@@ -12,6 +12,7 @@ import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/vi
 import { seedClipVersion } from '../api/focusActions';
 import { EDITOR_MODES } from '../stores/editorStore';
 import { allowEnterFraming } from '../utils/reelReEditable';
+import { withTabProfile } from '../utils/sessionInit';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -66,6 +67,11 @@ function buildClipMetadata(clipsData) {
   };
 }
 
+// T14970: back and forward can start a new load while an older one is in flight. Only the
+// latest may write: an older play's clips in a newer play's editor would pair the next
+// gesture's project id with the wrong clip ids.
+let latestLoadId = 0;
+
 /**
  * Hook for loading projects with all associated data
  *
@@ -101,6 +107,8 @@ export function useProjectLoader() {
     } = options;
 
     const projectId = project.id;
+    const loadId = ++latestLoadId;
+    const isStale = () => loadId !== latestLoadId;
 
     try {
       // Reset all stores for new project to clear stale data
@@ -198,6 +206,8 @@ export function useProjectLoader() {
         };
       }
 
+      if (isStale()) return { project, stale: true };
+
       // Store raw clips and metadata cache in projectDataStore
       setClipMetadataCache(metadataCache);
       setProjectClips({ clips: clipsData });
@@ -225,8 +235,9 @@ export function useProjectLoader() {
         setLoading(true, 'working-video');
 
         try {
-          const workingVideoUrl = resolveApiUrl(project.working_video_url);
+          const workingVideoUrl = withTabProfile(resolveApiUrl(project.working_video_url));
           const metadata = await extractVideoMetadataFromUrl(workingVideoUrl, 'working_video.mp4');
+          if (isStale()) return { project, stale: true };
 
           workingVideo = { file: null, url: workingVideoUrl, metadata };
           setWorkingVideo(workingVideo);
@@ -254,6 +265,8 @@ export function useProjectLoader() {
         }
       }
 
+      if (isStale()) return { project, stale: true };
+
       setLoading(false, 'complete');
       onProgress({ stage: 'complete', message: 'Highlight loaded' });
 
@@ -266,7 +279,7 @@ export function useProjectLoader() {
       };
     } catch (err) {
       console.error('[useProjectLoader] Failed to load project:', err);
-      setLoading(false);
+      if (!isStale()) setLoading(false);
       throw err;
     }
   }, [resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setLoading, setClipMetadataCache, updateClipMetadata]);

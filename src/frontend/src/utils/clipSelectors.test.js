@@ -15,6 +15,17 @@ vi.mock('../config', async (importOriginal) => ({
 }));
 
 import { clipFileUrl, clipSourceDuration } from './clipSelectors';
+import { setTabProfileId } from './tabProfile';
+
+describe('clipFileUrl (T14970)', () => {
+  it('names the tab profile on the proxy URL, never on a presigned one', () => {
+    setTabProfileId('tab-profile');
+    expect(clipFileUrl({ id: 7 }, 99)).toContain('profile_id=tab-profile');
+    expect(clipFileUrl({ id: 7, file_url: 'https://r2.example.com/clips/7.mp4?sig=abc' }, 99))
+      .toBe('https://r2.example.com/clips/7.mp4?sig=abc');
+    setTabProfileId(null);
+  });
+});
 
 describe('clipFileUrl (T5890 split-host)', () => {
   it('prefers a presigned absolute file_url unchanged', () => {

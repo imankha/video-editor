@@ -3,7 +3,9 @@ import { ProjectManager } from '../components/ProjectManager';
 import { InsufficientCreditsModal } from '../components/InsufficientCreditsModal';
 import { useGameUpload } from '../hooks/useGameUpload';
 import { useProjectLoader } from '../hooks/useProjectLoader';
-import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
+import { useEditorStore, EDITOR_MODES, parseEditorPath } from '../stores/editorStore';
+import { recoverDeepLink, showUrlLandingNotice, RECOVERY } from '../utils/deepLinkRecovery';
+import { DEEP_LINK_KIND } from '../constants/deepLinkKinds';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -13,7 +15,7 @@ import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
-import { setPendingProject, clearPendingProject, consumePendingProject, clearAnnotateOrigin } from '../utils/pendingNavigation';
+import { setPendingProject, settlePendingProject, consumePendingProject, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared/Toast';
 import { ERROR_COPY, CREDIT_COPY } from '../config/displayNames';
 
@@ -49,7 +51,13 @@ export function clearPendingGameFile() {
 // One-shot guard for the navigation-resume effect. Module scope so React
 // StrictMode's double effect invocation can't trigger a duplicate load
 // (the resume handler re-sets the breadcrumb it just consumed).
-let navigationResumeAttempted = false;
+let lastResumedUrlSeq = null;
+
+// T14970: back or forward can leave a play while it is still opening. That open must stop:
+// finishing would switch mode after the user left, and the push would erase forward history.
+function isStillOpening(projectId) {
+  return useProjectsStore.getState().selectedProjectId === projectId;
+}
 
 // Editor screens are lazy-loaded in App.jsx via lazyWithReload(). After a deploy,
 // the still-open tab runs the OLD build and references OLD chunk hashes that no longer
@@ -226,6 +234,7 @@ export function ProjectsScreen({
       // Fetch project details (selectProject updates the Zustand store,
       // which App.jsx reads reactively — no separate callback needed)
       const project = await selectProject(projectId);
+      if (!isStillOpening(projectId)) return;
       if (!project) {
         console.error('[ProjectsScreen] Failed to fetch project', projectId);
         toast.error(ERROR_COPY.OPEN_DRAFT, {
@@ -237,6 +246,7 @@ export function ProjectsScreen({
 
       // Load project with all associated data
       const result = await loadProject(project);
+      if (result.stale || !isStillOpening(projectId)) return;
 
       // Sync with editorStore for legacy compatibility
       setEditorMode(result.mode);
@@ -245,7 +255,7 @@ export function ProjectsScreen({
     } catch (err) {
       console.error('[ProjectsScreen] Failed to select project:', err);
     } finally {
-      clearPendingProject();
+      settlePendingProject(projectId);
       if (PROFILING_ENABLED) {
         performance.mark('gesture:open-project:end');
         try {
@@ -278,8 +288,23 @@ export function ProjectsScreen({
 
       // Fetch project details
       const project = await selectProject(projectId);
+      if (!isStillOpening(projectId)) return;
       if (!project) {
         console.error('[ProjectsScreen] Failed to fetch project', projectId);
+        // T14970: a URL can name a play in another of the user's profiles, or one that is gone.
+        if (options.fromUrl) {
+          useProjectsStore.getState().clearSelection();
+          const outcome = await recoverDeepLink({
+            kind: DEEP_LINK_KIND.PROJECT,
+            id: projectId,
+            pinnedToProfile: parseEditorPath().profileId != null,
+          });
+          if (outcome === RECOVERY.SWITCHED) {
+            await handleSelectProjectWithMode(projectId, { mode: options.mode });
+            return;
+          }
+          if (outcome === RECOVERY.MISSING) return;
+        }
         toast.error(ERROR_COPY.OPEN_DRAFT, {
           message: 'The connection dropped. Check your network and try again.',
           action: { label: 'Retry', onClick: () => handleSelectProjectWithMode(projectId, options) },
@@ -296,6 +321,7 @@ export function ProjectsScreen({
       const result = await loadProject(project, {
         mode: options.mode,
       });
+      if (result.stale || !isStillOpening(projectId)) return;
 
       // Sync with editorStore for legacy compatibility
       setEditorMode(result.mode);
@@ -304,7 +330,7 @@ export function ProjectsScreen({
     } catch (err) {
       console.error('[ProjectsScreen] Failed to select project:', err);
     } finally {
-      clearPendingProject();
+      settlePendingProject(projectId);
       setLoadingProjectId(null);
     }
   }, [selectProject, loadProject, setEditorMode, onStateReset]);
@@ -313,9 +339,22 @@ export function ProjectsScreen({
   // reload after a deploy, see lazyWithReload in App.jsx). editorStore already
   // restored the mode from the URL; the breadcrumb restores which project was
   // clicked. Games recover the same way via pendingGameId in AnnotateScreen.
+  // T14970: the same resume opens a play named by the URL, on a cold load and again
+  // each time back or forward lands on a different play (urlNavigationSeq).
+  const urlNavigationSeq = useEditorStore(state => state.urlNavigationSeq);
+  const gamesTabRequest = useEditorStore(state => state.gamesTabRequest);
+
+  // T14970: a URL named something unusable and landed here, possibly before the toast layer
+  // existed. Same words as an id that turned out to be gone.
+  const urlLandingNotice = useEditorStore(state => state.urlLandingNotice);
   useEffect(() => {
-    if (navigationResumeAttempted) return;
-    navigationResumeAttempted = true;
+    if (!urlLandingNotice) return;
+    showUrlLandingNotice(useEditorStore.getState().takeUrlLandingNotice());
+  }, [urlLandingNotice]);
+
+  useEffect(() => {
+    if (lastResumedUrlSeq === urlNavigationSeq) return;
+    lastResumedUrlSeq = urlNavigationSeq;
     const pending = consumePendingProject();
     if (!pending) return;
     const mode = useEditorStore.getState().editorMode;
@@ -324,11 +363,12 @@ export function ProjectsScreen({
     if (pending.mode) {
       handleSelectProjectWithMode(pending.projectId, {
         mode: pending.mode,
+        fromUrl: parseEditorPath().projectId === pending.projectId,
       });
     } else {
       handleSelectProject(pending.projectId);
     }
-  }, [handleSelectProject, handleSelectProjectWithMode]);
+  }, [handleSelectProject, handleSelectProjectWithMode, urlNavigationSeq]);
 
   // Handle game loading (navigate to annotate)
   const handleLoadGame = useCallback((gameId) => {
@@ -426,6 +466,7 @@ export function ProjectsScreen({
     <AppStateProvider value={appStateValue}>
       <div className="bg-gray-900">
         <ProjectManager
+          gamesTabRequest={gamesTabRequest}
           projects={projects}
           loading={projectsLoading || loadingProjectId !== null}
           error={projectsError}

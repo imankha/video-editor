@@ -22,6 +22,7 @@ import { openFinishedReel } from '../utils/finishedReelNav';
 import { clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
+import { withTabProfile } from '../utils/sessionInit';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
 import { HOME_TILE, LIBRARY_ACTIONS, CLIP_LINK, RESULT_SURFACE, ERROR_COPY, FRAME_COPY, STORAGE_COPY } from '../config/displayNames';
@@ -442,11 +443,11 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   const previewStreamUrl = previewOpenForThisProject
     ? null
     : project.final_video_id
-      ? `${API_BASE}/api/downloads/${project.final_video_id}/stream`
+      ? withTabProfile(`${API_BASE}/api/downloads/${project.final_video_id}/stream`)
       : project.has_working_video
-        ? `${API_BASE}/api/projects/${project.id}/working_video/stream`
+        ? withTabProfile(`${API_BASE}/api/projects/${project.id}/working_video/stream`)
         : firstClip?.stream_clip_id != null
-          ? `${API_BASE}/api/clips/projects/${project.id}/clips/${firstClip.stream_clip_id}/stream`
+          ? withTabProfile(`${API_BASE}/api/clips/projects/${project.id}/clips/${firstClip.stream_clip_id}/stream`)
           : null;
   // T6820: seek/loop the source-clip window only on the source-proxy rung. Final/
   // working previews carry no offsets (the file IS the clip) -> undefined, so

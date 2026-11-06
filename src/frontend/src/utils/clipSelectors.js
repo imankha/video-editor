@@ -7,6 +7,7 @@
  */
 
 import { API_BASE } from '../config';
+import { withTabProfile } from './tabProfile';
 
 // ========== Clip File Status Selectors ==========
 
@@ -27,7 +28,7 @@ export const clipDisplayName = (clip) =>
  * projectDataStore.getClipFileUrl, which already prefixes API_BASE.
  */
 export const clipFileUrl = (clip, projectId) =>
-  clip.file_url || `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file`;
+  clip.file_url || withTabProfile(`${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/file`);
 
 // ========== Data Accessors ==========
 

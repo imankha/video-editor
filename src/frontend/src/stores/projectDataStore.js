@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -266,7 +267,7 @@ export const useProjectDataStore = create((set, get) => ({
     const clip = get().clips.find(c => c.id === clipId);
     if (clip?.file_url) return clip.file_url;
     if (!projectId) return null;
-    return `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}/file`;
+    return withTabProfile(`${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}/file`);
   },
 
   // ========== Other Actions ==========

@@ -5,7 +5,7 @@ import { reportMarkPlayFailure } from '../utils/markPlayFailure';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore, useAuthStore } from '../stores';
 import { useVideoStore } from '../stores/videoStore';
-import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
+import { useEditorStore, EDITOR_MODES, parseEditorPath } from '../stores/editorStore';
 import {
   useUploadStore,
   useIsUploading,
@@ -37,7 +37,9 @@ import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../ut
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 import { generateClipName } from '../utils/clipDisplayName';
 import { SECTION_NAMES, ANNOTATE, VEO_SUGGESTIONS, ERROR_COPY } from '../config/displayNames';
-import { setPendingGame } from '../utils/pendingNavigation';
+import { setPendingGame, clearAnnotateResume } from '../utils/pendingNavigation';
+import { recoverDeepLink, RECOVERY } from '../utils/deepLinkRecovery';
+import { DEEP_LINK_KIND } from '../constants/deepLinkKinds';
 import { beginGameVideoLoad, computeResumePosition } from './annotateVideoLoad';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER, DEFAULT_PLAY_RATING } from '../components/shared/clipConstants';
 import { defaultPlayName } from '../modes/annotate/playProgress';
@@ -1307,6 +1309,10 @@ export function AnnotateContainer({
         annotateGameIdRef.current = game_id;
         setAnnotateGameId(game_id);
         setAnnotateGameName(name);
+        // T14970: the game has an address now. Skipped if the user has already left Annotate.
+        if (useEditorStore.getState().editorMode === EDITOR_MODES.ANNOTATE) {
+          useEditorStore.getState().bindAnnotateGamePath(game_id);
+        }
 
         // T1540: If resuming a pending game that already has clips (e.g., page refresh
         // during upload), fetch and import them so they appear in the UI.
@@ -1501,6 +1507,7 @@ export function AnnotateContainer({
     // to the play length, so auto-deselect wiped the re-selected play. Reset at the
     // game-open seam (same batch as the src change) so every entry path is covered.
     useVideoStore.getState().reset();
+    const openedFromUrl = useEditorStore.getState().takeUrlOpenGame(gameId);
     // T11830: view-only flag (never persisted), cleared in the finally below on every path.
     setIsGameDataLoading(true);
     if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
@@ -1634,10 +1641,29 @@ export function AnnotateContainer({
       // subsequent Add Clip until manually switched back, which read as a bug.)
       setNewClipLayerIsMine(true);
 
-      setEditorMode(EDITOR_MODES.ANNOTATE);
+      // T14970: the breadcrumb is consumed by now, so the id has to be named.
+      setEditorMode(EDITOR_MODES.ANNOTATE, { gameId });
     } catch (err) {
       console.warn('[AnnotateContainer] Failed to load game:', err.message);
-      if (err.message?.includes('not found')) {
+      if (openedFromUrl && err.message?.includes('not found')) {
+        // T14970: a URL can name a game in another of the user's profiles, or one that is gone.
+        const outcome = await recoverDeepLink({
+          kind: DEEP_LINK_KIND.GAME,
+          id: gameId,
+          pinnedToProfile: parseEditorPath().profileId != null,
+        });
+        if (outcome === RECOVERY.SWITCHED) {
+          setPendingGame(gameId, pendingClipSeekTime);
+          // The switch went through /home, so the URL's `t` has to be named to survive a reload.
+          setEditorMode(EDITOR_MODES.ANNOTATE, { gameId, seekTime: pendingClipSeekTime });
+        } else {
+          clearAnnotateResume();
+          if (outcome === RECOVERY.UNAVAILABLE) {
+            toast.error(ERROR_COPY.LOAD_GAME);
+            useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
+          }
+        }
+      } else if (err.message?.includes('not found')) {
         toast.error(ANNOTATE.GAME_REMOVED_TITLE);
         // T8180: refresh the games list so a deleted game (e.g. one offered by
         // "Continue where you left off" from a stale list) drops off after the click
@@ -2581,12 +2607,15 @@ export function AnnotateContainer({
       }
       effectiveSeek(seekTarget);
       setAnnotateSelectedLayer('clips');
-    } else if (resumeTime != null) {
+    } else if (resumeTime != null || seekTime != null) {
       // useVideo.seek writes the store currentTime synchronously, so the
       // auto-select effect sees the real playhead from the next render on.
-      const region = getRegionAtTimeUnified(resumeTime);
+      // T14970: a seek time need not land on a play (/annotate/g/{id}?t=60). It is a
+      // position on the game timeline, so effectiveSeek resolves it in either video.
+      const position = resumeTime ?? seekTime;
+      const region = getRegionAtTimeUnified(position);
       region ? selectClip(region.id) : deselectClip();
-      effectiveSeek(resumeTime);
+      effectiveSeek(position);
     } else {
       // No seek: the current playhead IS the starting position.
       const region = getRegionAtTimeUnified(effectiveCurrentTime);

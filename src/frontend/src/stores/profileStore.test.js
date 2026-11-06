@@ -439,3 +439,43 @@ describe('profileStore', () => {
     });
   });
 });
+
+// T14970: a tab can hold a profile from its URL while the account's active one is another.
+describe('profileStore tab profile (T14970)', () => {
+  const profiles = [{ id: 'abc12345', isCurrent: false }, { id: 'def67890', isCurrent: true }];
+  let useProfileStore;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ useProfileStore } = await import('./profileStore'));
+    mockFetch.mockReset();
+    useProfileStore.setState({ profiles: [], currentProfileId: null });
+  });
+
+  it("setFromBootstrap shows this tab's profile, not the server's", () => {
+    useProfileStore.getState().setFromBootstrap(profiles);
+    expect(useProfileStore.getState().currentProfileId).toBe('abc12345');
+  });
+
+  it('fetchProfiles keeps this tab\'s profile too', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ profiles }) });
+    await useProfileStore.getState().fetchProfiles({ force: true });
+    expect(useProfileStore.getState().currentProfileId).toBe('abc12345');
+  });
+
+  it('adoptTabProfile changes this tab and never writes the active profile', async () => {
+    useProfileStore.setState({ profiles, currentProfileId: 'abc12345' });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ profiles }) });
+    await expect(useProfileStore.getState().adoptTabProfile('def67890')).resolves.toBe(true);
+    expect(useProfileStore.getState().currentProfileId).toBe('def67890');
+    const methods = mockFetch.mock.calls.map(([, init]) => init?.method ?? 'GET');
+    expect(methods.filter((m) => m !== 'GET')).toEqual([]);
+  });
+
+  it('adoptTabProfile refuses a profile the user does not own', async () => {
+    useProfileStore.setState({ profiles, currentProfileId: 'abc12345' });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ profiles }) });
+    await expect(useProfileStore.getState().adoptTabProfile('ffffffff')).resolves.toBe(false);
+    expect(useProfileStore.getState().currentProfileId).toBe('abc12345');
+  });
+});

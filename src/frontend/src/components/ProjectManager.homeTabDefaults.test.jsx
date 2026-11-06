@@ -82,9 +82,7 @@ import { EMPTY_TAB_GUIDE } from '../config/emptyStates';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
 
-function renderManager(props = {}, path = '/home') {
-  window.history.replaceState(null, '', path);
-  return render(
+const managerElement = (props = {}) => (
     <AppStateProvider value={APP_STATE}>
       <ProjectManager
         projects={[]}
@@ -101,7 +99,11 @@ function renderManager(props = {}, path = '/home') {
         {...props}
       />
     </AppStateProvider>
-  );
+);
+
+function renderManager(props = {}, path = '/home') {
+  window.history.replaceState(null, '', path);
+  return render(managerElement(props));
 }
 
 // Prefix match on the tab's own accessible name. T9530 (N10): the Clips tab
@@ -175,12 +177,41 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     expect(clipsTab().disabled).toBe(false);
   });
 
+  it('a Games tab request moves a Home that is already on screen (T14970)', async () => {
+    const projects = [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }];
+    const view = renderManager({ projects, gamesTabRequest: 0 }, '/home/reels');
+    await screen.findByRole('button', { name: 'Upload a play' });
+
+    view.rerender(managerElement({ projects, gamesTabRequest: 1 }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Upload a play' })).toBeNull());
+    expect(window.location.pathname).toBe('/home/games');
+  });
+
+  it('a request made before Home mounted does not move it later (T14970)', async () => {
+    const projects = [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }];
+    const view = renderManager({ projects, gamesTabRequest: 3 }, '/home/reels');
+    await screen.findByRole('button', { name: 'Upload a play' });
+
+    view.rerender(managerElement({ projects, gamesTabRequest: 3 }));
+
+    expect(screen.getByRole('button', { name: 'Upload a play' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/home/reels');
+  });
+
   it('/home/reels deep link with real clip drafts STAYS on Clips (T10310 exception only fires at zero clips)', async () => {
     renderManager({ projects: [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }] }, '/home/reels');
 
     const addVideo = await screen.findByRole('button', { name: 'Upload a play' });
     expect(addVideo).toBeTruthy();
     expect(window.location.pathname).toBe('/home/reels');
+  });
+
+  it('leaves a cold /focus/p/{id} URL alone while the play opens underneath (T14970)', async () => {
+    renderManager({ projects: [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }] }, '/focus/p/7');
+
+    await waitFor(() => expect(clipsTab()).toBeTruthy());
+    expect(window.location.pathname).toBe('/focus/p/7');
   });
 
   it('user with extracted clips but no drafts: Clips tab is enabled', () => {
@@ -233,3 +264,42 @@ describe('ProjectManager home tab defaults (T6830)', () => {
 // (this file's old "three-way tab navigation (T8545)" block was superseded by
 // that four-tab split). This file keeps only the home-tab-defaults (T6830)
 // dead-end/asymmetry coverage above.
+
+// T14970: Home settles its landing tab once projects have loaded. These pin the cold order: an
+// empty list while loading, then the real one, as bootstrap delivers it.
+describe('ProjectManager cold landing (T14970)', () => {
+  const plays = [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }];
+
+  function coldLoad(path) {
+    const view = renderManager({ projects: [], loading: true }, path);
+    const landed = (
+      <AppStateProvider value={APP_STATE}>
+        <ProjectManager
+          projects={plays}
+          loading={false}
+          games={[]}
+          gamesLoading={false}
+          onSelectProject={vi.fn()}
+          onRefreshProjects={vi.fn()}
+          onDeleteProject={vi.fn()}
+          onAnnotateWithFile={vi.fn()}
+          onLoadGame={vi.fn()}
+          onDeleteGame={vi.fn()}
+          onFetchGames={vi.fn()}
+        />
+      </AppStateProvider>
+    );
+    view.rerender(landed);
+  }
+
+  it('a stale /home/published still falls to Games for an account with plays', async () => {
+    coldLoad('/home/published');
+    await waitFor(() => expect(window.location.pathname).toBe('/home/games'));
+  });
+
+  it('/home/reels stays put', async () => {
+    coldLoad('/home/reels');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Upload a play' })).toBeTruthy());
+    expect(window.location.pathname).toBe('/home/reels');
+  });
+});

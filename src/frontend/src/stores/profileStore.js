@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { reinstallProfileHeader } from '../utils/sessionInit';
+import { reinstallProfileHeader, getProfileId } from '../utils/sessionInit';
 import { ERROR_COPY } from '../config/displayNames';
 import { serverError } from '../utils/userError';
 
@@ -16,6 +16,16 @@ import { serverError } from '../utils/userError';
 // Module-level ref for fetch dedup
 let _fetchPromise = null;
 
+/**
+ * T14970: the server's isCurrent is the account's active profile, but a tab can hold another
+ * one from its URL. The switcher and tiles must agree with the data this tab is showing.
+ */
+function markTabProfileCurrent(profiles) {
+  const tabProfileId = getProfileId();
+  if (!profiles.some((p) => p.id === tabProfileId)) return profiles;
+  return profiles.map((p) => ({ ...p, isCurrent: p.id === tabProfileId }));
+}
+
 export const useProfileStore = create((set, get) => ({
   profiles: [],
   currentProfileId: null,
@@ -23,7 +33,8 @@ export const useProfileStore = create((set, get) => ({
   isInitialized: false,
   error: null,
 
-  setFromBootstrap: (profiles) => {
+  setFromBootstrap: (serverProfiles) => {
+    const profiles = markTabProfileCurrent(serverProfiles);
     const current = profiles.find(p => p.isCurrent);
     set({ profiles, currentProfileId: current?.id || null, isLoading: false, isInitialized: true });
   },
@@ -42,10 +53,11 @@ export const useProfileStore = create((set, get) => ({
         }
 
         const data = await response.json();
-        const current = data.profiles.find(p => p.isCurrent);
+        const profiles = markTabProfileCurrent(data.profiles);
+        const current = profiles.find(p => p.isCurrent);
 
         set({
-          profiles: data.profiles,
+          profiles,
           currentProfileId: current?.id || null,
           isLoading: false,
           isInitialized: true,
@@ -106,6 +118,26 @@ export const useProfileStore = create((set, get) => ({
       console.error('[ProfileStore] Failed to switch profile:', error);
       set({ isLoading: false, error: error.message });
     }
+  },
+
+  /**
+   * T14970: move THIS TAB to a profile a history entry names. Unlike switchProfile it writes
+   * nothing, because restoring a page must leave the account's active profile alone, and it does
+   * not navigate. Resolves false for a profile the user does not own; throws if that cannot
+   * be checked.
+   */
+  adoptTabProfile: async (profileId) => {
+    await get().fetchProfiles({ force: true });
+    const { profiles, error } = get();
+    if (error) throw new Error(error);
+    if (!profiles.some((p) => p.id === profileId)) return false;
+
+    reinstallProfileHeader(profileId);
+    // Same order as switchProfile: clear before publishing the new id (T13630).
+    await _clearDataStores();
+    set({ currentProfileId: profileId, profiles: markTabProfileCurrent(get().profiles) });
+    await _refetchDataStores();
+    return true;
   },
 
   createProfile: async (name, color, { sport } = {}) => {

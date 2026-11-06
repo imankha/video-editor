@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../utils/apiFetch', () => ({ default: vi.fn() }));
-vi.mock('../../utils/sessionInit', () => ({ reinstallProfileHeader: vi.fn() }));
+vi.mock('../../utils/sessionInit', () => ({ reinstallProfileHeader: vi.fn(), getProfileId: () => null }));
 
 import apiFetch from '../../utils/apiFetch';
 import { useProfileStore } from '../profileStore';

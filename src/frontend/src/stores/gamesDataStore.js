@@ -263,7 +263,8 @@ export const useGamesDataStore = create((set, get) => ({
       } catch (err) {
         const is404 = err.message?.includes('not found');
         (is404 ? console.warn : console.error).call(console, '[gamesDataStore] Failed to fetch game:', err.message);
-        set({ error: err.message, isLoading: false });
+        // T14970: `error` is the games LIST's failure; the caller gets this one by rejection.
+        set({ isLoading: false });
         throw err;
       } finally {
         _getGameInflight.delete(gameId);
@@ -296,7 +297,8 @@ export const useGamesDataStore = create((set, get) => ({
       } catch (err) {
         const is404 = err.message?.includes('not found');
         (is404 ? console.warn : console.error).call(console, '[gamesDataStore] loadGame failed:', err.message);
-        set({ error: err.message, isLoading: false });
+        // T14970: `error` is the games LIST's failure; the caller gets this one by rejection.
+        set({ isLoading: false });
         throw err;
       } finally {
         _getGameInflight.delete(gameId);

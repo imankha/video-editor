@@ -57,7 +57,9 @@ import { useConfigStore } from './stores/configStore';
 import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
 import { captureCampaignParams } from './utils/campaignCapture';
-import { setPendingGame } from './utils/pendingNavigation';
+import { setPendingGame, hasPendingProject } from './utils/pendingNavigation';
+import { openEmailGameLink } from './utils/emailGameLink';
+import { markBootstrapSettled, settleBootstrapAfter } from './utils/deepLinkRecovery';
 import { dismissPreloader as dismissPreloaderEl } from './utils/preloader';
 import './utils/syncCheck'; // T13810: installs window.__syncCheck (read-only consistency checker)
 
@@ -194,48 +196,51 @@ function App() {
 
     initSession().then(async (session) => {
       if (!session.isAuthenticated) {
+        markBootstrapSettled();
         initialLoadInProgress = false;
         dismissPreloader();
         return;
       }
 
-      // Wait for Phase B (profile ready) before bootstrap
-      await session.profileReady;
+      await settleBootstrapAfter(async () => {
+        // Wait for Phase B (profile ready) before bootstrap
+        await session.profileReady;
 
-      // T3370: Single bootstrap call replaces 9+ individual fetches
-      updatePreloader(50, 'Loading data...');
-      try {
-        const res = await apiFetch(`${API_BASE}/api/bootstrap`);
-        if (res.ok) {
-          const data = await res.json();
-          useProfileStore.getState().setFromBootstrap(data.profiles);
-          useSettingsStore.getState().setFromBootstrap(data.settings);
-          useCreditStore.getState().setFromBootstrap(data.credits);
-          useProjectsStore.getState().setFromBootstrap(data.projects);
-          useGamesDataStore.getState().setFromBootstrap(data.games);
-          useQuestStore.getState().setFromBootstrap(data.quests_progress);
-          useQuestStore.getState().setPanelCollapsed(data.quest_panel_collapsed);
-          useGalleryStore.getState().setFromBootstrap(data.downloads);
-          // T10250: mirror the clip-upload caps for the "Add Video" pre-flight
-          // size check (no-op if the server predates the field).
-          useConfigStore.getState().setFromBootstrap(data.upload_limits);
-          // Publish export data for useExportRecovery to consume (avoids separate fetch)
-          if (data.exports) {
-            window.__bootstrapExports = data.exports;
+        // T3370: Single bootstrap call replaces 9+ individual fetches
+        updatePreloader(50, 'Loading data...');
+        try {
+          const res = await apiFetch(`${API_BASE}/api/bootstrap`);
+          if (res.ok) {
+            const data = await res.json();
+            useProfileStore.getState().setFromBootstrap(data.profiles);
+            useSettingsStore.getState().setFromBootstrap(data.settings);
+            useCreditStore.getState().setFromBootstrap(data.credits);
+            useProjectsStore.getState().setFromBootstrap(data.projects);
+            useGamesDataStore.getState().setFromBootstrap(data.games);
+            useQuestStore.getState().setFromBootstrap(data.quests_progress);
+            useQuestStore.getState().setPanelCollapsed(data.quest_panel_collapsed);
+            useGalleryStore.getState().setFromBootstrap(data.downloads);
+            // T10250: mirror the clip-upload caps for the "Add Video" pre-flight
+            // size check (no-op if the server predates the field).
+            useConfigStore.getState().setFromBootstrap(data.upload_limits);
+            // Publish export data for useExportRecovery to consume (avoids separate fetch)
+            if (data.exports) {
+              window.__bootstrapExports = data.exports;
+            }
+            window.__bootstrapLoaded = true;
           }
-          window.__bootstrapLoaded = true;
+        } catch (err) {
+          console.error('[App] Bootstrap failed, falling back to individual fetches:', err);
+          await Promise.all([
+            useProfileStore.getState().fetchProfiles(),
+            useSettingsStore.getState().loadSettings(),
+            useProjectsStore.getState().fetchProjects({ reason: 'bootstrap' }),
+            useGamesDataStore.getState().fetchGames({ reason: 'bootstrap' }),
+            useQuestStore.getState().fetchProgress(),
+            useGalleryStore.getState().fetchCount({ reason: 'bootstrap' }),
+          ]);
         }
-      } catch (err) {
-        console.error('[App] Bootstrap failed, falling back to individual fetches:', err);
-        await Promise.all([
-          useProfileStore.getState().fetchProfiles(),
-          useSettingsStore.getState().loadSettings(),
-          useProjectsStore.getState().fetchProjects({ reason: 'bootstrap' }),
-          useGamesDataStore.getState().fetchGames({ reason: 'bootstrap' }),
-          useQuestStore.getState().fetchProgress(),
-          useGalleryStore.getState().fetchCount({ reason: 'bootstrap' }),
-        ]);
-      }
+      });
 
       scheduleWarmAllUserVideos();
       dismissPreloader();
@@ -279,34 +284,14 @@ function App() {
         }
       }
 
-      // T7670: Open a game from the upload-complete email deep link. Switch to
-      // the game's profile first (idempotent no-op if already current) so the
-      // per-profile game id resolves against the right profile, then open it in
-      // annotate mode once games load (AnnotateScreen reads pendingGameId).
+      // T7670: Open a game from the upload-complete email deep link.
       const deeplinkGameId = sessionStorage.getItem('deeplinkGameId');
       if (deeplinkGameId) {
         const deeplinkProfileId = sessionStorage.getItem('deeplinkProfileId');
         sessionStorage.removeItem('deeplinkGameId');
         sessionStorage.removeItem('deeplinkProfileId');
 
-        if (deeplinkProfileId) {
-          await useProfileStore.getState().switchProfile(deeplinkProfileId);
-        }
-        const targetId = Number(deeplinkGameId);
-        const waitForGame = setInterval(() => {
-          const games = useGamesDataStore.getState().games;
-          if (games.length === 0) return;
-          // Keep polling until the target game appears: switchProfile's Phase-3
-          // refetch isn't awaited, so a non-empty list can briefly precede the
-          // target profile's full list. Clear only once the game is found (or
-          // the 5s timeout fires), never on the first non-empty tick.
-          const game = games.find(g => g.id === targetId);
-          if (!game) return;
-          clearInterval(waitForGame);
-          setPendingGame(game.id);
-          useEditorStore.getState().setEditorMode('annotate');
-        }, 100);
-        setTimeout(() => clearInterval(waitForGame), 5000);
+        await openEmailGameLink(Number(deeplinkGameId), deeplinkProfileId);
       }
 
       // Payment return: restore editor state and auto-export if redirected from Stripe.
@@ -370,6 +355,7 @@ function App() {
       }
     }).catch((err) => {
       console.error('[App] Session init failed after retries:', err);
+      markBootstrapSettled();
       useAuthStore.getState().setSessionState(false);
       initialLoadInProgress = false;
       dismissPreloader();
@@ -499,12 +485,15 @@ function App() {
   // URL matches what's shown and the back button can't loop. Keyed on
   // selectedProjectId (set synchronously by selectProject) — NOT the async
   // selectedProject object — so the transient window during a project load or an
-  // auth-return restore never triggers a spurious bounce home. Redirect only; no
-  // state hydration (deep-linking INTO an editor with a project is out of scope).
+  // auth-return restore never triggers a spurious bounce home. T14970: a URL that
+  // names a play leaves a pending project, which ProjectsScreen opens; that open owns
+  // the outcome, including landing home with a notice when the id is gone. This effect
+  // sees the commit where the open starts through a stale selectedProjectId closure,
+  // so the pending check is what keeps it from bouncing a valid /focus/p/{id}.
   useEffect(() => {
     if (isCheckingSession) return;
     const inEditorMode = editorMode === EDITOR_MODES.FRAMING || editorMode === EDITOR_MODES.OVERLAY;
-    if (inEditorMode && !selectedProjectId) {
+    if (inEditorMode && !selectedProjectId && !hasPendingProject()) {
       redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
     }
   }, [editorMode, selectedProjectId, isCheckingSession, redirectToMode]);
@@ -706,13 +695,11 @@ function App() {
     // from the previous mode (e.g., working video from overlay showing in framing)
     useVideoStore.getState().reset();
 
-    // Going home replaces the current entry (replaceState) to avoid duplicate
-    // /home entries when the user alternates between in-app back and browser back.
+    // T14970: going home pushes. The entry being left is an address now (/focus/p/{id}),
+    // and replacing it would make that play unreachable with Back.
+    setEditorMode(newMode);
     if (newMode === EDITOR_MODES.PROJECT_MANAGER) {
-      redirectToMode(newMode);
       requestAnimationFrame(() => fetchProjects());
-    } else {
-      setEditorMode(newMode);
     }
 
     if (selectedProjectId && ['annotate', 'framing', 'overlay'].includes(newMode)) {
@@ -720,7 +707,7 @@ function App() {
         method: 'PATCH'
       }).catch(e => console.error('[App] Failed to persist mode:', e));
     }
-  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject, openModeSwitchDialog, setEditorMode, redirectToMode, clearSelection, fetchProjects, handleEditInAnnotate, selectedProjectId]);
+  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject, openModeSwitchDialog, setEditorMode, clearSelection, fetchProjects, handleEditInAnnotate, selectedProjectId]);
 
   // Mode switch dialog handlers
   const handleModeSwitchCancel = useCallback(() => {
@@ -772,11 +759,9 @@ function App() {
     }
 
     const finalMode = targetMode || EDITOR_MODES.PROJECT_MANAGER;
+    setEditorMode(finalMode);
     if (finalMode === EDITOR_MODES.PROJECT_MANAGER) {
-      redirectToMode(finalMode);
       requestAnimationFrame(() => fetchProjects());
-    } else {
-      setEditorMode(finalMode);
     }
 
     if (selectedProjectId && ['annotate', 'framing', 'overlay'].includes(finalMode)) {
@@ -784,7 +769,7 @@ function App() {
         method: 'PATCH'
       }).catch(e => console.error('[App] Failed to persist mode:', e));
     }
-  }, [selectedProjectId, discardUncommittedChanges, closeModeSwitchDialog, setEditorMode, redirectToMode, modeSwitchDialog.pendingMode, modeSwitchDialog.sourceMode, clearSelection, fetchProjects]);
+  }, [selectedProjectId, discardUncommittedChanges, closeModeSwitchDialog, setEditorMode, modeSwitchDialog.pendingMode, modeSwitchDialog.sourceMode, clearSelection, fetchProjects]);
 
   // Backward-compatible wrapper for setExportingProject
   const setExportingProject = useCallback((value) => {

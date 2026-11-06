@@ -45,6 +45,7 @@ import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useProfileStore } from '../stores/profileStore';
 import { UPLOAD_STATUS, useUploadStore } from '../stores/uploadStore';
 import { useQuestStore } from '../stores/questStore';
+import { parseEditorPath } from '../stores/editorStore';
 import {
   consumePendingRecap,
   setPendingGameReference,
@@ -493,10 +494,20 @@ function tabFromPath(pathname) {
 // The tab a COLD load lands on. Published (Finished) is never a landing: a stale
 // /home/published URL left from a prior session must not open the app there. The
 // user opens it by gesture (tab click / publish completion), which uses setActiveTab.
-// Landing = Clips when there are unfinished clips, else Games.
+// Landing = Clips when there are unfinished clips, else Games; a stale /home/published
+// always lands on Games, see defaultLandingTab.
 function landingTabFromPath(pathname) {
+  // T14970: this screen sits under a cold editor URL while the object opens or its profile
+  // is swapped. Naming a tab here keeps the default-tab settle from rewriting that URL, and
+  // Games is where the user belongs if the object turns out to be gone.
+  const { gameId, projectId } = parseEditorPath(pathname, '');
+  if (gameId != null || projectId != null) return 'games';
   const tab = tabFromPath(pathname);
   return tab === 'published' ? null : tab;
+}
+
+function defaultLandingTab(pathname, clipDraftCount) {
+  return tabFromPath(pathname) === 'published' || clipDraftCount === 0 ? 'games' : 'projects';
 }
 
 // T8545: one button renderer shared by all three segmented-control tabs.
@@ -589,6 +600,7 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, sho
  */
 
 export function ProjectManager({
+  gamesTabRequest = 0, // T14970: a change moves a mounted Home to Games
   projects,
   loading,
   error, // Projects fetch error
@@ -672,7 +684,7 @@ export function ProjectManager({
   // URL-first: a deep link / refresh to /home/games or /home/reels lands on that
   // tab. Bare /home falls back to the clip-drafts-count default. (T5677)
   const initialTab = landingTabFromPath(window.location.pathname)
-    ?? (clipDrafts.length === 0 ? 'games' : 'projects');
+    ?? defaultLandingTab(window.location.pathname, clipDrafts.length);
   const [activeTab, setActiveTabRaw] = useState(initialTab);
   const setActiveTab = useCallback((tab) => {
     setActiveTabRaw(tab);
@@ -681,6 +693,12 @@ export function ProjectManager({
       window.history.replaceState(null, '', path);
     }
   }, []);
+  const seenGamesTabRequest = useRef(gamesTabRequest);
+  useEffect(() => {
+    if (gamesTabRequest === seenGamesTabRequest.current) return;
+    seenGamesTabRequest.current = gamesTabRequest;
+    setActiveTab('games');
+  }, [gamesTabRequest, setActiveTab]);
   // T10260: refs read at clip-upload COMPLETION to decide whether to auto-open the
   // new clip in Framing. A completion is the tail of the user's own upload gesture,
   // so opening is allowed — but only if they are still on the Clips tab and the
@@ -1459,7 +1477,7 @@ export function ProjectManager({
     if (!hasSetInitialTab.current && !loading) {
       // Bare /home or a stale /home/published: settle on the default landing tab
       // (this also rewrites a stale /home/published URL).
-      setActiveTab(clipDrafts.length > 0 ? 'projects' : 'games');
+      setActiveTab(defaultLandingTab(window.location.pathname, clipDrafts.length));
       hasSetInitialTab.current = true;
     }
   }, [clipDrafts, highlightDrafts, loading, setActiveTab]);

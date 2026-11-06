@@ -27,7 +27,7 @@ read once on the next load, and used only when its target still exists.
 
 ```
 {
-  "path": "/focus/p/8124",            // T14970 canonical URL (object identity)
+  "path": "/focus/p/8124",            // T14970 canonical path (object identity); add ?profile=
   "profile_id": "452b…",              // which profile's object
   "screen": "focus",                  // BREADCRUMB_SCREENS vocabulary
   "step": "crop",                     // mode sub-step when the screen has one (focus: crop|review|export; overlay: pick|text|export; annotate: mark|review)
@@ -95,8 +95,9 @@ moves the user's own resume point. Covered by a test.
   fetches it separately.
 - On a cold load of `/` or `/home` (never when the user arrived with a deep link, a share link,
   a claim link, or a payment return), if the point is under `RESUME_MAX_AGE_DAYS` (30, named
-  constant) the client navigates to `point.path` with `?t=` when present. T14970's hydration
-  does the rest, including the other-profile switch.
+  constant) the client navigates to `point.path` with `?profile={point.profile_id}`, plus `&t=`
+  when present. T14970's hydration does the rest: it sets that profile in the tab before
+  anything loads, without changing the active profile.
 - The target is validated by the hydration itself: a 404 lands on Home with "That game is no
   longer here"; the stale point is then deleted by that gesture's handler (one DELETE), so it
   cannot loop.

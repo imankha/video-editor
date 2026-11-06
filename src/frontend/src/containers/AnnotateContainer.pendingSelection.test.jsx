@@ -156,6 +156,22 @@ describe('AnnotateContainer pending clip selection (T10750)', () => {
     expect(result.current.annotateSelectedRegionId).toBe(match.id);
   });
 
+  it('a seek time with no play at it still moves the playhead (T14970)', async () => {
+    const seek = vi.fn();
+    const loadGame = vi.fn().mockResolvedValue(gameResponse());
+    const { result } = renderHook(() => AnnotateContainer(
+      baseProps({ seek: (...a) => seek(...a), loadGame })
+    ));
+
+    await act(async () => {
+      await result.current.handleLoadGame(42, 200, null);
+      await flushMicrotasks();
+    });
+
+    expect(seek).toHaveBeenCalledTimes(1);
+    expect(seek).toHaveBeenCalledWith(200);
+  });
+
   it('drops a breadcrumb that matches no region, loudly, instead of retrying forever', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const seek = vi.fn();

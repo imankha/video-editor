@@ -1798,6 +1798,68 @@ black letterbox bands above/below a 16:9 picture on a phone; now the box shrink-
 - **Backend**: `src/backend/app/routers/clips.py` (prefix `/api/clips`) and
   `src/backend/app/routers/games.py` (`GET /{game_id}/load` at L2178, duration PATCH at L1409).
 
+## Navigation: canonical editor URLs (T14970)
+`/annotate/g/{gameId}?profile={profileId}[&t={seconds}]`, `/focus/p/{projectId}?profile={profileId}`,
+`/overlay/p/{projectId}?profile={profileId}`; bare mode paths mean "nothing open", and a URL with no
+profile is an old bookmark. `parseEditorPath` and `modeFromPath` (editorStore) own the grammar.
+- **The URL's profile is held by the tab, never the account:** `sessionInit` verifies it and sets
+  `X-Profile-ID` before `setSessionState`; back and forward use `profileStore.adoptTabProfile`. Neither
+  calls `PUT /api/profiles/current`, so opening a link leaves the active profile alone (T14990).
+  `/api/auth/init`'s `profile_id` is only a hint and answers with the active profile, so it
+  cannot validate anything. Unowned or deleted: Games plus the notice, never the current profile.
+  A first sign-in skips that startup path, so `onAuthSuccess` runs `applyUrlProfile` before opening
+  the session; a reload would lose `pendingAction`.
+- **Landing on Games moves a mounted Home:** Home's tab is local state read from the URL on mount, so
+  `redirectToGamesTab` also bumps `gamesTabRequest`, which ProjectsScreen passes to ProjectManager.
+- **The tab profile lives in `utils/tabProfile.js`:** a leaf module, so pure code can name the profile
+  without importing `sessionInit`, which installs the axios and fetch interceptors.
+- **Media needs `withTabProfile`:** `<video>` and `<img>` cannot send the header and would read the
+  ACTIVE profile's row for the same id. New same-origin media URLs go through it, and it always
+  names the profile, because another tab can switch the account unseen. The middleware reads
+  `?profile_id=` on GET and HEAD with no header, only on routes in `_MEDIA_PATH` and `_POSTER_PATH`
+  (add a new media route there). Unowned: 404 on media, T7940's 403 on posters.
+- **Writing:** `updatePath` resolves the object inside the gesture: explicit id, then the game
+  breadcrumb or `selectedProjectId`, then the id already in the path. An open that has already
+  consumed its breadcrumb must name the id (`setEditorMode(ANNOTATE, { gameId })`), or a later
+  push drops it. A new upload replaces the bare path in `onGameCreated` (`bindAnnotateGamePath`).
+  Never rewrite the URL from an effect.
+- **Reading:** cold load and popstate hand the path to `adoptUrlGame`/`adoptUrlProject`, so the
+  breadcrumb consumers (AnnotateScreen, ProjectsScreen's resume) stay the one way in. The URL
+  wins a conflict; a same-game breadcrumb keeps its seek and play. `urlNavigationSeq` re-runs
+  those consumers for an in-place change.
+- **`?t=` is read, and only kept, never added by ordinary navigation:** adding it would make a
+  reload seek to a stale time instead of the saved playhead (T12880). A profile switch passes it
+  explicitly, because it reopens through `/home`. It is a game-timeline position that need not land on a play, so
+  the initial-position effect seeks it with `effectiveSeek`, which resolves either video. The
+  early src's `#t=` alone never reached a multi-video game.
+- **Going home pushes:** `handleModeChange` and the mode-switch discard use `setEditorMode`, so the
+  play being left stays reachable with Back.
+- **Unusable ids** (`/focus/p/abc`, 16+ digits) land on `/home/games`; `malformedObjectKind` carries the
+  kind to ProjectsScreen, which shows the unknown-id notice. Init runs before the toast layer.
+- **A newer open beats an older one:** back or forward can start an open during a load. `loadProject`
+  drops superseded loads (`latestLoadId`, returns `{ stale: true }`) because an older play's clips in
+  a newer editor would pair the next gesture's project id with the wrong clip ids. `selectProject`
+  discards a late response, ProjectsScreen stops at `isStillOpening`, and `settlePendingProject`
+  leaves a newer breadcrumb alone. A stale `setEditorMode` here erases forward history.
+- **Store `error` fields are LIST failures:** the Games and Plays tabs render them as a failed list.
+  Single-object reads (`getGame`, `loadGame`, `fetchProject`) must not write them.
+- **404 on a URL-driven open only:** `recoverDeepLink` (`utils/deepLinkRecovery.js`) lands a URL with
+  `?profile=` on `/home/games` with a notice; an old bookmark probes the other profiles first, then
+  switches or lands. "Current" is the tab's `getProfileId()`, not the server's `isCurrent`. Anything
+  but a clean 404, or an empty or failed profile list, is `UNAVAILABLE`, never "no longer here". It
+  waits for bootstrap, because a late bootstrap would overwrite the switched profile's stores;
+  `settleBootstrapAfter` fires on every path so that wait cannot hang.
+- **T7670 (`/?game=&profile=`):** editorStore's canonicalization drops the query at module load, so
+  those two are allow-listed on a bare path. It keeps its persistent `switchProfile`.
+- **Landmines:** ids are per-profile, so an old bookmark opens the current profile's object when the
+  same id exists there. ProjectManager is mounted under a cold `/focus/p/{id}`, and its default-tab
+  settle replaces the URL unless `landingTabFromPath` names a tab. `projectsStore.loading` starts true,
+  like `gamesDataStore.isLoading`: the settle reads false as "this account has no plays". The fetch interceptor keeps a
+  caller's `X-Profile-ID`; a test that strictly mocks `pendingNavigation` must also supply
+  `peekPendingGame` (use `importOriginal`). In a container, Vite on the bind mount serves stale
+  modules and `dev-verify.sh` reuses a running stack: run `container-stack.sh --stop` first, or an
+  e2e run tests old code.
+
 ## Data flow
 ```
 open game → pendingGame breadcrumb → useAnnotateState seeds early /video src (T4000)

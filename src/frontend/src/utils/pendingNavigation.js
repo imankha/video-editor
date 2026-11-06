@@ -11,6 +11,10 @@
  * screen. editorStore restores the *mode* from the URL at init; these helpers
  * restore the *selection* that goes with it.
  *
+ * T14970: the URL is the primary carrier now (/annotate/g/{id}, /focus/p/{id},
+ * /overlay/p/{id}). editorStore hands it to adoptUrlGame / adoptUrlProject, so the
+ * breadcrumbs stay the one channel into their consumers, and the URL wins a conflict.
+ *
  * Pattern: set before navigating to a lazy-loaded screen, consume (read +
  * clear) at the restore site, clear once the navigation has completed so a
  * later home visit can't replay it.
@@ -87,6 +91,17 @@ export function restorePendingGameAfterReload() {
   const gameId = sessionStorage.getItem(ANNOTATE_RESUME_KEY);
   if (gameId == null) return;
   sessionStorage.setItem(GAME_ID_KEY, gameId);
+}
+
+/**
+ * The URL names a game: it wins, and a breadcrumb for another game is dropped. A breadcrumb
+ * for this same game is not a conflict; it keeps its seek and play across a chunk reload.
+ */
+export function adoptUrlGame(gameId, seekTime = null) {
+  const pending = peekPendingGame();
+  if (pending?.gameId === gameId && seekTime == null) return;
+  consumePendingGame();
+  setPendingGame(gameId, seekTime);
 }
 
 // --- Post-claim recap (T5730) ---
@@ -223,9 +238,24 @@ export function setPendingProject(projectId, { mode = null } = {}) {
   }
 }
 
+export function hasPendingProject() {
+  return sessionStorage.getItem(PROJECT_ID_KEY) != null;
+}
+
+/** The URL names a play: it replaces any breadcrumb, and its mode comes from the path. */
+export function adoptUrlProject(projectId, mode) {
+  clearPendingProject();
+  setPendingProject(projectId, { mode });
+}
+
 export function clearPendingProject() {
   sessionStorage.removeItem(PROJECT_ID_KEY);
   sessionStorage.removeItem(PROJECT_MODE_KEY);
+}
+
+/** An open finished. Back or forward may have started a newer one; its breadcrumb stays. */
+export function settlePendingProject(projectId) {
+  if (sessionStorage.getItem(PROJECT_ID_KEY) === projectId.toString()) clearPendingProject();
 }
 
 export function consumePendingProject() {

@@ -26,7 +26,9 @@ export const useProjectsStore = create((set, get) => ({
   projects: [],
   selectedProjectId: null,
   selectedProject: null,
-  loading: false,
+  // T14970: true until the first list lands, like gamesDataStore.isLoading. Home settles its
+  // landing tab once this is false, and read an unloaded store as "this account has no plays".
+  loading: true,
   error: null,
 
   // Computed
@@ -114,7 +116,8 @@ export const useProjectsStore = create((set, get) => ({
       });
       return data;
     } catch (err) {
-      set({ error: err.message, loading: false });
+      // T14970: `error` is the projects LIST's failure; the caller gets null for this one.
+      set({ loading: false });
       console.error('[projectsStore] fetchProject error:', err);
       return null;
     } finally {
@@ -143,7 +146,9 @@ export const useProjectsStore = create((set, get) => ({
 
     set({ selectedProjectId: projectId });
     const project = await get().fetchProject(projectId, { reason: 'select-project' });
-    set({ selectedProject: project });
+    // T14970: back and forward can move the selection during the fetch. Same discard as
+    // refreshSelectedProject: a late result must not resurrect its project.
+    if (get().selectedProjectId === projectId) set({ selectedProject: project });
     return project;
   },
 

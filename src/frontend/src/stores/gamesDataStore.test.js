@@ -144,3 +144,30 @@ describe('gamesDataStore — finishAnnotation 404 reporting (T8180, reverses T75
     expect(errorSpy).toHaveBeenCalled();
   });
 });
+
+// T14970: the Games tab shows this field as "We couldn't load your games". One game failing
+// to open says nothing about the list, and the caller already gets the rejection.
+describe('gamesDataStore: a single game failing does not fail the list', () => {
+  beforeEach(async () => {
+    await loadModule();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ['loadGame', 404],
+    ['getGame', 404],
+    ['loadGame', 500],
+    ['getGame', 500],
+  ])('%s on a %i rejects and leaves the list error clear', async (action, status) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status }));
+    await expect(useGamesDataStore.getState()[action](4040 + status)).rejects.toThrow();
+    expect(useGamesDataStore.getState().error).toBeNull();
+    expect(useGamesDataStore.getState().isLoading).toBe(false);
+  });
+});

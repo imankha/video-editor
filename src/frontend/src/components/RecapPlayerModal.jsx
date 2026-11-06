@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { X, Play, Plus, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
+import { withTabProfile } from '../utils/sessionInit';
 import apiFetch from '../utils/apiFetch';
 import { useRecapPlayback } from './recap/useRecapPlayback';
 import { useHighlightsPlayback } from './recap/useHighlightsPlayback';
@@ -19,7 +20,7 @@ import { generateClipName } from '../utils/clipDisplayName';
 import { toast } from './shared/Toast';
 import { HOME_TILE, LIBRARY_ACTIONS, PLAYS_ONLY, RECAP } from '../config/displayNames';
 
-const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
+const getStreamUrl = (downloadId) => withTabProfile(`${API_BASE}/api/downloads/${downloadId}/stream`);
 
 const getFullscreenElement = () =>
   document.fullscreenElement || document.webkitFullscreenElement || null;

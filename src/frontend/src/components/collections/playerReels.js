@@ -1,4 +1,5 @@
 import { API_BASE } from '../../config';
+import { withTabProfile } from '../../utils/sessionInit';
 
 /**
  * Map a download item to a presentational player reel (T3610). Single source of
@@ -10,7 +11,7 @@ export function toPlayerReel(d) {
   return {
     id: d.id,
     name: d.project_name,
-    streamUrl: `${API_BASE}/api/downloads/${d.id}/stream`,
+    streamUrl: withTabProfile(`${API_BASE}/api/downloads/${d.id}/stream`),
     aspect_ratio: d.aspect_ratio,
     duration: d.duration, // may be null; the player never relies on it
     // T3940: editable project behind the reel, so the in-player "Re-edit" button

@@ -6,6 +6,8 @@ import {
   setPendingProject,
   clearPendingProject,
   consumePendingProject,
+  settlePendingProject,
+  hasPendingProject,
   setPendingGameReference,
   peekPendingGameReference,
   consumePendingGameReference,
@@ -222,5 +224,22 @@ describe('pendingNavigation', () => {
     it('returns null when nothing is pending', () => {
       expect(peekAnnotateOrigin(42)).toBeNull();
     });
+  });
+});
+
+// T14970: an older open finishing must not erase the breadcrumb of the open that replaced it.
+describe('settlePendingProject', () => {
+  beforeEach(() => sessionStorage.clear());
+
+  it('clears the breadcrumb of the open that settled', () => {
+    setPendingProject(7);
+    settlePendingProject(7);
+    expect(hasPendingProject()).toBe(false);
+  });
+
+  it('leaves a newer open alone', () => {
+    setPendingProject(8, { mode: 'overlay' });
+    settlePendingProject(7);
+    expect(consumePendingProject()).toEqual({ projectId: 8, mode: 'overlay' });
   });
 });

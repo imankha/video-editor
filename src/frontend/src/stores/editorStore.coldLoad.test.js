@@ -25,3 +25,144 @@ describe('editorStore cold load of /annotate', () => {
     expect(nav.hasPendingGame()).toBe(false);
   });
 });
+
+// T14970: a cold load of a canonical editor URL hydrates from the path.
+describe('editorStore cold load of a canonical URL', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.resetModules();
+    delete window.__popstateHandler;
+  });
+
+  it('opens the game in the path and keeps the URL', { timeout: 30000 }, async () => {
+    window.history.pushState({}, '', '/annotate/g/42');
+    const nav = await import('../utils/pendingNavigation');
+    const { useEditorStore, EDITOR_MODES } = await import('./editorStore');
+    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.ANNOTATE);
+    expect(nav.peekPendingGame()).toEqual({ gameId: 42, seekTime: null, sourceClipId: null });
+    expect(window.location.pathname).toBe('/annotate/g/42');
+    expect(useEditorStore.getState().takeUrlOpenGame(42)).toBe(true);
+  });
+
+  it('carries ?t= into the seek breadcrumb and keeps it in the URL', async () => {
+    window.history.pushState({}, '', '/annotate/g/42?t=90');
+    const nav = await import('../utils/pendingNavigation');
+    await import('./editorStore');
+    expect(nav.peekPendingGame()?.seekTime).toBe(90);
+    expect(window.location.pathname + window.location.search).toBe('/annotate/g/42?t=90');
+  });
+
+  it('the URL wins over a breadcrumb for a different game, and that breadcrumb is cleared', async () => {
+    window.history.pushState({}, '', '/annotate/g/42');
+    const nav = await import('../utils/pendingNavigation');
+    nav.setPendingGame(7, 30, 9);
+    await import('./editorStore');
+    expect(nav.peekPendingGame()).toEqual({ gameId: 42, seekTime: null, sourceClipId: null });
+  });
+
+  it('a breadcrumb for the same game keeps its seek and play across a chunk reload', async () => {
+    window.history.pushState({}, '', '/annotate/g/42');
+    const nav = await import('../utils/pendingNavigation');
+    nav.setPendingGame(42, 30, 9);
+    await import('./editorStore');
+    expect(nav.peekPendingGame()).toEqual({ gameId: 42, seekTime: 30, sourceClipId: 9 });
+  });
+
+  it.each([
+    ['/focus/p/7', 'framing'],
+    ['/overlay/p/7', 'overlay'],
+  ])('%s sets the pending project with its mode and keeps the URL', async (path, mode) => {
+    window.history.pushState({}, '', path);
+    const nav = await import('../utils/pendingNavigation');
+    const { useEditorStore } = await import('./editorStore');
+    expect(useEditorStore.getState().editorMode).toBe(mode);
+    expect(nav.hasPendingProject()).toBe(true);
+    expect(nav.consumePendingProject()).toEqual({ projectId: 7, mode });
+    expect(window.location.pathname).toBe(path);
+  });
+
+  it('the URL wins over a pending project for a different play', async () => {
+    window.history.pushState({}, '', '/overlay/p/7');
+    const nav = await import('../utils/pendingNavigation');
+    nav.setPendingProject(3, { mode: 'framing' });
+    await import('./editorStore');
+    expect(nav.consumePendingProject()).toEqual({ projectId: 7, mode: 'overlay' });
+  });
+
+  it('bare /focus stays bare with nothing pending, and legacy /framing still lands on /focus', async () => {
+    window.history.pushState({}, '', '/framing');
+    const nav = await import('../utils/pendingNavigation');
+    const { useEditorStore, EDITOR_MODES } = await import('./editorStore');
+    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.FRAMING);
+    expect(window.location.pathname).toBe('/focus');
+    expect(nav.hasPendingProject()).toBe(false);
+  });
+
+  it.each([
+    ['/focus/p/abc', 'project'],
+    ['/overlay/p/abc', 'project'],
+    ['/annotate/g/abc', 'game'],
+    ['/focus/p/99999999999999999999', 'project'],
+  ])('%s lands on the Games tab and asks for the unknown-id notice', async (path, kind) => {
+    window.history.pushState({}, '', path);
+    const { useEditorStore, EDITOR_MODES } = await import('./editorStore');
+    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.PROJECT_MANAGER);
+    expect(window.location.pathname).toBe('/home/games');
+    expect(useEditorStore.getState().urlLandingNotice).toEqual({ kind, unavailable: false });
+  });
+
+  it('keeps the profile and seek time in the URL', async () => {
+    window.history.pushState({}, '', '/annotate/g/42?profile=aaaaaaaa&t=90');
+    const nav = await import('../utils/pendingNavigation');
+    await import('./editorStore');
+    expect(window.location.search).toBe('?profile=aaaaaaaa&t=90');
+    expect(nav.peekPendingGame()?.seekTime).toBe(90);
+  });
+
+  it.each([
+    ['/annotate/g/42?profile=NOT-AN-ID', 'game'],
+    ['/focus/p/7?profile=', 'project'],
+  ])('%s names no usable profile, so nothing opens', async (url, kind) => {
+    window.history.pushState({}, '', url);
+    const nav = await import('../utils/pendingNavigation');
+    const { useEditorStore } = await import('./editorStore');
+    expect(window.location.pathname + window.location.search).toBe('/home/games');
+    expect(nav.hasPendingGame()).toBe(false);
+    expect(nav.hasPendingProject()).toBe(false);
+    expect(useEditorStore.getState().urlLandingNotice).toEqual({ kind, unavailable: false });
+  });
+
+  it('the T7670 email link keeps ?game= and ?profile= until App reads them', async () => {
+    window.history.pushState({}, '', '/?game=42&profile=aaaaaaaa');
+    await import('./editorStore');
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get('game')).toBe('42');
+    expect(params.get('profile')).toBe('aaaaaaaa');
+  });
+
+  it.each([
+    ['/annotate/g/11?profile=XYZ', 'game'],
+    ['/annotate/g/11?profile=', 'game'],
+    ['/focus/p/7?profile=XYZ', 'project'],
+    ['/overlay/p/7?profile=', 'project'],
+  ])('%s lands on the Games tab, not in the editor', async (path, kind) => {
+    window.history.pushState({}, '', path);
+    const { useEditorStore } = await import('./editorStore');
+    expect(useEditorStore.getState().editorMode).toBe('project-manager');
+    expect(window.location.pathname).toBe('/home/games');
+    expect(useEditorStore.getState().urlLandingNotice).toMatchObject({ kind });
+  });
+
+  it('an unknown route that names no object stays noticeless', async () => {
+    window.history.pushState({}, '', '/focus/p/');
+    const { useEditorStore } = await import('./editorStore');
+    expect(window.location.pathname).toBe('/home');
+    expect(useEditorStore.getState().urlLandingNotice).toBeNull();
+  });
+
+  it('public routes are left alone', async () => {
+    window.history.pushState({}, '', '/shared/collection/abc');
+    await import('./editorStore');
+    expect(window.location.pathname).toBe('/shared/collection/abc');
+  });
+});
