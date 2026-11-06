@@ -1,6 +1,6 @@
 # T14780: Step names say the parent's goal
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-03

@@ -1,6 +1,6 @@
 # T14800: Journey: split "Add footage" so the biggest loss says why (never picked a file vs upload died)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-03
