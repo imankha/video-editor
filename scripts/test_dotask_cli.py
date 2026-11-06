@@ -229,6 +229,14 @@ class DotaskCliTest(unittest.TestCase):
         self._push_commit("T2: the work", code_file="x.py")
         self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
 
+    def test_a_task_id_opening_a_body_line_does_not_count_as_merged_work(self):
+        # 5c669996f: T14920's body wrapped so a line opened "T14780 T14800 ...", and T14780 read as shipped.
+        self._write_task("T2", "Named in a body", "TODO", ["x.py"])
+        self._push_commit("T9: other work\n\nRestores the rows for T1\nT2 T3, all still TODO.", code_file="other.py")
+        self.assertEqual(dotask_cli.merged_commits("T2"), [])
+        self._push_commit("T2: the work", code_file="x.py")
+        self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
+
     def test_a_merge_that_files_a_task_does_not_count_as_merged_work(self):
         # PR #579: the merge's body quoted "T11500: file ..." and its diff carried another task's code.
         self._write_task("T2", "Filed only", "TODO", ["x.py"])
