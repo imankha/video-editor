@@ -804,5 +804,28 @@ class PrelandCheckTest(unittest.TestCase):
         self.assertEqual(code, 0, out)
 
 
+class StartModeFlagTests(unittest.TestCase):
+    """`start` defaults to headless; --window is the opt-out."""
+
+    def _parsed(self, *argv):
+        with patch.object(dotask_cli, "start", return_value=0) as start:
+            self.assertEqual(dotask_cli.main(["start", *argv, "T1"]), 0)
+        return start.call_args.args[0]
+
+    def test_start_is_headless_by_default(self):
+        self.assertTrue(self._parsed().headless)
+
+    def test_headless_flag_is_still_accepted(self):
+        self.assertTrue(self._parsed("--headless").headless)
+
+    def test_window_opts_out_of_headless(self):
+        self.assertFalse(self._parsed("--window").headless)
+
+    def test_window_and_headless_together_are_refused(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+            dotask_cli.main(["start", "--window", "--headless", "T1"])
+        self.assertEqual(caught.exception.code, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

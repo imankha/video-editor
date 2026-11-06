@@ -48,9 +48,9 @@ task's map of the component, its conventions and its traps. The CtaBar group (g-
    area (e.g. "CtaBar screens"); description = the task ids in order, the shared code, and
    anything you left out and why. Starting flips PLAN.md statuses to WIP and opens a container,
    so never start without the user's pick.
-4. **Start.** `bash scripts/dotask.sh start [--headless] [--capture] <ids in order>` (pass through
+4. **Start.** `bash scripts/dotask.sh start [--window] [--capture] <ids in order>` (pass through
    the flags the user gave). A group's task list is fixed at start, so get the bundle right in
-   step 3. Relay exactly what `/dotask` relays: slug, branch, window (or log path). Add one line:
+   step 3. Relay exactly what `/dotask` relays: slug, branch, log path (or window). Add one line:
    the worker clears between task commits; shared learnings travel in
    `/workspace/.dotask-notes.md`, archived to the wave folder by `/dotask land --after-test`.
    Then return. Landing is `/dotask land <slug>`, unchanged.

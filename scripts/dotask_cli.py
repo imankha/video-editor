@@ -1,11 +1,12 @@
 """Supervisorless /dotask: one GROUP (one or more tasks) = one container, one
-checkout, one branch, one PR. There is no model supervisor process -- the user
-talks directly to the Claude session in the container (`task.sh code`) or runs
-it headless (`task.sh run`). This module does host-side bookkeeping and git/gh
-plumbing only; it never calls a model itself.
+checkout, one branch, one PR. There is no model supervisor process -- a group
+runs headless by default (HEADLESS_LOOP: one fresh `claude -p` per task, the
+equivalent of /clear + resending the kickoff), or with --window the user talks
+directly to the Claude session in the container (`task.sh code`). This module
+does host-side bookkeeping and git/gh plumbing only; it never calls a model itself.
 
 Commands (see scripts/dotask.sh, the thin bash entry point):
-  python scripts/dotask_cli.py start [--headless] [--capture] T1 [T2 ...]
+  python scripts/dotask_cli.py start [--window] [--capture] T1 [T2 ...]
   python scripts/dotask_cli.py stack <slug>              # app stack up + healthy, prints the URLs
   python scripts/dotask_cli.py land <slug>               # stack up for a human test; no push yet
   python scripts/dotask_cli.py land <slug> --after-test  # push, PR, CI, evidence (HEAD must be the tested one)
@@ -685,7 +686,11 @@ def main(argv=None):
 
     begin = sub.add_parser("start")
     begin.add_argument("tasks", nargs="+")
-    begin.add_argument("--headless", action="store_true")
+    mode = begin.add_mutually_exclusive_group()
+    mode.add_argument("--headless", dest="headless", action="store_true", default=True,
+                      help="the default: one fresh background `claude -p` per task")
+    mode.add_argument("--window", dest="headless", action="store_false",
+                      help="open a VS Code window instead; you send /clear + the kickoff between tasks")
     begin.add_argument("--capture", action="store_true")
     begin.add_argument("--allow-overlap", action="store_true",
                        help="start even if files overlap a live group; the worker rebases before finishing")

@@ -1,6 +1,6 @@
 ---
 name: dotask
-description: "Kick off one or more planned tasks as a GROUP in a permission-free container: one container + one checkout + one branch + one PR for the whole group, tasks worked sequentially. There is no model supervisor -- this chat runs scripts/dotask.sh and relays its few output lines, then returns immediately; the user talks to the worker directly in a new VS Code window (or headless with --headless)."
+description: "Kick off one or more planned tasks as a GROUP in a permission-free container: one container + one checkout + one branch + one PR for the whole group, tasks worked sequentially. There is no model supervisor -- this chat runs scripts/dotask.sh and relays its few output lines, then returns immediately; the group runs headless by default, one fresh conversation per task (or in a new VS Code window with --window)."
 license: MIT
 metadata:
   author: video-editor
@@ -27,8 +27,8 @@ below.
 
 | User says | This chat runs | Then |
 |---|---|---|
-| `/dotask T1 T2 ...` | `bash scripts/dotask.sh start T1 T2 ...` | Relay the 3-line summary (slug, branch, window). Return. Say nothing else. |
-| `/dotask T1 T2 ... --headless` | `bash scripts/dotask.sh start --headless T1 T2 ...` | Relay slug/branch/log path. Return. |
+| `/dotask T1 T2 ...` | `bash scripts/dotask.sh start T1 T2 ...` | Headless (the default). Relay slug/branch/log path. Return. Say nothing else. |
+| `/dotask T1 T2 ... --window` | `bash scripts/dotask.sh start --window T1 T2 ...` | Relay the 3-line summary (slug, branch, window). Return. |
 | `/dotask T1 T2 ... --allow-overlap` | `bash scripts/dotask.sh start --allow-overlap T1 T2 ...` | Same as a normal start, but files shared with another live group are a warning, not a refusal; the kickoff tells the worker to rebase on master before PUSHREADY. |
 | `/dotask T1 T2 ... --capture` | `bash scripts/dotask.sh start --capture T1 T2 ...` | Same, plus: this group's `land` will run captured review/proof automatically. |
 | `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Step 1 of 2. First runs `scripts/dotask_preland_check.sh` on the checkout (whitespace, non-evidence files under `qa/`, ruff/eslint growth, `ci_policy` routing) and refuses, naming the paths, while it fails. Then restarts the group's app stack and returns only once the frontend + backend `/api/health` answer. Relay the URL (`http://localhost:<5173+offset>`) WITH a test guide (see [Test guide](#test-guide-required-with-every-localhost-link)) and STOP: the human tests the app. Nothing is pushed and no PR exists yet. Records the tested HEAD. On a timeout it exits non-zero with the log paths; relay them. |
@@ -48,7 +48,9 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   whole group. Tasks are worked sequentially inside that one container, one commit per task
   (`T1: ...`, `T2: ...`), criteria namespaced per task (`T1:C1`, `T2:C1`, ...).
 - **One task per conversation** (user decision, 2026-10-08). After each task's commit the worker
-  stops and asks the user to send `/clear`, then `Implement /workspace/.dotask-kickoff.md`.
+  stops. Headless (the default, user decision 2026-11-06), the loop then starts a fresh `claude -p`
+  with the Implement instruction, which is `/clear` + resend with no human in it. With `--window`
+  the worker asks the user to send `/clear`, then `Implement /workspace/.dotask-kickoff.md`.
   The fresh conversation resumes at the first task without a `STAGE_DONE <task> commit` line,
   and `qa/proof.json` grows one task at a time. Measured on g-t12110-8: one session across 8 tasks
   re-read 48k -> 190k tokens per request. Fresh context per task is an estimated 33-51% fewer
@@ -71,9 +73,10 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   `DOTASK_PREFILL=0` turns it off.
 - **Parallelism = the user runs `/dotask` again** -- another group, another container, another
   window. There is no WIP-limit bookkeeping to maintain here; each group is independent.
-- **`--headless`** runs the group in the background instead of opening a window: one fresh
-  `task.sh drive` dispatch per task, stopping on `PUSHREADY` or anything unexpected.
+- **Headless is the default** (`--headless` is still accepted): the group runs in the background,
+  one fresh `task.sh drive` dispatch per task, stopping on `PUSHREADY` or anything unexpected.
   `dotask.sh start` prints the log path and returns immediately without waiting for it.
+  `--window` opens the VS Code window instead, for a group you want to talk to.
 - **Captured review/proof only with `--capture`.** Without it, `/dotask land <slug> --after-test`
   (after the human test) pushes, opens the PR, waits for CI, builds the evidence directory (`scripts/dotask_evidence.py`, reading the
   worker's `qa/proof.json`), and hands the PR + evidence path to the user -- nothing merges
