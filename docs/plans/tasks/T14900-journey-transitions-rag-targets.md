@@ -1,6 +1,6 @@
 # T14900: Journey transitions coloured green / yellow / red against the roadmap targets
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M

@@ -1,6 +1,6 @@
 # T14910: Spend-readiness gates (admin panel + read-only endpoint): "can we spend on ads yet?"
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Tier:** L (new admin endpoints + constants module shared with T7460; design gate passed)
