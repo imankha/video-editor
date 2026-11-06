@@ -443,6 +443,28 @@ class Report(unittest.TestCase):
         finally:
             os.chdir(cwd)
 
+    def test_init_accepts_a_task_whose_id_only_opens_a_body_line(self):
+        # 5c669996f: T14920's body wrapped so a line opened "T14780 T14800 ...", and init refused T14780.
+        repo = self.root / "gitrepo"
+        repo.mkdir()
+
+        def git(*args):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+        git("init", "-q")
+        (repo / "f.txt").write_text("x")
+        git("add", ".")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm",
+            "T9001: other work\n\nRestores the rows for T8999\nT9000 T9002, all still TODO.")
+        sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        git("update-ref", "refs/remotes/origin/master", sha)
+        cwd = os.getcwd()
+        os.chdir(repo)
+        try:
+            self.assertEqual(self.cli("init", "--wave", "w4", "--task", "T9000", "--plan", str(self.plan)), 0)
+        finally:
+            os.chdir(cwd)
+
     def test_init_refuses_a_task_already_merged_on_origin_master(self):
         repo = self.root / "gitrepo"
         repo.mkdir()
