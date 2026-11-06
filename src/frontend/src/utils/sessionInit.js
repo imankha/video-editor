@@ -13,9 +13,11 @@ import { DEEP_LINK_KIND } from '../constants/deepLinkKinds';
 import apiFetch from './apiFetch';
 import { checkServerVersion } from './appVersion';
 import { PROFILING_ENABLED } from './profiling';
+import { getTabProfileId, setTabProfileId } from './tabProfile';
+
+export { withTabProfile } from './tabProfile';
 
 let _profileId = null;
-let _currentProfileId = null;
 let _currentUserId = null;
 let _fetchPatched = false;
 let _axiosPatched = false;
@@ -89,7 +91,7 @@ function installFetchInterceptor() {
       const platform = `${isPwa ? 'pwa' : 'webapp'}-${isMobile ? 'mobile' : 'desktop'}`;
       // T14970: a caller may name a profile for one read (deep-link lookup across the
       // user's profiles). The backend still refuses a profile the user does not own.
-      const profileId = init.headers?.['X-Profile-ID'] || _currentProfileId;
+      const profileId = init.headers?.['X-Profile-ID'] || getTabProfileId();
       init.headers = {
         ...(init.headers || {}),
         'X-Request-ID': reqId,
@@ -185,8 +187,8 @@ function installAxiosInterceptor() {
     if (isApiRequest) {
       config.withCredentials = true;
       config.headers['X-Request-ID'] = crypto.randomUUID().slice(0, 8);
-      if (_currentProfileId) {
-        config.headers['X-Profile-ID'] = _currentProfileId;
+      if (getTabProfileId()) {
+        config.headers['X-Profile-ID'] = getTabProfileId();
       }
       if (_currentUserId) {
         config.headers['X-User-ID'] = _currentUserId;
@@ -291,13 +293,13 @@ export async function initSession() {
     }
 
     // T3360: Phase A complete (auth/me resolved). Do NOT call setSessionState
-    // yet -- that happens after Phase B sets _currentProfileId, preventing
+    // yet -- that happens after Phase B sets the tab profile, preventing
     // reactive fetches from arriving at the backend without X-Profile-ID.
 
     // Phase B: fire auth/init (profile DB download) -- callers can await
     // profileReady to know when profile-dependent endpoints are safe.
     updatePreloader(25, 'Initializing profile...');
-    const cachedProfileId = _currentProfileId || sessionStorage.getItem('rb_profile_id');
+    const cachedProfileId = getTabProfileId() || sessionStorage.getItem('rb_profile_id');
     const initBody = cachedProfileId ? JSON.stringify({ profile_id: cachedProfileId }) : '{}';
     const profileReady = fetchWithRetry(`${API_BASE}/api/auth/init`, {
       method: 'POST',
@@ -315,10 +317,10 @@ export async function initSession() {
       const tabProfileId = await resolveTabProfile(initData.profile_id);
 
       _profileId = tabProfileId;
-      _currentProfileId = tabProfileId;
+      setTabProfileId(tabProfileId);
       sessionStorage.setItem('rb_profile_id', tabProfileId);
 
-      // NOW set session state -- _currentProfileId is set so all subsequent
+      // NOW set session state -- the tab profile is set so all subsequent
       // requests will include X-Profile-ID header.
       useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator, { skipFetches: true, googleLinked });
       updatePreloader(40, 'Getting things ready...');
@@ -348,21 +350,6 @@ export async function initSession() {
 }
 
 /**
- * T14970: name this tab's profile on a same-origin media URL. <video> and <img> cannot send
- * X-Profile-ID, so without this they read the ACTIVE profile's row for the same id. Always
- * named, even when the tab matches the active profile now: another tab can switch the account
- * at any moment, and this one would not hear about it.
- */
-export function withTabProfile(url) {
-  if (!_currentProfileId) return url;
-  const isSameOrigin = url.startsWith('/') || (API_BASE && url.startsWith(API_BASE));
-  if (!isSameOrigin) return url;
-  const [path, fragment] = url.split('#');
-  const joined = `${path}${path.includes('?') ? '&' : '?'}profile_id=${_currentProfileId}`;
-  return fragment ? `${joined}#${fragment}` : joined;
-}
-
-/**
  * T14970: the profile this tab should use, given the one it would otherwise have. An editor
  * URL names its profile, and that must be settled before anything loads. Held by this tab
  * only: restoring a page never writes the active profile. A profile that cannot be used
@@ -382,10 +369,10 @@ async function resolveTabProfile(fallbackProfileId) {
 
 /** For a sign-in on the page, which skips initSession. Resolve before opening the session. */
 export async function applyUrlProfile() {
-  const tabProfileId = await resolveTabProfile(_currentProfileId);
+  const tabProfileId = await resolveTabProfile(getTabProfileId());
   if (!tabProfileId) return;
   _profileId = tabProfileId;
-  _currentProfileId = tabProfileId;
+  setTabProfileId(tabProfileId);
 }
 
 /** Is an editor URL's profile one this user owns? `unavailable` means the check itself failed. */
@@ -410,7 +397,7 @@ export function getProfileId() {
  * Called on profile switch — no need to re-patch fetch().
  */
 export function reinstallProfileHeader(newProfileId) {
-  _currentProfileId = newProfileId;
+  setTabProfileId(newProfileId);
   _profileId = newProfileId;
 }
 
@@ -431,7 +418,7 @@ export function getUserId() {
  * window so no such request is even emitted.
  */
 export function clearProfileHeader() {
-  _currentProfileId = null;
+  setTabProfileId(null);
   _profileId = null;
   sessionStorage.removeItem('rb_profile_id');
 }
@@ -443,6 +430,6 @@ export function clearProfileHeader() {
 export function resetSession() {
   _initPromise = null;
   _currentUserId = null;
-  _currentProfileId = null;
+  setTabProfileId(null);
   _profileId = null;
 }

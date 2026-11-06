@@ -30,7 +30,7 @@ import { forceRefreshUrl } from '../utils/storageUrls';
 import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
-import { withTabProfile } from '../utils/sessionInit';
+import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore } from '../stores';
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';

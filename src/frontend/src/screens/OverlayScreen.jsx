@@ -19,7 +19,7 @@ import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { frameToTime, timeToFrame } from '../utils/videoUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { API_BASE } from '../config';
-import { withTabProfile } from '../utils/sessionInit';
+import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
 import { useProject } from '../contexts/ProjectContext';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';

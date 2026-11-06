@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
-import { withTabProfile } from '../utils/sessionInit';
+import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
 
 const API_BASE_URL = `${API_BASE}/api`;

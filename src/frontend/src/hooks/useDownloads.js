@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
-import { withTabProfile } from '../utils/sessionInit';
+import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
 import { fetchReelDownload } from '../utils/reelDownload';
 import { recordWrite } from '../utils/syncTrace';

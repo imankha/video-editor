@@ -7,7 +7,7 @@
  */
 
 import { API_BASE } from '../config';
-import { withTabProfile } from './sessionInit';
+import { withTabProfile } from './tabProfile';
 
 // ========== Clip File Status Selectors ==========
 
