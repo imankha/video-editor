@@ -58,6 +58,7 @@ import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
 import { captureCampaignParams } from './utils/campaignCapture';
 import { setPendingGame, hasPendingProject } from './utils/pendingNavigation';
+import { openEmailGameLink } from './utils/emailGameLink';
 import { markBootstrapSettled, settleBootstrapAfter } from './utils/deepLinkRecovery';
 import { dismissPreloader as dismissPreloaderEl } from './utils/preloader';
 import './utils/syncCheck'; // T13810: installs window.__syncCheck (read-only consistency checker)
@@ -283,34 +284,14 @@ function App() {
         }
       }
 
-      // T7670: Open a game from the upload-complete email deep link. Switch to
-      // the game's profile first (idempotent no-op if already current) so the
-      // per-profile game id resolves against the right profile, then open it in
-      // annotate mode once games load (AnnotateScreen reads pendingGameId).
+      // T7670: Open a game from the upload-complete email deep link.
       const deeplinkGameId = sessionStorage.getItem('deeplinkGameId');
       if (deeplinkGameId) {
         const deeplinkProfileId = sessionStorage.getItem('deeplinkProfileId');
         sessionStorage.removeItem('deeplinkGameId');
         sessionStorage.removeItem('deeplinkProfileId');
 
-        if (deeplinkProfileId) {
-          await useProfileStore.getState().switchProfile(deeplinkProfileId);
-        }
-        const targetId = Number(deeplinkGameId);
-        const waitForGame = setInterval(() => {
-          const games = useGamesDataStore.getState().games;
-          if (games.length === 0) return;
-          // Keep polling until the target game appears: switchProfile's Phase-3
-          // refetch isn't awaited, so a non-empty list can briefly precede the
-          // target profile's full list. Clear only once the game is found (or
-          // the 5s timeout fires), never on the first non-empty tick.
-          const game = games.find(g => g.id === targetId);
-          if (!game) return;
-          clearInterval(waitForGame);
-          setPendingGame(game.id);
-          useEditorStore.getState().setEditorMode('annotate');
-        }, 100);
-        setTimeout(() => clearInterval(waitForGame), 5000);
+        await openEmailGameLink(Number(deeplinkGameId), deeplinkProfileId);
       }
 
       // Payment return: restore editor state and auto-export if redirected from Stripe.

@@ -265,11 +265,12 @@ export function resolveEditorScreen(editorMode, hasSelectedProject) {
 // URL, stale link, bare "/") resolves to the project manager — the app's home —
 // never into an editor, so a bad URL can't drop the user onto whatever project
 // state happens to be loaded (T5677).
-const initialMode = modeFromPath();
+// T14970: a path with an unusable id or profile lands on Games, so it never picks an editor.
+const initialMalformedKind = malformedObjectKind(window.location.pathname, window.location.search);
+const initialMode = initialMalformedKind ? EDITOR_MODES.PROJECT_MANAGER : modeFromPath();
 // T14970: the URL is the primary carrier of what is open; hand it to the same breadcrumbs
 // a tap sets, so the existing consumers open it. T12880: bare /annotate carries no game id,
 // so reopen the game the tab was on.
-const initialMalformedKind = malformedObjectKind(window.location.pathname, window.location.search);
 const initialObject = initialMalformedKind
   ? { gameId: null, projectId: null, seekTime: null, profileId: null }
   : parseEditorPath();

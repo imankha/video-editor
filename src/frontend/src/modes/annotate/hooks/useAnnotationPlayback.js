@@ -319,8 +319,9 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
     const startSeg = timeline.segments[startSegIndex];
 
-    // Push history entry so browser back exits playback instead of leaving annotate
-    window.history.pushState({ mode: 'annotate', playback: true }, '', '/annotate');
+    // Push history entry so browser back exits playback instead of leaving annotate. No URL
+    // argument: the entry keeps the page's address, game and profile included (T14970).
+    window.history.pushState({ mode: 'annotate', playback: true }, '');
 
     // Show loading state while we prepare
     setIsLoading(true);

@@ -140,6 +140,19 @@ describe('editorStore cold load of a canonical URL', () => {
     expect(params.get('profile')).toBe('aaaaaaaa');
   });
 
+  it.each([
+    ['/annotate/g/11?profile=XYZ', 'game'],
+    ['/annotate/g/11?profile=', 'game'],
+    ['/focus/p/7?profile=XYZ', 'project'],
+    ['/overlay/p/7?profile=', 'project'],
+  ])('%s lands on the Games tab, not in the editor', async (path, kind) => {
+    window.history.pushState({}, '', path);
+    const { useEditorStore } = await import('./editorStore');
+    expect(useEditorStore.getState().editorMode).toBe('project-manager');
+    expect(window.location.pathname).toBe('/home/games');
+    expect(useEditorStore.getState().urlLandingNotice).toMatchObject({ kind });
+  });
+
   it('an unknown route that names no object stays noticeless', async () => {
     window.history.pushState({}, '', '/focus/p/');
     const { useEditorStore } = await import('./editorStore');

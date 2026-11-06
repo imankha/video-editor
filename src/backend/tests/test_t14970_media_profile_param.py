@@ -91,6 +91,7 @@ def test_query_profile_never_chooses_where_a_write_lands(client):
     "/api/downloads/1/stream",
     "/api/projects/1/working_video/stream",
     "/api/clips/projects/1/clips/1/stream",
+    "/api/clips/projects/1/clips/1/file",
 ])
 @pytest.mark.parametrize("value", [FOREIGN, "deadbeef", "not-an-id"])
 def test_unowned_query_profile_on_a_media_route_is_a_404(client, path, value):

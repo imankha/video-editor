@@ -668,7 +668,7 @@ async def _apply_read_etag(request: Request, response: Response) -> Response:
 # cannot send X-Profile-ID.
 _MEDIA_PATH = re.compile(
     r'^/api/(?:games/\d+/(?:video|stream)|downloads/\d+/stream'
-    r'|projects/\d+/working_video/stream|clips/projects/\d+/clips/\d+/stream)$'
+    r'|projects/\d+/working_video/stream|clips/projects/\d+/clips/\d+/(?:stream|file))$'
 )
 _POSTER_PATH = re.compile(r'^/api/(?:games|projects|downloads)/\d+/poster\.jpg$')
 

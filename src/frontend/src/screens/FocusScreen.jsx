@@ -30,6 +30,7 @@ import { forceRefreshUrl } from '../utils/storageUrls';
 import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
+import { withTabProfile } from '../utils/sessionInit';
 import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore } from '../stores';
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
@@ -188,7 +189,7 @@ export function FocusScreen({
   const getClipFileUrl = useCallback((clipId) => {
     const clip = clips.find(c => c.id === clipId);
     if (clip) return getClipFileUrlSelector(clip, projectId);
-    return `${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/file`;
+    return withTabProfile(`${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/file`);
   }, [clips, projectId]);
 
   // T740: No outdated clips check needed in framing mode.
@@ -537,7 +538,7 @@ export function FocusScreen({
           };
         } catch (err) {
           console.warn('[Framing] Presigned URL fetch failed, falling back to proxy:', err.message);
-          const proxyUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/stream`;
+          const proxyUrl = withTabProfile(`${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/stream`);
           return {
             url: proxyUrl,
             gameUrl: null,

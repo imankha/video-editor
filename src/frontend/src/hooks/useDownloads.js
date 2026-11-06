@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
+import { withTabProfile } from '../utils/sessionInit';
 import apiFetch from '../utils/apiFetch';
 import { fetchReelDownload } from '../utils/reelDownload';
 import { recordWrite } from '../utils/syncTrace';
@@ -151,7 +152,7 @@ export function useDownloads(isOpen = false) {
    * limit on the R2 origin (presigned URLs caused 15s+ "blocked" stalls).
    */
   const getStreamingUrl = useCallback((downloadId) => {
-    return `${API_BASE_URL}/downloads/${downloadId}/stream`;
+    return withTabProfile(`${API_BASE_URL}/downloads/${downloadId}/stream`);
   }, []);
 
   /**

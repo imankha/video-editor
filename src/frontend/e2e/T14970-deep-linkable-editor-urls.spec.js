@@ -267,6 +267,32 @@ for (const { name, viewport } of VIEWPORTS) {
       expect(await markDocument(page), 'every step stayed in one document').toBe(documentMark);
     });
 
+    test('Watch plays keeps the game address during playback, after it, and on a reload', async ({ page }) => {
+      await page.goto('/home/games');
+      const games = await listGames(page);
+      const game = games.find(g => g.clip_count > 0);
+      expect(game, 'the full preset has a game with plays').toBeTruthy();
+
+      // 150 s sits between plays: the Watch plays card is hidden while a play is selected.
+      await page.goto(`/annotate/g/${game.id}?t=150`);
+      await expectOnGame(page, game.id);
+      const address = () => { const url = new URL(page.url()); return url.pathname + url.search; };
+      const before = address();
+
+      const watchPlays = page.locator('[data-testid="annotate-review-plays"]:visible').first();
+      await watchPlays.waitFor({ timeout: 30000 });
+      await watchPlays.click();
+      await expect(page.getByTestId('playback-mode-badge')).toBeVisible({ timeout: 30000 });
+      expect(address()).toBe(before);
+
+      await page.goBack();
+      await expect(page.getByTestId('playback-mode-badge')).toBeHidden({ timeout: 30000 });
+      expect(address()).toBe(before);
+
+      await page.reload();
+      await expectOnGame(page, game.id);
+    });
+
     test('reload on an open game lands on the same game', async ({ page }) => {
       await page.goto('/home/games');
       const [game] = await listGames(page);

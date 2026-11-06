@@ -149,6 +149,10 @@ reports UNAVAILABLE rather than a false "no longer here" and uses the tab's own 
 settles on every path; the T7670 link survives URL canonicalization; a cold `/home/reels` stays on
 Plays (the projects store said "not loading" before its first load).
 
+**2026-11-06**: Independent verification fixes. Watch plays no longer overwrites the address (its history entry keeps the page's URL). The T7670 link moved to `utils/emailGameLink.js`: a profile that cannot be selected lands on Games with the notice and never opens the id in the current profile, and a game missing from the list gets the notice too. A malformed or empty `?profile=` lands on Games, not Plays. Same-origin video URLs that lacked the tab's profile now name it, and the clip `/file` route honours `profile_id`.
+
+**2026-11-06**: Owner approved the landing change on bare paths: on an account with plays, `/annotate`, `/home`, `/`, `/framing`, `/focus` and `/overlay` land on `/home/reels`, and `/nonsense` lands on `/home`.
+
 ## Acceptance Criteria
 
 - [x] Every editor page has a canonical URL that reproduces it on a cold load in the same account.

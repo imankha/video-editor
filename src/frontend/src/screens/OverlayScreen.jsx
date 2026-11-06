@@ -19,6 +19,7 @@ import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { frameToTime, timeToFrame } from '../utils/videoUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { API_BASE } from '../config';
+import { withTabProfile } from '../utils/sessionInit';
 import apiFetch from '../utils/apiFetch';
 import { useProject } from '../contexts/ProjectContext';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
@@ -1906,7 +1907,7 @@ export function OverlayScreen({
           reels={[{
             id: project.final_video_id,
             name: project?.name,
-            streamUrl: `${API_BASE}/api/downloads/${project.final_video_id}/stream`,
+            streamUrl: withTabProfile(`${API_BASE}/api/downloads/${project.final_video_id}/stream`),
             aspect_ratio: project?.aspect_ratio,
             duration: null,
             // T10190 §3.2 Shaper 4: already-derived gameName (above); RAW
