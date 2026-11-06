@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from app.analytics import create_user_segment
 from app.services import spend_readiness_constants as C
 from app.services.analytics_spend_readiness import (
+    _dollars,
     all_green,
     break_even_cents,
     build_gate_diagnosis,
@@ -511,6 +512,57 @@ class TestGateReaders:
         assert rows["US"]["n"] == 3 and rows["US"]["pct"] == 60.0
         assert rows["unknown"]["n"] == 1
         assert "GB" not in rows
+
+
+class TestNoBreakEvenEstimate:
+    """T14910 follow-up (2026-11-06): no payers or no sign-ups means NO UPPER BOUND, so no channel
+    may read settled and no reason may quote a $0.00 bound as evidence. Through the production
+    path (build_spend_readiness), never hand-picked bounds. A real upper bound under the floor
+    (one payer) still rules the dear channels out, as design section 4 allows."""
+
+    @staticmethod
+    def _assert_no_estimate(data, missing):
+        be = data["break_even"]
+        assert be["point_cents"] is None and be["upper_cents"] is None and be["lower_cents"] is None
+        priced = [c for c in data["channels"] if c["key"] != "club_placement"]
+        assert len(priced) == 5
+        assert all((c["state"], c["confidence"]) == ("grey", None) for c in priced), [
+            (c["key"], c["state"], c["confidence"]) for c in priced]
+        assert all("$0.00" not in c["reason"] and missing in c["reason"] for c in priced)
+        assert not any(c["confidence"] == "settled" for c in data["channels"])
+        line = data["verdict"]["line"]
+        assert "$0.00" not in line and f"no estimate yet ({missing})" in line
+        assert data["verdict"]["all_green"] is False
+        assert be["readable"] is False and be["no_estimate"] == missing and be["binding_input"] is None
+        assert missing in be["text"]
+
+    def test_empty_database_has_no_upper_bound_so_no_channel_is_settled(self, pg):
+        self._assert_no_estimate(_read(), f"0 sign-ups in the {C.COHORT_DAYS} d cohort")
+
+    def test_many_signups_and_no_payers_is_grey_not_a_settled_no(self, pg):
+        for i in range(30):
+            _user(f"np-{i}", days_ago=20)
+        data = _read()
+        assert _gate(data, "payers_per_100")["n"] == 30
+        self._assert_no_estimate(data, f"0 payers in {C.REVENUE_DAYS} d")
+        assert data["break_even"]["inputs"]["revenue_per_payer_cents"] is None
+        assert data["break_even"]["inputs"]["payers_per_signup"] == 0.0
+
+    def test_one_payer_gives_a_real_upper_bound_that_still_rules_meta_out(self, pg):
+        for i in range(100):
+            _user(f"op-{i}", days_ago=20)
+        _purchase(_uid("op-0"), 1999, days_ago=10)
+        data = _read()
+        be = data["break_even"]
+        assert be["readable"] is False and be["no_estimate"] is None
+        assert 0 < be["upper_cents"] < 300
+        rows = {c["key"]: c for c in data["channels"]}
+        assert (rows["meta_reels"]["state"], rows["meta_reels"]["confidence"]) == ("NO", "settled")
+        assert (rows["reddit_central"]["state"], rows["reddit_central"]["confidence"]) == ("NO", "settled")
+        assert "even at the upper bound" in rows["meta_reels"]["reason"]
+        assert "$0.00" not in rows["meta_reels"]["reason"]
+        assert rows["coach_credits"]["confidence"] == "provisional"
+        assert f"at most {_dollars(be['upper_cents'])}" in data["verdict"]["line"]
 
 
 class TestDiagnosis:

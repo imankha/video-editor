@@ -170,13 +170,17 @@ def _dollars(cents: float) -> str:
     return f"${cents / 100:.2f}"
 
 
-def channel_rows(*, point: float, lower: float, upper: float, readable: bool,
+def channel_rows(*, point: float | None, lower: float | None, upper: float | None, readable: bool,
                  payers_per_signup: float | None = None, signups: int | None = None,
                  revenue_per_payer_cents: float | None = None, variable_cents: float | None = None,
-                 club_attributed: int = 0) -> list[dict[str, Any]]:
+                 club_attributed: int = 0, no_estimate: str | None = None) -> list[dict[str, Any]]:
     """The ladder: one benchmark row per channel, ordered by cost, coloured by the break-even
     against the channel's cost per sign-up. A state whose bounds disagree is provisional and
-    names the other reading and the payers needed to settle."""
+    names the other reading and the payers needed to settle. With no break-even estimate at all
+    (`no_estimate` names the unmeasured factor; the bounds are None) every priced row is grey,
+    like a gate under its floor: there is no upper bound, so nothing can be settled either way."""
+    if (no_estimate is None) != (point is not None and lower is not None and upper is not None):
+        raise ValueError(f"channel_rows: bounds and no_estimate disagree ({point}, {lower}, {upper}, {no_estimate!r})")
     rows = []
     for ch in C.CHANNELS:
         row = {"key": ch["key"], "label": ch["label"], "platform": ch["platform"], "label_kind": "B",
@@ -190,6 +194,11 @@ def channel_rows(*, point: float, lower: float, upper: float, readable: bool,
                 rows.append(row)
                 continue
             row["cost_cents"] = ch["fee_cents"] / club_attributed
+        if no_estimate is not None:
+            row["state"] = "grey"
+            row["reason"] = f"no break-even yet: {no_estimate}"
+            rows.append(row)
+            continue
         cost = row["cost_cents"]
         s_point, s_lo, s_hi = (channel_state(x, cost) for x in (point, lower, upper))
         settled = ((s_point == "GO" and s_lo == "GO")
@@ -432,7 +441,9 @@ def verdict(gates: list[dict], channels: list[dict], focus_: dict | None, measur
     parts.append("Channels: " + ", ".join(
         f"{c['label']} {c['state']}" + (" (provisional)" if c["confidence"] == "provisional" else "")
         for c in channels) + ".")
-    if break_even.get("point_cents") is not None:
+    if break_even.get("no_estimate"):
+        parts.append(f"Break-even: no estimate yet ({break_even['no_estimate']}).")
+    elif break_even.get("point_cents") is not None:
         parts.append(f"Break-even today {_dollars(break_even['point_cents'])}, "
                      f"at most {_dollars(break_even['upper_cents'])} (A).")
     return {"headline": headline, "line": " ".join(parts), "all_green": green}
@@ -644,18 +655,36 @@ def _ratio(a: float, b: float) -> float:
 
 
 def _break_even(g6: dict, g7: dict, inputs: dict, purchases_per_payer: float) -> dict:
+    """Break-even per sign-up with its 95% bounds. Both factors must be MEASURED for any bound
+    to exist: with no sign-up in the cohort or no payer in REVENUE_DAYS there is no estimate,
+    so every bound is None and `no_estimate` names the missing input (2026-11-06 follow-up:
+    treating a missing revenue per payer as $0.00 manufactured a settled NO on every channel)."""
     signups = inputs["signups"]
-    payers = _ratio(g6["k"], g6["n"])
-    revenue = g7["value"] or 0.0
-    rev_lo, rev_hi = (g7["interval"] or [revenue, revenue])
     export_rate = _ratio(inputs["exporters"], signups)
     plays_per_exporter = _ratio(inputs["plays"], inputs["exporters"])
     games_per_signup = _ratio(inputs["games"], signups)
+    payers = g6["k"] / g6["n"] if g6["n"] else None
+    revenue = g7["value"]
+    if payers is None:
+        missing = f"0 sign-ups in the {C.COHORT_DAYS} d cohort"
+    elif revenue is None:
+        missing = f"0 payers in {C.REVENUE_DAYS} d"
+    else:
+        missing = None
+    base = {"readable": False, "label_kind": "M", "upper_label_kind": "A", "binding_input": None,
+            "binding_text": None, "no_estimate": missing,
+            "inputs": {"payers_per_signup": payers, "revenue_per_payer_cents": revenue, "export_rate": export_rate,
+                       "plays_per_exporter": plays_per_exporter, "games_per_signup": games_per_signup,
+                       "purchases_per_payer": purchases_per_payer, "variable_cents": None, "signups": signups}}
+    if missing is not None:
+        return {**base, "point_cents": None, "lower_cents": None, "upper_cents": None,
+                "text": f"no break-even yet: {missing}"}
+    rev_lo, rev_hi = g7["interval"]
     kw = {"export_rate": export_rate, "plays_per_exporter": plays_per_exporter,
           "games_per_signup": games_per_signup, "purchases_per_payer": purchases_per_payer}
     point = break_even_cents(payers_per_signup=payers, revenue_per_payer_cents=revenue, **kw)
     variable = variable_cost_cents(payers_per_signup=payers, revenue_per_payer_cents=revenue, **kw)
-    p_lo, p_hi = wilson(g6["k"], g6["n"]) if g6["n"] else (0.0, 0.0)
+    p_lo, p_hi = wilson(g6["k"], g6["n"])
     lower = break_even_cents(payers_per_signup=p_lo, revenue_per_payer_cents=max(rev_lo, 0), **kw)
     upper = break_even_cents(payers_per_signup=p_hi, revenue_per_payer_cents=rev_hi, **kw)
     readable = g6["n"] >= C.SMALL_N_FLOOR and g7["n"] >= C.SMALL_N_FLOOR
@@ -670,14 +699,11 @@ def _break_even(g6: dict, g7: dict, inputs: dict, purchases_per_payer: float) ->
     text = (f"{payers * 100:.2f}% payers x {_dollars(revenue)} - {_dollars(variable)} variable "
             f"({export_rate:.3f} export x {plays_per_exporter:.1f} plays x {_dollars(C.GPU_PER_PLAY_CENTS)} "
             f"+ {games_per_signup:.2f} games x {_dollars(C.STORAGE_PER_GAME_CENTS)} + Stripe)")
-    return {"point_cents": round(point, 2), "lower_cents": round(lower, 2), "upper_cents": round(upper, 2),
-            "readable": readable, "label_kind": "M", "upper_label_kind": "A", "binding_input": binding,
+    base["inputs"]["variable_cents"] = round(variable, 2)
+    return {**base, "point_cents": round(point, 2), "lower_cents": round(lower, 2), "upper_cents": round(upper, 2),
+            "readable": readable, "binding_input": binding,
             "binding_text": ("Revenue per payer is the input that moves paid channels into range: a pricing "
                              "decision, not a funnel fix." if binding == "revenue_per_payer" else None),
-            "inputs": {"payers_per_signup": payers, "revenue_per_payer_cents": revenue, "export_rate": export_rate,
-                       "plays_per_exporter": plays_per_exporter, "games_per_signup": games_per_signup,
-                       "purchases_per_payer": purchases_per_payer, "variable_cents": round(variable, 2),
-                       "signups": signups},
             "text": text}
 
 
@@ -783,7 +809,8 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
                             upper=break_even["upper_cents"], readable=break_even["readable"],
                             payers_per_signup=break_even["inputs"]["payers_per_signup"], signups=inputs["signups"],
                             revenue_per_payer_cents=break_even["inputs"]["revenue_per_payer_cents"],
-                            variable_cents=break_even["inputs"]["variable_cents"])
+                            variable_cents=break_even["inputs"]["variable_cents"],
+                            no_estimate=break_even["no_estimate"])
     focus_ = focus(gates)
     measurement = measurement_test(gates)
     return {

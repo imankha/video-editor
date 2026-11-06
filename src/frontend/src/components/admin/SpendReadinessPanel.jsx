@@ -143,8 +143,15 @@ function Economics({ data }) {
       <div data-testid="spend-break-even" className="space-y-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="uppercase text-gray-400">Break-even per sign-up</span>
-          <span className="text-white font-semibold">{money(be.point_cents)}</span>
-          <span className="text-gray-500">(at most {money(be.upper_cents)}, A{be.readable ? '' : '; not readable under the floor'})</span>
+          {be.point_cents == null ? (
+            // No sign-up or no payer: the backend sends null bounds and names the missing factor.
+            <span data-testid="spend-break-even-none" className="text-gray-400 italic">no estimate yet ({be.no_estimate})</span>
+          ) : (
+            <>
+              <span className="text-white font-semibold">{money(be.point_cents)}</span>
+              <span className="text-gray-500">(at most {money(be.upper_cents)}, A{be.readable ? '' : '; not readable under the floor'})</span>
+            </>
+          )}
           <Toggle testId="spend-break-even-inputs" open={inputsOpen} onClick={() => setInputsOpen(o => !o)} className="text-purple-300">inputs</Toggle>
         </div>
         {inputsOpen && (
