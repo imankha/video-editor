@@ -342,6 +342,7 @@ export function ProjectsScreen({
   // T14970: the same resume opens a play named by the URL, on a cold load and again
   // each time back or forward lands on a different play (urlNavigationSeq).
   const urlNavigationSeq = useEditorStore(state => state.urlNavigationSeq);
+  const gamesTabRequest = useEditorStore(state => state.gamesTabRequest);
 
   // T14970: a URL named something unusable and landed here, possibly before the toast layer
   // existed. Same words as an id that turned out to be gone.
@@ -465,6 +466,7 @@ export function ProjectsScreen({
     <AppStateProvider value={appStateValue}>
       <div className="bg-gray-900">
         <ProjectManager
+          gamesTabRequest={gamesTabRequest}
           projects={projects}
           loading={projectsLoading || loadingProjectId !== null}
           error={projectsError}

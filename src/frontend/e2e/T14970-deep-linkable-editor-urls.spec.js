@@ -293,6 +293,24 @@ for (const { name, viewport } of VIEWPORTS) {
       await expectOnGame(page, game.id);
     });
 
+    test.describe('an email link that cannot open', () => {
+      for (const [title, link] of [
+        ['a profile the account cannot use', game => `/?game=${game.id}&profile=deadbeef`],
+        ['a game that is not in the profile', (game, profile) => `/?game=${UNKNOWN_ID}&profile=${profile}`],
+      ]) {
+        test(`${title} shows the Games tab, not only its URL`, async ({ page }) => {
+          await page.goto('/home/reels');
+          const [game] = await listGames(page);
+          const profile = await currentProfileId(page);
+
+          await page.goto(link(game, profile));
+          await expectGamesTabWithNotice(page, 'That game is no longer here');
+          await expect(page.getByTestId('home-upload-game')).toBeVisible();
+          await expect(page.getByTestId('home-upload-clip')).toHaveCount(0);
+        });
+      }
+    });
+
     test('reload on an open game lands on the same game', async ({ page }) => {
       await page.goto('/home/games');
       const [game] = await listGames(page);

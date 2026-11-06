@@ -82,9 +82,7 @@ import { EMPTY_TAB_GUIDE } from '../config/emptyStates';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
 
-function renderManager(props = {}, path = '/home') {
-  window.history.replaceState(null, '', path);
-  return render(
+const managerElement = (props = {}) => (
     <AppStateProvider value={APP_STATE}>
       <ProjectManager
         projects={[]}
@@ -101,7 +99,11 @@ function renderManager(props = {}, path = '/home') {
         {...props}
       />
     </AppStateProvider>
-  );
+);
+
+function renderManager(props = {}, path = '/home') {
+  window.history.replaceState(null, '', path);
+  return render(managerElement(props));
 }
 
 // Prefix match on the tab's own accessible name. T9530 (N10): the Clips tab
@@ -173,6 +175,28 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     expect(addGame).toBeTruthy();
     expect(window.location.pathname).toBe('/home/games');
     expect(clipsTab().disabled).toBe(false);
+  });
+
+  it('a Games tab request moves a Home that is already on screen (T14970)', async () => {
+    const projects = [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }];
+    const view = renderManager({ projects, gamesTabRequest: 0 }, '/home/reels');
+    await screen.findByRole('button', { name: 'Upload a play' });
+
+    view.rerender(managerElement({ projects, gamesTabRequest: 1 }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Upload a play' })).toBeNull());
+    expect(window.location.pathname).toBe('/home/games');
+  });
+
+  it('a request made before Home mounted does not move it later (T14970)', async () => {
+    const projects = [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }];
+    const view = renderManager({ projects, gamesTabRequest: 3 }, '/home/reels');
+    await screen.findByRole('button', { name: 'Upload a play' });
+
+    view.rerender(managerElement({ projects, gamesTabRequest: 3 }));
+
+    expect(screen.getByRole('button', { name: 'Upload a play' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/home/reels');
   });
 
   it('/home/reels deep link with real clip drafts STAYS on Clips (T10310 exception only fires at zero clips)', async () => {

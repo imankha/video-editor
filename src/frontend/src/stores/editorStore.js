@@ -322,6 +322,10 @@ export const useEditorStore = create((set, get) => ({
   // A stale tap in the session has no URL behind it and keeps its own error.
   urlOpenGameId: initialObject.gameId,
 
+  // T14970: bumped by redirectToGamesTab. Home's tab is local state, read from the URL only on
+  // mount, so a Home already on screen needs telling.
+  gamesTabRequest: 0,
+
   // T14970: a URL named something unusable and the user landed on Games. ProjectsScreen shows
   // this, because the store can run before the toast layer. `unavailable` means we could not
   // tell, so the notice must not say it is gone.
@@ -364,6 +368,7 @@ export const useEditorStore = create((set, get) => ({
     set({
       editorMode: EDITOR_MODES.PROJECT_MANAGER,
       screen: getScreenByType(EDITOR_MODES.PROJECT_MANAGER),
+      gamesTabRequest: get().gamesTabRequest + 1,
     });
   },
 

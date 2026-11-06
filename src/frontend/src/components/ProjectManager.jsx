@@ -600,6 +600,7 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, sho
  */
 
 export function ProjectManager({
+  gamesTabRequest = 0, // T14970: a change moves a mounted Home to Games
   projects,
   loading,
   error, // Projects fetch error
@@ -692,6 +693,12 @@ export function ProjectManager({
       window.history.replaceState(null, '', path);
     }
   }, []);
+  const seenGamesTabRequest = useRef(gamesTabRequest);
+  useEffect(() => {
+    if (gamesTabRequest === seenGamesTabRequest.current) return;
+    seenGamesTabRequest.current = gamesTabRequest;
+    setActiveTab('games');
+  }, [gamesTabRequest, setActiveTab]);
   // T10260: refs read at clip-upload COMPLETION to decide whether to auto-open the
   // new clip in Framing. A completion is the tail of the user's own upload gesture,
   // so opening is allowed — but only if they are still on the Clips tab and the

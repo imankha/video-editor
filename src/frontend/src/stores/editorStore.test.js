@@ -277,6 +277,12 @@ describe('editorStore', () => {
       expect(window.history.length).toBe(before);
     });
 
+    it('redirectToGamesTab asks a mounted Home to change tab, because the tab is local state', () => {
+      const before = useEditorStore.getState().gamesTabRequest;
+      useEditorStore.getState().redirectToGamesTab();
+      expect(useEditorStore.getState().gamesTabRequest).toBe(before + 1);
+    });
+
     it('redirectToGamesTab lands on the Games tab', () => {
       useEditorStore.getState().setEditorMode(EDITOR_MODES.FRAMING);
       useEditorStore.getState().redirectToGamesTab();
