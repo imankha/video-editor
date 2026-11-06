@@ -255,9 +255,13 @@ until T15200 gives it a reader. Which gates have a drawer is the backend's rule 
 and catches nothing else, so a bug inside a builder is a 500, never a 404. The drawer's cache
 follows the panel payload: every spend-readiness read empties it and an open drawer reads again,
 and a response is dropped when a newer read of the same gate, or a panel read, started after it.
-The gate drill opens the Users list without a count: the gate's n − k (mature cohort, 14 d
-window) is not the list's definition (ever, all stages), so a number on the chip would disagree
-with the rows under it.
+The gate 2 and gate 4 drills open the Users list on the gate's own query (`spend_gate` on
+`GET /api/admin/users`, `gate_lost_user_ids`, corrected 2026-11-06): same population, hit and
+window as the reader, so the list is exactly the gate's n − k. Journey stages cannot express these
+gates, because `credits_consumed` is off the ladder and gate 2 has a 14 d deadline: the stage-based
+drill listed 9 of gate 4's 44 lost users in the seeded check. Every drawer also has "Open in Step
+Inspector", which opens the stage where the gate's span starts (gate 2 `signed_up`, gate 3
+`add_footage`, gate 4 `finished`).
 
 ## 6. Moved to T15200
 

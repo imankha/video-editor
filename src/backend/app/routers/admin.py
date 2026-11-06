@@ -400,6 +400,8 @@ def list_users(
     # defaults. Several stages = a collapsed group on the map.
     journey_stage: Annotated[list[str] | None, Query()] = None,
     journey_outcome: Annotated[str | None, Query(pattern="^(in_window|stuck|gone|lost)$")] = None,
+    # T14910: a spend gate drill, the gate's own n - k (its window, not the map's filters).
+    spend_gate: Annotated[str | None, Query(pattern="^(signup_to_export_14d|finished_to_took_away)$")] = None,
     window_days: Annotated[int, Query(ge=1, le=365)] = 14,
     inactive_days: Annotated[int, Query(ge=1, le=365)] = 14,
     platform: Annotated[str | None, Query(pattern="^(mobile|desktop)$")] = None,
@@ -422,6 +424,8 @@ def list_users(
         raise HTTPException(status_code=422, detail="journey_stage needs journey_outcome")
     if journey_stage and filter:
         raise HTTPException(status_code=422, detail="journey_stage and filter are exclusive")
+    if spend_gate and (journey_stage or filter):
+        raise HTTPException(status_code=422, detail="spend_gate excludes journey_stage and filter")
 
     # `sort`/`sort_dir` are validated to a hard whitelist BEFORE any DB work -- an
     # unknown key 422s and never reaches SQL.
@@ -444,7 +448,12 @@ def list_users(
         cur = conn.cursor()
         _assert_payments_ledger_ready(cur)
 
-        if journey_stage:
+        journey_ids = None
+        if spend_gate:
+            from ..services.analytics_spend_readiness import gate_lost_user_ids
+
+            journey_ids = gate_lost_user_ids(cur, excl, datetime.now(UTC), spend_gate)
+        elif journey_stage:
             from ..services.analytics_journey import stopped_user_ids
 
             try:
@@ -457,6 +466,7 @@ def list_users(
                 )
             except KeyError as e:
                 raise HTTPException(status_code=404, detail=f"Unknown journey stage {e.args[0]!r}") from None
+        if journey_ids is not None:
             population = _journey_user_population()
             where_parts.append("u.user_id = ANY(%s)")
             where_clause = "WHERE " + " AND ".join(where_parts)

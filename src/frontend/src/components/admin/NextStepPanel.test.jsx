@@ -119,6 +119,30 @@ describe('NextStepPanel: biggest leak (T14920:C1)', () => {
     expect(tasks.textContent).toMatch(/first step with planned work/);
   });
 
+  it('calls the leak measured and names what it could not judge', () => {
+    panel({ journey: journeyOf(ladder(1000, { started: 300, clipped: 100 }).map(n => (
+      n.key === 'footage_landed' ? { ...n, partial_from: '2026-08-26' } : n))) });
+    expect(screen.getByText('Biggest judged leak')).toBeTruthy();
+    expect(screen.queryByText('Biggest leak')).toBeNull();
+    const leak = screen.getByTestId('next-step-leak');
+    expect(leak.textContent).toMatch(/Not judged: .*partial data.*could be larger/);
+  });
+
+  it('keeps the plain label when every step was judged', () => {
+    panel({ journey: journeyOf(ladder(1000, { started: 300 })) });
+    expect(screen.getByText('Biggest leak')).toBeTruthy();
+    expect(screen.getByTestId('next-step-leak').textContent).not.toMatch(/Not judged/);
+  });
+
+  it('does not report "below target" when nothing could be judged', () => {
+    panel({ journey: journeyOf(ladder(1000).map(n => (
+      n.key === 'signed_up' ? n : { ...n, partial_from: '2026-11-04' }))) });
+    const leak = screen.getByTestId('next-step-leak');
+    expect(leak.textContent).toMatch(/No step could be judged/);
+    expect(leak.textContent).not.toMatch(/below target/);
+    expect(screen.getByTestId('next-step-tasks').textContent).not.toMatch(/no step is below target/);
+  });
+
   it('waits for the Journey payload without hiding the row', () => {
     panel({ journey: null });
     expect(screen.getByTestId('next-step-leak').textContent).toMatch(/Loading journey/);

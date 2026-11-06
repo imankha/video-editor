@@ -119,6 +119,19 @@ describe('Journey drop-off filter in the Users section (T14740)', () => {
     expect(chip().textContent).toContain('Stopped at Signed up: lost (6)');
   });
 
+  it('a spend gate drill asks the server for the users of that gate and names it', async () => {
+    await mount();
+    await act(async () => {
+      useAdminStore.setState({ journeyUserFilter: { gate: 'finished_to_took_away', label: 'Finished, not taken away' } });
+      await useAdminStore.getState().fetchUsers(1);
+    });
+    expect(lastUsersParams().get('spend_gate')).toBe('finished_to_took_away');
+    expect(lastUsersParams().has('journey_stage')).toBe(false);
+    expect(lastUsersParams().has('journey_outcome')).toBe(false);
+    expect(chip().textContent).toContain('Finished, not taken away');
+    expect(chip().textContent).not.toMatch(/Stopped at|undefined/);
+  });
+
   it('a filter without a count (a spend-readiness drill) shows the chip without a number', async () => {
     // Review follow-up 2026-11-06: the gate drill no longer sends n - k, whose definition differs
     // from the list it opens; the chip must not print "(undefined)".

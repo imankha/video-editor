@@ -100,6 +100,10 @@ every use.
 
 **2026-11-03**: Filed from the ad-spend ROI session.
 
+**2026-11-06**: Independent verification found a collapsed group could read green over a partial
+edge. `foldedMark` now gives a group a colour only when every folded step was judged; otherwise it
+prints "partial, worst 83.33%" (or "n < 20, ...") uncoloured, keeping the worst measured rate.
+
 ## Acceptance Criteria
 
 - [ ] Every transition on the map shows a colour or a grey "n < 20" mark; none is uncoloured.

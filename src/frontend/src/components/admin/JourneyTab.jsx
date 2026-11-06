@@ -98,8 +98,9 @@ function RagLegend() {
   );
 }
 
-export function JourneyView({ data, filters, fit = false, onListUsers }) {
+export function JourneyView({ data, filters, fit = false, onListUsers, inspectRequest = null }) {
   const [selected, setSelected] = useState(null);
+  const selectedRef = useRef(null);
   // Inspector view state (never persisted): breakdown tab and the People outcome.
   const [by, setBy] = useState('platform');
   const [outcome, setOutcome] = useState('stuck');
@@ -134,6 +135,14 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
     if (group) setExpanded(prev => (prev.has(group.key) ? prev : new Set(prev).add(group.key)));
     setSelected(stage);
   };
+  // A spend gate's "Open in Step Inspector": a new request object each click, so a repeat works.
+  useEffect(() => {
+    if (inspectRequest) selectStage(inspectRequest.stage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectStage closes over `data`; the click is the event
+  }, [inspectRequest]);
+  useEffect(() => {
+    if (inspectRequest && selected === inspectRequest.stage) selectedRef.current?.scrollIntoView?.({ block: 'center' });
+  }, [inspectRequest, selected]);
   // A drop ribbon opens its stage with that outcome pre-selected in People.
   const selectDrop = (stage, kind) => { setOutcome(kind); setSelected(stage); };
   // Run rollup click: the sweep, then re-read the open stage so "Where they left" shows the new run.
@@ -171,7 +180,7 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
       </p>
 
       {node && (
-        <div data-testid="journey-selected" className="text-xs text-gray-300 bg-white/5 rounded p-3 border border-white/10">
+        <div ref={selectedRef} data-testid="journey-selected" className="text-xs text-gray-300 bg-white/5 rounded p-3 border border-white/10">
           <span className="font-semibold text-white">{node.label}</span>: reached {node.reached}, continued{' '}
           {node.continued} ({formatRate(node.continue_rate)}), in window {node.in_window}, stuck {node.stuck}, gone {node.gone}
         </div>
@@ -236,6 +245,7 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
   const [inactiveDays, setInactiveDays] = useState(14);
   const rootRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [inspectRequest, setInspectRequest] = useState(null);
 
   const filters = useMemo(() => ({
     from: from || undefined,
@@ -320,14 +330,14 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
 
       <SpendReadinessPanel data={spendReadiness} loading={spendReadinessLoading} error={spendReadinessError}
                            onRefresh={fetchSpendReadiness} diagnosis={spendGateDiagnosis}
-                           onDiagnose={fetchSpendGateDiagnosis} onListUsers={listUsers}
+                           onDiagnose={fetchSpendGateDiagnosis} onListUsers={listUsers} onInspectStage={stage => setInspectRequest({ stage })}
                            onShowUploadFailures={onShowUploadFailures} />
 
       {error && <p className="text-red-400 text-sm mb-2">Journey failed to load: {error}</p>}
       {loading && !data && <p className="text-gray-500 text-sm">Loading journey...</p>}
       {data && (
         <div className={loading ? 'opacity-60' : ''}>
-          <JourneyView data={data} filters={filters} fit={isFullscreen} onListUsers={listUsers} />
+          <JourneyView data={data} filters={filters} fit={isFullscreen} onListUsers={listUsers} inspectRequest={inspectRequest} />
         </div>
       )}
     </div>

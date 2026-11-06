@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   JOURNEY_TARGETS, END_TO_END_KEY, TERMINAL_STAGE, SMALL_N_FLOOR,
-  ragFor, journeyTransitions, endToEndTransition, stageTransition, worstTransition,
+  ragFor, journeyTransitions, endToEndTransition, stageTransition, worstTransition, foldedMark,
 } from './journeyTargets';
 
 // The real ladder, read from the backend so a new stage without a target fails here.
@@ -129,6 +129,28 @@ describe('journeyTransitions (T14900)', () => {
   it('rates end to end from the first stage to the last', () => {
     const t = endToEndTransition(ladderNodes(100, { signed_up: 80 }));
     expect(t).toMatchObject({ key: END_TO_END_KEY, k: 20, n: 100, pct: 20, rag: 'green', target: 18 });
+  });
+});
+
+describe('foldedMark (T14900)', () => {
+  const t = (rag, pct, target = 90) => ({ rag, pct, target, n: 100, k: 1, key: `${rag}-${pct}` });
+
+  it('colours a group only when every folded step was judged', () => {
+    expect(foldedMark([t('green', 95), t('red', 10)])).toEqual({ rag: 'red', text: 'worst 10.00%' });
+  });
+
+  it('never shows a colour over an unmeasured step, and still prints the worst measured rate', () => {
+    expect(foldedMark([t('green', 83.33), t('partial', null)])).toEqual({ rag: 'partial', text: 'partial, worst 83.33%' });
+    expect(foldedMark([t('red', 10), t('partial', null)])).toEqual({ rag: 'partial', text: 'partial, worst 10.00%' });
+  });
+
+  it('never shows a colour over a step under the floor', () => {
+    expect(foldedMark([t('green', 95), t('grey', null)])).toEqual({ rag: 'grey', text: 'n < 20, worst 95.00%' });
+  });
+
+  it('partial outranks grey, and a group with nothing measured prints the bare mark', () => {
+    expect(foldedMark([t('grey', null), t('partial', null)])).toEqual({ rag: 'partial', text: 'partial' });
+    expect(foldedMark([t('grey', null)])).toEqual({ rag: 'grey', text: 'n < 20' });
   });
 });
 

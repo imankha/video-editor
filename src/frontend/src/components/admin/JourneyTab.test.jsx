@@ -176,6 +176,14 @@ describe('JourneyFlowChart progressive disclosure (T14010)', () => {
   });
 });
 
+describe('JourneyView / opened from a spend gate (T14910)', () => {
+  it('opens the inspector on the requested stage', () => {
+    const stage = DATA.nodes[DATA.nodes.length - 1];
+    render(<JourneyView data={DATA} inspectRequest={{ stage: stage.key }} />);
+    expect(screen.getByTestId('journey-selected').textContent).toContain(stage.label);
+  });
+});
+
 describe('JourneyView / loss ranking and expansion (T14010)', () => {
   it('lists stages by loss with "still visiting" beside the total and shows thresholds', () => {
     render(<JourneyView data={DATA} />);
@@ -569,6 +577,13 @@ describe('Journey transition colours (T14900)', () => {
     expect(mark.querySelector('text').textContent).toBe('worst 50.00%');
     expect(mark.querySelector('title').textContent).toContain('clipped to frame_opened');
     expect(mark.querySelector('title').textContent).toContain('framed to exported');
+  });
+
+  it('a collapsed group never reads green over a partial edge', () => {
+    mapOf(ladder(1000, {}, { exported: { partial_from: '2026-11-04' } }), new Set());
+    const mark = screen.getByTestId('journey-rate-group-clipped..exported');
+    expect(mark.getAttribute('data-rag')).toBe('partial');
+    expect(mark.querySelector('text').textContent).toMatch(/^partial, worst /);
   });
 
   it('keeps an exact mark on a transition whose two ends stay visible when collapsed', () => {

@@ -233,6 +233,10 @@ validates with the same rule. Small items: K-factor server text in "per 100" lik
 unused `readable` parameter of `channel_rows` removed; the route's `except KeyError` removed
 (validation first, bugs propagate); the drill's n − k count dropped from the Users chip.
 
+**2026-11-06**: Independent verification found the Step Inspector drill missing and the gate 4
+drill listing a subset of the gate's lost users. Added "Open in Step Inspector" on every drawer,
+and the gate 2 and 4 drills now use the gate's own query (`spend_gate`), so the list equals n − k.
+
 ## Acceptance Criteria
 
 - [ ] Endpoint returns all eleven gates with rag in {green, yellow, red, grey}, each with its tier,

@@ -1,6 +1,6 @@
 import { collapseJourney } from './journeyFold';
 import { fmtPct } from './formatNumber';
-import { RAG_STYLES, journeyTransitions, transitionChipText, transitionMark, worstTransition } from './journeyTargets';
+import { RAG_STYLES, foldedMark, journeyTransitions, transitionChipText, transitionMark } from './journeyTargets';
 
 // T14010: hand-rolled SVG journey map (no chart library), geometry from the approved mock
 // (design doc Section 4). ONE horizontal row: each stage is a vertical bar whose height is
@@ -106,10 +106,7 @@ function rateMarks(nodes, index, groups, expanded) {
     folded.set(g, [...(folded.get(g) || []), t]);
   }
   for (const [g, ts] of folded) {
-    const worst = worstTransition(ts);
-    const uncoloured = worst.rag === 'grey' || worst.rag === 'partial';
-    marks.push({ testId: `journey-rate-group-${g.key}`, from: g.from, to: g.to, rag: worst.rag,
-      text: uncoloured ? transitionMark(worst) : `worst ${transitionMark(worst)}`,
+    marks.push({ testId: `journey-rate-group-${g.key}`, from: g.from, to: g.to, ...foldedMark(ts),
       title: ts.map(t => `${t.label}: ${transitionChipText(t)}`).join('\n') });
   }
   return marks;

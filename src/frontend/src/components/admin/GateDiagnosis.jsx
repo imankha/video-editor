@@ -6,21 +6,21 @@ import { fmtGateValue } from './spendReadinessFormat';
 // carrying the settled / provisional rendering; a row under the floor prints the count.
 // Drill links open the existing tools with the gate's filter applied. Read-only.
 
-// Users the gate counts as lost, expressed in Journey stages for the Users list (T14740).
-// Gate 2 is "signed up, no true export within 14 d": every stage before `exported`.
-// Gate 4 is "finished, not taken away": the stages between `finished` and `took_away`.
+// `chipLabel` gates open the Users list on the gate's own query (`spend_gate`): stages cannot
+// express them, since credits_consumed is off the ladder and gate 2 has a 14 d deadline.
+// `inspectStage` is where the gate's span starts on the Journey map.
 export const DRILLS = {
   signup_to_export_14d: {
     label: 'List sign-ups without an export',
     chipLabel: 'Sign-up without an export in 14 d',
-    stages: ['signed_up', 'started', 'add_footage', 'footage_landed', 'clipped', 'frame_opened', 'framed', 'export_pressed'],
+    inspectStage: 'signed_up',
   },
   finished_to_took_away: {
     label: 'List users who did not take it away',
     chipLabel: 'Finished, not taken away',
-    stages: ['finished', 'watched'],
+    inspectStage: 'finished',
   },
-  upload_failure: { label: 'Open upload failures', panel: true },
+  upload_failure: { label: 'Open upload failures', panel: true, inspectStage: 'add_footage' },
 };
 
 const CUT_LABELS = { weekly: 'Weekly', by_build: 'By build', by_platform: 'By platform', by_country: 'By country' };
@@ -67,16 +67,14 @@ function CutRows({ cut, rows, gate }) {
   );
 }
 
-export function GateDiagnosis({ gate, entry, onListUsers, onShowUploadFailures }) {
+export function GateDiagnosis({ gate, entry, onListUsers, onShowUploadFailures, onInspectStage }) {
   const drill = DRILLS[gate.key];
   const drillClick = () => {
     if (drill.panel) {
       onShowUploadFailures();
       return;
     }
-    // No count: the gate's n - k (a 14 d window, mature cohort) is not what the Users list
-    // counts (ever, all stages), so the chip would disagree with the rows under it.
-    onListUsers({ stages: drill.stages, label: drill.chipLabel, outcome: 'lost' });
+    onListUsers({ gate: gate.key, label: drill.chipLabel });
   };
   return (
     <div data-testid={`spend-diagnosis-${gate.key}`} className="mt-2 ml-2 pl-3 border-l border-white/10 space-y-3 text-xs text-gray-300">
@@ -84,6 +82,12 @@ export function GateDiagnosis({ gate, entry, onListUsers, onShowUploadFailures }
         <button type="button" data-testid={`spend-drill-${gate.key}`} onClick={drillClick}
                 className="text-purple-300 hover:text-white underline">
           {drill.label}
+        </button>
+      )}
+      {drill && (
+        <button type="button" data-testid={`spend-inspect-${gate.key}`} onClick={() => onInspectStage(drill.inspectStage)}
+                className="ml-4 text-purple-300 hover:text-white underline">
+          Open in Step Inspector
         </button>
       )}
       {!entry || entry.loading ? <p className="text-gray-500">Loading diagnosis...</p> : null}

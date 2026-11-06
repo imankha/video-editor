@@ -123,6 +123,13 @@ Two more PLAN.md defects found by the validation: a prose line inside the SEO ta
 T10990 and the rows after it from the board's parser (moved above the table), and the T14910 commit had left
 `AdminScreen.journeyFilter.test` crashing on a spend payload without a verdict (routed). Screenshots in `qa/`.
 
+**2026-11-06**: Independent verification found the panel could name a lesser leak, or report "no
+step below target" with nothing judged, when instrumentation dates make steps partial
+(`export_completed` dates from 2026-11-04, so export steps are partial on any view with older
+sign-ups). The row now reads "Biggest judged leak" and names the unjudged steps whenever any step
+was not judged, and says "No step could be judged" at zero. Judging partial steps over the
+measurable cohort needs a backend change and is not part of this task.
+
 ## Acceptance Criteria
 
 - [x] Panel shows biggest leak, Do next list with the highlighted Next task, spend verdict with its

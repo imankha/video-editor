@@ -49,7 +49,7 @@ function Recent({ gate }) {
   );
 }
 
-function GateRow({ gate, isFocus, diagnosis, onDiagnose, onListUsers, onShowUploadFailures }) {
+function GateRow({ gate, isFocus, diagnosis, onDiagnose, onListUsers, onShowUploadFailures, onInspectStage }) {
   const [open, setOpen] = useState(false);
   const diagnosable = gate.diagnosable; // the backend's rule (Tier A, kind none, repeat purchase: none)
   const entry = diagnosis[gate.key];
@@ -94,7 +94,7 @@ function GateRow({ gate, isFocus, diagnosis, onDiagnose, onListUsers, onShowUplo
         </div>
       </div>
       {open && diagnosable && (
-        <GateDiagnosis gate={gate} entry={entry} onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} />
+        <GateDiagnosis gate={gate} entry={entry} onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} onInspectStage={onInspectStage} />
       )}
     </li>
   );
@@ -182,7 +182,7 @@ function Economics({ data }) {
   );
 }
 
-function Tier({ tier, data, diagnosis, onDiagnose, onListUsers, onShowUploadFailures }) {
+function Tier({ tier, data, diagnosis, onDiagnose, onListUsers, onShowUploadFailures, onInspectStage }) {
   const [open, setOpen] = useState(tier !== 'C');
   const gates = data.gates.filter(g => g.tier === tier);
   const isFocus = !!data.focus && data.focus.tier === tier;
@@ -205,7 +205,7 @@ function Tier({ tier, data, diagnosis, onDiagnose, onListUsers, onShowUploadFail
             </li>
             {gates.map(g => (
               <GateRow key={g.key} gate={g} isFocus={isFocus && data.focus.gate === g.key} diagnosis={diagnosis}
-                       onDiagnose={onDiagnose} onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} />
+                       onDiagnose={onDiagnose} onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} onInspectStage={onInspectStage} />
             ))}
           </ul>
           {tier === 'C' && <Economics data={data} />}
@@ -224,7 +224,7 @@ function Countries({ rows, days }) {
   );
 }
 
-export function SpendReadinessPanel({ data, loading, error, onRefresh, onListUsers, onShowUploadFailures, diagnosis, onDiagnose }) {
+export function SpendReadinessPanel({ data, loading, error, onRefresh, onListUsers, onShowUploadFailures, onInspectStage, diagnosis, onDiagnose }) {
   const [open, setOpen] = useState(false);
   const computedAt = data ? new Date(data.computed_at) : null;
   return (
@@ -253,7 +253,7 @@ export function SpendReadinessPanel({ data, loading, error, onRefresh, onListUse
               <Legend />
               {TIER_ORDER.map(tier => (
                 <Tier key={tier} tier={tier} data={data} diagnosis={diagnosis} onDiagnose={onDiagnose}
-                      onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} />
+                      onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} onInspectStage={onInspectStage} />
               ))}
               <Countries rows={data.signups_by_country} days={data.meta.cohort_days} />
               <p className="text-[11px] text-gray-500">

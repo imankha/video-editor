@@ -122,21 +122,26 @@ function Row({ label, children }) {
 }
 
 // Which step "Do next" describes: the leak, or (nothing below target) the first step with work.
+const isJudged = t => ['red', 'yellow', 'green'].includes(t.rag);
+
 function doNextKey(leak, transitions, roadmap) {
   if (leak) return { key: leak.key, note: null };
   const planned = roadmap && transitions.find(t => (roadmap.transitions[t.key] || []).length > 0);
   const t = planned || transitions[0];
-  return t ? { key: t.key, note: 'first step with planned work (no step is below target)' } : null;
+  const judged = transitions.filter(isJudged).length;
+  const why = judged === 0 ? 'no step could be judged'
+    : judged < transitions.length ? 'no judged step is below target' : 'no step is below target';
+  return t ? { key: t.key, note: `first step with planned work (${why})` } : null;
 }
 
 function LeakRow({ journey, transitions, leak }) {
   if (!journey) return <div data-testid="next-step-leak">Loading journey...</div>;
+  const judged = transitions.filter(isJudged).length;
+  const unjudged = transitions.filter(t => !isJudged(t)).map(t => `${t.label} (${RAG_STYLES[t.rag].word})`);
   if (!leak) {
-    const judged = transitions.filter(t => ['red', 'yellow', 'green'].includes(t.rag)).length;
-    const unjudged = transitions.filter(t => !['red', 'yellow', 'green'].includes(t.rag)).map(t => `${t.label} (${RAG_STYLES[t.rag].word})`);
     return (
       <div data-testid="next-step-leak">
-        No step below target among the {judged} judged steps.
+        {judged === 0 ? 'No step could be judged.' : `No step below target among the ${judged} judged steps.`}
         {unjudged.length > 0 && <span className="text-gray-500"> Not judged: {unjudged.join(', ')}.</span>}
       </div>
     );
@@ -146,6 +151,7 @@ function LeakRow({ journey, transitions, leak }) {
       <span className="text-white font-medium">{leak.label}</span>
       <RagChip testId="next-step-leak-chip" rag={leak.rag} text={transitionChipText(leak)} title={RAG_STYLES[leak.rag].word} />
       <span className="text-white font-semibold">{usersLost(leak)} lost</span>
+      {unjudged.length > 0 && <span className="text-gray-500">Not judged: {unjudged.join(', ')}. Any of these could be larger.</span>}
     </div>
   );
 }
@@ -235,7 +241,7 @@ export function NextStepPanel({ roadmap, roadmapLoading, roadmapError, journey, 
         </Loud>
       )}
 
-      <Row label="Biggest leak">
+      <Row label={transitions.every(isJudged) ? 'Biggest leak' : 'Biggest judged leak'}>
         <LeakRow journey={journey} transitions={transitions} leak={leak} />
       </Row>
 

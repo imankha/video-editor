@@ -104,6 +104,17 @@ export function worstTransition(transitions) {
   return [...transitions].sort((a, b) => rank(a) - rank(b) || (a.pct - a.target) - (b.pct - b.target))[0];
 }
 
+// A collapsed group's mark. A colour claims every folded step was judged, so one partial or
+// under-floor step takes the colour away; the worst measured rate stays readable in the text.
+export function foldedMark(transitions) {
+  const measured = transitions.filter(t => t.rag !== 'partial' && t.rag !== 'grey');
+  const worst = measured.length ? worstTransition(measured) : null;
+  const unmeasured = transitions.find(t => t.rag === 'partial') || transitions.find(t => t.rag === 'grey');
+  if (!unmeasured) return { rag: worst.rag, text: `worst ${transitionMark(worst)}` };
+  const mark = transitionMark(unmeasured);
+  return { rag: unmeasured.rag, text: worst ? `${mark}, worst ${transitionMark(worst)}` : mark };
+}
+
 // The short mark on the map.
 export function transitionMark(t) {
   if (t.rag === 'partial') return 'partial';

@@ -508,18 +508,43 @@ def _total(rows: list[dict]) -> tuple[int, int]:
     return sum(r["k"] for r in rows), sum(r["n"] for r in rows)
 
 
-def _gate2_rows(cur, excl, today, *, lo_days, hi_days, cut=None):
+def _gate2_cohort() -> dict:
     deadline = " AND a.first_at <= (s.acquired_at + %(mature)s)::timestamp AT TIME ZONE 'UTC'"
-    return _cohort_rows(cur, excl, today, lo_days=lo_days, hi_days=hi_days, cut=cut,
-                        hit=_exists(EXPORT_ACTIONS, "export_actions", deadline),
-                        params={"export_actions": list(EXPORT_ACTIONS), "mature": C.MATURE_DAYS})
+    return {"hit": _exists(EXPORT_ACTIONS, "export_actions", deadline),
+            "params": {"export_actions": list(EXPORT_ACTIONS), "mature": C.MATURE_DAYS}}
+
+
+def _gate4_cohort() -> dict:
+    return {"hit": _exists(TOOK_AWAY_ACTIONS, "took_away"),
+            "population": " AND " + _exists(FINISHED_ACTIONS, "finished"),
+            "params": {"took_away": list(TOOK_AWAY_ACTIONS), "finished": list(FINISHED_ACTIONS)}}
+
+
+def _gate2_rows(cur, excl, today, *, lo_days, hi_days, cut=None):
+    return _cohort_rows(cur, excl, today, lo_days=lo_days, hi_days=hi_days, cut=cut, **_gate2_cohort())
 
 
 def _gate4_rows(cur, excl, today, *, lo_days, hi_days, cut=None):
-    return _cohort_rows(cur, excl, today, lo_days=lo_days, hi_days=hi_days, cut=cut,
-                        hit=_exists(TOOK_AWAY_ACTIONS, "took_away"),
-                        population=" AND " + _exists(FINISHED_ACTIONS, "finished"),
-                        params={"took_away": list(TOOK_AWAY_ACTIONS), "finished": list(FINISHED_ACTIONS)})
+    return _cohort_rows(cur, excl, today, lo_days=lo_days, hi_days=hi_days, cut=cut, **_gate4_cohort())
+
+
+DRILL_COHORTS = {"signup_to_export_14d": _gate2_cohort, "finished_to_took_away": _gate4_cohort}
+
+
+def gate_lost_user_ids(cur, excl: str, now: datetime, key: str) -> list[str]:
+    """The n - k behind a mature-cohort gate: the same population and hit as its reader, so the
+    Users list a drill opens is the number on the gate. KeyError for a gate outside DRILL_COHORTS."""
+    spec = DRILL_COHORTS[key]()
+    today = now.date()
+    cur.execute(f"""
+        SELECT s.user_id
+        FROM user_segments s
+        LEFT JOIN users u ON u.user_id = s.user_id
+        WHERE s.acquired_at BETWEEN %(d_lo)s AND %(d_hi)s {spec.get("population", "")}{_and(excl)}
+          AND NOT ({spec["hit"]})
+    """, {**spec["params"], "d_lo": today - timedelta(days=C.COHORT_DAYS + C.MATURE_DAYS),
+          "d_hi": today - timedelta(days=C.MATURE_DAYS)})
+    return [r["user_id"] for r in cur.fetchall()]
 
 
 def _gate6_rows(cur, excl, today, *, lo_days, hi_days, cut=None):

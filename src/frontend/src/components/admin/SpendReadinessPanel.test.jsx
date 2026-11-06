@@ -121,7 +121,7 @@ const DATA = {
 
 function panel(props = {}) {
   const all = { data: DATA, loading: false, error: null, onRefresh: vi.fn(), onListUsers: vi.fn(),
-    onShowUploadFailures: vi.fn(), diagnosis: {}, onDiagnose: vi.fn(), ...props };
+    onShowUploadFailures: vi.fn(), onInspectStage: vi.fn(), diagnosis: {}, onDiagnose: vi.fn(), ...props };
   const utils = render(<SpendReadinessPanel {...all} />);
   return { ...utils, ...all };
 }
@@ -264,7 +264,7 @@ describe('SpendReadinessPanel (T14910)', () => {
           { group: 'unknown', n: 3, k: 0, value: null, interval: null, rag: 'grey', confidence: null, text: '0 of 3' }],
       } } },
     };
-    const { onListUsers, onShowUploadFailures } = panel({ diagnosis });
+    const { onListUsers, onShowUploadFailures, onInspectStage } = panel({ diagnosis });
     expand();
     fireEvent.click(screen.getByTestId('spend-diagnose-signup_to_export_14d'));
     const drawer = screen.getByTestId('spend-diagnosis-signup_to_export_14d');
@@ -279,11 +279,11 @@ describe('SpendReadinessPanel (T14910)', () => {
     fireEvent.click(within(drawer).getByTestId('spend-drill-signup_to_export_14d'));
     expect(onListUsers).toHaveBeenCalledTimes(1);
     const pick = onListUsers.mock.calls[0][0];
-    expect(pick.outcome).toBe('lost');
-    expect(pick.stages).toContain('signed_up');
-    expect(pick.stages).toContain('export_pressed');
-    expect(pick.stages).not.toContain('exported');
-    expect(pick).not.toHaveProperty('count'); // the gate's n - k is not the list's definition (review follow-up 2026-11-06)
+    expect(pick.gate).toBe('signup_to_export_14d'); // the gate's own query, not a stage approximation
+    expect(pick).not.toHaveProperty('stages');
+    expect(pick.label).toBeTruthy();
+    fireEvent.click(within(drawer).getByTestId('spend-inspect-signup_to_export_14d'));
+    expect(onInspectStage).toHaveBeenCalledWith('signed_up');
     fireEvent.click(screen.getByTestId('spend-diagnose-upload_failure'));
     fireEvent.click(screen.getByTestId('spend-drill-upload_failure'));
     expect(onShowUploadFailures).toHaveBeenCalledTimes(1);

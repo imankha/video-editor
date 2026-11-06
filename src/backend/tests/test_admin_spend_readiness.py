@@ -720,3 +720,57 @@ class TestEndpoints:
                           headers={"X-User-ID": "admin-user"}).status_code == 404
         assert client.get("/api/admin/analytics/spend-readiness/gate/nope",
                           headers={"X-User-ID": "admin-user"}).status_code == 404
+
+
+class TestGateDrillUsers:
+    """The Users list a gate drill opens is the gate's own lost users, not a stage approximation."""
+
+    def _ids(self, client, key):
+        resp = client.get(f"/api/admin/users?spend_gate={key}&exclude_test=true",
+                          headers={"X-User-ID": "admin-user"})
+        assert resp.status_code == 200, resp.text
+        return {u["user_id"] for u in resp.json()["users"]}
+
+    def test_gate_4_lists_every_exporter_who_did_not_take_it_away(self, client):
+        credits_only = _user("g4-credits")      # exported before export_completed existed
+        _action(credits_only, "credits_consumed", days_ago=25)
+        completed = _user("g4-completed")       # stopped at Highlight made, never Finished
+        _action(completed, "export_completed", days_ago=25)
+        finished = _user("g4-finished")
+        _action(finished, "overlay_exported", days_ago=25)
+        kept = _user("g4-kept")
+        _action(kept, "overlay_exported", days_ago=25)
+        _action(kept, "video_downloaded", days_ago=24)
+        never = _user("g4-never")
+        too_new = _user("g4-new", days_ago=5)
+        _action(too_new, "overlay_exported", days_ago=4)
+        test_account = _user("g4-test", test=True)
+        _action(test_account, "overlay_exported", days_ago=25)
+
+        ids = self._ids(client, "finished_to_took_away")
+        assert ids == {credits_only, completed, finished}
+        assert kept not in ids and never not in ids
+        g = _gate(_read(), "finished_to_took_away")
+        assert len(ids) == g["n"] - g["k"]
+
+    def test_gate_2_lists_sign_ups_without_an_export_inside_14_days(self, client):
+        never = _user("g2-never")
+        late = _user("g2-late")
+        _action(late, "export_completed", days_ago=5)       # 25 days after sign-up
+        in_time = _user("g2-in-time")
+        _action(in_time, "export_completed", days_ago=25)
+        credits = _user("g2-credits")                       # stopped early on the ladder, still exported
+        _action(credits, "credits_consumed", days_ago=25)
+
+        ids = self._ids(client, "signup_to_export_14d")
+        assert ids == {never, late}
+        g = _gate(_read(), "signup_to_export_14d")
+        assert len(ids) == g["n"] - g["k"]
+
+    def test_rejects_an_unknown_gate_and_a_mixed_filter(self, client):
+        admin = {"X-User-ID": "admin-user"}
+        assert client.get("/api/admin/users?spend_gate=payers_per_100", headers=admin).status_code == 422
+        assert client.get("/api/admin/users?spend_gate=finished_to_took_away&journey_stage=finished&journey_outcome=lost",
+                          headers=admin).status_code == 422
+        assert client.get("/api/admin/users?spend_gate=finished_to_took_away&filter=paying",
+                          headers=admin).status_code == 422

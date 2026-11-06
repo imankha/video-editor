@@ -262,7 +262,9 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentCountry) params.set('country', state.segmentCountry);
       if (state.userFilter) params.set('filter', state.userFilter);
       const journey = state.journeyUserFilter;
-      if (journey) {
+      if (journey && journey.gate) {
+        params.set('spend_gate', journey.gate);
+      } else if (journey) {
         for (const stage of journey.stages) params.append('journey_stage', stage);
         params.set('journey_outcome', journey.outcome);
         params.set('window_days', journey.windowDays);
