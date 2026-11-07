@@ -711,8 +711,15 @@ class DotaskCliTest(unittest.TestCase):
         (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(
             {"head": "abc", "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}))
         best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
-        self.assertIn("fix round 25 min", basis)
+        self.assertIn("fix 1 task(s) x 25 min", basis)
         self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 35 + 8))
+        # Findings in four tasks: four fix dispatches and two re-check batches, not one of each.
+        group["tasks"] = ["T1", "T2", "T3", "T4"]
+        (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps({"head": "abc", "criteria": [
+            {"id": f"{t}:C1", "status": "fail", "evidence": "x"} for t in ("T1", "T2", "T3", "T4")], "bugs": []}))
+        best, _with_fix, basis = dotask_cli.estimate(group, checkout, now)
+        self.assertIn("fix 4 task(s) x 25 min, 2 re-check batch(es) x 35 min", basis)
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=4 * 25 + 2 * 35 + 8))
         with (checkout / ".dotask-status").open("a") as stream:
             stream.write("t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
                          "t RESUMED Fix round 1 dispatch 2 of 3: ran out of turns, handoff written\n")
@@ -1345,7 +1352,11 @@ class AutolandTest(unittest.TestCase):
         self.assertIn("RESUMED fix round 1 T1 dispatch 2 of 3", self.status.read_text())
 
     def test_a_human_criterion_the_owner_ruled_check_on_staging_rides_in_the_pr(self):
-        (self.main_repo / "docs" / "plans" / "tasks" / "T1-fix-the-thing.md").write_text(
+        # The ruling is committed on the group branch only; master's copy has none. Reading master stopped
+        # g-t15220-10 for T14860:C2 anyway (2026-11-07).
+        branch_copy = self.checkout / "docs" / "plans" / "tasks" / "T1-fix-the-thing.md"
+        branch_copy.parent.mkdir(parents=True)
+        branch_copy.write_text(
             self.TASK_TEXT.replace("## Acceptance Criteria",
                                    "**2026-11-07 (owner ruling)**: C2 verified on staging after merge.\n\n"
                                    "## Acceptance Criteria"))

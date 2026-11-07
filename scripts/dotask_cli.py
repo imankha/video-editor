@@ -612,8 +612,16 @@ VERIFY_ATTEMPTS = 2  # retries cover only a dispatch that errored out, never a b
 # One verifier for 10 tasks (about 45 criteria) ran out of 120 turns (g-t15220-10, 2026-11-07), so each
 # dispatch proves a few tasks and the last one also runs the regression pass.
 VERIFY_BATCH = 3
+# The tests that import what the branch changed run here: a T14800 rollup bug reached Branch CI after a
+# clean verdict because no verifier ran the backend tests (g-t15220-10, PR 717, 2026-11-07). Selection is
+# by import, as Branch CI does it; never a whole suite.
 REGRESSION_STEP = ("Regression pass: from `git diff origin/master...HEAD --stat`, exercise the flows this branch "
-                   "touches and look for anything broken that no criterion names.")
+                   "touches and look for anything broken that no criterion names. Then run the tests that import "
+                   "what the branch changed: for src/frontend, `npx vitest related --run <changed files>` in "
+                   "src/frontend; for src/backend, pytest on every test file under src/backend/tests that imports "
+                   "a changed module (grep for the module name), never the whole suite. Run each failing test once "
+                   "more on its own before reporting it. A failure on this branch is a `group` bug naming the "
+                   "test; one that also fails on origin/master is `unrelated`.")
 NO_REGRESSION_STEP = "Skip the regression pass: another verifier dispatch runs it. Report bugs you happen to see."
 FULL_SCOPE_STEP = ("For EACH task ({tasks}), read the `## Acceptance Criteria` of its file under docs/plans/tasks and "
                    "give EVERY criterion one entry, in order, named T<id>:C1, T<id>:C2, ...")
@@ -661,6 +669,18 @@ Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-
 
 class UntrustedVerdict(Exception):
     pass
+
+
+def task_file_in(checkout, task_id):
+    """The group branch's copy of a task file, falling back to master's. Rulings and amended criteria are
+    committed on the branch, so reading master missed them: T14860's "verify on staging" ruling still
+    stopped autoland (g-t15220-10, 2026-11-07)."""
+    main = resolve_task_file(task_id)
+    try:
+        branch_copy = Path(checkout) / main.relative_to(MAIN_REPO)
+    except ValueError:
+        return main
+    return branch_copy if branch_copy.is_file() else main
 
 
 def acceptance_items(task_file):
@@ -733,7 +753,7 @@ def read_verdict(checkout, group, head, tasks=None, criteria_ids=None):
             raise UntrustedVerdict(f"re-check verdict is missing {' '.join(missing)}")
         return verdict
     for task_id in tasks or group["tasks"]:
-        need = max(1, acceptance_count(resolve_task_file(task_id)))
+        need = max(1, acceptance_count(task_file_in(checkout, task_id)))
         have = sum(1 for item in criteria if str(item.get("id", "")).startswith(f"{task_id}:"))
         if have < need:
             raise UntrustedVerdict(f"{task_id}: verdict covers {have} of {need} criteria")
@@ -1158,7 +1178,7 @@ def autoland(args):
     if focus:
         print(f"[dotask] resuming at round {first_round}: re-checking {focus['criteria']} and "
               f"{len(focus['bugs'])} bug(s) from {focus['previous']['head'][:9]}")
-    staging = set().union(*(staging_deferred(resolve_task_file(t)) for t in group["tasks"]))
+    staging = set().union(*(staging_deferred(task_file_in(checkout, t)) for t in group["tasks"]))
     eta = EtaReporter(group, checkout)
     for fix_round in range(first_round - 1, MAX_FIX_ROUNDS + 1):
         round_number = fix_round + 1
@@ -1189,7 +1209,7 @@ def autoland(args):
             if not failed and not bugs:
                 group["tested_head"] = head
                 group["staging_checks"] = [
-                    {"id": c, "text": acceptance_items(resolve_task_file(c.split(":")[0]))[int(c.split(":C")[1]) - 1]}
+                    {"id": c, "text": acceptance_items(task_file_in(checkout, c.split(":")[0]))[int(c.split(":C")[1]) - 1]}
                     for c in deferred]
                 save_group(checkout, group)
                 if human:
@@ -1363,7 +1383,13 @@ def estimate(group, checkout, now=None):
     source = f"medians of {len(records)} timed dispatch(es)" if records else "defaults, no timed dispatch yet"
     left = [t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in text]
     batches = -(-len(group["tasks"]) // VERIFY_BATCH)
-    fix_round = impl + batch  # one worker dispatch, then one focused re-check batch
+    # A fix round is one worker dispatch per task with findings, then a re-check of those tasks in
+    # batches of VERIFY_BATCH; counting one of each underestimated g-t15220-10 by an hour (2026-11-07).
+    owners = findings_tasks(checkout, group) or group["tasks"][:1]
+    fix_work, recheck = len(owners) * impl, -(-len(owners) // VERIFY_BATCH) * batch
+    fix_round = fix_work + recheck
+    fix_parts = [f"fix {len(owners)} task(s) x {impl:.0f} min", f"{-(-len(owners) // VERIFY_BATCH)} re-check batch(es) "
+                 f"x {batch:.0f} min"]
     parts, verify_ahead = [], True
     if "VERIFY_PASS" in last:
         minutes, verify_ahead = ci, False
@@ -1373,23 +1399,23 @@ def estimate(group, checkout, now=None):
     elif " RESUMED " in last and "fix round" in last.lower():
         # A fix dispatch restarted after running out of turns: the rest of the round, then the re-check.
         minutes = fix_round + ci
-        parts += [f"fix round (restarted) {impl:.0f} min", f"1 re-check batch {batch:.0f} min", f"CI {ci:.0f} min"]
+        parts += ["fix round (restarted)", *fix_parts, f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last and "verify round" in last:
         found = BATCH_PROGRESS.search(last)
         remaining = int(found.group(2)) - int(found.group(1)) if found else batches
         if remaining == 0 and verdict_has_findings(checkout):
             # The last batch is in and found problems: the fix round is running now.
             minutes = fix_round + ci
-            parts += [f"fix round {impl:.0f} min", f"1 re-check batch {batch:.0f} min", f"CI {ci:.0f} min"]
+            parts += [*fix_parts, f"CI {ci:.0f} min"]
         else:
             minutes = remaining * batch + ci
             parts += [f"{remaining} verify batch(es) x {batch:.0f} min", f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last and "fix round" in last:
-        minutes = batch + ci
-        parts += [f"1 re-check batch {batch:.0f} min", f"CI {ci:.0f} min"]
+        minutes = recheck + ci
+        parts += [fix_parts[1], f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last and (checkout / VERIFY_FILE).is_file():
         minutes = fix_round + ci  # a verdict with findings is on disk: the fix round is running
-        parts += [f"fix round {fix_round:.0f} min", f"CI {ci:.0f} min"]
+        parts += [*fix_parts, f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last:
         minutes = batches * batch + ci
         parts += [f"{batches} verify batch(es) x {batch:.0f} min", f"CI {ci:.0f} min"]
@@ -1400,6 +1426,15 @@ def estimate(group, checkout, now=None):
     best = now + dt.timedelta(minutes=minutes)
     with_fix = best + dt.timedelta(minutes=fix_round) if verify_ahead else None
     return best, with_fix, f"{', '.join(parts)}; {source}"
+
+
+def findings_tasks(checkout, group):
+    """The group tasks the verdict on disk has findings for (failed criteria, group bugs), or []."""
+    try:
+        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [task for task, _criteria, _bugs in fix_units(group, verdict) if task]
 
 
 def verdict_has_findings(checkout):

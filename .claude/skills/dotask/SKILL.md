@@ -129,7 +129,9 @@ User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `au
 1. Preland check, then restart the stack on HEAD.
 2. Fresh verifier dispatches (`qa` phase, 200 turns, no shared context with the worker), three tasks
    per batch, prove every acceptance criterion by observation, Playwright for anything a user can see;
-   the last batch also runs a regression pass over the flows the diff touches. They write
+   the last batch also runs a regression pass over the flows the diff touches, plus the tests that
+   import what the branch changed (`vitest related`; pytest on backend test files importing a changed
+   module, never a whole suite: a T14800 rollup bug first surfaced in Branch CI on PR 717). They write
    `.dotask-verify.json`; each round is archived as `waves/<wave>/verify-round-N.json`.
 3. Any `fail` criterion or `group` bug goes to a fix round: one fresh worker dispatch per owning task,
    in group order, each fixing and committing only its task's findings (findings no task owns go last).
