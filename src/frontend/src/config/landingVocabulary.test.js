@@ -10,7 +10,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MODE_NAMES, ANNOTATE, LIBRARY_ACTIONS } from './displayNames';
-import { DEFINITION, FACTS, HIGHLIGHT_REEL_LINE, INPUT_SOURCES, STEP_NAMES } from '../../../landing/src/site.ts';
+import { DEFINITION, FACTS, HERO_SUBLINE, HIGHLIGHT_REEL_LINE, INPUT_SOURCES, STEP_NAMES } from '../../../landing/src/site.ts';
 import { SPORTS } from '../../../landing/src/data/sports.ts';
 import { CAMERAS } from '../../../landing/src/data/cameras.ts';
 import { COMPARISONS } from '../../../landing/src/data/comparisons.ts';
@@ -170,6 +170,24 @@ describe('T14650 highlight reel means several highlights (D5)', () => {
       .filter((line) => /^\s*(a|text|body|heading|description)\b.*highlight reel/i.test(line))
       .filter((line) => !/combine/i.test(line));
     expect(lines).toEqual([]);
+  });
+});
+
+describe('T14780 landing uses the current step name, not "frame"', () => {
+  it('index.astro no longer calls the zoom step "frame"', () => {
+    const text = read('pages/index.astro');
+    expect(text).not.toMatch(/\bframe your athlete\b/i);
+    expect(text).not.toMatch(/\bin frame\b/i);
+    expect(text).not.toContain('afterLabel="Framed"');
+  });
+
+  it('shared hero/definition copy uses the current step name', () => {
+    expect(HERO_SUBLINE).not.toMatch(/\bframe your athlete\b/i);
+    expect(DEFINITION).not.toMatch(/\bframe your athlete\b/i);
+  });
+
+  it('the before/after illustration label matches STEP_NAMES.frame, not the old word', () => {
+    expect(read('components/Illustrations.tsx')).not.toMatch(/>FRAME</);
   });
 });
 
