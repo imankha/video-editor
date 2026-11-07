@@ -5,7 +5,7 @@ import { GUIDE } from '../../config/displayNames';
 
 const focusFacts = (finishedCount) => ({
   screen: 'focus', job: { status: 'none' }, progress: { finishedCount },
-  local: { dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true, previewing: false, hasPreviewPlayedThrough: true, ctaBusy: false },
+  local: { shapeChosen: true, dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true, previewing: false, hasPreviewPlayedThrough: true, ctaBusy: false },
 });
 
 describe('finished-highlight count tiers (T12660)', () => {

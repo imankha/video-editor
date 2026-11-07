@@ -38,6 +38,11 @@ export function HighlightEntry({ pending, locked = false, onMake }) {
       <span className="text-center leading-tight">
         {locked ? ANNOTATE.HIGHLIGHT_AFTER_UPLOAD : pending ? ANNOTATE.OPENING_FRAME : ANNOTATE.MAKE_HIGHLIGHT}
       </span>
+      {!locked && !pending && (
+        <span className="text-center text-xs font-medium leading-tight text-slate-950/70">
+          {ANNOTATE.MAKE_HIGHLIGHT_CARD}
+        </span>
+      )}
     </button>
   );
 }

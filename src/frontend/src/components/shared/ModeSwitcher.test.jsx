@@ -194,7 +194,6 @@ describe('ModeSwitcher while the game is loading (T11830)', () => {
 describe('T12130: one Make highlight entry string', () => {
   it('every entry point shares the same copy', () => {
     expect(ANNOTATE.FRAME_THIS_CLIP).toBe('Make highlight');
-    expect(ANNOTATE.MAKE_A_HIGHLIGHT).toBe('Make highlight');
     expect(ANNOTATE.MAKE_HIGHLIGHT_NOW).toBe('Make highlight');
   });
 });

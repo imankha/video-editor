@@ -4,7 +4,7 @@ import { GUIDE } from '../../config/displayNames';
 import { GUIDE_PULSE } from './guideTargets';
 
 const fl = (over) => ({
-  dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true,
+  shapeChosen: true, dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true,
   previewing: false, hasPreviewPlayedThrough: true, ctaBusy: false, ...over,
 });
 const focusFacts = (status, local) => ({ screen: 'focus', job: { status }, local: fl(local) });

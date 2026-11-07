@@ -1308,7 +1308,7 @@ export function ProjectManager({
         // User navigated away mid-upload: never force navigation — offer Open.
         toast.success(addedMsg, {
           action: {
-            label: ANNOTATE.MAKE_A_HIGHLIGHT,
+            label: ANNOTATE.MAKE_HIGHLIGHT_NOW,
             onClick: () => onSelectProjectWithMode(firstId, { mode: 'framing' }),
           },
         });

@@ -126,7 +126,7 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
     dedupKey: 'reel-created',
     ...(withAction ? {
       action: {
-        label: ANNOTATE.MAKE_A_HIGHLIGHT,
+        label: ANNOTATE.MAKE_HIGHLIGHT_NOW,
         onClick: () => onOpenReelInFocus?.(projectId),
       },
     } : {}),
