@@ -71,6 +71,7 @@ export default function FocusCockpit({
   // the cue up for the WHOLE first drag in landscape). isCropDragging is memory-only view state, exactly as the
   // portrait path (FocusModeView) holds it.
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
+  const boxPrePlaced = focusPointCount > 0;
   const [isCropDragging, setIsCropDragging] = useState(false);
   const [activeSheet, setActiveSheet] = useState(null); // 'setup' | 'trim' | null
   const [previewing, setPreviewing] = useState(false);
@@ -87,7 +88,7 @@ export default function FocusCockpit({
     screen: 'focus',
     job: { status: jobStatus },
     local: {
-      cockpit: true, shapeChosen: shapeTapped || focusPointCount > 0, dragDone: focusPointCount > 0, previewing, hasPreviewed,
+      cockpit: true, shapeChosen: shapeTapped || boxPrePlaced, dragDone: boxPrePlaced, previewing, hasPreviewed,
       rendered: framingCtaMode === 'preview',
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
       videoError: !!error, canRetryVideo: !!error && !!onRetryVideo && isUrlExpiredError?.(),
@@ -308,7 +309,7 @@ export default function FocusCockpit({
               athlete under the box stays visible. Foot of the stage: the top corners hold the chips. */}
           {introSeen && !isCropDragging && (
             <div className="pointer-events-none absolute inset-x-2 bottom-2 z-20 flex justify-center">
-              <CompactGuide guide={guide} testId="cockpit-guide" className="w-full max-w-[30rem]" />
+              <CompactGuide guide={guide} boxPrePlaced={boxPrePlaced} testId="cockpit-guide" className="w-full max-w-[30rem]" />
             </div>
           )}
         </div>

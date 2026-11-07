@@ -1,7 +1,7 @@
 import Guide from '../components/instructions/Guide';
 import CompactGuide from '../components/instructions/CompactGuide';
 import { GUIDE_PULSE } from '../components/instructions/guideTargets';
-import { resolveGuide } from '../components/instructions/resolveGuide';
+import { resolveGuide, focusGuideStepDisplay } from '../components/instructions/resolveGuide';
 import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -766,7 +766,7 @@ export function FocusModeView({
         {/* Guided framing: one floating instruction near the current action. */}
         {(videoUrl || error) && !isFullscreen && !mobileFs && guide && (
           <Guide guide={guide}>
-            <FramingGuide step={guide.step} total={6} text={guide.message.title} compact={guide.compact} />
+            <FramingGuide {...focusGuideStepDisplay(guide.step, boxPrePlaced)} text={guide.message.title} compact={guide.compact} />
           </Guide>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
@@ -779,7 +779,7 @@ export function FocusModeView({
               slim strip between the corner buttons and lets touches through to the stage. */}
           {(isFullscreen || mobileFs) && (
             <div className="pointer-events-none absolute inset-x-14 top-2 z-30 flex justify-center sm:inset-x-16 sm:top-4">
-              <CompactGuide guide={guide} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
+              <CompactGuide guide={guide} boxPrePlaced={boxPrePlaced} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
             </div>
           )}
           {/* T14770: "Where will you share it?" (design decision 1, Option C) —

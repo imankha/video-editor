@@ -161,7 +161,9 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-preview-toggle').className).not.toMatch(/coach-target-pulse/);
     // Playback reaches the clip end (clipDuration 6s).
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
-    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 6');
+    // T14760 (owner ruling 2026-11-07): box already placed means no shape choice was
+    // ever shown this session, so the total drops to 5 and every later step renumbers down.
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 4 of 5');
     expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Preview/);
     expect(screen.getByTestId('framing-preview-toggle').className).toMatch(/coach-target-pulse/);
   });
@@ -175,7 +177,7 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.watchPreview);
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 0 }} />);
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
-    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 6 of 6');
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 5');
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.generate);
     expect(screen.getByTestId('generate').dataset.pulse).toBe('true');
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
@@ -197,7 +199,7 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.watchPreview);
     rerender(<Harness initial={{ ...props, currentTime: 2 }} />);
     rerender(<Harness initial={{ ...props, currentTime: 5.9 }} />);
-    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 6 of 6');
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 5');
     expect(screen.getByTestId('generate').dataset.pulse).toBe('true');
   });
 
@@ -209,7 +211,7 @@ describe('FocusModeView guided framing steps', () => {
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
     rerender(<Harness initial={{ ...props, currentTime: 5.9 }} />);
     expect(screen.getByTestId('generate').dataset.pulse).toBe('false');
-    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 6');
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 4 of 5');
   });
 
   it('locks Trim and SlowMo, Preview highlight and Generate until the box is dragged', () => {
@@ -244,7 +246,10 @@ describe('FocusModeView guided framing steps', () => {
 
   it('T14760: a clip that already has a focus point skips the shape choice (already settled) and starts at the drag step, with the check-the-box copy', () => {
     render(<Harness initial={{ keyframes: [kf(10)] }} />);
-    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 2 of 6');
+    // T14760 (owner ruling 2026-11-07): the shape choice never showed this session, so
+    // the drag step (otherwise "2 of 6") renumbers to "1 of 5" -- the first step this
+    // parent actually sees.
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 1 of 5');
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.dragPrePlaced);
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
     expect(screen.getByTestId('play').dataset.pulse).toBe('false');
@@ -311,7 +316,8 @@ it('disabling guidance stops targets and re-enabling preserves progress', () => 
 it('saved trim edits never opt the user into trim guidance', () => {
   render(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, segmentBoundaries: [0, 2, 4, 10], trimRange: { start: 2, end: 8 } }} />);
   expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
-  expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 4 of 6');
+  // T14760: box pre-placed (kf(10)) -- total 5, keep renumbers from 4 to 3.
+  expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 5');
 });
 
 // T12470:C3 a draft that is already rendered (CTA is "Back to Preview") shows no step guide.

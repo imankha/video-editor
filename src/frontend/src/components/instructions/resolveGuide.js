@@ -367,6 +367,19 @@ export function resolveGuide(facts) {
   return { id, message, cta, anchor: resolvedAnchor, avoid, keepClear, shadeClear, compact, reveal, pulse, tone, step, phase, end, gotIt, side };
 }
 
+/**
+ * T14760 (owner ruling 2026-11-07): number only the steps a parent actually sees.
+ * The shape-choice rule (step 1 of 6) can never fire once `boxPrePlaced` is true --
+ * `shapeChosen` is forced true from the first render (FocusModeView/FocusCockpit), so
+ * that step never shows this session. Renumber every later step down by one and drop
+ * the total to 5, so the first step this parent can see always reads "Step 1", never
+ * a skipped step's number -- at any later step either.
+ */
+export function focusGuideStepDisplay(step, boxPrePlaced) {
+  if (step == null) return { step: null, total: null };
+  return boxPrePlaced ? { step: step - 1, total: 5 } : { step, total: 6 };
+}
+
 const play = (rating, portrait = null, highlightCount = 0) => ({ selectedPlay: rating == null ? null : { rating }, portrait, highlightCount });
 const fl = (over) => ({
   shapeChosen: true, dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true,
