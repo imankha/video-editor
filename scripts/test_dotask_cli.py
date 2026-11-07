@@ -1015,6 +1015,31 @@ class AutolandTest(unittest.TestCase):
         self.assertNotIn("carried_from", final["criteria"][1])
         self.assertIn("VERIFY_PASS", self._last())
 
+    def test_a_restart_after_the_fix_round_resumes_with_only_the_failed_criteria(self):
+        # The process that ran round 1 and its fix was stopped; HEAD has the fix commit.
+        old_head = "b" * 40
+        (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(self._verdict(("pass", "fail"), head=old_head)))
+        waves = self.tasks_root / "waves" / "w1"
+        waves.mkdir(parents=True)
+        (waves / "verify-round-1.json").write_text(json.dumps({"head": old_head}))
+        self.verdicts = [{"bugs": [], "criteria": [{"id": "T1:C2", "status": "pass", "evidence": "fixed"}]}]
+        with patch.object(dotask_cli, "is_ancestor", lambda checkout, older, newer: older == old_head):
+            self.assertEqual(self._run(no_land=True), 0)
+        qa = [text for phase, text in self.dispatches if phase == "qa"]
+        self.assertEqual(len(qa), 1)
+        self.assertIn("Prove ONLY these criteria", qa[0])
+        final = json.loads((waves / "verify-round-2.json").read_text())
+        self.assertEqual(final["criteria"][0]["carried_from"], old_head)
+        self.assertIn("VERIFY_PASS", self._last())
+
+    def test_a_restart_with_no_fix_since_the_verdict_verifies_everything(self):
+        (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(self._verdict(("pass", "fail"))))
+        self.verdicts = [self._verdict()]
+        with patch.object(dotask_cli, "is_ancestor", lambda checkout, older, newer: True):
+            self.assertEqual(self._run(no_land=True), 0)
+        qa = [text for phase, text in self.dispatches if phase == "qa"]
+        self.assertIn("EVERY criterion", qa[0])
+
     def test_a_re_check_that_skips_a_failed_criterion_never_passes(self):
         self.verdicts = [self._verdict(("fail", "pass"))]
         original = self._dispatch

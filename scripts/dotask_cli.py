@@ -853,6 +853,33 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
     return merged
 
 
+def is_ancestor(checkout, older, newer):
+    return subprocess.run(["git", "-C", str(checkout), "merge-base", "--is-ancestor", older, newer],
+                          capture_output=True).returncode == 0
+
+
+def resume_focus(checkout, group, head):
+    """(focus, round) to pick up a stopped autoland after its fix round: the last verdict failed, was
+    made on an ancestor of HEAD, and HEAD has moved since. Otherwise (None, 1): a full verify. Without
+    this a restart re-ran every criterion (g-t15220-10, 2026-11-07: 4 batches, about 3 hours)."""
+    path = checkout / VERIFY_FILE
+    try:
+        previous = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, 1
+    seen = str(previous.get("head") or "")
+    failed = [c.get("id") for c in previous.get("criteria", []) if c.get("status") == "fail"]
+    bugs = [b for b in previous.get("bugs", []) if b.get("scope") == "group"]
+    if not seen or seen == head or not (failed or bugs) or not previous.get("criteria"):
+        return None, 1
+    if not is_ancestor(checkout, seen, head):
+        return None, 1
+    rounds = [int(m.group(1)) for p in (TASKS_ROOT / "waves" / group["wave_id"]).glob("verify-round-*.json")
+              if (m := re.fullmatch(r"verify-round-(\d+)\.json", p.name))
+              and json.loads(p.read_text(encoding="utf-8")).get("head") == seen]
+    return {"criteria": failed, "bugs": bugs, "previous": previous}, (max(rounds) if rounds else 1) + 1
+
+
 def autoland(args):
     slug = args.slug
     checkout = TASKS_ROOT / sanitize(slug)
@@ -871,8 +898,12 @@ def autoland(args):
         with exclude_path.open("a", encoding="utf-8") as stream:
             stream.write(VERIFY_FILE + "\n")
 
-    focus = None  # after a failed round: what the next verifier re-checks
-    for fix_round in range(MAX_FIX_ROUNDS + 1):
+    # After a failed round: what the next verifier re-checks. A restart after a fix round resumes it.
+    focus, first_round = resume_focus(checkout, group, git_head(checkout))
+    if focus:
+        print(f"[dotask] resuming at round {first_round}: re-checking {focus['criteria']} and "
+              f"{len(focus['bugs'])} bug(s) from {focus['previous']['head'][:9]}")
+    for fix_round in range(first_round - 1, MAX_FIX_ROUNDS + 1):
         round_number = fix_round + 1
         head = git_head(checkout)
         check = run_preland_check(checkout)
