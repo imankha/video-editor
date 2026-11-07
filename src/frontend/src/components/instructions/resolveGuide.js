@@ -88,6 +88,9 @@ const FINISHED_SHARE = tid('finished-share-action');
 // CTA bright, and the card goes beside the primary card (`side: 'beside'`). The picture is `shadeClear` (a preference):
 // on a phone there is no free slot, and the card covering part of the picture beats covering a CTA.
 const PLAYER_VIDEO = tid('collection-player-video');
+// T14840: Download sits in the player's header toolbar, not inside the share action bar
+// (FINISHED_SHARE) -- it needs its own cutout, the share bar's never covered it.
+const PLAYER_DOWNLOAD = tid('player-download');
 const FOCUS_READY_PRIMARY = tid('focus-choice-primary');
 const FOCUS_READY_CTAS = [FOCUS_READY_PRIMARY, tid('focus-choice-publish'), tid('focus-choice-edit-framing'), tid('focus-save-draft')];
 const OVERLAY_READY_PRIMARY = tid('overlay-choice-primary');
@@ -285,9 +288,12 @@ export const GUIDE_RULES = [
   jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress', null, NO_PROGRESS),
   readyPanel(jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PRIMARY, OVERLAY_READY_PANEL, 'coach', GUIDE_PULSE.OVERLAY_FINISH), OVERLAY_READY_CTAS),
   // T12290: finished viewer (silent once a link exists: the link card is the instruction) and share modal.
-  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [FINISHED_SHARE], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
-  // End of the first-highlight walk: the link exists, so offer to turn the guide off.
-  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [FINISHED_SHARE], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-done' },
+  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
+  // End of the first-highlight walk: the link exists, so offer to turn the guide off. T14840: this
+  // card's only action is "turn off guidance" -- it has nothing to protect by shading the screen, so
+  // it renders unshaded like a progress/error card (NO_SHADE_TONES) rather than needing a cutout for
+  // every real player action (Download, Close, Back to game, ...).
+  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'progress', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-done' },
   { id: 'share.modal', screen: 'share', when: () => true, message: { title: GUIDE.share.modal, body: '' }, anchor: { target: SHARE_MODAL_BODY, fallback: SHARE_MODAL_BODY }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_SUBMIT, avoid: [], step: null, phase: 'share-modal' },
   // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong', GUIDE_PULSE.EXPORT),

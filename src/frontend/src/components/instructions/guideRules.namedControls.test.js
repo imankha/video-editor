@@ -33,7 +33,7 @@ const CONTROL_PHRASES = [
   { name: 'Exit fullscreen', re: /\bExit fullscreen\b/, pulse: [P.EXIT_FULLSCREEN] },
   { name: 'Finish', re: /\btap Finish\b/i, pulse: [P.OVERLAY_FINISH, P.FOCUS_ADD_SPOTLIGHT] },
   { name: 'Get link', re: /\bTap Get link\b/, pulse: [P.GET_LINK] },
-  { name: 'Download', re: /\bDownload to save\b/, pulse: [] },
+  { name: 'Download', re: /\bDownload to save\b/, pulse: [], keepClear: ['player-download'] },
   { name: 'Choose who can watch', re: /\bChoose who can watch\b/, pulse: [] },
   { name: 'Share', re: /\btap Share\b(?! game)/, pulse: [P.SHARE_SUBMIT, P.SHARE_GAME_SUBMIT, P.COLLECTION_SHARE_SUBMIT, P.TEAMMATES_SHARE_SUBMIT, P.SHARE_PLAYBACK_SUBMIT] },
   { name: 'Tap your athlete', re: /\bTap your athlete\b/, pulse: [P.PICK_BOX] },
@@ -72,7 +72,6 @@ const IN_DIALOG = 'Dialog rule: the control lives inside the dialog body, drawn 
 const NAMES_OFFSCREEN = {
   'home.finished.many:open a game': 'Names a destination two steps away (Games tab, then a game); T12620 decided these do not pulse.',
   'home.finished.first:Tap it/one': 'The pulse is the first finished tile, which is what "it" names.',
-  'finished.viewer:Download': 'Secondary action beside Get link, inside the anchor (finished-share-action) the card never covers.',
   'share.modal:Choose who can watch': 'The audience chooser is inside the anchor (share modal body) the card never covers.',
   'focus.progress.generate.advanced:Trim and slow motion': 'Trim sits in the action band; the docked card stays in the strip above that band.',
   'modal.link-clip:Tap a/the (list item)': IN_DIALOG,
