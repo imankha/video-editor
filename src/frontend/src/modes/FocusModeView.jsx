@@ -345,8 +345,7 @@ export function FocusModeView({
   // Guided framing steps (one instruction at a time). Focus points a parent places
   // are 'user'-origin keyframes; 'trim'-origin ones are trim-boundary residue.
   // EPHEMERAL view state, never persisted, never a useEffect: step 1 completes on
-  // a box drag release (or a clip that already has a focus point), step 2 on the
-  // first time playback is observed.
+  // a box drag release, step 2 on the first time playback is observed.
   const { coachEnabled } = useGuidanceSettings();
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [hasDragged, setHasDragged] = useState(false);
@@ -354,7 +353,15 @@ export function FocusModeView({
   // Derived-state-in-render (React-sanctioned): any play path (button, spacebar,
   // tapping the video) flips isPlaying, so observe that rather than one handler.
   if (isPlaying && !hasPlayed) setHasPlayed(true);
-  const dragDone = hasDragged || focusPointCount > 0;
+  // T14760: a clip can open with a box already placed (AI-proposed, or copied from an
+  // earlier highlight) -- `focusPointCount > 0` before the parent has touched anything
+  // this session. That used to skip step 1 straight to step 2, so the parent never saw
+  // "Step 1 of 5" and the first two steps looked collapsed into one. Step 1 now still
+  // shows (resolveGuide swaps in the "check the box" copy for this case, see
+  // `boxPrePlaced`), and completes on a drag OR on playing -- tapping Play is itself
+  // confirmation the already-placed box looked right.
+  const boxPrePlaced = focusPointCount > 0;
+  const dragDone = hasDragged || (boxPrePlaced && hasPlayed);
   const stepsComplete = dragDone && hasPlayed;
   // Step 3 -> 4: once the first play has started, reaching the clip end while
   // playing counts as one full play-through (playback loops, so the time wraps
@@ -429,7 +436,7 @@ export function FocusModeView({
     progress: { finishedCount },
     job: { status: jobStatus === 'none' && needCredits ? 'credits' : jobStatus },
     local: {
-      dragDone, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
+      dragDone, boxPrePlaced, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
       rendered: framingCtaMode === 'preview',
       // T12790: a failed load and fullscreen each get their own sentence instead of silence.

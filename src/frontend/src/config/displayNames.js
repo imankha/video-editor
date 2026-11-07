@@ -941,6 +941,7 @@ export const GUIDE = {
   },
   focus: {
     drag: 'Drag the box onto your athlete. Your highlight shows what’s inside it.',
+    dragPrePlaced: 'The box is already on your athlete. Drag it if it isn’t, then tap Play.',
     play: 'Tap Play and watch your athlete.',
     keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the positions you set.',
     preview: 'Tap Check framing to see exactly what you’ll share.',

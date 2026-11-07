@@ -233,9 +233,17 @@ describe('FocusModeView guided framing steps', () => {
     expect(lastDisabled()).toBe(false);
   });
 
-  it('a clip that already has a focus point starts at step 2', () => {
+  it('T14760: a clip that already has a focus point still starts at step 1, with the check-the-box copy', () => {
     render(<Harness initial={{ keyframes: [kf(10)] }} />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.play);
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 1 of 5');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.dragPrePlaced);
+    expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
+    expect(screen.getByTestId('play').dataset.pulse).toBe('false');
+  });
+
+  it('T14760: a clip that already has a focus point advances past step 1 when the parent plays, without a separate tap-play step', () => {
+    render(<Harness initial={{ keyframes: [kf(10)], isPlaying: true }} />);
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.keep);
   });
 
   it('ignores trim-origin keyframes when deciding step 1 is done', () => {
@@ -279,7 +287,8 @@ describe('FocusModeView guided framing steps', () => {
 it('disabling guidance stops targets and re-enabling preserves progress', () => {
   useSettingsStore.getState().reset();
   useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } });
-  const view = render(<Harness initial={{ keyframes: [kf(10)] }} />);
+  const view = render(<Harness />);
+  fireEvent.click(screen.getByTestId('crop-box'));
   expect(screen.getByTestId('play').getAttribute('data-pulse')).toBe('true');
   act(() => useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: false } }));
   expect(screen.queryByTestId('framing-guide')).toBeNull();

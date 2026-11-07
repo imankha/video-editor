@@ -319,6 +319,9 @@ export function resolveGuide(facts) {
   const gotIt = rule.gotIt ?? !end;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
+  // T14760: a box already on the athlete (AI-proposed, or copied from an earlier highlight)
+  // gets the "check it" wording instead of "drag it onto" -- step 1 still shows, it is not skipped.
+  if (id === 'focus.progress.drag' && facts.local.boxPrePlaced) message = { title: GUIDE.focus.dragPrePlaced, body: '' };
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
   return { id, message, cta, anchor, avoid, keepClear, shadeClear, compact, reveal, pulse, tone, step, phase, end, gotIt, side };
 }
