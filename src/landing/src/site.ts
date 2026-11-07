@@ -56,7 +56,7 @@ export const DEFINITION =
 export const STEP_NAMES = {
   upload: 'Upload game',
   mark: 'Mark plays',
-  frame: 'Frame',
+  frame: 'Zoom in',
   spotlight: 'Spotlight',
   share: 'Share',
 } as const

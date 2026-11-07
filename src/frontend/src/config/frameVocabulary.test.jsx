@@ -83,13 +83,13 @@ describe('T14620 Frame and paid-step copy', () => {
   it('T14620:C5 box, positions, sections and Check framing replace the tool words', () => {
     expect(FOCUS_COCKPIT.ADD_FOCUS_POINT).toBe('Add position');
     expect(EDITOR_PANELS.FOCUS_POINT).toBe('Position');
-    expect(EDITOR_PANELS.PREVIEW_HIGHLIGHT).toBe('Check framing');
+    expect(EDITOR_PANELS.PREVIEW_HIGHLIGHT).toBe('Check zoom');
     expect(FOCUS_PREVIEW.BACK_TO_PREVIEW_LABEL).toBe('Watch highlight');
     expect(FRAME_COPY?.MOVE_VIDEO).toBe('Move the video');
     expect(FRAME_COPY?.MOVE_BOX).toBe('Move the box');
     expect(FRAME_COPY?.LENGTH_CHANGED).toBe('Length of your highlight. Credits are based on this.');
     expect(FRAME_COPY?.BOX_TOO_TIGHT).toBe('This box is very tight, so the sharpened video may look softer. Try a slightly wider box.');
-    expect(MODE_NAMES.FRAMING).toBe('Frame');
+    expect(MODE_NAMES.FRAMING).toBe('Zoom in');
   });
 
   it('T14620:C6 no retired word survives in Frame or paid-step constants', () => {

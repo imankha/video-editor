@@ -57,7 +57,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
     const { container } = render(
       <SegmentedProgressStrip project={makeProject({ has_working_video: true })} />
     );
-    const framing = getSegmentByTitle(container, 'Frame');
+    const framing = getSegmentByTitle(container, 'Zoom in');
     expect(framing.className).toContain('bg-green-500');
     expect(getHalfFill(framing)).toBeNull();
   });
@@ -75,21 +75,21 @@ describe('SegmentedProgressStrip (T3540)', () => {
     const exporting = render(
       <SegmentedProgressStrip project={makeProject()} isExporting="framing" />
     );
-    const exportingSeg = getSegmentByTitle(exporting.container, 'Frame');
+    const exportingSeg = getSegmentByTitle(exporting.container, 'Zoom in');
     expect(exportingSeg.className).toContain('bg-amber-500');
     expect(getHalfFill(exportingSeg)).toBeNull();
 
     const failed = render(
       <SegmentedProgressStrip project={makeProject()} failedExportType="framing" />
     );
-    const failedSeg = getSegmentByTitle(failed.container, 'Frame');
+    const failedSeg = getSegmentByTitle(failed.container, 'Zoom in');
     expect(failedSeg.className).toContain('bg-orange-500');
     expect(getHalfFill(failedSeg)).toBeNull();
 
     const disconnected = render(
       <SegmentedProgressStrip project={makeProject()} isExporting="framing" isOffline={true} />
     );
-    const disconnectedSeg = getSegmentByTitle(disconnected.container, 'Frame');
+    const disconnectedSeg = getSegmentByTitle(disconnected.container, 'Zoom in');
     expect(disconnectedSeg.className).toContain('bg-gray-400');
     expect(getHalfFill(disconnectedSeg)).toBeNull();
 
@@ -142,7 +142,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
         })}
       />
     );
-    const framing = getSegmentByTitle(container, 'Frame');
+    const framing = getSegmentByTitle(container, 'Zoom in');
     expect(framing.className).not.toContain('ring-amber-400');
   });
 

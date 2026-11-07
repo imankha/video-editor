@@ -381,9 +381,11 @@ export const DETECTION = {
   markerFound: (n) => `${n} ${n === 1 ? 'athlete' : 'athletes'} found. Tap to pick yours.`,
 };
 
+// T14780 (user pick 2026-11-07): "Frame" renamed to "Zoom in" -- a first-time
+// parent doesn't know what framing is, but "zoom in" says what the step does.
 export const MODE_NAMES = {
   ANNOTATE: 'Mark Plays',
-  FRAMING: 'Frame',
+  FRAMING: 'Zoom in',
   SPOTLIGHT: 'Spotlight',
 };
 
@@ -391,7 +393,7 @@ export const MODE_NAMES = {
 // vocabulary remains the noun used by status text, progress strips, and tiles.
 export const MODE_SWITCHER_NAMES = {
   ANNOTATE: MODE_NAMES.ANNOTATE,
-  FRAMING: 'Frame',
+  FRAMING: 'Zoom in',
   SPOTLIGHT: 'Spotlight',
 };
 
@@ -406,7 +408,7 @@ export const MODE_SWITCHER_LOCKED = {
   SPOTLIGHT_NEEDS_HIGHLIGHT: 'Make your highlight first, then add a spotlight.',
   LOADING_PLAYS: 'Loading your plays...',
   LOADING_WORKING_VIDEO: 'Loading video...',
-  OUT_OF_SYNC: 'Your highlight no longer matches your framing. Sharpen it again, then add a spotlight.',
+  OUT_OF_SYNC: 'Your highlight no longer matches your zoom. Sharpen it again, then add a spotlight.',
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
@@ -880,7 +882,7 @@ export const FOCUS_COCKPIT = {
   // Zone A / D rail button labels (10px, under a Lucide icon).
   BACK: 'Back',
   SETUP: 'Settings',
-  PREVIEW: 'Check framing',
+  PREVIEW: 'Check zoom',
   // Compact CTA, two 10px lines (D9 / D13).
   GENERATE_LINE_1: 'Sharpen my',
   GENERATE_LINE_2: 'highlight',
@@ -915,7 +917,7 @@ export const GUIDE = {
     hasHighlightsOne: { title: 'This play has 1 highlight.', body: 'Tap it to pick up where you left off, or Make highlight for another.' },
     hasHighlightsMany: { title: 'This play has {n} highlights.', body: 'Tap one to pick up where you left off, or Make highlight for another.' },
     brilliant: { title: 'Brilliant play. Make a highlight to share it.', body: 'Tap Make highlight and keep your athlete in the picture. Edit play is there if the timing is off.' },
-    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add a spotlight if you want.' },
+    portrait: { title: 'Continue your portrait highlight.', body: 'Finish your zoom on your athlete, then add a spotlight if you want.' },
     generating: { title: 'Your highlight is being sharpened. It will be ready soon.', body: '' },
     spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
     preview: { title: 'Your portrait highlight is ready.', body: 'Watch it to check the finished result.' },
@@ -957,10 +959,10 @@ export const GUIDE = {
     dragPrePlaced: 'The box is already on your athlete. Drag it if it isn’t, then tap Play.',
     play: 'Tap Play and watch your athlete.',
     keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the positions you set.',
-    preview: 'Tap Check framing to see exactly what you’ll share.',
+    preview: 'Tap Check zoom to see exactly what you’ll share.',
     watchPreview: 'Watch it through. Tap Back to full video to change anything.',
     generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
-    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Check framing when it looks right.`,
+    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Check zoom when it looks right.`,
     generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
     credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then sharpen it.`,
     progressExport: 'Sharpening your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
@@ -972,10 +974,10 @@ export const GUIDE = {
     // T12790: video load failure, fullscreen hand-off, and the landscape cockpit's own controls.
     videoErrorRetry: 'This video didn’t load. Tap Retry Loading Video.',
     videoError: 'This video didn’t load. Go back and open this play again.',
-    leaveFullscreen: 'Exit fullscreen to check your framing and sharpen your highlight.',
+    leaveFullscreen: 'Exit fullscreen to check your zoom and sharpen your highlight.',
     leaveFullscreenJob: 'Exit fullscreen to see your highlight’s status and what to do next.',
-    cockpitPreview: 'Tap Check framing to see exactly what you’ll share.',
-    cockpitWatchPreview: 'Watch it through. Tap Check framing again to change anything.',
+    cockpitPreview: 'Tap Check zoom to see exactly what you’ll share.',
+    cockpitWatchPreview: 'Watch it through. Tap Check zoom again to change anything.',
   },
   finished: {
     viewer: `Done! Tap ${RESULT_PUBLISH.PUBLISH_GET_LINK} to send it, or Download to save it.`,
@@ -1261,13 +1263,13 @@ export const EDITOR_PANELS = {
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for
   // crop/timing/format/audio; approximate for image quality. Never a
   // sharpness claim in either direction.
-  PREVIEW_HIGHLIGHT: 'Check framing',
+  PREVIEW_HIGHLIGHT: 'Check zoom',
   PREVIEW_BACK_TO_FRAMING: 'Back to full video',
   // T12020 -- the Preview tile's caption follows its label: framing check before
   // previewing, return-to-box while previewing.
   PREVIEW_CAPTION_FRAMING: 'See what your highlight will show before you sharpen it.',
   PREVIEW_CAPTION_RETURN: 'Return to dragging the box.',
-  PREVIEW_DISCLOSURE: 'This shows your framing, timing and format. Final picture quality comes when you sharpen your highlight.',
+  PREVIEW_DISCLOSURE: 'This shows your zoom, timing and format. Final picture quality comes when you sharpen your highlight.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same disclosure shape as the Trim and slow motion track (user request 2026-09-21).
   TEXT_LANE: 'Text',

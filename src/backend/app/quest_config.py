@@ -125,7 +125,7 @@ STEP_TITLES = {
     # sync"). Mode/feature proper nouns (Annotate, Framing, Spotlight, Publish)
     # keep their capitals; the "spotlight" EFFECT stays lowercase.
     "watch_annotate_tutorial": "Watch Mark plays tutorial",
-    "watch_framing_tutorial": "Watch Frame tutorial",
+    "watch_framing_tutorial": "Watch Zoom in tutorial",
     "watch_overlay_tutorial": "Watch Spotlight tutorial",
     "watch_publish_tutorial": "Watch Finish tutorial",
     "upload_game": "Upload your first game",

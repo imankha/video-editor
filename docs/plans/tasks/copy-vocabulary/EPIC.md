@@ -41,8 +41,8 @@ user decided on 2026-11-03 that "clip" leaves user copy entirely.
 | The finished video (exists only after the paid AI step) | **highlight** | reel, generated video, final video, export, content, comparison video |
 | Several highlights played as one video | **highlight reel** | collection, mix, Mixes, Top Plays, smart |
 | All plays from one game, back to back | **game plays**; action **Watch plays** | recap, Team Recap, My Recap, annotations |
-| Steps | **Mark plays**, **Frame**, **Spotlight**, **Finish** | Annotate, Framing (as a label), Focus, Overlay, Educate/Elevate/Celebrate |
-| The rectangle in Frame | **box**; each placement is a **position** | crop box, focus point, keyframe, spots, rectangle, Pan/Zoom mode |
+| Steps | **Mark plays**, **Zoom in**, **Spotlight**, **Finish** | Annotate, Framing (as a label), Focus, Overlay, Frame (step name, retired T14780), Educate/Elevate/Celebrate |
+| The rectangle in Zoom in | **box**; each placement is a **position** | crop box, focus point, keyframe, spots, rectangle, Pan/Zoom mode |
 | The circle on the parent's kid | **spotlight** | highlight layer, Highlight Region, ellipse, player boxes, tracking, region |
 | The parent's kid | **athlete** (user decision 2026-11-03: "player" is too generic) | player (for the parent's kid), kid, child |
 | Other kids in a play | **teammates** | players, recipients |
@@ -68,12 +68,12 @@ and URLs (`projects`, `/home/reels`) stay frozen for deep links.
 | Add a game | **Upload game** |
 | Add another half or camera | **Add video** |
 | Mark | **Mark play** |
-| Start a highlight from a play (opens Frame) | **Make highlight**; in progress **Continue highlight** (user 2026-11-03: parents don't know what "Frame play" means; they want to make a highlight) |
-| The paid AI step (inside Frame) | **Sharpen my highlight** (user pick 2026-11-03); progress "Sharpening your highlight..."; done "Your highlight is ready" (retires Generate, Export, Generation, Create, Render, Rebuild, Re-generate, Re-run Focus) |
+| Start a highlight from a play (opens Zoom in) | **Make highlight**; in progress **Continue highlight** (user 2026-11-03: parents don't know what "Frame play" means; they want to make a highlight) |
+| The paid AI step (inside Zoom in) | **Sharpen my highlight** (user pick 2026-11-03); progress "Sharpening your highlight..."; done "Your highlight is ready" (retires Generate, Export, Generation, Create, Render, Rebuild, Re-generate, Re-run Focus) |
 | Spotlight | **Add spotlight**, **Edit spotlight** |
 | Finish | **Finish** (moves the highlight to the Highlights tab) |
 | Change a finished highlight | **Edit highlight** |
-| Watch | **Watch**; before the paid step only, **Check framing** |
+| Watch | **Watch**; before the paid step only, **Check zoom** (user pick 2026-11-07, T14780: retires "Check framing") |
 | Remove | **Delete**; confirm with "Tap again to confirm" |
 
 ### Other decisions

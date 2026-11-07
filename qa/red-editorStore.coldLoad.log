@@ -71,10 +71,10 @@
 [41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?session_id until App reads it
 [31m[1mAssertionError[22m: expected null to be 'abc' // Object.is equality[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 "abc"
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 null
 
 [36m [2m❯[22m src/stores/editorStore.coldLoad.test.js:[2m153:67[22m[39m
@@ -113,10 +113,10 @@ null
 [41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps an arrival param on a canonical URL alongside its own query
 [31m[1mAssertionError[22m: expected null to be 'x' // Object.is equality[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 "x"
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 null
 
 [36m [2m❯[22m src/stores/editorStore.coldLoad.test.js:[2m168:38[22m[39m
@@ -134,4 +134,3 @@ null
 [2m      Tests [22m [1m[31m21 failed[39m[22m[2m | [22m[1m[32m24 passed[39m[22m[90m (45)[39m
 [2m   Start at [22m 22:10:03
 [2m   Duration [22m 3.39s[2m (transform 2.55s, setup 0ms, collect 376ms, tests 2.22s, environment 612ms, prepare 6ms)[22m
-
