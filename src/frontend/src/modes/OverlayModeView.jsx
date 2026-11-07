@@ -33,6 +33,15 @@ import {
   detectionAssignmentStates,
 } from './overlay/utils/detectionAssignment';
 
+// T14850: the 30rem (T13610) floor keeps a portrait reel's width from collapsing on a
+// TALL viewport, but below ~850px of viewport height it forces more height than the
+// sticky ActionBand (--cta-bar-h) + header reservation leaves room for, so the video
+// overflows under the band at scrollTop 0 (sticky's "stay fully visible" clamp pulls
+// the band up into the video's own flow region). Lowering the floor to 320px ONLY in
+// this media-gated override keeps the tall-viewport fix (T13610) intact while giving
+// the short-viewport case enough headroom that it never needs the 30rem floor's reach.
+const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(max-height:850px)]:!h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] [@media(min-width:1024px)_and_(max-height:850px)]:!max-h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]';
+
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
  *
@@ -419,7 +428,7 @@ export function OverlayModeView({
       // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 22rem (T12440; 12rem under-reserved) for
       // header + controls is an estimate (same term as FocusModeView stage cap).
       // T13610: floor raised 20rem -> 30rem; at 1440x900 the 20rem floor won and left a ~180x320 video.
-      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]'
+      `relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] ${SHORT_DESKTOP_STAGE_CLASS}`
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'

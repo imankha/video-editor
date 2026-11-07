@@ -88,6 +88,23 @@ describe('OverlayModeView aspect-fit stage (T5676)', () => {
     expect(stage.className).toContain('lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]');
   });
 
+  // T14850: below ~850px of viewport height the 30rem floor forces more height than
+  // the sticky ActionBand + 22rem header reservation leaves room for, overflowing the
+  // video under the band (measured 54px overlap at 1280x800). A media-gated
+  // `!`-important override lowers the floor to 320px ONLY in that height range,
+  // leaving the T13610 tall-viewport (30rem) fix untouched.
+  it('T14850:C2 lowers the floor to 320px below 850px viewport height', () => {
+    isMobileMock.mockReturnValue(false);
+    renderView({ effectiveOverlayMetadata: { width: 808, height: 1440, duration: 10 } });
+    const stage = screen.getByTestId('overlay-video-stage');
+    expect(stage.className).toContain(
+      '[@media(min-width:1024px)_and_(max-height:850px)]:!h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
+    );
+    expect(stage.className).toContain(
+      '[@media(min-width:1024px)_and_(max-height:850px)]:!max-h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
+    );
+  });
+
   it('adapts the stage box to a 16:9 reel (no hardcoded portrait)', () => {
     isMobileMock.mockReturnValue(false);
     renderView({ effectiveOverlayMetadata: { width: 1920, height: 1080, duration: 10 } });

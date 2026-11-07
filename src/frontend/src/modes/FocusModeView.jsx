@@ -31,6 +31,17 @@ import { ratioWithName } from '../constants/aspectRatios';
 import { FRAMING_GUIDE } from '../components/instructions/catalog';
 import { useExportJobStatus } from '../components/instructions/exportJob';
 
+// T14850: below ~850px of viewport height at desktop widths, the 22rem header/timeline
+// reservation in the box-state height formula (and the matching 70vh*aspect-ratio term
+// in the preview-state width formula) leaves less than 320px for the player -- too small
+// to judge framing or drag the crop box. These media-gated `!`-important overrides floor
+// both states at 320px, same "size to the viewport" approach as AnnotateModeView's
+// SHORT_DESKTOP_STAGE_CLASS. Gated on `min-width:1024px` so phone/tablet layouts (which
+// never apply the `lg:` formula these override) are untouched.
+const SHORT_DESKTOP_MEDIA = '(min-width:1024px)_and_(max-height:850px)';
+const SHORT_DESKTOP_BOX_HEIGHT_CLASS = `[@media${SHORT_DESKTOP_MEDIA}]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]`;
+const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = `[@media${SHORT_DESKTOP_MEDIA}]:!w-[min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]`;
+
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
  *
@@ -802,8 +813,8 @@ export function FocusModeView({
               (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
-                  ? 'rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))]'
-                  : 'rounded-lg h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]'
+                  ? `rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`
+                  : `rounded-lg h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
             }`}
             style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}
             onClick={mobileFs ? togglePlay : undefined}
