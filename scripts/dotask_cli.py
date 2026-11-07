@@ -1341,9 +1341,32 @@ def status(args):
             lines = [line for line in status_file.read_text(encoding="utf-8").splitlines() if line.strip()]
             last = lines[-1] if lines else ""
         print(f"{slug}\t{','.join(group.get('tasks', []))}\t{running}\t{last}")
-        if group.get("tasks"):
+        if not group.get("tasks"):
+            continue
+        # An estimate only means something for a group that is moving: a merged PR is done (its
+        # group file outlives it until nuke), and a stopped container runs nothing.
+        merged = merged_pr(group.get("branch"))
+        if merged:
+            print(f"  eta: done -- PR #{merged} merged")
+        elif running == "stopped":
+            print(f"  eta: none (container stopped; `bash scripts/dotask.sh resume {slug}` continues it, "
+                  f"`task.sh nuke {slug}` clears it)")
+        else:
             print(f"  {eta_line({**group, 'slug': slug}, group_path.parent)}")
     return 0
+
+
+def merged_pr(branch):
+    """The number of a merged PR from `branch`, or None (none, or gh unavailable)."""
+    if not branch:
+        return None
+    try:
+        result = subprocess.run([tool("gh"), "pr", "list", "--head", branch, "--state", "merged", "--json", "number",
+                                 "--jq", ".[0].number"], capture_output=True, text=True, timeout=60, check=False)
+    except (OSError, subprocess.SubprocessError, SystemExit):
+        return None
+    number = result.stdout.strip()
+    return number if result.returncode == 0 and number.isdigit() else None
 
 
 def main(argv=None):

@@ -674,10 +674,24 @@ class DotaskCliTest(unittest.TestCase):
     def test_status_prints_an_eta_line_per_group(self):
         group, checkout = self._group_for_eta("")
         (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        (self.docker_state / f"{dotask_cli.cname('g-x')}.running").touch()
         with contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(dotask_cli.main(["status"]), 0)
-        self.assertIn("g-x\tT1,T2,T3\tstopped", out.getvalue())
+        self.assertIn("g-x\tT1,T2,T3\trunning", out.getvalue())
         self.assertIn("  eta: PR about", out.getvalue())
+
+    def test_status_gives_no_eta_for_a_stopped_or_merged_group(self):
+        # A merged group's file outlived its PR, and a stopped container's PUSHREADY was weeks old:
+        # both got a made-up "PR about" time (2026-11-07).
+        group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\n")
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            dotask_cli.main(["status"])
+        self.assertIn("eta: none (container stopped; `bash scripts/dotask.sh resume g-x`", out.getvalue())
+        with patch.object(dotask_cli, "merged_pr", lambda branch: "716"), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            dotask_cli.main(["status"])
+        self.assertIn("eta: done -- PR #716 merged", out.getvalue())
 
     # --- D3 / D4: land ------------------------------------------------------------
     def _group_dir_with_ports(self, slug):
