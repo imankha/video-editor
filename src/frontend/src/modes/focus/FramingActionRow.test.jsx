@@ -27,7 +27,7 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
     const { rerender } = render(
       <FramingActionRow previewing={false} onTogglePreview={vi.fn()} />
     );
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/check framing/i);
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/preview/i);
 
     rerender(
       <FramingActionRow previewing onTogglePreview={vi.fn()} />
