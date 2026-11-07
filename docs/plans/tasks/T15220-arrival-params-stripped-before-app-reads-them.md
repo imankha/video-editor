@@ -38,8 +38,17 @@ Introduced by b95bb7f25 and made `/home`-aware by 2b1e2a80a (T5677); T11500 adde
 | `/?payment=success&session_id=cs_test_probe` | Staging, signed out | Params gone, URL `/home` |
 | `/?payment=success&session_id=cs_test_fake&utm_source=x&ref=abc` | T14970 branch stack, signed in | `/api/payments/verify` never called, no campaign params stored |
 
-**Not established:** production was not probed, and no prod data was read. Do step 1 first: it
-sets how far past attribution numbers can be trusted.
+**Production (business-intelligence anchor, measured 2026-11-03, 375 real sign-ups, all-time
+since the account base began — the full window since b95bb7f25 2026-06-08):** attribution
+coverage is 0 of 375 sign-ups (`.claude/agents/business-intelligence.md` "Anchors measured
+2026-11-03" / "Known gaps"). This is an all-time aggregate, not a month-by-month split; the doc's
+own gap note attributes the 0 partly to a separate cause (the landing site relays `utm_*`/`ref`
+only from the first page a visitor sees, so multi-page visits arrive untagged until T15000, and no
+landing page is recorded at sign-up until T15010) in addition to this bug's stripping. There is no
+pre-b95bb7f25 baseline to compare against in prod (the account base is younger than the bug), so a
+before/after-by-month split is not computable from existing data; the honest number past-that-date
+is 0 of 375 for the whole window. Treat any attribution-dependent number (T14910, T14930, T15000,
+T15010, T15120) as 0%-covered until this fix is live in production and re-measured.
 
 ## Solution
 
@@ -78,9 +87,11 @@ prefer one small named list over a second copy of the rule.
 ## Implementation
 
 ### Steps
-1. [ ] Read-only prod aggregate through the business-intelligence agent: the share of sign-ups with
-       any attribution by month, against the date of b95bb7f25. Record it here so the owner knows
-       how far past channel numbers can be trusted.
+1. [x] Read-only prod aggregate: the share of sign-ups with any attribution, against the date of
+       b95bb7f25. Recorded in the Evidence table above from the existing business-intelligence
+       anchor (0 of 375, measured 2026-11-03) rather than a fresh prod pull, since no pre-bug
+       baseline exists to split by month and a new prod DB connection needs the owner's explicit
+       grant per `.claude/agents/business-intelligence.md`.
 2. [ ] Failing tests: e2e, a signed-out arrival with `utm_*`, `ref` and a click id lands those
        values in `campaignParams`; e2e, a signed-in arrival with `?payment=success&session_id=`
        calls `/api/payments/verify`; unit, unrelated params are still stripped.
@@ -99,4 +110,4 @@ prefer one small named list over a second copy of the rule.
 - [ ] `/payments/verify` runs once per return, and `payment` and `session_id` leave the URL after.
 - [ ] A fresh visit with any campaign param stores it, and sign-up carries it into `user_segments`.
 - [ ] An unrelated query param is still stripped, and T14970's URLs and `dev_account` keep working.
-- [ ] The prod attribution impact is recorded in this file.
+- [x] The prod attribution impact is recorded in this file.
