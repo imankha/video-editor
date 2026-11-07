@@ -61,7 +61,8 @@ Two bugs:
 
 ## Acceptance Criteria
 
-- [ ] Opening Frame with Guidance on shows step 1 of 5 first, including when a box is already placed
+- [ ] Opening Frame with Guidance on shows step 1 (of however many steps apply) first, including when a box is already placed
+  > Amended by the user 2026-11-07: was "step 1 of 5"; T14770's share-shape step makes it 6 when the shape is not chosen yet.
 - [ ] Got it never leaves the screen shaded with no card
 - [ ] After each gesture the guide advances to the next step that applies
 - [ ] Guide copy uses glossary words (box, position, athlete, Sharpen my highlight)
