@@ -131,8 +131,12 @@ User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `au
    per batch, prove every acceptance criterion by observation, Playwright for anything a user can see;
    the last batch also runs a regression pass over the flows the diff touches. They write
    `.dotask-verify.json`; each round is archived as `waves/<wave>/verify-round-N.json`.
-3. Any `fail` criterion or `group` bug goes to a fresh worker dispatch. A fix dispatch that runs out
-   of turns is restarted up to twice with a handoff note (below). Then back to step 1, where the
+3. Any `fail` criterion or `group` bug goes to a fix round: one fresh worker dispatch per owning task,
+   in group order, each fixing and committing only its task's findings (findings no task owns go last).
+   A task whose dispatch commits nothing is recorded (`FIX_SKIPPED`), its leftover changes stashed, and
+   the round moves on; its findings fail again in the re-check. One worker given every finding chased
+   the hardest one and committed nothing for three hours (g-t15220-10, 2026-11-07). A fix dispatch that
+   runs out of turns is restarted up to twice with a handoff note (below). Then back to step 1, where the
    verifier re-checks only what failed plus the regression pass; earlier passes carry forward
    (`carried_from`). A restarted `autoland` resumes at that point.
 4. Clean verdict: `VERIFY_PASS`, then push, PR, CI, evidence (`land --after-test`). Merging stays with the user.

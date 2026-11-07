@@ -649,12 +649,14 @@ Write /workspace/.dotask-verify.json, exactly:
 `human` is only for what no automation can observe (a real card payment, a physical phone). Never use it to save effort.
 A bug's scope is `group` if this branch caused it and `unrelated` if master has it too: check before deciding.
 Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round} batch {batch}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
-FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json: every criterion with status `fail` and every bug with scope `group`. Ignore everything else in that file. All tasks already have commits, so do not start a new one.
-Before your first code edit, append a `## fix round {round} progress` checklist to .dotask-notes.md with one line per finding (unless one with that exact heading is already there: then continue it), and tick each line as it is fixed: a dispatch can run out of turns mid-round, and the next worker resumes from that list (g-t15220-10 fix round 1, 2026-11-07, stopped with 17 files changed and no list). A progress checklist under any other heading is from an earlier round or task: ignore it.
-Commit as you go: as soon as one owning task's findings are fixed and their tests pass, commit that task (explicit paths), then move to the next. Work left uncommitted is lost to the next worker's verification when a dispatch runs out of turns (the same round ran out three times with nothing committed).
-Fix each finding at its root, failing test first. Re-run only the tests that failed and the ones you wrote; a test that already passed on this code stays passed and is not run again (user rule, 2026-11-07). Lint the files you changed. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
+# A fix round is one dispatch per owning task: fix, commit, next. One worker given every finding went
+# straight to the hardest (T15220's export race), ran out of turns three times and committed nothing,
+# so three finished fixes sat uncommitted for three hours (g-t15220-10, 2026-11-07).
+FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json. This dispatch fixes ONLY {scope}: {items}. Every other finding in that file gets its own dispatch after this one: do not touch it. All tasks already have commits, so do not start a new one.
+Before your first code edit, append a `## {label} progress` checklist to .dotask-notes.md with one line per finding above (unless one with that exact heading is already there: then continue it), and tick each line as it is fixed: a dispatch can run out of turns, and the next worker resumes from that list. A progress checklist under any other heading is from another task or round: ignore it.
+Fix each finding at its root, failing test first. Re-run only the tests that failed and the ones you wrote; a test that already passed on this code stays passed and is not run again (user rule, 2026-11-07). Lint the files you changed. Commit with explicit paths, subject `{subject}: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
 A finding you believe is wrong: do not work around it. Never edit a task file's Acceptance Criteria to make one pass: they are the user's. Append `BLOCKED <finding and why>` and stop.
-Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> fix round {round}` to /workspace/.dotask-status and stop."""
+Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> {label}` to /workspace/.dotask-status and stop."""
 
 
 class UntrustedVerdict(Exception):
@@ -888,19 +890,81 @@ def resume(args):
     fix_round = interrupted_fix_round(checkout, group)
     if fix_round:
         # The fix round stopped with its work uncommitted. autoland would verify that dirty tree from
-        # scratch and block on it (g-t15220-10, 2026-11-07), so the round continues first; once it
-        # commits, autoland's resume_focus picks up the focused re-check.
-        head = git_head(checkout)
+        # scratch and block on it (g-t15220-10, 2026-11-07), so the round continues first (tasks whose
+        # fix already committed are skipped); once it commits, autoland's resume_focus picks up the
+        # focused re-check.
         print(f"[dotask] fix round {fix_round} stopped with uncommitted work; continuing it")
-        handoff_note(checkout, f"fix round {fix_round}", latest_run(checkout))
-        finished = dispatch_with_restarts(slug, group, checkout, f"fix round {fix_round}",
-                                          FIX_INSTRUCTION.format(head=head, branch=group["branch"], round=fix_round)
-                                          + RESUME_HINT)
-        if not finished or git_head(checkout) == head:
-            append_status(checkout, f"VERIFY_BLOCKED fix round {fix_round} did not finish on resume: "
-                                    f"{last_status(checkout)[:200]}")
+        verdict = json.loads((checkout / VERIFY_FILE).read_text(encoding="utf-8"))
+        fixed, skipped = run_fix_round(slug, group, checkout, fix_round, verdict, resuming=True)
+        if not fixed:
+            append_status(checkout, f"VERIFY_BLOCKED fix round {fix_round} committed nothing on resume"
+                                    f" (skipped: {' '.join(skipped) or 'none'})")
             return 1
     return autoland(SimpleNamespace(slug=slug, no_land=args.no_land))
+
+
+def fix_units(group, verdict):
+    """The round's findings grouped by owning task, in group order: [(task or None, [criterion ids],
+    [bug titles])]. Findings no task in the group owns (a preland failure, a bug without a task) come
+    last as one unit."""
+    units = {}
+    for item in verdict.get("criteria", []):
+        if item.get("status") == "fail":
+            task = str(item.get("id", "")).split(":")[0]
+            units.setdefault(task if task in group["tasks"] else None, ([], []))[0].append(str(item["id"]))
+    for bug in verdict.get("bugs", []):
+        if bug.get("scope") == "group":
+            task = bug.get("task")
+            units.setdefault(task if task in group["tasks"] else None, ([], []))[1].append(str(bug["title"]))
+    order = [t for t in group["tasks"] if t in units] + ([None] if None in units else [])
+    return [(task, *units[task]) for task in order]
+
+
+def stash_unfinished(checkout, label):
+    """Park a skipped task's uncommitted changes so the next task and the verifier see a clean tree;
+    the work stays in `git stash list` under the label."""
+    if not tracked_changes(checkout):
+        return None
+    subprocess.run([tool("git"), "-C", str(checkout), "stash", "push", "-m", f"dotask: unfinished {label}"],
+                   capture_output=True, text=True, check=False)
+    return f"stashed as 'dotask: unfinished {label}'"
+
+
+def run_fix_round(slug, group, checkout, round_number, verdict, resuming=False):
+    """One dispatch per owning task: fix, commit, next. A task whose dispatch commits nothing is recorded
+    (FIX_SKIPPED), its leftover changes stashed, and the round moves on: one hard finding cannot block
+    the others. A task whose `PUSHREADY ... fix round N T<id>` line is already in the status file was
+    fixed before a restart and is not dispatched again. Returns ([fixed labels], [skipped labels])."""
+    fixed, skipped = [], []
+    head = git_head(checkout)
+    dirty_from_before = resuming and bool(tracked_changes(checkout))
+    for task, criteria, bugs in fix_units(group, verdict):
+        name = task or "other"
+        label = f"fix round {round_number} {name}"
+        status_path = Path(checkout) / ".dotask-status"
+        lines = status_path.read_text(encoding="utf-8").splitlines() if status_path.is_file() else []
+        if any(" PUSHREADY " in line and line.rstrip().endswith(label) for line in lines):
+            continue
+        items = "; ".join([*criteria, *(f"bug: {title}" for title in bugs)])
+        scope = f"{task}'s findings" if task else "the findings no single task owns"
+        instruction = FIX_INSTRUCTION.format(head=head, scope=scope, items=items, label=label,
+                                             subject=task or "<owning task id>", branch=group["branch"])
+        if dirty_from_before:
+            # Changes left by the interrupted dispatch may belong to any task: the first worker sorts them.
+            handoff_note(checkout, label, latest_run(checkout))
+            instruction += RESUME_HINT + " Commit only this task's part of it; leave the rest for later dispatches."
+            dirty_from_before = False
+        before = git_head(checkout)
+        finished = dispatch_with_restarts(slug, group, checkout, label, instruction,
+                                          task_ids=[task] if task else None)
+        if finished and git_head(checkout) != before:
+            fixed.append(name)
+            continue
+        skipped.append(name)
+        parked = stash_unfinished(checkout, label)
+        append_status(checkout, f"FIX_SKIPPED {label}: {'no commit' if finished else last_status(checkout)[:160]}"
+                                + (f"; {parked}" if parked else ""))
+    return fixed, skipped
 
 
 def interrupted_fix_round(checkout, group):
@@ -1141,14 +1205,15 @@ def autoland(args):
         if fix_round == MAX_FIX_ROUNDS:
             append_status(checkout, f"VERIFY_EXHAUSTED after {MAX_FIX_ROUNDS} fix rounds; {summary}")
             return 1
-        print(f"[dotask] {summary}; sending it back to a worker")
-        if not dispatch_with_restarts(slug, group, checkout, f"fix round {round_number}",
-                                      FIX_INSTRUCTION.format(head=head, branch=group["branch"], round=round_number)):
-            append_status(checkout, f"VERIFY_BLOCKED fix round {round_number} did not finish: {last_status(checkout)[:200]}")
+        print(f"[dotask] {summary}; sending it back to workers, one task at a time")
+        verdict_now = json.loads((checkout / VERIFY_FILE).read_text(encoding="utf-8"))
+        fixed, skipped = run_fix_round(slug, group, checkout, round_number, verdict_now)
+        if not fixed:
+            append_status(checkout, f"VERIFY_BLOCKED fix round {round_number} committed nothing"
+                                    f" (skipped: {' '.join(skipped) or 'none'})")
             return 1
-        if git_head(checkout) == head:
-            append_status(checkout, f"VERIFY_BLOCKED fix round {round_number} committed nothing")
-            return 1
+        if skipped:  # their findings stay in the re-check and fail again unless another fix covered them
+            print(f"[dotask] fix round {round_number}: fixed {' '.join(fixed)}; skipped {' '.join(skipped)}")
     return 1
 
 

@@ -659,9 +659,9 @@ class DotaskCliTest(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(dotask_cli.main(["resume", "g-x"]), 0)
         self.assertEqual(len(calls), 1)
-        self.assertIn("fix round 1 progress", calls[0])
+        self.assertIn("## fix round 1 T1 progress", calls[0])
         self.assertIn("handoff section", calls[0])
-        self.assertIn("## fix round 1 handoff", (checkout / ".dotask-notes.md").read_text())
+        self.assertIn("## fix round 1 T1 handoff", (checkout / ".dotask-notes.md").read_text())
         autoland.assert_called_once()
         self.assertIn("fix round 1 stopped with uncommitted work", out.getvalue())
 
@@ -1123,7 +1123,7 @@ class AutolandTest(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def _dispatch(self, slug, group, phase, instruction):
+    def _dispatch(self, slug, group, phase, instruction, task_ids=None):
         self.dispatches.append((phase, instruction))
         if phase == "qa":
             verdict = self.verdicts.pop(0)
@@ -1184,7 +1184,7 @@ class AutolandTest(unittest.TestCase):
         self.verdicts = [self._verdict(("pass", "fail"), bugs=[bug])]
         original = self._dispatch
 
-        def dispatch(slug, group, phase, instruction):
+        def dispatch(slug, group, phase, instruction, task_ids=None):
             if phase == "implementation":
                 self.verdicts.append(None)
             result = original(slug, group, phase, instruction)
@@ -1237,7 +1237,7 @@ class AutolandTest(unittest.TestCase):
         self.verdicts = [self._verdict(("fail", "pass"))]
         original = self._dispatch
 
-        def dispatch(slug, group, phase, instruction):
+        def dispatch(slug, group, phase, instruction, task_ids=None):
             if phase == "implementation":
                 self.verdicts.append(None)
             result = original(slug, group, phase, instruction)
@@ -1269,7 +1269,7 @@ class AutolandTest(unittest.TestCase):
         self.verdicts = [self._verdict(("pass", "fail"))]
         original = self._dispatch
 
-        def dispatch(slug, group, phase, instruction):
+        def dispatch(slug, group, phase, instruction, task_ids=None):
             if phase == "implementation":
                 self.verdicts.append(None)
             result = original(slug, group, phase, instruction)
@@ -1341,8 +1341,8 @@ class AutolandTest(unittest.TestCase):
             self.assertEqual(self._run(no_land=True), 0)
         self.assertEqual(self._phases(), ["qa", "implementation", "implementation", "qa"])
         self.assertIn("handoff section", fix_attempts[1])
-        self.assertIn("## fix round 1 handoff", (self.checkout / ".dotask-notes.md").read_text())
-        self.assertIn("RESUMED fix round 1 dispatch 2 of 3", self.status.read_text())
+        self.assertIn("## fix round 1 T1 handoff", (self.checkout / ".dotask-notes.md").read_text())
+        self.assertIn("RESUMED fix round 1 T1 dispatch 2 of 3", self.status.read_text())
 
     def test_a_human_criterion_the_owner_ruled_check_on_staging_rides_in_the_pr(self):
         (self.main_repo / "docs" / "plans" / "tasks" / "T1-fix-the-thing.md").write_text(
@@ -1377,7 +1377,7 @@ class AutolandTest(unittest.TestCase):
         self.assertEqual(self._phases(), ["qa", "implementation"])
 
     def test_stops_after_three_fix_rounds_without_landing(self):
-        def dispatch(slug, group, phase, instruction):
+        def dispatch(slug, group, phase, instruction, task_ids=None):
             self.dispatches.append((phase, instruction))
             if phase == "qa":
                 (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(self._verdict(("fail", "pass"))))
@@ -1440,6 +1440,38 @@ class AutolandTest(unittest.TestCase):
         self.assertEqual(self._run(), 1)
         self.assertEqual(self._phases(), ["implementation"])
         self.assertIn("whitespace", (self.checkout / dotask_cli.VERIFY_FILE).read_text())
+
+    def test_a_fix_round_works_one_task_at_a_time_and_a_stuck_task_does_not_block_the_rest(self):
+        # g-t15220-10, 2026-11-07: one worker given every finding chased the hardest one through three
+        # restarts and committed nothing, while three easy fixes sat uncommitted.
+        (self.main_repo / "docs" / "plans" / "tasks" / "T2-x.md").write_text(self.TASK_TEXT.replace("T1:", "T2:"))
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        group["tasks"] = ["T1", "T2"]
+        (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        self.status.write_text("t STAGE_DONE T1 commit x\nt STAGE_DONE T2 commit x\n")
+        first = {"bugs": [{"scope": "group", "task": "T2", "title": "Subtitle missing"}], "criteria": [
+            {"id": "T1:C1", "status": "fail", "evidence": "x"}, {"id": "T1:C2", "status": "pass", "evidence": "x"},
+            {"id": "T2:C1", "status": "pass", "evidence": "x"}, {"id": "T2:C2", "status": "pass", "evidence": "x"}]}
+        self.verdicts = [first]
+        fixes = []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            if phase == "qa":
+                return self._dispatch(slug, group, phase, instruction)
+            fixes.append((task_ids, instruction))
+            if task_ids == ["T2"]:  # T1 is the hard one and commits nothing; T2 commits
+                self.head = "c" * 40
+                self.verdicts.append({"bugs": [], "criteria": [{"id": "T1:C1", "status": "pass", "evidence": "x"}]})
+            return True
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        self.assertEqual([t for t, _ in fixes], [["T1"], ["T2"]])
+        self.assertIn("fixes ONLY T1's findings: T1:C1.", fixes[0][1])
+        self.assertNotIn("Subtitle missing", fixes[0][1])
+        self.assertIn("T2's findings: bug: Subtitle missing", fixes[1][1])
+        self.assertIn("## fix round 1 T2 progress", fixes[1][1])
+        self.assertIn("FIX_SKIPPED fix round 1 T1: no commit", self.status.read_text())
+        self.assertIn("VERIFY_PASS", self._last())
 
     def test_fix_dispatch_with_no_commit_stops(self):
         self.verdicts = [self._verdict(("fail", "pass"))]

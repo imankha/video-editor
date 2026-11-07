@@ -128,7 +128,8 @@ only what failed plus a regression pass (earlier passes carry forward in the ver
 at most 3 fix rounds. A clean verdict on the exact HEAD replaces the human test unless a criterion
 needs a person, then pushes and opens the PR. Merging stays with the user. A headless worker has
 nobody to ask, so `start` refuses a task whose file still waits on a user ruling: record it under
-`## Ruling` first (`/nextup` collects these before the container starts). A dispatch that runs out of
+`## Ruling` first (`/nextup` collects these before the container starts). Fix rounds dispatch one owning
+task at a time (fix, commit, next; a stuck task is skipped, not blocking). A dispatch that runs out of
 turns is restarted up to twice with a handoff note; a `human` criterion the owner ruled "check on
 staging" rides in the PR body instead of stopping the push; a worker whose change makes another group
 task's criterion false stops with `CONFLICT` before committing; groups hold at most 4 tasks;
