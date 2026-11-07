@@ -100,3 +100,10 @@ prefer one small named list over a second copy of the rule.
 - [ ] A fresh visit with any campaign param stores it, and sign-up carries it into `user_segments`.
 - [ ] An unrelated query param is still stripped, and T14970's URLs and `dev_account` keep working.
 - [ ] The prod attribution impact is recorded in this file.
+
+## Attempt in g-t15220-10 (2026-11-07), reverted
+
+Built and verified in group g-t15220-10, then reverted from that branch by the user's ruling (land the other nine tasks without it) after the payment-return auto-export still failed verification twice. What was learned:
+- Params survive canonicalization (e4e01ac0d, reverted as c1658315d): that part passed C2-C5.
+- C1, the auto-export after a Stripe return, never fired. A one-shot 500ms `setTimeout` raced the editor mount. A rework (62c03850b, reverted as b77ba3f54) awaited `fetchCredits` and polled a `ready` flag on the export handle (FocusCockpit: clips loaded, button enabled), but the export still never fired in 90s and the fallback toast showed. So `ready` never turned true, or `triggerExport` hit an early return in `ExportButtonContainer.handleExport`. Start by logging which of the two it is in the e2e `T15220-arrival-params.spec.js` scenario (recover it from 62c03850b).
+- This exposed a pre-existing bug: the auto-export code was unreachable on master because the params were stripped.
