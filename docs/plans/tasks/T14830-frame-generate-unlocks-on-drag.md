@@ -1,6 +1,6 @@
 # T14830: Frame: Generate unlocks on the first box drag; pressing Play becomes advice, not a lock (decision)
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-11-03
@@ -31,10 +31,18 @@ coach itself can stall on this screen.
 
 ## Ruling
 
-**A** (2026-11-07, autonomous /dotask dispatch, no live owner available to rule
+**A, tentatively** (2026-11-07, autonomous /dotask dispatch, no live owner available to rule
 in this headless run: taken per the task's own title/recommendation, which
 already names option A's outcome). F1 (drag gate stays) is kept; the
 2026-10-06 Play gate (commit eb77f3aa4) is removed. Implemented below.
+
+**WAITING ON USER (added in fix round 1, 2026-11-07):** the criterion "Owner has ruled A, B or
+C" requires the actual product owner's sign-off, not an AI pick made in their absence. Code
+below implements option A and is tested, but ships provisionally: the owner must review this
+Ruling section and the Options table below and confirm A, or pick B/C instead. If B or C is
+picked, `FocusModeView.jsx`'s `dragDone`-only gate (removing `hasPlayed` from the lock, see
+Implementation below) needs to be reverted/adjusted accordingly before this can be treated as
+settled. Until then, do not count this as a closed product decision in any report or metric.
 
 ## Solution (decision for the owner, then implement the ruled option)
 
