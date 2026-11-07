@@ -42,8 +42,9 @@ task's map of the component, its conventions and its traps. The CtaBar group (g-
    - **Has its rulings.** A headless worker has nobody to ask. On g-t15220-10 (2026-11-07) one
      decision-gated task stalled and another ruled for itself; the verifier flagged it, and the
      fix, hold, ruling and rebuild made landing take longer than building all ten tasks.
-   - **Is 2-8 tasks.** Split a bigger bundle by sub-area; a lone task is fine when nothing shares
-     its code.
+   - **Is 2-4 tasks** (cap, user decision 2026-11-07: with ten tasks in g-t15220-10 one export bug
+     held eight passing tasks back at landing). The script prints one `start:` line per four, in
+     order; a lone task is fine when nothing shares its code.
    - **Respects priority.** Prefer the highest-ranked bundle. Only pass it over for a bundle that
      ranks nearly as high and shares more code, and say so.
    - **Is ordered foundation first.** PLAN order, unless a task's Related Tasks or text says it
@@ -63,7 +64,8 @@ task's map of the component, its conventions and its traps. The CtaBar group (g-
    so never start without the user's pick.
 5. **Start.** `bash scripts/dotask.sh start [--window] [--capture] <ids in order>` (pass through
    the flags the user gave). A group's task list is fixed at start, so get the bundle right in
-   step 4. Relay exactly what `/dotask` relays: slug, branch, log path (or window). Add one line:
+   step 4. Relay exactly what `/dotask` relays: slug, branch, log path (or window) and the `eta:`
+   line (the ETA for the PR; see the dotask skill's Status tracking). Add one line:
    the worker clears between task commits; shared learnings travel in
    `/workspace/.dotask-notes.md`, archived to the wave folder by `/dotask land --after-test`.
    Then return. Landing is `/dotask land <slug>`, unchanged.

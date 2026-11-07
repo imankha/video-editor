@@ -1,6 +1,6 @@
 """Supervisorless /dotask: one GROUP (one or more tasks) = one container, one
 checkout, one branch, one PR. There is no model supervisor process -- a group
-runs headless by default (HEADLESS_LOOP: one fresh `claude -p` per task, the
+runs headless by default (build_loop: one fresh `claude -p` per task, the
 equivalent of /clear + resending the kickoff), or with --window the user talks
 directly to the Claude session in the container (`task.sh code`). This module
 does host-side bookkeeping and git/gh plumbing only; it never calls a model itself.
@@ -11,7 +11,8 @@ Commands (see scripts/dotask.sh, the thin bash entry point):
   python scripts/dotask_cli.py land <slug>               # stack up for a human test; no push yet
   python scripts/dotask_cli.py land <slug> --after-test  # push, PR, CI, evidence (HEAD must be the tested one)
   python scripts/dotask_cli.py autoland <slug> [--no-land]  # verify -> fix -> verify, then push (headless runs this itself)
-  python scripts/dotask_cli.py status
+  python scripts/dotask_cli.py resume <slug> [--no-land]    # continue a headless group: build what is left, then autoland
+  python scripts/dotask_cli.py status                       # one line per live group, with its ETA
   python scripts/dotask_cli.py nextup [--limit N]          # TODO tasks bundled by shared code area
 """
 import argparse
@@ -62,31 +63,17 @@ GROUP_FILE = ".dotask-group.json"
 STOPWORDS = {"the", "a", "an", "to", "of", "for", "and", "on", "in", "is", "this", "that", "with"}
 HEADLESS_INSTRUCTION = ("Implement /workspace/.dotask-kickoff.md: the next task without a commit line in "
                         "/workspace/.dotask-status, one commit, a status line after every stage; then stop.")
-# One fresh `claude -p` (task.sh drive: one implementation dispatch, no QA chaining) per task, the
-# kickoff's one-task-per-conversation protocol. Args: $1 max dispatches, $2 task.sh, $3 slug,
-# $4 instruction, $5 status file, $6 space-separated task ids. Each dispatch must end on the next
-# task's commit line (continue) or PUSHREADY (done); anything else (BLOCKED, DISPATCH_FAILED,
-# ENDED_WITHOUT_STATUS, ...) stops with exit 1, and running out of dispatches without PUSHREADY is 3.
-# The dispatch names its task: a worker left to derive it trusted a stale BLOCKED line instead (2026-11-07).
-HEADLESS_LOOP = r'''
-for i in $(seq 1 "$1"); do
-  next=""
-  for t in $6; do grep -q "STAGE_DONE $t commit" "$5" 2>/dev/null || { next="$t"; break; }; done
-  [ -n "$next" ] || break
-  DOTASK_TASK_IDS="$next" bash "$2" drive "$3" "$4 Your task is $next." || exit $?
-  last="$(tail -n 1 "$5" 2>/dev/null)"
-  case "$last" in
-    *" PUSHREADY "*) exit 0 ;;
-    *" STAGE_DONE $next commit"*) ;;
-    *) echo "[dotask] headless stopped after $next: $last" >&2; exit 1 ;;
-  esac
-done
-tail -n 1 "$5" 2>/dev/null | grep -q " PUSHREADY " && exit 0
-echo "[dotask] headless stopped: no PUSHREADY after $1 dispatch(es)" >&2
-exit 3
-'''
-# $7 python, $8 dotask_cli.py. The subshell keeps the loop's `exit` from skipping the verify stage.
-HEADLESS_THEN_VERIFY = "(" + HEADLESS_LOOP + ') && "$7" "$8" autoland "$3"\n'
+# A worker that ran out of turns leaves its work uncommitted; the next conversation must not discard it.
+RESUME_HINT = (" The working tree already holds uncommitted work on this task from a conversation that ran out "
+               "of turns, and .dotask-notes.md ends with a handoff section for it: keep that work, verify it "
+               "against the progress checklist, finish, run the relevant tests, and commit.")
+# One group of ten tasks held eight passing tasks back behind one export bug at landing (g-t15220-10,
+# 2026-11-07). Smaller groups land what passes sooner; a bigger bundle starts as several groups.
+MAX_GROUP_TASKS = 4
+# Extra dispatches for one task (or one fix round) after a dispatch ran out of turns with its work
+# uncommitted. Three such stops were restarted by hand on g-t15220-10 (2026-11-07), one of them after
+# an overnight gap; each had the code done and only the commit missing.
+BUILD_RETRIES = 2
 
 
 def die(message, code=2):
@@ -331,6 +318,11 @@ def start(args):
     task_ids = [normalize_task(t) for t in args.tasks]
     if len(set(task_ids)) != len(task_ids):
         die("duplicate task ids in one group")
+    if len(task_ids) > MAX_GROUP_TASKS and not getattr(args, "allow_large", False):
+        first, rest = task_ids[:MAX_GROUP_TASKS], task_ids[MAX_GROUP_TASKS:]
+        die(f"{len(task_ids)} tasks in one group: at landing one failing task holds back every other one "
+            f"(g-t15220-10, 2026-11-07: one export bug held eight passing tasks). The cap is {MAX_GROUP_TASKS}.\n"
+            f"Start /dotask {' '.join(first)} now and /dotask {' '.join(rest)} after it, or add --allow-large.")
     files_by_task, owned, shared = preflight(task_ids, args.allow_overlap)
 
     slug = f"g-{task_ids[0].lower()}-{len(task_ids)}"
@@ -371,16 +363,16 @@ def start(args):
         log_path = TASKS_ROOT / "profiles" / sanitize(slug) / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("w", encoding="utf-8") as log:
-            subprocess.Popen([bash(), "-c", HEADLESS_THEN_VERIFY, "dotask-headless", str(len(task_ids)),
-                              (REPO_ROOT / "scripts" / "task.sh").as_posix(), slug, HEADLESS_INSTRUCTION,
-                              bash_path(checkout / ".dotask-status"), " ".join(task_ids),
-                              Path(sys.executable).as_posix(), Path(__file__).resolve().as_posix()],
+            # `resume` is the whole headless run: the build loop, then autoland. The same command
+            # continues a group that stopped, so nothing is special about the first launch.
+            subprocess.Popen([Path(sys.executable).as_posix(), Path(__file__).resolve().as_posix(), "resume", slug],
                              env={**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
                                   "DOTASK_WAVE_ID": wave_id, "DOTASK_PHASE": "implementation"},
                              stdout=log, stderr=subprocess.STDOUT)
         print(f"slug: {slug}")
         print(f"branch: {branch}")
         print(f"headless log: {log_path}")
+        print(eta_line(group, checkout))
     else:
         task_sh("code", slug, "--prompt-file", kickoff_path.as_posix())
         print(f"slug: {slug}")
@@ -394,9 +386,13 @@ def start(args):
 # --- land ----------------------------------------------------------------------
 def render_pr_body(group):
     criteria_note = ", ".join(f"{t}:C1.." for t in group["tasks"])
-    return "\n".join([f"Tasks: {', '.join(group['tasks'])}", "",
-                      f"Criteria are namespaced per task ({criteria_note}).",
-                      f"Evidence: {LANDING_ROOT / 'evidence' / group['slug']}"])
+    lines = [f"Tasks: {', '.join(group['tasks'])}", "",
+             f"Criteria are namespaced per task ({criteria_note}).",
+             f"Evidence: {LANDING_ROOT / 'evidence' / group['slug']}"]
+    if group.get("staging_checks"):
+        lines += ["", "Check on staging after merge (owner ruling in the task file; not verified before the push):"]
+        lines += [f"- {item['id']}: {item['text']}" for item in group["staging_checks"]]
+    return "\n".join(lines)
 
 
 def wait_for_ci(branch, head, interval=30, cap_minutes=30):
@@ -654,7 +650,7 @@ Write /workspace/.dotask-verify.json, exactly:
 A bug's scope is `group` if this branch caused it and `unrelated` if master has it too: check before deciding.
 Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round} batch {batch}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
 FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json: every criterion with status `fail` and every bug with scope `group`. Ignore everything else in that file. All tasks already have commits, so do not start a new one.
-Fix each finding at its root, failing test first, and run the relevant tests and lint. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
+Fix each finding at its root, failing test first. Re-run only the tests that failed and the ones you wrote; a test that already passed on this code stays passed and is not run again (user rule, 2026-11-07). Lint the files you changed. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
 A finding you believe is wrong: do not work around it. Never edit a task file's Acceptance Criteria to make one pass: they are the user's. Append `BLOCKED <finding and why>` and stop.
 Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> fix round {round}` to /workspace/.dotask-status and stop."""
 
@@ -663,15 +659,47 @@ class UntrustedVerdict(Exception):
     pass
 
 
-def acceptance_count(task_file):
-    """Checkbox items in a task file's Acceptance Criteria: the floor a verdict must cover."""
-    count, inside = 0, False
+def acceptance_items(task_file):
+    """The checkbox items of a task file's Acceptance Criteria, in order, as their text."""
+    items, inside = [], False
     for line in Path(task_file).read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
             inside = line.lower().startswith("## acceptance")
         elif inside and ACCEPTANCE_ITEM.match(line):
-            count += 1
-    return count
+            items.append(ACCEPTANCE_ITEM.sub("", line).strip())
+    return items
+
+
+def acceptance_count(task_file):
+    """Checkbox items in a task file's Acceptance Criteria: the floor a verdict must cover."""
+    return len(acceptance_items(task_file))
+
+
+STAGING_WORD = re.compile(r"\bstaging\b", re.I)
+CRITERION_REF = re.compile(r"\bC(\d+)\b")
+
+
+def staging_deferred(task_file):
+    """Criterion ids whose check the owner moved to staging after merge: a recorded ruling (see
+    RULING_RECORDED) that says `staging` and names the criterion (`C2 ... verified on staging`), or
+    sits right under it in the Acceptance Criteria. T14860:C2 (2026-11-07) needed two real GPU
+    exports no sandbox has; the owner ruled "check on staging", and autoland still stopped for it."""
+    task_id = re.match(r"T\d+", Path(task_file).name).group(0)
+    deferred, inside, current = set(), False, 0
+    for line in Path(task_file).read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            inside, current = line.lower().startswith("## acceptance"), 0
+            continue
+        if inside and ACCEPTANCE_ITEM.match(line):
+            current += 1
+        if not (STAGING_WORD.search(line) and RULING_RECORDED.search(line)):
+            continue
+        named = [int(n) for n in CRITERION_REF.findall(line)]
+        if named:
+            deferred.update(named)
+        elif inside and current:
+            deferred.add(current)
+    return {f"{task_id}:C{n}" for n in sorted(deferred)}
 
 
 def read_verdict(checkout, group, head, tasks=None, criteria_ids=None):
@@ -732,15 +760,128 @@ def append_status(checkout, text):
 PHASE_MAX_TURNS = {"qa": 200}
 
 
-def dispatch(slug, group, phase, instruction):
-    """One fresh `claude -p` in the group's container. True only if it ended on PUSHREADY."""
+def dispatch(slug, group, phase, instruction, task_ids=None):
+    """One fresh `claude -p` in the group's container. True only if it ended on PUSHREADY. `task_ids`
+    names the task(s) this dispatch is for (the profile records it; default: the whole group)."""
     env = {**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
-           "DOTASK_WAVE_ID": group["wave_id"], "DOTASK_PHASE": phase, "DOTASK_TASK_IDS": ",".join(group["tasks"])}
+           "DOTASK_WAVE_ID": group["wave_id"], "DOTASK_PHASE": phase,
+           "DOTASK_TASK_IDS": ",".join(task_ids or group["tasks"])}
     if "DOTASK_MAX_TURNS" not in os.environ and phase in PHASE_MAX_TURNS:
         env["DOTASK_MAX_TURNS"] = str(PHASE_MAX_TURNS[phase])
     result = subprocess.run([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "drive", slug, instruction],
                             env=env, check=False)
     return result.returncode == 0 and " PUSHREADY " in last_status(TASKS_ROOT / sanitize(slug))
+
+
+def latest_run(checkout):
+    """The newest dispatch record the profiler wrote in the checkout: what the last dispatch did
+    (`outcome_class`, `requests`), even when the worker left its own status lines on the way."""
+    best = {}
+    for path in (Path(checkout) / ".dotask-profile").glob("*.json"):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if record.get("schema_version") == 2 and str(record.get("started_at") or "") >= str(best.get("started_at") or ""):
+            best = record
+    return best
+
+
+def out_of_turns(checkout):
+    return latest_run(checkout).get("outcome_class") == "budget_stop"
+
+
+def handoff_note(checkout, label, record):
+    """What a fresh conversation needs to pick up work a dispatch left uncommitted when it ran out of
+    turns: the uncommitted files and a pointer to the worker's own progress checklist."""
+    try:
+        changes = subprocess.run([tool("git"), "-C", str(checkout), "status", "--porcelain"],
+                                 capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        changes = "(git status unavailable)"
+    listed = "\n".join(f"    {line}" for line in changes.splitlines()) or "    (none)"
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M")
+    note = (f"\n## {label} handoff (host, {stamp})\n"
+            f"- The previous conversation ran out of turns ({record.get('requests', '?')} requests) before "
+            f"committing. Its work is in the tree, uncommitted:\n{listed}\n"
+            f"- Continue from the `## {label} progress` checklist above if there is one: verify each unchecked "
+            f"item against the tree and do not redo the checked ones. Keep the uncommitted changes, verify them, "
+            f"finish, run the relevant tests, and commit.\n")
+    path = Path(checkout) / ".dotask-notes.md"
+    existing = path.read_bytes().decode("utf-8") if path.is_file() else ""
+    write_lf(path, existing + note)
+
+
+def dispatch_with_restarts(slug, group, checkout, label, instruction, task_ids=None):
+    """A worker dispatch, repeated up to BUILD_RETRIES times while it keeps running out of turns: each
+    restart gets a handoff note and the resume hint. Returns the last dispatch's result (True only if
+    it ended on PUSHREADY, as `dispatch` reports)."""
+    finished = False
+    for attempt in range(BUILD_RETRIES + 1):
+        text = instruction + (RESUME_HINT if attempt else "")
+        if task_ids is None:
+            finished = dispatch(slug, group, "implementation", text)
+        else:
+            finished = dispatch(slug, group, "implementation", text, task_ids)
+        if not out_of_turns(checkout) or attempt == BUILD_RETRIES:
+            break
+        handoff_note(checkout, label, latest_run(checkout))
+        append_status(checkout, f"RESUMED {label} dispatch {attempt + 2} of {BUILD_RETRIES + 1}: ran out of turns, "
+                                "handoff written to .dotask-notes.md")
+    return finished
+
+
+# --- build loop (headless): one fresh dispatch per task ----------------------------------------
+def next_task(checkout, group):
+    text = (Path(checkout) / ".dotask-status").read_text(encoding="utf-8") \
+        if (Path(checkout) / ".dotask-status").is_file() else ""
+    return next((t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in text), None), text
+
+
+def build_loop(slug, group, checkout):
+    """The kickoff's one-task-per-conversation protocol with no human between tasks: each dispatch
+    names its task (a worker left to derive it trusted a stale BLOCKED line, 2026-11-07) and must end
+    on that task's commit line (continue) or PUSHREADY (done, 0). Anything else stops with 1: BLOCKED,
+    CONFLICT (another task's criterion would become false; the user rules), DISPATCH_FAILED, ... A
+    dispatch that ran out of turns is restarted with a handoff (dispatch_with_restarts). No PUSHREADY
+    after the last commit is 3."""
+    eta = EtaReporter(group, checkout)
+    while True:
+        task, text = next_task(checkout, group)
+        if task is None:
+            return 0 if " PUSHREADY " in text else 3
+        eta.report()
+        dispatch_with_restarts(slug, group, checkout, task, f"{HEADLESS_INSTRUCTION} Your task is {task}.",
+                               task_ids=[task])
+        last = last_status(checkout)
+        if " PUSHREADY " in last:
+            return 0
+        if f" STAGE_DONE {task} commit" in last:
+            continue
+        why = ("needs the user's ruling (another task's criterion would become false)" if " CONFLICT " in last
+               else "stopped")
+        print(f"[dotask] headless {why} after {task}: {last}", file=sys.stderr)
+        return 1
+
+
+def resume(args):
+    """Continue a headless group from wherever it stopped: the build loop for every task without a
+    commit line, then autoland (which itself resumes a fix round's focused re-check). `start --headless`
+    launches exactly this, so a restart after a crash, a BLOCKED answer or a host reboot is the same command."""
+    slug = args.slug
+    checkout = TASKS_ROOT / sanitize(slug)
+    group_path = checkout / GROUP_FILE
+    if not group_path.is_file():
+        die(f"no group file at {group_path}; is {slug} a live /dotask group?")
+    group = json.loads(group_path.read_text(encoding="utf-8"))
+    task, _text = next_task(checkout, group)
+    done = len(group["tasks"]) - len([t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in _text])
+    print(f"[dotask] resume {slug}: {done} of {len(group['tasks'])} task(s) committed"
+          + (f", next {task}" if task else ", building done"))
+    code = build_loop(slug, group, checkout)
+    if code:
+        return code
+    return autoland(SimpleNamespace(slug=slug, no_land=args.no_land))
 
 
 def file_unrelated_bug(bug, group, head):
@@ -798,13 +939,16 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
         tasks = tasks or group["tasks"][-1:]  # a bug the verifier left without a task is still re-run
     else:
         tasks = list(group["tasks"])
-    batches = [tasks[i:i + VERIFY_BATCH] for i in range(0, len(tasks), VERIFY_BATCH)]
+    queue = [tasks[i:i + VERIFY_BATCH] for i in range(0, len(tasks), VERIFY_BATCH)]
     merged = {"head": head, "criteria": [], "bugs": []}
     archive_dir = TASKS_ROOT / "waves" / group["wave_id"]
     archive_dir.mkdir(parents=True, exist_ok=True)
-    for number, batch in enumerate(batches, 1):
-        label = f"{number} of {len(batches)}"
-        last = number == len(batches)
+    number = 0
+    while queue:
+        batch = queue.pop(0)
+        number += 1
+        label = f"{number} of {number + len(queue)}"
+        last = not queue
         wanted = None
         if focus:
             wanted = [c for c in focus["criteria"] if c.split(":")[0] in batch]
@@ -825,6 +969,13 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
             if finished or "outcome=error" not in last_status(checkout) or tracked_changes(checkout):
                 break
             print(f"[dotask] verifier dispatch errored (attempt {attempt + 1}); retrying", file=sys.stderr)
+        if not finished and out_of_turns(checkout) and len(batch) > 1:
+            # A batch of three tasks (about 12 criteria) still ran out of 120 turns (g-t15220-10 batch 3,
+            # 2026-11-07). A verifier has nothing to hand off, so its tasks are proved one at a time.
+            print(f"[dotask] verifier batch {label} ran out of turns; proving its tasks one at a time",
+                  file=sys.stderr)
+            queue[0:0] = [[t] for t in batch]
+            continue
         if not finished:
             raise UntrustedVerdict(f"verifier batch {label} did not finish: {last_status(checkout)[:200]}")
         changed = tracked_changes(checkout)
@@ -903,9 +1054,12 @@ def autoland(args):
     if focus:
         print(f"[dotask] resuming at round {first_round}: re-checking {focus['criteria']} and "
               f"{len(focus['bugs'])} bug(s) from {focus['previous']['head'][:9]}")
+    staging = set().union(*(staging_deferred(resolve_task_file(t)) for t in group["tasks"]))
+    eta = EtaReporter(group, checkout)
     for fix_round in range(first_round - 1, MAX_FIX_ROUNDS + 1):
         round_number = fix_round + 1
         head = git_head(checkout)
+        eta.report()
         check = run_preland_check(checkout)
         if check.returncode:  # hygiene is the worker's to fix; a browser pass on it would be wasted
             summary = f"pre-land check failed on {head[:9]}"
@@ -924,14 +1078,22 @@ def autoland(args):
             failed = [c.get("id") for c in verdict["criteria"] if c["status"] == "fail"]
             bugs = [b["title"] for b in verdict["bugs"] if b["scope"] == "group"]
             human = [c.get("id") for c in verdict["criteria"] if c["status"] == "human"]
+            # A `human` criterion the owner already ruled "check on staging" is answered: it rides
+            # along in the PR body instead of stopping the push.
+            deferred = [c for c in human if c in staging]
+            human = [c for c in human if c not in staging]
             if not failed and not bugs:
                 group["tested_head"] = head
+                group["staging_checks"] = [
+                    {"id": c, "text": acceptance_items(resolve_task_file(c.split(":")[0]))[int(c.split(":C")[1]) - 1]}
+                    for c in deferred]
                 save_group(checkout, group)
                 if human:
                     append_status(checkout, f"VERIFY_NEEDS_USER {head[:9]}: check {' '.join(human)}, "
                                             f"then run /dotask land {slug} --after-test")
                     return 0
-                append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}")
+                staging_note = f"; check on staging after merge: {' '.join(deferred)}" if deferred else ""
+                append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}{staging_note}")
                 return 0 if args.no_land else land(SimpleNamespace(slug=slug, after_test=True))
             summary = f"round {round_number} on {head[:9]}: failed {failed}, new bugs {bugs}"
             focus = {"criteria": failed, "bugs": [b for b in verdict["bugs"] if b["scope"] == "group"],
@@ -940,8 +1102,8 @@ def autoland(args):
             append_status(checkout, f"VERIFY_EXHAUSTED after {MAX_FIX_ROUNDS} fix rounds; {summary}")
             return 1
         print(f"[dotask] {summary}; sending it back to a worker")
-        if not dispatch(slug, group, "implementation", FIX_INSTRUCTION.format(
-                head=head, branch=group["branch"], round=round_number)):
+        if not dispatch_with_restarts(slug, group, checkout, f"fix round {round_number}",
+                                      FIX_INSTRUCTION.format(head=head, branch=group["branch"], round=round_number)):
             append_status(checkout, f"VERIFY_BLOCKED fix round {round_number} did not finish: {last_status(checkout)[:200]}")
             return 1
         if git_head(checkout) == head:
@@ -1030,14 +1192,16 @@ def nextup(args):
         print("no startable TODO tasks in PLAN.md")
     for rank, bundle in enumerate(bundles[:args.limit], start=1):
         size = len(bundle["tasks"])
-        too_big = "  [over 8: split by sub-area before starting]" if size > 8 else ""
+        too_big = (f"  [over {MAX_GROUP_TASKS}: one group per start line below, in order]"
+                   if size > MAX_GROUP_TASKS else "")
         print(f"bundle {rank}: {size} task(s), epics: {', '.join(bundle['epics']) or '(none)'}{too_big}")
         for row in bundle["rows"]:
             print(f"  {row['id']}: {row['title']} -- {row['path']}")
             print(f"    files: {', '.join(row['files']) or '(none listed)'}")
         for name, ids in bundle["shared_files"].items():
             print(f"  shared: {name} ({', '.join(ids)})")
-        print(f"  start: bash scripts/dotask.sh start {' '.join(bundle['tasks'])}")
+        for i in range(0, size, MAX_GROUP_TASKS):
+            print(f"  start: bash scripts/dotask.sh start {' '.join(bundle['tasks'][i:i + MAX_GROUP_TASKS])}")
     if len(bundles) > args.limit:
         print(f"(+{len(bundles) - args.limit} more bundle(s); --limit to see them)")
     for task_id, items in held.items():
@@ -1047,6 +1211,115 @@ def nextup(args):
     for note in skipped:
         print(f"skipped: {note}")
     return 0
+
+
+# --- ETA ---------------------------------------------------------------------------
+# An ETA goes with every status (user decision, 2026-11-07), and a move of more than ETA_SHIFT_MINUTES
+# is reported as a change. Defaults are g-t15220-10's medians; a group's own timed dispatches replace
+# them as they accumulate. The estimate is for the PR, not the merge: merging stays with the user.
+DEFAULT_MINUTES = {"implementation": 25, "qa": 35, "ci": 8}
+ETA_SHIFT_MINUTES = 15
+STOP_WORDS = ("VERIFY_BLOCKED", "VERIFY_EXHAUSTED", "VERIFY_NEEDS_USER", "BLOCKED", "CONFLICT", "DISPATCH_FAILED",
+              "ENDED_WITHOUT_STATUS", "AUTH_DEAD", "PHASE_VIOLATION")
+BATCH_PROGRESS = re.compile(r"verify round \d+ batch (\d+) of (\d+)")
+
+
+def run_records(slug):
+    """This group's dispatch records (task.sh archives them to profiles/<slug>/), oldest first."""
+    records = []
+    for path in sorted((TASKS_ROOT / "profiles" / sanitize(slug)).glob("*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if record.get("schema_version") == 2 and record.get("duration_seconds") is not None:
+            records.append(record)
+    return records
+
+
+def phase_minutes(records, phase):
+    """Median minutes of this group's finished dispatches in `phase`, else the default."""
+    done = sorted(r["duration_seconds"] / 60 for r in records
+                  if r.get("phase") == phase and r.get("outcome_class") == "success")
+    return done[len(done) // 2] if done else DEFAULT_MINUTES[phase]
+
+
+def estimate(group, checkout, now=None):
+    """(best, with_one_fix_round, basis): when the PR should open if nothing fails, when it should open
+    if one fix round is needed (None once no verify is ahead), and what the numbers rest on. A stopped
+    group returns (None, None, why)."""
+    now = now or dt.datetime.now().astimezone()
+    _next, text = next_task(checkout, group)
+    lines = [line for line in text.splitlines() if line.strip()]
+    last = lines[-1] if lines else ""
+    records = run_records(group["slug"])
+    impl, batch, ci = (phase_minutes(records, "implementation"), phase_minutes(records, "qa"),
+                       DEFAULT_MINUTES["ci"])
+    source = f"medians of {len(records)} timed dispatch(es)" if records else "defaults, no timed dispatch yet"
+    left = [t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in text]
+    batches = -(-len(group["tasks"]) // VERIFY_BATCH)
+    fix_round = impl + batch  # one worker dispatch, then one focused re-check batch
+    parts, verify_ahead = [], True
+    if "VERIFY_PASS" in last:
+        minutes, verify_ahead = ci, False
+        parts.append(f"CI {ci:.0f} min")
+    elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and " RESUMED " not in last:
+        return None, None, f"stopped, needs a restart or a ruling: {last[:140]}"
+    elif " PUSHREADY " in last and "verify round" in last:
+        found = BATCH_PROGRESS.search(last)
+        remaining = int(found.group(2)) - int(found.group(1)) if found else batches
+        minutes = remaining * batch + ci
+        parts += [f"{remaining} verify batch(es) x {batch:.0f} min", f"CI {ci:.0f} min"]
+    elif " PUSHREADY " in last and "fix round" in last:
+        minutes = batch + ci
+        parts += [f"1 re-check batch {batch:.0f} min", f"CI {ci:.0f} min"]
+    elif " PUSHREADY " in last and (checkout / VERIFY_FILE).is_file():
+        minutes = fix_round + ci  # a verdict with findings is on disk: the fix round is running
+        parts += [f"fix round {fix_round:.0f} min", f"CI {ci:.0f} min"]
+    elif " PUSHREADY " in last:
+        minutes = batches * batch + ci
+        parts += [f"{batches} verify batch(es) x {batch:.0f} min", f"CI {ci:.0f} min"]
+    else:
+        minutes = len(left) * impl + batches * batch + ci
+        parts += [f"{len(left)} task(s) x {impl:.0f} min", f"{batches} verify batch(es) x {batch:.0f} min",
+                  f"CI {ci:.0f} min"]
+    best = now + dt.timedelta(minutes=minutes)
+    with_fix = best + dt.timedelta(minutes=fix_round) if verify_ahead else None
+    return best, with_fix, f"{', '.join(parts)}; {source}"
+
+
+def clock(when, now):
+    return f"{when:%H:%M}" if when.date() == now.date() else f"{when:%a %H:%M}"
+
+
+def eta_line(group, checkout, now=None):
+    now = now or dt.datetime.now().astimezone()
+    best, with_fix, basis = estimate(group, checkout, now)
+    if best is None:
+        return f"eta: none ({basis})"
+    line = f"eta: PR about {clock(best, now)}"
+    if with_fix:
+        line += f" ({clock(with_fix, now)} with one fix round)"
+    return f"{line} -- {basis}"
+
+
+class EtaReporter:
+    """Prints the ETA at a milestone when it is new or moved by more than ETA_SHIFT_MINUTES, naming
+    the earlier figure, so the run log shows every change and not every tick."""
+
+    def __init__(self, group, checkout):
+        self.group, self.checkout, self.last = group, checkout, None
+
+    def report(self):
+        now = dt.datetime.now().astimezone()
+        best, _with_fix, _basis = estimate(self.group, self.checkout, now)
+        if best is None:
+            return
+        moved = self.last is None or abs((best - self.last).total_seconds()) > ETA_SHIFT_MINUTES * 60
+        if moved:
+            was = f" (was {clock(self.last, now)})" if self.last is not None else ""
+            print(f"[dotask] {eta_line(self.group, self.checkout, now)}{was}", flush=True)
+            self.last = best
 
 
 # --- status ----------------------------------------------------------------------
@@ -1068,6 +1341,8 @@ def status(args):
             lines = [line for line in status_file.read_text(encoding="utf-8").splitlines() if line.strip()]
             last = lines[-1] if lines else ""
         print(f"{slug}\t{','.join(group.get('tasks', []))}\t{running}\t{last}")
+        if group.get("tasks"):
+            print(f"  {eta_line({**group, 'slug': slug}, group_path.parent)}")
     return 0
 
 
@@ -1085,6 +1360,12 @@ def main(argv=None):
     begin.add_argument("--capture", action="store_true")
     begin.add_argument("--allow-overlap", action="store_true",
                        help="start even if files overlap a live group; the worker rebases before finishing")
+    begin.add_argument("--allow-large", action="store_true",
+                       help=f"start more than {MAX_GROUP_TASKS} tasks as one group anyway")
+
+    carry_on = sub.add_parser("resume", help="continue a headless group: build what has no commit line, then autoland")
+    carry_on.add_argument("slug")
+    carry_on.add_argument("--no-land", action="store_true", help="stop after a clean verdict; push nothing")
 
     finish = sub.add_parser("land")
     finish.add_argument("slug")
@@ -1106,8 +1387,8 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     try:
-        return {"start": start, "land": land, "autoland": autoland, "stack": stack, "status": status,
-                "nextup": nextup}[args.action](args)
+        return {"start": start, "land": land, "autoland": autoland, "resume": resume, "stack": stack,
+                "status": status, "nextup": nextup}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)
         return 1

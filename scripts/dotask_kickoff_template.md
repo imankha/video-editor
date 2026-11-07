@@ -72,6 +72,9 @@ __TASK_LIST__
   with a `sha256` and refuses evidence if the test file changed since red/green.
 - Test scope: the RELEVANT SET only (~10 tests: new tests + regression tests for the files you
   change + at most one e2e spec). Never a full suite. Name the set in the status line.
+- One run of the set, then only failures (user rule, 2026-11-07): when a test in the set fails,
+  fix it and re-run ONLY that test (plus any test you wrote for the fix). A test that passed on
+  this code is passed; never re-run the set, or a passing test, in a loop.
 - Do NOT spawn a reviewer (capture flag: __CAPTURE__). If one focused fix attempt fails on a
   non-obvious mechanism, spawn `expert` (Opus) once with the knowledge doc name and a precise
   question; also for design tradeoffs, async/persistence/concurrency, or real performance
@@ -80,6 +83,15 @@ __TASK_LIST__
   fallbacks for internal data.
 - Headless run: every command in the foreground (a backgrounded command or ScheduleWakeup ends
   the dispatch).
+- Other tasks in this group: before you commit, re-read the `## Acceptance Criteria` of every
+  OTHER task listed above. If your change makes one of them literally false (2026-11-07: T14770
+  added a guide step and made T14760's "step 1 of 5" wrong, found hours later by the verifier),
+  do NOT commit and do NOT edit that criterion (criteria are the user's). Append
+  `<UTC yyyy-mm-ddTHH:MM> CONFLICT <your task> <other task>:C<n> "<what changed and why>"` to the
+  status file and stop: the user rules, and a headless run stops here instead of in the verifier.
+- Resumed after running out of turns: `.dotask-notes.md` then ends with a `## <task> handoff`
+  section listing the uncommitted files. Keep that work, check it against your `## <task>
+  progress` checklist, finish and commit; do not start over.
 - Never `git push` / `gh pr create` -- you have no push creds by design.
 - Last task only: update the touched knowledge doc(s) if you learned a new invariant; the notes
   file is the place to find candidates (anything durable beyond this group belongs in the doc).
