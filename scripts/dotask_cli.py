@@ -650,7 +650,8 @@ Write /workspace/.dotask-verify.json, exactly:
 A bug's scope is `group` if this branch caused it and `unrelated` if master has it too: check before deciding.
 Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round} batch {batch}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
 FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json: every criterion with status `fail` and every bug with scope `group`. Ignore everything else in that file. All tasks already have commits, so do not start a new one.
-Before your first code edit, append a `## fix round {round} progress` checklist to .dotask-notes.md with one line per finding, and tick each line as it is fixed: a dispatch can run out of turns mid-round, and the next worker resumes from that list (g-t15220-10 fix round 1, 2026-11-07, stopped with 17 files changed and no list).
+Before your first code edit, append a `## fix round {round} progress` checklist to .dotask-notes.md with one line per finding (unless one with that exact heading is already there: then continue it), and tick each line as it is fixed: a dispatch can run out of turns mid-round, and the next worker resumes from that list (g-t15220-10 fix round 1, 2026-11-07, stopped with 17 files changed and no list). A progress checklist under any other heading is from an earlier round or task: ignore it.
+Commit as you go: as soon as one owning task's findings are fixed and their tests pass, commit that task (explicit paths), then move to the next. Work left uncommitted is lost to the next worker's verification when a dispatch runs out of turns (the same round ran out three times with nothing committed).
 Fix each finding at its root, failing test first. Re-run only the tests that failed and the ones you wrote; a test that already passed on this code stays passed and is not run again (user rule, 2026-11-07). Lint the files you changed. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
 A finding you believe is wrong: do not work around it. Never edit a task file's Acceptance Criteria to make one pass: they are the user's. Append `BLOCKED <finding and why>` and stop.
 Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> fix round {round}` to /workspace/.dotask-status and stop."""
@@ -806,8 +807,10 @@ def handoff_note(checkout, label, record):
             f"- The previous conversation ran out of turns ({record.get('requests', '?')} requests) before "
             f"committing. Its work is in the tree, uncommitted:\n{listed}\n"
             f"- Continue from the `## {label} progress` checklist above if there is one: verify each unchecked "
-            f"item against the tree and do not redo the checked ones. Keep the uncommitted changes, verify them, "
-            f"finish, run the relevant tests, and commit.\n")
+            f"item against the tree and do not redo the checked ones. A checklist under any other heading is from "
+            f"an earlier round or task: ignore it. If there is none, write `## {label} progress` first. Keep the "
+            f"uncommitted changes, verify them, finish, run the relevant tests, and commit each finished task "
+            f"before starting the next.\n")
     path = Path(checkout) / ".dotask-notes.md"
     existing = path.read_bytes().decode("utf-8") if path.is_file() else ""
     write_lf(path, existing + note)
@@ -1302,11 +1305,20 @@ def estimate(group, checkout, now=None):
         parts.append(f"CI {ci:.0f} min")
     elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and " RESUMED " not in last:
         return None, None, f"stopped, needs a restart or a ruling: {last[:140]}"
+    elif " RESUMED " in last and "fix round" in last.lower():
+        # A fix dispatch restarted after running out of turns: the rest of the round, then the re-check.
+        minutes = fix_round + ci
+        parts += [f"fix round (restarted) {impl:.0f} min", f"1 re-check batch {batch:.0f} min", f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last and "verify round" in last:
         found = BATCH_PROGRESS.search(last)
         remaining = int(found.group(2)) - int(found.group(1)) if found else batches
-        minutes = remaining * batch + ci
-        parts += [f"{remaining} verify batch(es) x {batch:.0f} min", f"CI {ci:.0f} min"]
+        if remaining == 0 and verdict_has_findings(checkout):
+            # The last batch is in and found problems: the fix round is running now.
+            minutes = fix_round + ci
+            parts += [f"fix round {impl:.0f} min", f"1 re-check batch {batch:.0f} min", f"CI {ci:.0f} min"]
+        else:
+            minutes = remaining * batch + ci
+            parts += [f"{remaining} verify batch(es) x {batch:.0f} min", f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last and "fix round" in last:
         minutes = batch + ci
         parts += [f"1 re-check batch {batch:.0f} min", f"CI {ci:.0f} min"]
@@ -1323,6 +1335,15 @@ def estimate(group, checkout, now=None):
     best = now + dt.timedelta(minutes=minutes)
     with_fix = best + dt.timedelta(minutes=fix_round) if verify_ahead else None
     return best, with_fix, f"{', '.join(parts)}; {source}"
+
+
+def verdict_has_findings(checkout):
+    try:
+        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return any(c.get("status") == "fail" for c in verdict.get("criteria", [])) or \
+        any(b.get("scope") == "group" for b in verdict.get("bugs", []))
 
 
 def clock(when, now):

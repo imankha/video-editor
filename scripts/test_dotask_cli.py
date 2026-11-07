@@ -701,6 +701,23 @@ class DotaskCliTest(unittest.TestCase):
         group, checkout = self._group_for_eta("t PUSHREADY feature/x abc verify round 1 batch 1 of 4\n")
         self.assertIn("3 verify batch(es)", dotask_cli.estimate(group, checkout, now)[2])
 
+    def test_eta_while_a_fix_round_runs_or_restarts(self):
+        # g-t15220-10, 2026-11-07: after the last batch found problems, and after a fix dispatch was
+        # restarted, `status` estimated a whole build plus a full verify instead of the fix round.
+        now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
+        group, checkout = self._group_for_eta(
+            "t STAGE_DONE T1 commit x\nt STAGE_DONE T2 commit x\nt STAGE_DONE T3 commit x\n"
+            "t PUSHREADY feature/x abc verify round 1 batch 2 of 2\n")
+        (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(
+            {"head": "abc", "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}))
+        best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
+        self.assertIn("fix round 25 min", basis)
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 35 + 8))
+        with (checkout / ".dotask-status").open("a") as stream:
+            stream.write("t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
+                         "t RESUMED Fix round 1 dispatch 2 of 3: ran out of turns, handoff written\n")
+        self.assertIn("fix round (restarted)", dotask_cli.estimate(group, checkout, now)[2])
+
     def test_eta_reporter_speaks_only_when_the_estimate_moves(self):
         group, checkout = self._group_for_eta("")
         reporter = dotask_cli.EtaReporter(group, checkout)
