@@ -347,6 +347,13 @@ def _gate(payload, key):
     return next(g for g in payload["gates"] if g["key"] == key)
 
 
+def _assert_no_task_id_in_unblock_text(payload):
+    for g in payload["gates"]:
+        text = (g["unblock"] or {}).get("text") if g["unblock"] else None
+        if text:
+            assert not re.search(r"\bT\d+\b", text), (g["key"], text)
+
+
 def _diag(key, excl=True):
     from app.routers.admin import _test_exclusion
     with get_pg() as conn:
@@ -493,6 +500,7 @@ class TestGateReaders:
         assert g7["label_kind"] == "M"
         assert data["break_even"]["readable"] is False
         assert data["break_even"]["inputs"]["payers_per_signup"] == pytest.approx(3 / 25)
+        _assert_no_task_id_in_unblock_text(data)
 
     def test_gate_8_repeat_purchase_eligibility_date(self, pg):
         _user("g8-repeat", days_ago=300)
@@ -505,11 +513,13 @@ class TestGateReaders:
         _purchase(_uid("g8-quick"), 1000, days_ago=150)  # only 50 d later: not a repeat
         _user("g8-young", days_ago=120)
         _purchase(_uid("g8-young"), 1000, days_ago=100)  # not yet eligible
-        g = _gate(_read(), "repeat_purchase")
+        data = _read()
+        g = _gate(data, "repeat_purchase")
         assert (g["k"], g["n"]) == (1, 3)
         assert g["rag"] == "grey" and g["unblock"]["kind"] == "time"
         assert (TODAY - timedelta(days=100) + timedelta(days=C.REPEAT_AGE_DAYS)).isoformat() in g["unblock"]["text"]
         assert "of 20 eligible" in g["unblock"]["text"]
+        _assert_no_task_id_in_unblock_text(data)
 
     def test_gate_9_k_factor_counts_referrals_rows(self, pg):
         _user("g9-ref", days_ago=200)
@@ -522,19 +532,21 @@ class TestGateReaders:
         assert g["value"] == 0.1 and g["rag"] == "green"
         assert g["recent"]["n"] == 30
 
-    def test_gates_10_and_11_are_grey_until_t15200(self, pg):
+    def test_gates_10_and_11_are_grey_until_the_registry_has_spend_columns(self, pg):
         data = _read()
         g10, g11 = _gate(data, "attribution_coverage"), _gate(data, "kickback_payers_per_100")
         assert g10["rag"] == "grey" and g10["unblock"]["kind"] == "none"
-        assert "T15200" in g10["unblock"]["text"]
+        assert "no paid campaign yet" in g10["unblock"]["text"]
         assert g11["rag"] == "grey" and g11["unblock"]["kind"] == "volume"
         assert g11["unblock"]["need"]["floor"] == C.KICKBACK_MIN_SIGNUPS
+        _assert_no_task_id_in_unblock_text(data)
 
     def test_gate_1_is_grey_not_instrumented_without_visit_daily(self, pg):
-        g = _gate(_read(), "visit_to_signup")
+        data = _read()
+        g = _gate(data, "visit_to_signup")
         assert g["rag"] == "grey" and g["unblock"]["kind"] == "task"
         assert "not instrumented" in g["unblock"]["text"]
-        assert not re.search(r"\bT\d+\b", g["unblock"]["text"]), g["unblock"]["text"]
+        _assert_no_task_id_in_unblock_text(data)
 
     def test_signups_by_country_for_the_window_with_unknown(self, pg):
         for i in range(3):
