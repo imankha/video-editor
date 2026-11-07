@@ -165,10 +165,10 @@ Received: [31m"Check zoom"[39m
 [41m[1m FAIL [22m[49m src/modes/FocusModeView.guidedSteps.test.jsx[2m > [22mFocusModeView guided framing steps[2m > [22mstep 3 pulses the box; playing through once advances to step 4 and pulses Preview highlight
 [31m[1mAssertionError[22m: expected 'Tap Check zoom to see exactly what yo…' to match /Preview/[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 /Preview/
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 "Tap Check zoom to see exactly what you’ll share."
 
 [36m [2m❯[22m src/modes/FocusModeView.guidedSteps.test.jsx:[2m165:66[22m[39m
