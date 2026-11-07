@@ -765,9 +765,9 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
     # 1 visit -> sign-up
     if _visit_daily_exists(cur):
         logger.warning("[spend-readiness] visit_daily exists but gate 1 has no reader yet (T7410)")
-        text = "visit_daily exists but this gate has no reader yet (T7410)"
+        text = "visit_daily exists but this gate has no reader yet"
     else:
-        text = "not instrumented: no visit beacon (visit_daily missing, T7410)"
+        text = "not instrumented: no visit beacon (visit_daily missing)"
     gates.append(gate_row("visit_to_signup", k=0, n=0, computed_at=now,
                           unblock={"kind": "task", "text": text, "need": None}))
 
@@ -841,9 +841,9 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
 
     # 10, 11: the campaign registry has no spend or channel columns until T15200
     gates.append(gate_row("attribution_coverage", computed_at=now,
-                          unblock={"kind": "none", "text": f"no paid campaign yet; {C.T15200_TEXT}", "need": None}))
+                          unblock={"kind": "none", "text": f"no paid campaign yet; {C.NO_SPEND_COLUMNS_TEXT}", "need": None}))
     gates.append(gate_row("kickback_payers_per_100", computed_at=now,
-                          unblock={"kind": "volume", "text": f"{C.T15200_TEXT}; {C.KICKBACK_MIN_SIGNUPS} attributed sign-ups",
+                          unblock={"kind": "volume", "text": f"{C.NO_SPEND_COLUMNS_TEXT}; {C.KICKBACK_MIN_SIGNUPS} attributed sign-ups",
                                    "need": {"have": 0, "floor": C.KICKBACK_MIN_SIGNUPS, "unit": "attributed sign-ups",
                                             "eta_days": None, "rate_per_day": None}}))
 

@@ -175,6 +175,19 @@ a year; HTML always revalidates.
 
 ---
 
+## Attribution hop to the app (T15000)
+
+`PageLayout`'s bootstrap script (backed by `src/attribution.ts`) writes a per-tab
+`sessionStorage.rbFirstTouch` record on the FIRST landing page a visitor sees — whitelisted
+`utm_*`/`ref`/click-id params plus the external referrer hostname (`lref`) — and merges it
+into every `a[data-cta]` href on every page after that, so a multi-page visit (e.g. a search
+click into `/sports` then `/hockey`) still hands the original source to the app. First touch
+wins: the record is never overwritten by a later page's params in the same tab. Per-tab
+`sessionStorage` only — no cookies, no localStorage, no IDs; attribution params you arrived
+with are kept in the tab until you open the app, then discarded when the tab closes.
+
+---
+
 ## Verifying before you push
 
 ```bash
