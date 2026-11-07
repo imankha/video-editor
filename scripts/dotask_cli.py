@@ -650,6 +650,7 @@ Write /workspace/.dotask-verify.json, exactly:
 A bug's scope is `group` if this branch caused it and `unrelated` if master has it too: check before deciding.
 Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round} batch {batch}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
 FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json: every criterion with status `fail` and every bug with scope `group`. Ignore everything else in that file. All tasks already have commits, so do not start a new one.
+Before your first code edit, append a `## fix round {round} progress` checklist to .dotask-notes.md with one line per finding, and tick each line as it is fixed: a dispatch can run out of turns mid-round, and the next worker resumes from that list (g-t15220-10 fix round 1, 2026-11-07, stopped with 17 files changed and no list).
 Fix each finding at its root, failing test first. Re-run only the tests that failed and the ones you wrote; a test that already passed on this code stays passed and is not run again (user rule, 2026-11-07). Lint the files you changed. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
 A finding you believe is wrong: do not work around it. Never edit a task file's Acceptance Criteria to make one pass: they are the user's. Append `BLOCKED <finding and why>` and stop.
 Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> fix round {round}` to /workspace/.dotask-status and stop."""
@@ -881,7 +882,43 @@ def resume(args):
     code = build_loop(slug, group, checkout)
     if code:
         return code
+    fix_round = interrupted_fix_round(checkout, group)
+    if fix_round:
+        # The fix round stopped with its work uncommitted. autoland would verify that dirty tree from
+        # scratch and block on it (g-t15220-10, 2026-11-07), so the round continues first; once it
+        # commits, autoland's resume_focus picks up the focused re-check.
+        head = git_head(checkout)
+        print(f"[dotask] fix round {fix_round} stopped with uncommitted work; continuing it")
+        handoff_note(checkout, f"fix round {fix_round}", latest_run(checkout))
+        finished = dispatch_with_restarts(slug, group, checkout, f"fix round {fix_round}",
+                                          FIX_INSTRUCTION.format(head=head, branch=group["branch"], round=fix_round)
+                                          + RESUME_HINT)
+        if not finished or git_head(checkout) == head:
+            append_status(checkout, f"VERIFY_BLOCKED fix round {fix_round} did not finish on resume: "
+                                    f"{last_status(checkout)[:200]}")
+            return 1
     return autoland(SimpleNamespace(slug=slug, no_land=args.no_land))
+
+
+def interrupted_fix_round(checkout, group):
+    """The fix round to continue, or None: the last verdict has findings and was made on HEAD (so its
+    fix has not committed), the tree holds tracked changes, and the last dispatch was a worker that ran
+    out of turns or ended without its PUSHREADY. The round number is the newest archived verify round
+    on that HEAD."""
+    try:
+        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    findings = [c for c in verdict.get("criteria", []) if c.get("status") == "fail"] + \
+               [b for b in verdict.get("bugs", []) if b.get("scope") == "group"]
+    run = latest_run(checkout)
+    if not findings or verdict.get("head") != git_head(checkout) or not tracked_changes(checkout) \
+            or run.get("phase") != "implementation" or run.get("outcome_class") == "success":
+        return None
+    rounds = [int(m.group(1)) for p in (TASKS_ROOT / "waves" / group["wave_id"]).glob("verify-round-*.json")
+              if (m := re.fullmatch(r"verify-round-(\d+)\.json", p.name))
+              and json.loads(p.read_text(encoding="utf-8")).get("head") == verdict.get("head")]
+    return max(rounds) if rounds else 1
 
 
 def file_unrelated_bug(bug, group, head):

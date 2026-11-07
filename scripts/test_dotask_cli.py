@@ -623,6 +623,48 @@ class DotaskCliTest(unittest.TestCase):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             dotask_cli.main(["resume", "g-nope"])
 
+    def test_resume_continues_a_fix_round_that_stopped_with_uncommitted_work(self):
+        # g-t15220-10, 2026-11-07: fix round 1 ran out of turns with 17 files changed. Resuming straight
+        # into autoland would have verified that dirty tree from scratch and blocked.
+        checkout = self.tasks_root / "g-x"
+        (checkout / ".dotask-profile").mkdir(parents=True)
+        group = {"slug": "g-x", "tasks": ["T1"], "wave_id": "w", "branch": "feature/x"}
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        (checkout / ".dotask-status").write_text("t STAGE_DONE T1 commit x\nt PUSHREADY feature/x aaa\n"
+                                                 "t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n")
+        verdict = {"head": "a" * 40, "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}
+        (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
+        waves = self.tasks_root / "waves" / "w"
+        waves.mkdir(parents=True)
+        (waves / "verify-round-1.json").write_text(json.dumps(verdict))
+        (checkout / ".dotask-profile" / "r1.json").write_text(json.dumps(
+            {"schema_version": 2, "started_at": "2026-11-07T20:00:00+00:00", "phase": "implementation",
+             "outcome_class": "budget_stop", "requests": 120}))
+        state = {"head": "a" * 40, "dirty": " M src/x.js"}
+        calls = []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            calls.append(instruction)
+            state["head"], state["dirty"] = "b" * 40, ""
+            (checkout / ".dotask-profile" / "r2.json").write_text(json.dumps(
+                {"schema_version": 2, "started_at": "2026-11-07T21:00:00+00:00", "phase": "implementation",
+                 "outcome_class": "success"}))
+            with (checkout / ".dotask-status").open("a") as stream:
+                stream.write("t PUSHREADY feature/x bbb fix round 1\n")
+            return True
+        autoland = MagicMock(return_value=0)
+        with patch.object(dotask_cli, "dispatch", dispatch), patch.object(dotask_cli, "autoland", autoland), \
+                patch.object(dotask_cli, "git_head", lambda c: state["head"]), \
+                patch.object(dotask_cli, "tracked_changes", lambda c: state["dirty"]), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(dotask_cli.main(["resume", "g-x"]), 0)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("fix round 1 progress", calls[0])
+        self.assertIn("handoff section", calls[0])
+        self.assertIn("## fix round 1 handoff", (checkout / ".dotask-notes.md").read_text())
+        autoland.assert_called_once()
+        self.assertIn("fix round 1 stopped with uncommitted work", out.getvalue())
+
     # --- ETA: every relay carries one; a move of more than 15 minutes is a change --------------
     def _group_for_eta(self, status_text, tasks=("T1", "T2", "T3"), minutes=()):
         checkout = self.tasks_root / "g-x"
