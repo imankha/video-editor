@@ -1,0 +1,24 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/components/instructions/resolveGuide.pulseTargets.test.js [2m([22m[2m122 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m src/components/instructions/guideRules.namedControls.test.js [2m([22m[2m110 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m src/config/questDefinitions.test.jsx [2m([22m[2m24 tests[22m[2m)[22m[32m 85[2mms[22m[39m
+ [32m✓[39m src/config/frameVocabulary.test.jsx [2m([22m[2m8 tests[22m[2m)[22m[32m 248[2mms[22m[39m
+[90mstderr[2m | src/config/copyGlossary.guard.test.js
+[22m[39mformatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (Sample)
+formatLength: non-finite or negative input (Sample)
+formatLength: non-finite or negative input (Sample)
+
+ [32m✓[39m src/config/copyGlossary.guard.test.js [2m([22m[2m33 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+ [32m✓[39m src/modes/FocusModeView.guidedSteps.test.jsx [2m([22m[2m21 tests[22m[2m)[22m[33m 1015[2mms[22m[39m
+ [32m✓[39m src/components/instructions/FloatingCoach.shade.test.jsx [2m([22m[2m30 tests[22m[2m)[22m[33m 2519[2mms[22m[39m
+ [32m✓[39m src/components/instructions/guideRules.pulse.test.js [2m([22m[2m113 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m8 passed[39m[22m[90m (8)[39m
+[2m      Tests [22m [1m[32m461 passed[39m[22m[90m (461)[39m
+[2m   Start at [22m 06:19:11
+[2m   Duration [22m 24.75s[2m (transform 69.05s, setup 0ms, collect 87.09s, tests 3.94s, environment 3.82s, prepare 59ms)[22m
+
+exit: 0

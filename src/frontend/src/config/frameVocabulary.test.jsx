@@ -83,7 +83,7 @@ describe('T14620 Frame and paid-step copy', () => {
   it('T14620:C5 box, positions, sections and Check framing replace the tool words', () => {
     expect(FOCUS_COCKPIT.ADD_FOCUS_POINT).toBe('Add position');
     expect(EDITOR_PANELS.FOCUS_POINT).toBe('Position');
-    expect(EDITOR_PANELS.PREVIEW_HIGHLIGHT).toBe('Check zoom');
+    expect(EDITOR_PANELS.PREVIEW_HIGHLIGHT).toBe('Preview');
     expect(FOCUS_PREVIEW.BACK_TO_PREVIEW_LABEL).toBe('Watch highlight');
     expect(FRAME_COPY?.MOVE_VIDEO).toBe('Move the video');
     expect(FRAME_COPY?.MOVE_BOX).toBe('Move the box');

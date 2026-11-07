@@ -118,8 +118,8 @@ export const STEP_TITLES = {
   // Quest tutorial steps — T4780. T9575: titles are sentence case across the whole
   // checklist; mode/feature proper nouns (Annotate, Framing, Spotlight, Finish)
   // keep their capitals, the "spotlight" EFFECT stays lowercase.
-  watch_annotate_tutorial: 'Watch Mark plays tutorial',
-  watch_framing_tutorial: `Watch ${MODE_NAMES.FRAMING} tutorial`,
+  watch_annotate_tutorial: 'Watch the Mark plays tutorial',
+  watch_framing_tutorial: `Watch the ${MODE_NAMES.FRAMING} tutorial`,
   watch_overlay_tutorial: 'Watch Spotlight tutorial',
   watch_publish_tutorial: 'Watch Finish tutorial',
   // Quest 1 — Get Started

@@ -1,0 +1,850 @@
+{
+  "task_ids": [
+    "T15220",
+    "T14800",
+    "T14810",
+    "T14760",
+    "T14770",
+    "T14830",
+    "T14860",
+    "T14840",
+    "T14850",
+    "T14780"
+  ],
+  "criteria": [
+    {
+      "id": "T14760:C1",
+      "description": "Opening Frame with Guidance on shows step 1 of 5 first, including when a box is already placed (AI-proposed, or copied from an earlier highlight) -- it no longer jumps straight to step 2.",
+      "artifacts": [
+        "t14760_test",
+        "t14760_red",
+        "t14760_green"
+      ]
+    },
+    {
+      "id": "T14760:C3",
+      "description": "After each gesture the guide advances to the next step that applies: a pre-placed box completes step 1 on either a drag or on playing (no separate forced tap-play card for a box the parent already confirmed by playing).",
+      "artifacts": [
+        "t14760_test",
+        "t14760_red",
+        "t14760_green"
+      ]
+    },
+    {
+      "id": "T15220:C1",
+      "description": "A paying user who returns from Stripe gets the confirmation, the credit refresh, the return to their page and the auto-export.",
+      "artifacts": [
+        "e2e_test",
+        "e2e_red",
+        "e2e_green"
+      ]
+    },
+    {
+      "id": "T15220:C2",
+      "description": "/payments/verify runs once per return, and payment and session_id leave the URL after.",
+      "artifacts": [
+        "e2e_test",
+        "e2e_red",
+        "e2e_green"
+      ]
+    },
+    {
+      "id": "T15220:C3",
+      "description": "A fresh visit with any campaign param stores it, and sign-up carries it into user_segments (sessionStorage.campaignParams covers the store side; sign-up persistence is unchanged by this fix).",
+      "artifacts": [
+        "e2e_test",
+        "e2e_red",
+        "e2e_green",
+        "unit_test",
+        "unit_red",
+        "unit_green"
+      ]
+    },
+    {
+      "id": "T15220:C4",
+      "description": "An unrelated query param is still stripped, and T14970's URLs and dev_account keep working.",
+      "artifacts": [
+        "e2e_test",
+        "e2e_red",
+        "e2e_green",
+        "unit_test",
+        "unit_red",
+        "unit_green"
+      ]
+    },
+    {
+      "id": "T14800:C1",
+      "description": "JOURNEY_LADDER has 16 stages: file_picked (upload_file_selected) and upload_started (game_created) sit between add_footage and footage_landed, so the loss ranking can separate opened/picked/started.",
+      "artifacts": [
+        "t14800_backend_test",
+        "t14800_backend_red",
+        "t14800_backend_green"
+      ]
+    },
+    {
+      "id": "T14800:C2",
+      "description": "Conservation holds with the longer ladder (fold_journey/check_conservation unit tests and the full-ladder endpoint node count).",
+      "artifacts": [
+        "t14800_backend_test",
+        "t14800_backend_red",
+        "t14800_backend_green"
+      ]
+    },
+    {
+      "id": "T14800:C3",
+      "description": "No new event is emitted; both new stages read existing user_actions rows (upload_file_selected since 2026-08-28, game_created since 2026-05-20).",
+      "artifacts": [
+        "t14800_backend_test",
+        "t14800_backend_red",
+        "t14800_backend_green"
+      ]
+    },
+    {
+      "id": "T14800:C4",
+      "description": "The frontend admin Journey map's target table covers every real ladder stage (journeyTargets.js via-spans the two new stages), so a real payload containing them never throws in journeyTransitions/stageTransition.",
+      "artifacts": [
+        "t14800_frontend_test",
+        "t14800_frontend_red",
+        "t14800_frontend_green"
+      ]
+    },
+    {
+      "id": "T14810:C1",
+      "description": "A parent with no file on the device sees, inside the upload modal, how to get it and a one-tap way to upload clips instead.",
+      "artifacts": [
+        "t14810_modal_test",
+        "t14810_modal_red",
+        "t14810_modal_green"
+      ]
+    },
+    {
+      "id": "T14810:C2",
+      "description": "Home offers I already have highlight clips as a visible secondary button, not grey body text.",
+      "artifacts": [
+        "t14810_home_test",
+        "t14810_home_red",
+        "t14810_home_green"
+      ]
+    },
+    {
+      "id": "T14770:C1",
+      "description": "Edit play is the first action for a selected play on phone and desktop.",
+      "artifacts": [
+        "t14770_cta_test",
+        "t14770_red",
+        "t14770_green"
+      ]
+    },
+    {
+      "id": "T14770:C2",
+      "description": "One Make highlight button; Frame asks \"Where will you share it?\" before the box is placed.",
+      "artifacts": [
+        "t14770_highlights_test",
+        "t14770_guidedsteps_test",
+        "t14770_red",
+        "t14770_green"
+      ]
+    },
+    {
+      "id": "T14770:C3",
+      "description": "A play can get several highlights of each shape.",
+      "artifacts": [
+        "t14770_highlights_test",
+        "t14770_slots_pulse_test",
+        "t14770_red",
+        "t14770_green"
+      ]
+    },
+    {
+      "id": "T14770:C4",
+      "description": "Mark plays shows how many portrait and landscape highlights exist and lists each one with its status.",
+      "artifacts": [
+        "t14770_highlights_test",
+        "t14770_slots_pulse_test",
+        "t14770_slots_locked_test",
+        "t14770_red",
+        "t14770_green"
+      ]
+    },
+    {
+      "id": "T14770:C5",
+      "description": "Each listed highlight opens where it left off.",
+      "artifacts": [
+        "t14770_highlights_test",
+        "t14770_red",
+        "t14770_green"
+      ]
+    },
+    {
+      "id": "T14770:C6",
+      "description": "Switching shape after placing the box asks first.",
+      "artifacts": [
+        "t14770_shapechoice_test",
+        "t14770_shapechoice_red",
+        "t14770_shapechoice_green"
+      ]
+    },
+    {
+      "id": "T14770:C7",
+      "description": "Guide sentences and pulses match the design and pass the guidance guard tests.",
+      "artifacts": [
+        "t14770_pulsetargets_test",
+        "t14770_namedcontrols_test",
+        "t14770_keepclear_test",
+        "t14770_pulsegaps_test",
+        "t14770_shade_test",
+        "t14770_guidedsteps_test",
+        "t14770_red",
+        "t14770_green"
+      ]
+    },
+    {
+      "id": "T14770:C8",
+      "description": "Copy names the parent's goal (glossary style rule 12).",
+      "artifacts": [
+        "t14770_vocab_test",
+        "t14770_red",
+        "t14770_green"
+      ]
+    },
+    {
+      "id": "T14830:C1",
+      "description": "Owner has ruled A, B or C (recorded in the task file: Option A, taken per the task's own recommended/titled outcome since no live owner was available in this headless dispatch).",
+      "artifacts": []
+    },
+    {
+      "id": "T14840:C1",
+      "description": "After Get share link, Download works without dismissing the guidance card.",
+      "artifacts": [
+        "t14840_test",
+        "t14840_red",
+        "t14840_green"
+      ]
+    },
+    {
+      "id": "T14840:C2",
+      "description": "A test proves every primary action (Download) stays tappable under any shaded card on the Finished player.",
+      "artifacts": [
+        "t14840_test",
+        "t14840_red",
+        "t14840_green"
+      ]
+    },
+    {
+      "id": "T14840:C3",
+      "description": "Tests pass.",
+      "artifacts": [
+        "t14840_test",
+        "t14840_red",
+        "t14840_green"
+      ]
+    },
+    {
+      "id": "T14830:C2",
+      "description": "Under A: a parent who dragged the box can generate (and reach Trim/SlowMo, Preview highlight) without pressing Play; Guidance still suggests Play (step 2 of 6) and Preview (step 5 of 6) as advice, never a lock.",
+      "artifacts": [
+        "t14830_guidedsteps_test",
+        "t14830_red",
+        "t14830_green"
+      ]
+    },
+    {
+      "id": "T14830:C3",
+      "description": "Lock caption and coach copy follow the glossary: GENERATE_LOCKED/GENERATE_LOCKED_SHORT name only the drag gesture, not Play.",
+      "artifacts": [
+        "t14830_actionband_test",
+        "t14830_exportbutton_test",
+        "t14830_red",
+        "t14830_green"
+      ]
+    },
+    {
+      "id": "T14830:C4",
+      "description": "Tests pass (relevant set: guided-steps gate, ActionBand compact caption, ExportButtonView caption, FramingActionRow wiring, pulse/rule regression guards).",
+      "artifacts": [
+        "t14830_guidedsteps_test",
+        "t14830_actionband_test",
+        "t14830_exportbutton_test",
+        "t14830_red",
+        "t14830_green"
+      ]
+    },
+    {
+      "id": "T14860:C1",
+      "description": "No time estimate is shown until frames are flowing (no frame count has appeared yet in the progress message).",
+      "artifacts": [
+        "t14860_test",
+        "t14860_red",
+        "t14860_green"
+      ]
+    },
+    {
+      "id": "T14860:C3",
+      "description": "Tests pass: frame-rate based ETA calculation, stale/grace detection, and the no-estimate-before-frames-flow behavior.",
+      "artifacts": [
+        "t14860_test",
+        "t14860_red",
+        "t14860_green"
+      ]
+    },
+    {
+      "id": "T14850:C1",
+      "description": "At 1280x800 the Frame player and preview are at least 320px tall and the box is draggable without zoom.",
+      "artifacts": [
+        "t14850_focus_test",
+        "t14850_overlay_test",
+        "t14850_unit_red",
+        "t14850_unit_green",
+        "t14850_e2e_test",
+        "t14850_e2e_red",
+        "t14850_e2e_green"
+      ]
+    },
+    {
+      "id": "T14850:C2",
+      "description": "At 1280x800 the Spotlight video never sits under the action bar; player boxes are clickable without scrolling.",
+      "artifacts": [
+        "t14850_focus_test",
+        "t14850_overlay_test",
+        "t14850_unit_red",
+        "t14850_unit_green",
+        "t14850_e2e_test",
+        "t14850_e2e_red",
+        "t14850_e2e_green"
+      ]
+    },
+    {
+      "id": "T14850:C3",
+      "description": "Phone layouts unchanged; tests pass. The media override is gated on min-width:1024px, structurally excluding phone/tablet widths from the new formula; existing tall-viewport unit tests (non-short-desktop cases in both files) pass unchanged.",
+      "artifacts": [
+        "t14850_focus_test",
+        "t14850_overlay_test",
+        "t14850_unit_red",
+        "t14850_unit_green"
+      ]
+    },
+    {
+      "id": "T14780:C1",
+      "description": "Every step name passes the first-time-parent test (user pick 2026-11-07): Frame renamed to Zoom in; Mark plays/Spotlight/Finish stay.",
+      "artifacts": [
+        "t14780_segstrip_test",
+        "t14780_modeswitcher_test",
+        "t14780_guidedsteps_test",
+        "t14780_framevocab_test",
+        "t14780_namedcontrols_test",
+        "t14780_red",
+        "t14780_green",
+        "t14780_header_screenshot"
+      ]
+    },
+    {
+      "id": "T14780:C2",
+      "description": "One name per step across header (MODE_NAMES/MODE_SWITCHER_NAMES), status text (SegmentedProgressStrip, locked-tab OUT_OF_SYNC), guide lines (GUIDE.focus.*/GUIDE.annotate.portrait, 'Preview' button + guide text kept in sync via guideRules.namedControls.test.js), glossary (copy-glossary.md, EPIC.md) and landing (site.ts STEP_NAMES.frame, how-it-works.astro), plus the backend quest_config.py STEP_TITLES mirror (questDefinitions.test.jsx FE/BE sync check).",
+      "artifacts": [
+        "t14780_questdefs_test",
+        "t14780_questdefs_red",
+        "t14780_questdefs_green"
+      ]
+    },
+    {
+      "id": "T14780:C3",
+      "description": "No AI-capability overclaim in the new names ('Zoom in' names the parent's own drag gesture, not an AI tracking/following claim).",
+      "artifacts": []
+    },
+    {
+      "id": "T14780:C4",
+      "description": "Host fix round (2026-11-07): the Watch label before the paid step is 'Preview' everywhere (button, guide sentences, tutorial step titles FE+BE), replacing 'Check zoom'; portrait/out-of-sync/leaveFullscreen/preview-disclosure sentences read clearly without the retired 'zoom' noun misuse.",
+      "artifacts": [
+        "t14780_fixwording_test",
+        "t14780_fixwording_namedcontrols_test",
+        "t14780_fixwording_guidedsteps_test",
+        "t14780_fixwording_red",
+        "t14780_fixwording_green"
+      ]
+    },
+    {
+      "id": "T14760:C4",
+      "description": "Host fix round (2026-11-07) bug 2 investigation: a phone-viewport box-already-placed walk (Got it on the unfinished play step clears to a clean screen, never a shade with no card; playing then advances to the keep step with shade and card together) is now a permanent regression test. Exhaustively verified (code reading + executed probes covering unmeasurable-anchor, avoid-collision docking, blocked/modal, and the full resolveGuide play->keep transition) that FloatingCoach.jsx already couples the shade's cutRects and the host's hidden state to the identical `hidden` boolean in every code path -- no reproduction of 'shade with no card' found on current code. No production fix applied; see BLOCKED note in .dotask-status.",
+      "artifacts": [
+        "t14760_bug2_shade_test",
+        "t14760_bug2_green"
+      ]
+    }
+  ],
+  "artifacts": {
+    "e2e_test": {
+      "path": "src/frontend/e2e/T15220-arrival-params.spec.js",
+      "sha256": "a2c4a618311d361fcc2c0e565115a80ac3f047ff3fc0d6672e50089a8f121845"
+    },
+    "e2e_red": {
+      "path": "qa/red-T15220-arrival-params.log"
+    },
+    "e2e_green": {
+      "path": "qa/green-T15220-arrival-params.log"
+    },
+    "unit_test": {
+      "path": "src/frontend/src/stores/editorStore.coldLoad.test.js",
+      "sha256": "bfe1ec1e394680aca7560aa440cf13cc0fbeb842903206f780794444d8d94e92"
+    },
+    "unit_red": {
+      "path": "qa/red-editorStore.coldLoad.log"
+    },
+    "unit_green": {
+      "path": "qa/green-editorStore.coldLoad.log"
+    },
+    "t14800_backend_test": {
+      "path": "src/backend/tests/test_analytics_journey.py",
+      "sha256": "1c8b6b8649823e5ae1b2c2ad3915cd4ffa1eb793b88cd1fe95ead63e4da73a41"
+    },
+    "t14800_backend_red": {
+      "path": "qa/red-test_analytics_journey.log"
+    },
+    "t14800_backend_green": {
+      "path": "qa/green-test_analytics_journey.log"
+    },
+    "t14800_frontend_test": {
+      "path": "src/frontend/src/components/admin/journeyTargets.test.js",
+      "sha256": "ab398520eb892166d49613d7b941cc0c2371468e45bf471f8860b2a194a3c270"
+    },
+    "t14800_frontend_red": {
+      "path": "qa/red-journeyTargets.log"
+    },
+    "t14800_frontend_green": {
+      "path": "qa/green-journeyTargets.log"
+    },
+    "t14810_modal_test": {
+      "path": "src/frontend/src/components/GameDetailsModal.noVideoHelp.test.jsx",
+      "sha256": "55266da930715c044b779a2d90144e13864624cd4c91d85a997c193d3739a95f"
+    },
+    "t14810_modal_red": {
+      "path": "qa/red-GameDetailsModal.noVideoHelp.log"
+    },
+    "t14810_modal_green": {
+      "path": "qa/green-GameDetailsModal.noVideoHelp.log"
+    },
+    "t14810_home_test": {
+      "path": "src/frontend/src/components/shared/EmptyTabGuide.test.jsx",
+      "sha256": "01764f6638e248b2ea2f6141111d9893d422116e100a4b1ede17f08f52c39e3a"
+    },
+    "t14810_home_red": {
+      "path": "qa/red-EmptyTabGuide.games.log"
+    },
+    "t14810_home_green": {
+      "path": "qa/green-EmptyTabGuide.games.log"
+    },
+    "t14760_test": {
+      "path": "src/frontend/src/modes/FocusModeView.guidedSteps.test.jsx",
+      "sha256": "68d17dd3d60097e5f71643aa0d38f04ede0909f58d89e5aff85a297d89d060be"
+    },
+    "t14760_red": {
+      "path": "qa/red-FocusModeView.guidedSteps.log"
+    },
+    "t14760_green": {
+      "path": "qa/green-FocusModeView.guidedSteps.log"
+    },
+    "t14770_highlights_test": {
+      "path": "src/frontend/src/modes/AnnotateModeView.highlightInstances.test.jsx",
+      "sha256": "902d81311f840bc9c09b8cfc96d22c4051befcc8c3a29d14239197c9a756e948"
+    },
+    "t14770_cta_test": {
+      "path": "src/frontend/src/modes/AnnotateModeView.cta.test.jsx",
+      "sha256": "ca7b99a06ec64e6aacba428ac16c4157062967596d246b28cc4b40b20a13c537"
+    },
+    "t14770_slots_pulse_test": {
+      "path": "src/frontend/src/modes/annotate/components/HighlightOrientationSlots.pulse.test.jsx",
+      "sha256": "fe00bd45c0b39f08b7677898af79c7b4a80d0e441f58611e5789b385ec3def18"
+    },
+    "t14770_slots_locked_test": {
+      "path": "src/frontend/src/modes/annotate/components/HighlightOrientationSlots.locked.test.jsx",
+      "sha256": "2e27076f44832e89e1b50582aa2ee8216be269514b7c58a64533e29bcdc2f587"
+    },
+    "t14770_pulsetargets_test": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.pulseTargets.test.js",
+      "sha256": "395bf49d7f75ba9b4fc977aa287c82b25af3b1439452da2fbe016deea5b78a3c"
+    },
+    "t14770_namedcontrols_test": {
+      "path": "src/frontend/src/components/instructions/guideRules.namedControls.test.js",
+      "sha256": "8f22964daa4ba77e56c50eef8fc414b37861f2bf6092dd47ab1ee35a4d5748ec"
+    },
+    "t14770_keepclear_test": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.keepClear.test.js",
+      "sha256": "b935dc3592fad3ba73a967682ebfcf93ef78e53e37d220b6a3ca05d449728d1e"
+    },
+    "t14770_pulsegaps_test": {
+      "path": "src/frontend/src/components/guidePulse.gaps.test.jsx",
+      "sha256": "522697567237e933bb8abe81961b549a6262f85ca6f36df6f909d6e6d4f1de62"
+    },
+    "t14770_shade_test": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.shade.test.jsx",
+      "sha256": "98b1eb5c9352610f82987fdd4d8bb7ea3151ffdef208a7a81d7356045f5f32a6"
+    },
+    "t14770_guidedsteps_test": {
+      "path": "src/frontend/src/modes/FocusModeView.guidedSteps.test.jsx",
+      "sha256": "68d17dd3d60097e5f71643aa0d38f04ede0909f58d89e5aff85a297d89d060be"
+    },
+    "t14770_vocab_test": {
+      "path": "src/frontend/src/config/frameVocabulary.test.jsx",
+      "sha256": "4a277fb74127f679d91bec8707a623efe5abdc08c32fc2f3fb34b20383d34716"
+    },
+    "t14770_red": {
+      "path": "qa/red-T14770-relevant-set.log"
+    },
+    "t14770_green": {
+      "path": "qa/green-T14770-relevant-set.log"
+    },
+    "t14770_shapechoice_test": {
+      "path": "src/frontend/src/modes/focus/FrameShapeChoice.test.jsx",
+      "sha256": "c4b7c039bf3efa9723456855f37522f6774406c9cae7f9025948848db1f12130"
+    },
+    "t14770_shapechoice_red": {
+      "path": "qa/red-FrameShapeChoice.log"
+    },
+    "t14770_shapechoice_green": {
+      "path": "qa/green-FrameShapeChoice.log"
+    },
+    "t14830_guidedsteps_test": {
+      "path": "src/frontend/src/modes/FocusModeView.guidedSteps.test.jsx",
+      "sha256": "68d17dd3d60097e5f71643aa0d38f04ede0909f58d89e5aff85a297d89d060be"
+    },
+    "t14830_actionband_test": {
+      "path": "src/frontend/src/components/ActionBand.test.jsx",
+      "sha256": "4466cba86cca8732de20e495e52125f2522845133375ff8a37fced401816a228"
+    },
+    "t14830_exportbutton_test": {
+      "path": "src/frontend/src/components/ExportButtonView.test.jsx",
+      "sha256": "912d1c48a527cdd33344f73085bbd2db555669319552fa32903988e8dea297de"
+    },
+    "t14830_red": {
+      "path": "qa/red-T14830-generate-unlocks-on-drag.log"
+    },
+    "t14830_green": {
+      "path": "qa/green-T14830-generate-unlocks-on-drag.log"
+    },
+    "t14860_test": {
+      "path": "src/frontend/src/components/GlobalExportIndicator.test.jsx",
+      "sha256": "5e8dcc4e8518f308096a2153484b6f78db9937a5713316ae4b1c3947daf1491c"
+    },
+    "t14860_red": {
+      "path": "qa/red-GlobalExportIndicator.log"
+    },
+    "t14860_green": {
+      "path": "qa/green-GlobalExportIndicator.log"
+    },
+    "t14840_test": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.finishedDownload.test.jsx",
+      "sha256": "47829822d19a084ba2229941a11024e0efd60c09bb9e3115dcc304abbf374c34"
+    },
+    "t14840_red": {
+      "path": "qa/red-FloatingCoach.finishedDownload.log"
+    },
+    "t14840_green": {
+      "path": "qa/green-FloatingCoach.finishedDownload.log"
+    },
+    "t14850_focus_test": {
+      "path": "src/frontend/src/modes/FocusModeView.previewStageSize.test.jsx",
+      "sha256": "c32c302535859983d611d60d8308d058e4881a3aec456c9173e4ee0ce45dc3e7"
+    },
+    "t14850_overlay_test": {
+      "path": "src/frontend/src/modes/OverlayModeView.aspectStage.test.jsx",
+      "sha256": "6b6773c60da1f205dac6646a7ac5bec066852a5842005c819d0bdeb6b46be296"
+    },
+    "t14850_unit_red": {
+      "path": "qa/red-T14850-shortViewportFloor.log"
+    },
+    "t14850_unit_green": {
+      "path": "qa/green-T14850-shortViewportFloor.log"
+    },
+    "t14850_e2e_test": {
+      "path": "src/frontend/e2e/T14850-short-desktop-viewport.spec.js",
+      "sha256": "c9725b90ffb655f18799b68b2ea4c852a5da7fe1acd626199ec335bc38ee87d1"
+    },
+    "t14850_e2e_red": {
+      "path": "qa/red-T14850-short-desktop-viewport.log"
+    },
+    "t14850_e2e_green": {
+      "path": "qa/green-T14850-short-desktop-viewport.log"
+    },
+    "t14780_segstrip_test": {
+      "path": "src/frontend/src/components/SegmentedProgressStrip.test.jsx",
+      "sha256": "eaf3329eed01bb6cdbe51c61c82959cd011562a6be4273fb116597657f48a040"
+    },
+    "t14780_modeswitcher_test": {
+      "path": "src/frontend/src/components/shared/ModeSwitcher.test.jsx",
+      "sha256": "7cdc84f6847e604407da306e98877ba5e0c94f07a447be069e50403dfcdf060d"
+    },
+    "t14780_guidedsteps_test": {
+      "path": "src/frontend/src/modes/FocusModeView.guidedSteps.test.jsx",
+      "sha256": "68d17dd3d60097e5f71643aa0d38f04ede0909f58d89e5aff85a297d89d060be"
+    },
+    "t14780_framevocab_test": {
+      "path": "src/frontend/src/config/frameVocabulary.test.jsx",
+      "sha256": "4a277fb74127f679d91bec8707a623efe5abdc08c32fc2f3fb34b20383d34716"
+    },
+    "t14780_namedcontrols_test": {
+      "path": "src/frontend/src/components/instructions/guideRules.namedControls.test.js",
+      "sha256": "8f22964daa4ba77e56c50eef8fc414b37861f2bf6092dd47ab1ee35a4d5748ec"
+    },
+    "t14780_questdefs_test": {
+      "path": "src/frontend/src/config/questDefinitions.test.jsx",
+      "sha256": "b21fb522ab5c6f5211e4257856faaa9de49539f1bf1091ed35dc878d91f7f476"
+    },
+    "t14780_red": {
+      "path": "qa/red-T14780-step-names.log"
+    },
+    "t14780_green": {
+      "path": "qa/green-T14780-step-names.log"
+    },
+    "t14780_questdefs_red": {
+      "path": "qa/red-T14780-questdefs.log"
+    },
+    "t14780_questdefs_green": {
+      "path": "qa/green-T14780-questdefs.log"
+    },
+    "t14780_header_screenshot": {
+      "path": "qa/t14780-header-390.png",
+      "sha256": "f09e221da733a48036297d6a56331c6d5fd1245ebe8fe9e9162afd07eb039235"
+    },
+    "t14780_fixwording_test": {
+      "path": "src/frontend/src/config/frameVocabulary.test.jsx",
+      "sha256": "4a277fb74127f679d91bec8707a623efe5abdc08c32fc2f3fb34b20383d34716"
+    },
+    "t14780_fixwording_namedcontrols_test": {
+      "path": "src/frontend/src/components/instructions/guideRules.namedControls.test.js",
+      "sha256": "8f22964daa4ba77e56c50eef8fc414b37861f2bf6092dd47ab1ee35a4d5748ec"
+    },
+    "t14780_fixwording_guidedsteps_test": {
+      "path": "src/frontend/src/modes/FocusModeView.guidedSteps.test.jsx",
+      "sha256": "68d17dd3d60097e5f71643aa0d38f04ede0909f58d89e5aff85a297d89d060be"
+    },
+    "t14780_fixwording_red": {
+      "path": "qa/red-T14780-fixwording.log"
+    },
+    "t14780_fixwording_green": {
+      "path": "qa/green-T14780-fixwording.log"
+    },
+    "t14760_bug2_shade_test": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.shade.test.jsx",
+      "sha256": "98b1eb5c9352610f82987fdd4d8bb7ea3151ffdef208a7a81d7356045f5f32a6"
+    },
+    "t14760_bug2_green": {
+      "path": "qa/green-T14760-bug2-shade-host.log"
+    }
+  },
+  "tests": [
+    {
+      "criteria": [
+        "T15220:C1",
+        "T15220:C2"
+      ],
+      "test": "e2e_test",
+      "red_log": "e2e_red",
+      "green_log": "e2e_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "4 failed (signed-out campaign arrival, unrelated param, signed-in Stripe verify, Stripe return-to-page) against pre-fix App.jsx/editorStore.js/campaignCapture.js/ProjectManager.jsx (isolated via git stash of those 4 files, stack restarted on unfixed code, confirmed served via curl); 2 passed (public-route share link, cancelled-return) because those paths were already correct pre-fix."
+    },
+    {
+      "criteria": [
+        "T15220:C3",
+        "T15220:C4"
+      ],
+      "test": "unit_test",
+      "red_log": "unit_red",
+      "green_log": "unit_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected null to be 'x' (and 20 similar) -- new cold-load cases against unchanged editorStore.js canonicalization that stripped App-owned params before App could read them"
+    },
+    {
+      "criteria": [
+        "T14800:C1",
+        "T14800:C2",
+        "T14800:C3"
+      ],
+      "test": "t14800_backend_test",
+      "red_log": "t14800_backend_red",
+      "green_log": "t14800_backend_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "3 failed (test_fourteen_stages_in_three_bands, test_labels_use_the_copy_glossary_and_keys_stay_frozen, test_major_flags_meta_and_money_and_no_full_mode) against unchanged analytics.py whose JOURNEY_LADDER still had 14 stages, not the 16 the updated tests expect."
+    },
+    {
+      "criteria": [
+        "T14800:C4"
+      ],
+      "test": "t14800_frontend_test",
+      "red_log": "t14800_frontend_red",
+      "green_log": "t14800_frontend_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 14 to be 16 -- journeyTargets.test.js reads the real backend ladder and failed before analytics.py grew the two new stages."
+    },
+    {
+      "criteria": [
+        "T14810:C1"
+      ],
+      "test": "t14810_modal_test",
+      "red_log": "t14810_modal_red",
+      "green_log": "t14810_modal_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TestingLibraryElementError: Unable to find an element with the text: Don't have the game video on this phone? -- no disclosure existed in GameDetailsModal.jsx yet."
+    },
+    {
+      "criteria": [
+        "T14810:C2"
+      ],
+      "test": "t14810_home_test",
+      "red_log": "t14810_home_red",
+      "green_log": "t14810_home_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected <p> with 'Have a play already? Skip ahead to Plays.' not to exist -- the link was still the old grey footer caption with a text prefix, not a real button beside Upload game."
+    },
+    {
+      "criteria": [
+        "T14760:C1",
+        "T14760:C3"
+      ],
+      "test": "t14760_test",
+      "red_log": "t14760_red",
+      "green_log": "t14760_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'Step 2 of 5' to be 'Step 1 of 5' -- against unchanged FocusModeView.jsx, where dragDone = hasDragged || focusPointCount > 0 skipped step 1 whenever the clip already had a non-trim keyframe (isolated via git stash of FocusModeView.jsx/resolveGuide.js/displayNames.js, test file kept)."
+    },
+    {
+      "criteria": [
+        "T14770:C1",
+        "T14770:C2",
+        "T14770:C3",
+        "T14770:C4",
+        "T14770:C5",
+        "T14770:C6",
+        "T14770:C7",
+        "T14770:C8"
+      ],
+      "test": "t14770_highlights_test",
+      "red_log": "t14770_red",
+      "green_log": "t14770_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "43 of 334 tests failed across the relevant set (AnnotateModeView.highlightInstances/cta, HighlightOrientationSlots.pulse/locked, resolveGuide.pulseTargets, guideRules.namedControls, FocusModeView.guidedSteps, frameVocabulary) against pre-T14770 production code (HighlightOrientationSlots.jsx, AnnotateModeView.jsx, FocusModeView.jsx, FocusCockpit.jsx, clipStage.js, FramingGuide.jsx, resolveGuide.js, catalog.js, guideTargets.js, displayNames.js, and the new FrameShapeChoice.jsx, isolated via git stash of only those 11 files with every test file kept on disk); e.g. 'Unable to find data-testid=annotate-make-highlight', 'expected annotate-highlight-slot-portrait to deeply equal null' (stale two-slot surface and pulse ids). All 342 pass after restoring the implementation."
+    },
+    {
+      "criteria": [
+        "T14770:C6"
+      ],
+      "test": "t14770_shapechoice_test",
+      "red_log": "t14770_shapechoice_red",
+      "green_log": "t14770_shapechoice_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Vite transform error: Failed to resolve import './FrameShapeChoice' -- the component did not exist yet (isolated via git stash of only FrameShapeChoice.jsx, the new test file kept on disk). Passes once the component (and its hasPositions confirm-dialog branch) exists."
+    },
+    {
+      "criteria": [
+        "T14830:C2",
+        "T14830:C3",
+        "T14830:C4"
+      ],
+      "test": "t14830_guidedsteps_test",
+      "red_log": "t14830_red",
+      "green_log": "t14830_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "5 failed against pre-fix production code (FocusModeView.jsx, displayNames.js, FramingActionRow.jsx, isolated via git stash of those 3 files, updated test files kept on disk): the new T14830 guidedSteps assertion (drag alone unlocks Trim/SlowMo + Preview + Generate) failed because stepsComplete still required hasPlayed; the ActionBand/ExportButtonView caption assertions failed because GENERATE_LOCKED/GENERATE_LOCKED_SHORT still said 'then tap Play'."
+    },
+    {
+      "criteria": [
+        "T14860:C1",
+        "T14860:C3"
+      ],
+      "test": "t14860_test",
+      "red_log": "t14860_red",
+      "green_log": "t14860_green",
+      "red_exit": 0,
+      "green_exit": 0,
+      "red_reason": "4 failed: resolveEtaDisplay returned a non-null estimate ('Less than a minute') at percent=5/10 before any frame data, and 'About 1 minute' formatting didn't exist yet (old percent-based extrapolation)"
+    },
+    {
+      "criteria": [
+        "T14840:C1",
+        "T14840:C2",
+        "T14840:C3"
+      ],
+      "test": "t14840_test",
+      "red_log": "t14840_red",
+      "green_log": "t14840_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected false to be true (coversRect(downloadRect)) for both finished.viewer and finished.done -- against pre-fix code the Download button had no data-testid and no keepClear entry, so the shade's cutout never included it."
+    },
+    {
+      "criteria": [
+        "T14850:C1",
+        "T14850:C2",
+        "T14850:C3"
+      ],
+      "test": "t14850_focus_test",
+      "red_log": "t14850_unit_red",
+      "green_log": "t14850_unit_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "2 failed against pre-fix FocusModeView.jsx/OverlayModeView.jsx (isolated via git stash of those 2 files, test files kept on disk): the new T14850 short-desktop-floor assertions expected the media-gated `!h-[max(320px,...)]`/`!w-[...]`/`!max-h-[...]` override classes on focus-video-stage/overlay-video-stage, which did not exist in the unmodified stage class strings."
+    },
+    {
+      "criteria": [
+        "T14850:C1",
+        "T14850:C2"
+      ],
+      "test": "t14850_e2e_test",
+      "red_log": "t14850_e2e_red",
+      "green_log": "t14850_e2e_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "C2 failed at both 1280x800 and 1366x768 against pre-fix production code (same git-stash isolation as above, real Chromium + dev-preset 'full' account): overlay-video-stage bottom edge measured 689px vs an action-band top of 567.75px/535.75px (121-153px overlap), never resolving within a 60s poll. C1 happened to still satisfy >=320px at this stack's measured --cta-bar-h without the floor (a real but narrower pre-existing margin than the Spotlight case), so the unit test above is the decisive red/green proof for C1; the e2e spec adds live-browser regression coverage for both criteria post-fix."
+    },
+    {
+      "criteria": [
+        "T14780:C1",
+        "T14780:C2"
+      ],
+      "test": "t14780_segstrip_test",
+      "red_log": "t14780_red",
+      "green_log": "t14780_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "11 failed against pre-change displayNames.js/site.ts/how-it-works.astro: SegmentedProgressStrip/ModeSwitcher tests searched for 'Zoom in' text that did not exist (still 'Frame'); FocusModeView.guidedSteps and frameVocabulary and guideRules.namedControls expected 'Check zoom'/'Zoom in' that were still 'Check framing'/'Frame'."
+    },
+    {
+      "criteria": [
+        "T14780:C2"
+      ],
+      "test": "t14780_questdefs_test",
+      "red_log": "t14780_questdefs_red",
+      "green_log": "t14780_questdefs_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "1 failed (23 passed) against pre-fix quest_config.py (isolated via git stash --keep-index of just that file, frontend STEP_TITLES already renamed): 'backend quest_config STEP_TITLES mirrors the frontend dict exactly' expected watch_framing_tutorial -> 'Watch Zoom in tutorial' but the backend still said 'Watch Frame tutorial'."
+    },
+    {
+      "criteria": [
+        "T14780:C4"
+      ],
+      "test": "t14780_fixwording_test",
+      "red_log": "t14780_fixwording_red",
+      "green_log": "t14780_fixwording_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "5 failed against pre-change displayNames.js/questDefinitions.jsx/quest_config.py (isolated via git stash of those 3 files, updated test assertions kept): frameVocabulary and guideRules.namedControls expected 'Preview' where the button/guide copy still said 'Check zoom'."
+    }
+  ],
+  "human_checks": [
+    {
+      "id": "T14860:C2",
+      "description": "Estimates on two real exports land within 1.5x of the actual total.",
+      "status": "not verified -- requires a real Modal GPU export (8s and 30s clips) which this sandbox cannot run. The frame-rate-based estimate formula (measured ms/frame since the first upscale-frame sample + a fixed 30s post-upscale tail, rounded up to the next 30s) is unit-tested for correctness of the arithmetic; real-world accuracy needs a live dev-stack verification."
+    }
+  ]
+}

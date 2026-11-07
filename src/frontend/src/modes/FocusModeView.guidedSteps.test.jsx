@@ -162,7 +162,7 @@ describe('FocusModeView guided framing steps', () => {
     // Playback reaches the clip end (clipDuration 6s).
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 6');
-    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Check zoom/);
+    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Preview/);
     expect(screen.getByTestId('framing-preview-toggle').className).toMatch(/coach-target-pulse/);
   });
 

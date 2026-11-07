@@ -73,7 +73,7 @@ and URLs (`projects`, `/home/reels`) stay frozen for deep links.
 | Spotlight | **Add spotlight**, **Edit spotlight** |
 | Finish | **Finish** (moves the highlight to the Highlights tab) |
 | Change a finished highlight | **Edit highlight** |
-| Watch | **Watch**; before the paid step only, **Check zoom** (user pick 2026-11-07, T14780: retires "Check framing") |
+| Watch | **Watch**; before the paid step only, **Preview** (retires "Check framing") |
 | Remove | **Delete**; confirm with "Tap again to confirm" |
 
 ### Other decisions
