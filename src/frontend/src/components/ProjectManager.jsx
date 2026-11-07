@@ -1384,6 +1384,15 @@ export function ProjectManager({
     setVeoZip(zip);
   }, []);
 
+  // T14810: "Upload a play instead" from the Upload game modal's no-video-on-
+  // this-device disclosure — close the game modal and open the SAME direct
+  // clip-upload flow the Clips tab's Add Video button uses.
+  const handleSwitchToClipUpload = useCallback(() => {
+    setShowGameDetailsModal(false);
+    setGamePrefillFiles(null);
+    handleAddVideoClick();
+  }, [handleAddVideoClick]);
+
   // T10250: "Add Game instead" from the size-limit dialog — carry the over-cap
   // file(s) into the Add Game picker (no size cap there), then dismiss the dialog.
   const handleOversizeAddGame = useCallback(() => {
@@ -2567,6 +2576,7 @@ export function ProjectManager({
         onCreateGame={handleCreateGame}
         initialFiles={gamePrefillFiles}
         onVeoZip={handleVeoFromGameModal}
+        onSwitchToClipUpload={handleSwitchToClipUpload}
       />
 
       {/* T10250: over-cap pre-flight dialog. Shown INSTEAD of hashing/uploading a

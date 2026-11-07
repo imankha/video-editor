@@ -1386,6 +1386,13 @@ export const UPLOAD = {
   TAP_TO_CHOOSE_VIDEO: 'Tap to choose a video',
   ADDING_VIDEO: 'Adding video...',
   EXTENSION_NOTE: (days) => `Adds ${days} days of storage.`,
+  // T14810: the Upload game modal's disclosure for a parent with no game video
+  // on this device (the biggest Add footage loss, prod Journey 2026-11-03).
+  NO_VIDEO_TOGGLE: "Don't have the game video on this phone?",
+  NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here. A highlights zip works too.",
+  NO_VIDEO_STEPS_LINK: 'See the steps for your camera',
+  NO_VIDEO_SWITCH: 'Upload a play instead',
+  NO_VIDEO_OTHER_DEVICE: 'On another device? Open reelballers.com there. Your account is the same.',
 };
 
 // Retention, stated as the three distinct outcomes confirmed in the T9680

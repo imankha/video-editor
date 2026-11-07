@@ -69,7 +69,7 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
 });
 
 describe('EmptyTabGuide - Games tab', () => {
-  it('shows the approved headline, the upload-a-game coach, Add Game CTA, and the Clips footer link without a cost caption', () => {
+  it('shows the approved headline, the upload-a-game coach, Add Game CTA, and the Clips link without a cost caption', () => {
     const onAddGame = vi.fn();
     const onNavigate = vi.fn();
     render(<EmptyTabGuide tab="games" gamesCount={0} guide={resolveGuide(homeFacts({ tab: 'games' }))} onAddGame={onAddGame} onNavigate={onNavigate} />);
@@ -83,9 +83,13 @@ describe('EmptyTabGuide - Games tab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
     expect(onAddGame).toHaveBeenCalledTimes(1);
 
-    // Footer link (Games only) switches to the Clips tab (id 'projects').
-    fireEvent.click(screen.getByRole('button', { name: EMPTY_TAB_GUIDE.games.footerLink }));
+    // T14810: the Clips link is a REAL secondary button beside Upload game, not
+    // grey body text, and still switches to the Clips tab (id 'projects').
+    const skipAhead = screen.getByRole('button', { name: EMPTY_TAB_GUIDE.games.footerLink });
+    fireEvent.click(skipAhead);
     expect(onNavigate).toHaveBeenCalledWith('projects');
+    // No standalone "Have a play already?" caption remains outside the button row.
+    expect(screen.queryByText(/have a play already/i)).toBeNull();
   });
 });
 
