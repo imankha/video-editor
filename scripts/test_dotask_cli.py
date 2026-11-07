@@ -400,6 +400,53 @@ class DotaskCliTest(unittest.TestCase):
         ])
         self.assertEqual([b["tasks"] for b in dotask_cli.nextup_bundles()], [["T20"], ["T30"]])
 
+    # --- decision gate: a task that waits on the user is not headless work ----------
+    def test_start_refuses_a_task_that_waits_on_a_user_ruling(self):
+        path = self._write_task("T2", "Pick a name", "TODO", ["src/Name.jsx"])
+        path.write_text(path.read_text() + "\n## Solution\n\nPut the options on a decision page; the user picks.\n")
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err:
+            dotask_cli.preflight(["T1", "T2"])
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("T2: Put the options on a decision page; the user picks.", err.getvalue())
+        self.assertIn("/dotask T1", err.getvalue())
+        # An unchecked "Owner has ruled" criterion is the gate, not the ruling.
+        path.write_text(path.read_text() + "\n## Acceptance Criteria\n\n- [ ] Owner has ruled A, B or C\n")
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            dotask_cli.preflight(["T2"])
+        # The user's recorded ruling clears it.
+        path.write_text(path.read_text() + "\n## Ruling\n\n**B** (owner, 2026-11-07). Shorter header.\n")
+        files_by_task, _owned, _shared = dotask_cli.preflight(["T1", "T2"])
+        self.assertEqual(sorted(files_by_task), ["T1", "T2"])
+
+    def test_pending_decision_tells_a_recorded_ruling_from_a_worker_s_own_pick(self):
+        cases = {  # real shapes from docs/plans/tasks, 2026-11-07
+            "A, tentatively (2026-11-07, autonomous /dotask dispatch, no live owner available to rule)": True,
+            '**"Confirm once"** (owner, 2026-11-07). Replaces F1.': False,
+            "## Ruling (2026-10-11, T12310 re-run, user agreed)": False,
+            "## Approved design (user, 2026-11-03)": False,
+            "ui-designer proposed A/B/C; user picked C.": False,
+        }
+        for ruling, still_pending in cases.items():
+            path = self.root / "t.md"
+            path.write_text(f"# T9: Name the steps (decision)\n\n## Ruling\n\n{ruling}\n")
+            self.assertEqual(dotask_cli.pending_decision(path) is not None, still_pending, ruling)
+        path.write_text("# T9: Plain fix\n\n## Problem\n\nThe user picks a clip and nothing happens.\n")
+        self.assertIn("user picks", dotask_cli.pending_decision(path))  # conservative: a false gate costs one question
+        path.write_text("# T9: Plain fix\n\n## Problem\n\nSaving fails.\n")
+        self.assertIsNone(dotask_cli.pending_decision(path))
+
+    def test_nextup_sets_aside_tasks_that_wait_on_a_user_ruling(self):
+        self._plan_rows([
+            ("T20", "Name the steps", "TODO", ["src/a.py"], "a"),
+            ("T30", "Free", "TODO", ["src/b.py"], "b"),
+        ])
+        path = next((self.main_repo / "docs" / "plans" / "tasks").rglob("T20-*.md"))
+        path.write_text(path.read_text() + "\n## Solution (after the user decides)\n")
+        self.assertEqual([b["tasks"] for b in dotask_cli.nextup_bundles()], [["T30"]])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(dotask_cli.main(["nextup"]), 0)
+        self.assertIn("decision: T20: ## Solution (after the user decides)", out.getvalue())
+
     def test_nextup_holds_back_tasks_whose_files_a_live_group_owns(self):
         self._plan_rows([
             ("T20", "Busy", "TODO", ["src/busy.py"], "a"),
@@ -921,17 +968,69 @@ class AutolandTest(unittest.TestCase):
         def batch_verdict(task_ids, status="pass"):
             return {"bugs": [], "criteria": [
                 {"id": f"{t}:C{i}", "status": status, "evidence": "seen"} for t in task_ids for i in (1, 2)]}
-        self.verdicts = [batch_verdict(ids[:3]), batch_verdict(ids[3:], "fail"), batch_verdict(ids[:3]),
-                         batch_verdict(ids[3:])]
+        self.verdicts = [batch_verdict(ids[:3]), batch_verdict(ids[3:], "fail"), batch_verdict(ids[3:])]
         self.assertEqual(self._run(no_land=True), 0)
         qa = [text for phase, text in self.dispatches if phase == "qa"]
-        self.assertEqual(self._phases(), ["qa", "qa", "implementation", "qa", "qa"])
+        # After the fix only T4 is re-checked: one batch, which also runs the regression pass.
+        self.assertEqual(self._phases(), ["qa", "qa", "implementation", "qa"])
         self.assertIn("T1, T2, T3", qa[0])
         self.assertIn("Skip the regression pass", qa[0])
         self.assertIn(dotask_cli.REGRESSION_STEP, qa[1])
+        self.assertIn("T4:C1, T4:C2", qa[2])
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[2])
         # The fix worker saw the whole round, not just the last batch.
         merged = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-1.json").read_text())
         self.assertEqual(len(merged["criteria"]), 8)
+        final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
+        self.assertEqual(len(final["criteria"]), 8)
+        self.assertEqual(sum("carried_from" in c for c in final["criteria"]), 6)
+
+    def test_after_a_fix_round_only_the_failed_criteria_are_re_checked_and_earlier_passes_carry(self):
+        first_head = self.head
+        bug = {"scope": "group", "task": "T1", "title": "Crash on save", "actual": "boom"}
+        self.verdicts = [self._verdict(("pass", "fail"), bugs=[bug])]
+        original = self._dispatch
+
+        def dispatch(slug, group, phase, instruction):
+            if phase == "implementation":
+                self.verdicts.append(None)
+            result = original(slug, group, phase, instruction)
+            if phase == "implementation":  # the re-check reports only what it was asked to prove
+                self.verdicts[-1] = {"head": self.head, "bugs": [],
+                                     "criteria": [{"id": "T1:C2", "status": "pass", "evidence": "fixed"}]}
+            return result
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        qa = [text for phase, text in self.dispatches if phase == "qa"]
+        self.assertIn("EVERY criterion", qa[0])
+        scope = next(line for line in qa[1].splitlines() if line.startswith("1. "))
+        self.assertIn("Prove ONLY these criteria", scope)
+        self.assertIn("same id: T1:C2.", scope)
+        self.assertNotIn("T1:C1", scope)  # the JSON example below step 1 always shows T1:C1
+        self.assertIn("Crash on save", scope)
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[1])
+        final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
+        self.assertEqual([c["id"] for c in final["criteria"]], ["T1:C1", "T1:C2"])
+        self.assertEqual(final["criteria"][0]["carried_from"], first_head)
+        self.assertNotIn("carried_from", final["criteria"][1])
+        self.assertIn("VERIFY_PASS", self._last())
+
+    def test_a_re_check_that_skips_a_failed_criterion_never_passes(self):
+        self.verdicts = [self._verdict(("fail", "pass"))]
+        original = self._dispatch
+
+        def dispatch(slug, group, phase, instruction):
+            if phase == "implementation":
+                self.verdicts.append(None)
+            result = original(slug, group, phase, instruction)
+            if phase == "implementation":  # C1 failed, but the verifier reports only C2
+                self.verdicts[-1] = {"head": self.head, "bugs": [],
+                                     "criteria": [{"id": "T1:C2", "status": "pass", "evidence": "seen"}]}
+            return result
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(), 1)
+        self.land.assert_not_called()
+        self.assertIn("missing T1:C1", self._last())
 
     def test_clean_verdict_records_the_head_and_lands_it(self):
         self.verdicts = [self._verdict()]
@@ -1053,6 +1152,32 @@ class AutolandTest(unittest.TestCase):
         path = self.root / "t.md"
         path.write_text("## Solution\n- [ ] not this\n## Acceptance Criteria\n- [ ] a\n1. [x] b\n* [ ] c\nprose\n## After\n- [ ] no\n")
         self.assertEqual(dotask_cli.acceptance_count(path), 3)
+
+
+class DispatchTurnCapTest(unittest.TestCase):
+    """task.sh's 120-turn default starved the verifier twice on g-t15220-10 (2026-11-07): qa gets its own cap."""
+
+    def _env_seen_by_task_sh(self, phase, environ):
+        seen = {}
+
+        def run(cmd, env=None, **kwargs):
+            seen.update(env)
+            return SimpleNamespace(returncode=1)
+        with patch.dict(os.environ, environ), patch.object(dotask_cli.subprocess, "run", run), \
+                patch.object(dotask_cli, "bash", lambda: "bash"):
+            if "DOTASK_MAX_TURNS" not in environ:
+                os.environ.pop("DOTASK_MAX_TURNS", None)
+            dotask_cli.dispatch("g-t1-1", {"wave_id": "w1", "tasks": ["T1"]}, phase, "go")
+        return seen
+
+    def test_a_qa_dispatch_gets_the_higher_cap(self):
+        self.assertEqual(self._env_seen_by_task_sh("qa", {})["DOTASK_MAX_TURNS"], "200")
+
+    def test_an_implementation_dispatch_keeps_task_sh_s_default(self):
+        self.assertNotIn("DOTASK_MAX_TURNS", self._env_seen_by_task_sh("implementation", {}))
+
+    def test_an_explicit_cap_wins_for_every_phase(self):
+        self.assertEqual(self._env_seen_by_task_sh("qa", {"DOTASK_MAX_TURNS": "50"})["DOTASK_MAX_TURNS"], "50")
 
 
 if __name__ == "__main__":

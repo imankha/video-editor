@@ -142,6 +142,27 @@ def task_title(path):
     return re.sub(r"^#\s*T\d+:\s*", "", first_line).strip()
 
 
+# A task that still waits on the user (a decision page, "the user picks", an owner ruling) cannot be
+# worked headless: nobody is there to answer. g-t15220-10 (2026-11-07) carried two such tasks; one
+# stalled and the other ruled for itself, and landing then took longer than building all ten tasks.
+# The ruling must be in the task file, where the worker and the verifier read it.
+DECISION_GATE = re.compile(r"decision page|\(decision\)|design-gated|WAITING ON USER"
+                           r"|\b(?:user|owner) (?:picks|decides|rules|has ruled)\b", re.I)
+RULING_RECORDED = re.compile(r"\b(?:user|owner)(?:'s)? (?:pick|picked|ruling|ruled|chose|choice|confirmed|agreed|approved)\b"
+                             r"|\bUSER PICK\b|\bapproved \d{4}-\d{2}-\d{2}|\((?:user|owner), \d{4}-\d{2}-\d{2}\)", re.I)
+UNCHECKED_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[ \]")
+
+
+def pending_decision(path):
+    """The first line that makes this task wait on the user, or None: no such line, or a line that
+    records the user's ruling (`(owner, 2026-11-07)`, `user picked C`, `USER PICK`, ...). An unchecked
+    criterion like `- [ ] Owner has ruled A, B or C` is the gate itself, never the ruling."""
+    lines = Path(path).read_text(encoding="utf-8").splitlines()
+    if any(RULING_RECORDED.search(line) for line in lines if not UNCHECKED_ITEM.match(line)):
+        return None
+    return next((line.strip() for line in lines if DECISION_GATE.search(line)), None)
+
+
 def relevant_files(path):
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     files, in_section = [], False
@@ -215,6 +236,7 @@ def task_sh(*args, check=True, capture_output=False):
 # --- start ---------------------------------------------------------------------
 def preflight(task_ids, allow_overlap=False):
     files_by_task = {}
+    waiting = {}  # task -> the line that makes it wait on the user
     for task_id in task_ids:
         path = resolve_task_file(task_id)
         status = task_status(path)
@@ -223,7 +245,17 @@ def preflight(task_ids, allow_overlap=False):
         commits = merged_commits(task_id)
         if commits:
             die(f"{task_id} already has commits on origin/master: {commits[0]}")
+        gate = pending_decision(path)
+        if gate:
+            waiting[task_id] = gate
         files_by_task[task_id] = relevant_files(path)
+    if waiting:
+        lines = [f"  {task_id}: {line[:160]}" for task_id, line in waiting.items()]
+        clear = [t for t in task_ids if t not in waiting]
+        hint = f"Start the others now: /dotask {' '.join(clear)}" if clear else "Every task waits on the user."
+        die("these tasks wait on a user ruling, which a headless worker cannot give:\n" + "\n".join(lines) +
+            "\nAsk the user, record the answer in the task file under `## Ruling` (e.g. `**B** (owner, 2026-11-07)` "
+            "plus the reasoning), commit it, then start.\n" + hint)
     owned = sorted({f for files in files_by_task.values() for f in files})
     conflicts = {}  # task -> ["file (live group slug)"]
     for group in live_groups():
@@ -574,18 +606,28 @@ def land(args):
 
 # --- autoland: verify -> fix -> verify, then push -----------------------------------
 # After PUSHREADY a fresh verifier drives the running app against every acceptance criterion and
-# the flows the diff touches. Failures go back to a fresh worker, and the result is verified from
-# scratch. Only a clean verdict on the exact HEAD pushes (user decision, 2026-11-07); merging stays
-# with the user. Any verdict that cannot be trusted stops the loop: it never counts as a pass.
+# the flows the diff touches. Failures go back to a fresh worker; the next verifier re-checks only
+# what failed (plus the regression pass) on the new HEAD, and the earlier passes carry forward. Only a
+# clean verdict on the exact HEAD pushes (user decision, 2026-11-07); merging stays with the user. Any
+# verdict that cannot be trusted stops the loop: it never counts as a pass.
 VERIFY_FILE = ".dotask-verify.json"
-MAX_FIX_ROUNDS = 3
+MAX_FIX_ROUNDS = 3  # a flaky test or an unfixable bug must not burn usage forever
 VERIFY_ATTEMPTS = 2  # retries cover only a dispatch that errored out, never a bad verdict
 # One verifier for 10 tasks (about 45 criteria) ran out of 120 turns (g-t15220-10, 2026-11-07), so each
 # dispatch proves a few tasks and the last one also runs the regression pass.
 VERIFY_BATCH = 3
 REGRESSION_STEP = ("Regression pass: from `git diff origin/master...HEAD --stat`, exercise the flows this branch "
                    "touches and look for anything broken that no criterion names.")
-NO_REGRESSION_STEP = "Skip the regression pass: another verifier dispatch runs it. Report bugs you happen to see."  # a flaky test or an unfixable bug must not burn usage forever
+NO_REGRESSION_STEP = "Skip the regression pass: another verifier dispatch runs it. Report bugs you happen to see."
+FULL_SCOPE_STEP = ("For EACH task ({tasks}), read the `## Acceptance Criteria` of its file under docs/plans/tasks and "
+                   "give EVERY criterion one entry, in order, named T<id>:C1, T<id>:C2, ...")
+# After a fix round only what failed is re-checked: re-proving 40 passing criteria cost an hour per
+# round on g-t15220-10 (2026-11-07). The regression pass still runs, and earlier passes carry forward.
+FOCUSED_SCOPE_STEP = ("This is a re-check after fix round {fix_round}. Prove ONLY these criteria from the task files "
+                      "under docs/plans/tasks, one entry each with the same id: {criteria}. {bugs_step}Every other "
+                      "criterion passed on the previous HEAD and is not re-checked here; do not list it.")
+BUGS_STEP = ("Re-run the steps of each of these bugs and list any still present under `bugs` with the same title "
+             "(a fixed bug gets no entry): {titles}. ")
 VERIFY_STATUSES = ("pass", "fail", "human")
 BUG_SCOPES = ("group", "unrelated")
 ACCEPTANCE_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]")
@@ -597,7 +639,7 @@ Do NOT edit tracked files, commit, or change qa/proof.json. Keep every script yo
 
 The app stack was just restarted on this code: http://localhost:5173, backend :8000, dev accounts ?dev_account=empty|upload|full.
 
-1. For EACH task ({tasks}), read the `## Acceptance Criteria` of its file under docs/plans/tasks and give EVERY criterion one entry, in order, named T<id>:C1, T<id>:C2, ...
+1. {scope}
 2. Prove each criterion by observation. Use Playwright for anything a user can see (require('/workspace/src/frontend/node_modules/@playwright/test'), scripts under /tmp, chromium headless). Use the real API or the task's targeted tests only for what no user can see.
 3. Read each criterion literally. Code that meets the intent but not the text is a `fail`, with that said in the evidence.
 4. src/landing changes: this stack does not serve the landing site. Run `npm run build` in src/landing (`npm ci` first if node_modules is missing), then serve dist from a small node script under /tmp, mapping /x to x.html.
@@ -632,7 +674,10 @@ def acceptance_count(task_file):
     return count
 
 
-def read_verdict(checkout, group, head, tasks=None):
+def read_verdict(checkout, group, head, tasks=None, criteria_ids=None):
+    """The verifier's file, checked before it is believed. Full verify: every task in `tasks` (default:
+    the group) is covered as far as its task file counts. Focused re-check: every id in `criteria_ids`
+    is present."""
     path = Path(checkout) / VERIFY_FILE
     try:
         verdict = json.loads(path.read_text(encoding="utf-8"))
@@ -649,6 +694,12 @@ def read_verdict(checkout, group, head, tasks=None):
     for bug in bugs:
         if bug.get("scope") not in BUG_SCOPES or not bug.get("title"):
             raise UntrustedVerdict(f"bug needs a title and a scope of {BUG_SCOPES}: {bug}")
+    if criteria_ids is not None:
+        have = {str(item.get("id", "")) for item in criteria}
+        missing = [c for c in criteria_ids if c not in have]
+        if missing:
+            raise UntrustedVerdict(f"re-check verdict is missing {' '.join(missing)}")
+        return verdict
     for task_id in tasks or group["tasks"]:
         need = max(1, acceptance_count(resolve_task_file(task_id)))
         have = sum(1 for item in criteria if str(item.get("id", "")).startswith(f"{task_id}:"))
@@ -675,10 +726,18 @@ def append_status(checkout, text):
     print(f"[dotask] {text}")
 
 
+# task.sh dispatches with --max-turns 120 unless DOTASK_MAX_TURNS says otherwise. A verifier proving
+# about 12 criteria used 118 of those 120 (g-t15220-10 batch 1, 2026-11-07), and the unbatched verifier
+# before it ran out twice; a worker's 120 stays. An explicit DOTASK_MAX_TURNS wins for every phase.
+PHASE_MAX_TURNS = {"qa": 200}
+
+
 def dispatch(slug, group, phase, instruction):
     """One fresh `claude -p` in the group's container. True only if it ended on PUSHREADY."""
     env = {**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
            "DOTASK_WAVE_ID": group["wave_id"], "DOTASK_PHASE": phase, "DOTASK_TASK_IDS": ",".join(group["tasks"])}
+    if "DOTASK_MAX_TURNS" not in os.environ and phase in PHASE_MAX_TURNS:
+        env["DOTASK_MAX_TURNS"] = str(PHASE_MAX_TURNS[phase])
     result = subprocess.run([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "drive", slug, instruction],
                             env=env, check=False)
     return result.returncode == 0 and " PUSHREADY " in last_status(TASKS_ROOT / sanitize(slug))
@@ -723,23 +782,42 @@ def file_unrelated_bug(bug, group, head):
     return task_id
 
 
-def verify_once(slug, group, checkout, head, round_number):
-    """Stack up on HEAD, then fresh verifiers a few tasks at a time. Returns the merged verdict; raises
-    UntrustedVerdict if any batch cannot be used."""
+def verify_once(slug, group, checkout, head, round_number, focus=None):
+    """Stack up on HEAD, then fresh verifiers a few tasks at a time. After a fix round `focus` names the
+    previous verdict's failed criteria and group bugs (and carries that verdict): only those are
+    re-checked, plus the regression pass, and the rest of the previous verdict carries forward.
+    Returns the merged verdict, which lists every criterion; raises UntrustedVerdict if any batch
+    cannot be used."""
     try:
         bring_up_stack(slug)
     except subprocess.CalledProcessError as exc:
         raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
-    tasks = list(group["tasks"])
+    if focus:
+        tasks = [t for t in group["tasks"] if any(c.startswith(f"{t}:") for c in focus["criteria"])
+                 or any(b.get("task") == t for b in focus["bugs"])]
+        tasks = tasks or group["tasks"][-1:]  # a bug the verifier left without a task is still re-run
+    else:
+        tasks = list(group["tasks"])
     batches = [tasks[i:i + VERIFY_BATCH] for i in range(0, len(tasks), VERIFY_BATCH)]
     merged = {"head": head, "criteria": [], "bugs": []}
     archive_dir = TASKS_ROOT / "waves" / group["wave_id"]
     archive_dir.mkdir(parents=True, exist_ok=True)
     for number, batch in enumerate(batches, 1):
         label = f"{number} of {len(batches)}"
+        last = number == len(batches)
+        wanted = None
+        if focus:
+            wanted = [c for c in focus["criteria"] if c.split(":")[0] in batch]
+            bugs = [b for b in focus["bugs"]
+                    if b.get("task") in batch or (last and b.get("task") not in group["tasks"])]
+            bugs_step = BUGS_STEP.format(titles="; ".join(str(b["title"]) for b in bugs)) if bugs else ""
+            scope = FOCUSED_SCOPE_STEP.format(fix_round=round_number - 1, criteria=", ".join(wanted) or "(none)",
+                                              bugs_step=bugs_step)
+        else:
+            scope = FULL_SCOPE_STEP.format(tasks=", ".join(batch))
         instruction = VERIFY_INSTRUCTION.format(
-            round=round_number, batch=label, head=head, tasks=", ".join(batch), branch=group["branch"],
-            regression=REGRESSION_STEP if number == len(batches) else NO_REGRESSION_STEP)
+            round=round_number, batch=label, head=head, scope=scope, branch=group["branch"],
+            regression=REGRESSION_STEP if last else NO_REGRESSION_STEP)
         for attempt in range(VERIFY_ATTEMPTS):
             (checkout / VERIFY_FILE).unlink(missing_ok=True)
             finished = dispatch(slug, group, "qa", instruction)
@@ -752,11 +830,22 @@ def verify_once(slug, group, checkout, head, round_number):
         changed = tracked_changes(checkout)
         if git_head(checkout) != head or changed:
             raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
-        verdict = read_verdict(checkout, group, head, tasks=batch)
+        verdict = read_verdict(checkout, group, head, tasks=batch, criteria_ids=wanted)
         (archive_dir / f"verify-round-{round_number}-batch-{number}.json").write_text(
             json.dumps(verdict, indent=2) + "\n", encoding="utf-8")
         merged["criteria"] += verdict["criteria"]
         merged["bugs"] += verdict["bugs"]
+    if focus:
+        # Every criterion stays in the verdict: the re-checked ones fresh, the rest as the previous
+        # verifier saw them, marked with the HEAD that observation was made on.
+        previous = focus["previous"]
+        fresh = {str(c.get("id")): c for c in merged["criteria"]}
+        ordered = []
+        for item in previous["criteria"]:
+            item_id = str(item.get("id"))
+            ordered.append(fresh.pop(item_id) if item_id in fresh
+                           else {**item, "carried_from": item.get("carried_from") or previous["head"]})
+        merged["criteria"] = ordered + list(fresh.values())
     # The fix worker reads the whole round's findings from this one file.
     write_lf(checkout / VERIFY_FILE, json.dumps(merged, indent=2) + "\n")
     (archive_dir / f"verify-round-{round_number}.json").write_text(json.dumps(merged, indent=2) + "\n",
@@ -782,6 +871,7 @@ def autoland(args):
         with exclude_path.open("a", encoding="utf-8") as stream:
             stream.write(VERIFY_FILE + "\n")
 
+    focus = None  # after a failed round: what the next verifier re-checks
     for fix_round in range(MAX_FIX_ROUNDS + 1):
         round_number = fix_round + 1
         head = git_head(checkout)
@@ -792,7 +882,7 @@ def autoland(args):
                 {"scope": "group", "title": "pre-land check failed", "actual": check.stdout + check.stderr}]}, indent=2) + "\n")
         else:
             try:
-                verdict = verify_once(slug, group, checkout, head, round_number)
+                verdict = verify_once(slug, group, checkout, head, round_number, focus)
             except UntrustedVerdict as exc:
                 append_status(checkout, f"VERIFY_BLOCKED round {round_number}: {exc}")
                 return 1
@@ -813,6 +903,8 @@ def autoland(args):
                 append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}")
                 return 0 if args.no_land else land(SimpleNamespace(slug=slug, after_test=True))
             summary = f"round {round_number} on {head[:9]}: failed {failed}, new bugs {bugs}"
+            focus = {"criteria": failed, "bugs": [b for b in verdict["bugs"] if b["scope"] == "group"],
+                     "previous": verdict}
         if fix_round == MAX_FIX_ROUNDS:
             append_status(checkout, f"VERIFY_EXHAUSTED after {MAX_FIX_ROUNDS} fix rounds; {summary}")
             return 1
@@ -841,16 +933,21 @@ def plan_todo_tasks():
 
 
 def nextup_candidates():
-    """(candidates in PLAN order, {task: ["file (live group slug)"]} held back, [unresolvable notes])."""
+    """(candidates in PLAN order, {task: ["file (live group slug)"]} held back, [unresolvable notes],
+    {task: gating line} waiting on a user ruling)."""
     tasks_dir = MAIN_REPO / "docs" / "plans" / "tasks"
     groups = live_groups()
-    candidates, held, skipped = [], {}, []
+    candidates, held, skipped, decisions = [], {}, [], {}
     for task_id in plan_todo_tasks():
         matches = sorted(tasks_dir.rglob(f"{task_id}-*.md"))
         if len(matches) != 1:
             skipped.append(f"{task_id}: {len(matches)} task files match {task_id}-*.md")
             continue
         path = matches[0]
+        gate = pending_decision(path)
+        if gate:
+            decisions[task_id] = gate
+            continue
         files = [f for f in relevant_files(path) if "/" in f]  # prose in backticks is not a file
         taken = [f"{name} (live group {g.get('slug')})"
                  for g in groups for name in sorted(set(files) & set(g.get("owned_files", [])))]
@@ -860,13 +957,13 @@ def nextup_candidates():
         epic = path.parent.relative_to(tasks_dir).as_posix() if path.parent != tasks_dir else None
         candidates.append({"id": task_id, "title": task_title(path), "path": path.relative_to(MAIN_REPO).as_posix(),
                            "files": files, "epic": epic})
-    return candidates, held, skipped
+    return candidates, held, skipped, decisions
 
 
 def nextup_bundles():
     """TODO tasks joined when they share a Relevant File or an epic folder (transitively). Tasks keep
     PLAN order inside a bundle; bundles rank by their first task's PLAN position."""
-    candidates, _held, _skipped = nextup_candidates()
+    candidates, _held, _skipped, _decisions = nextup_candidates()
     root = list(range(len(candidates)))
 
     def find(i):
@@ -896,7 +993,7 @@ def nextup_bundles():
 
 
 def nextup(args):
-    _candidates, held, skipped = nextup_candidates()
+    _candidates, held, skipped, decisions = nextup_candidates()
     bundles = nextup_bundles()
     if not bundles:
         print("no startable TODO tasks in PLAN.md")
@@ -914,6 +1011,8 @@ def nextup(args):
         print(f"(+{len(bundles) - args.limit} more bundle(s); --limit to see them)")
     for task_id, items in held.items():
         print(f"held: {task_id}: {', '.join(items)}")
+    for task_id, line in decisions.items():
+        print(f"decision: {task_id}: {line[:160]}")
     for note in skipped:
         print(f"skipped: {note}")
     return 0

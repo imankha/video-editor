@@ -91,7 +91,11 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
 
 `dotask.sh start` refuses before touching Docker if: a task id doesn't resolve to exactly one
 `docs/plans/tasks/**/T<id>-*.md` file; a task's PLAN.md status isn't `TODO`/`WIP`; a task
-already has a commit on `origin/master` matching `^T<id>[: ]`; or any task's Relevant Files
+already has a commit on `origin/master` matching `^T<id>[: ]`; a task's file still waits on a
+user ruling (a decision page, "the user picks", "owner has ruled") with no recorded ruling
+(`## Ruling` with `(owner, <date>)`, `user picked ...`, `USER PICK`; an unchecked criterion
+never counts) -- a headless worker has nobody to ask, so ask the user, record the ruling in the
+task file, commit, then start; or any task's Relevant Files
 overlap the owned files of another group whose container is currently running. Each refusal
 exits 2 with a clear reason -- relay it to the user, don't retry automatically. Files shared
 WITHIN one group are fine (its tasks run sequentially). For an overlap with another live group,

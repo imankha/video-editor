@@ -123,9 +123,12 @@ are separate verdicts. Missing reproducibility stays unverified; request more ev
 the implementor/tester before asking the user for a genuinely human-only observation.
 
 A headless group lands itself (user decision, 2026-11-07): after `PUSHREADY`, `autoland` has a fresh
-verifier prove every acceptance criterion with Playwright, sends failures to a fresh worker, and
-repeats for at most 3 fix rounds. A clean verdict on the exact HEAD replaces the human test unless a
-criterion needs a person, then pushes and opens the PR. Merging stays with the user.
+verifier prove every acceptance criterion with Playwright, sends failures to a fresh worker, re-checks
+only what failed plus a regression pass (earlier passes carry forward in the verdict), and repeats for
+at most 3 fix rounds. A clean verdict on the exact HEAD replaces the human test unless a criterion
+needs a person, then pushes and opens the PR. Merging stays with the user. A headless worker has
+nobody to ask, so `start` refuses a task whose file still waits on a user ruling: record it under
+`## Ruling` first (`/nextup` collects these before the container starts).
 
 By hand, `/dotask land <slug>` first starts the group's app stack and stops for a human test (no push,
 no PR). Then `/dotask land <slug> --after-test` pushes that tested revision (it refuses if
