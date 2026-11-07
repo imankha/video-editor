@@ -888,6 +888,7 @@ class AutolandTest(unittest.TestCase):
         if phase == "qa":
             verdict = self.verdicts.pop(0)
             if verdict is not None:
+                verdict.setdefault("head", self.head)  # None-free verdicts made before a fix moved HEAD
                 (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
         elif self.fix_commits:
             self.head = f"{len(self.dispatches):040d}"
@@ -906,6 +907,31 @@ class AutolandTest(unittest.TestCase):
 
     def _phases(self):
         return [phase for phase, _ in self.dispatches]
+
+    def test_a_large_group_is_verified_in_batches_and_only_the_last_runs_the_regression_pass(self):
+        ids = [f"T{n}" for n in range(1, 5)]
+        for task_id in ids[1:]:
+            (self.main_repo / "docs" / "plans" / "tasks" / f"{task_id}-x.md").write_text(
+                self.TASK_TEXT.replace("T1:", f"{task_id}:"))
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        group["tasks"] = ids
+        (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        self.status.write_text("".join(f"t STAGE_DONE {t} commit \"x\"\n" for t in ids))
+
+        def batch_verdict(task_ids, status="pass"):
+            return {"bugs": [], "criteria": [
+                {"id": f"{t}:C{i}", "status": status, "evidence": "seen"} for t in task_ids for i in (1, 2)]}
+        self.verdicts = [batch_verdict(ids[:3]), batch_verdict(ids[3:], "fail"), batch_verdict(ids[:3]),
+                         batch_verdict(ids[3:])]
+        self.assertEqual(self._run(no_land=True), 0)
+        qa = [text for phase, text in self.dispatches if phase == "qa"]
+        self.assertEqual(self._phases(), ["qa", "qa", "implementation", "qa", "qa"])
+        self.assertIn("T1, T2, T3", qa[0])
+        self.assertIn("Skip the regression pass", qa[0])
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[1])
+        # The fix worker saw the whole round, not just the last batch.
+        merged = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-1.json").read_text())
+        self.assertEqual(len(merged["criteria"]), 8)
 
     def test_clean_verdict_records_the_head_and_lands_it(self):
         self.verdicts = [self._verdict()]

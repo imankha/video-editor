@@ -60,8 +60,10 @@ HEADLESS_RUN_NOTE = (
     "timeout: `claude -p --model opus \"<question>\"`. Paste the code excerpts into the question and tell it not "
     "to use tools: left to explore, it ran past the 10-minute limit twice. Read its answer before "
     "deciding; never report it as unavailable. A dispatch has a turn limit and can stop mid-task, so "
-    "keep a `## T<id> progress` checklist of the acceptance criteria in .dotask-notes.md and update it "
-    "as each one is done: the next worker starts from it instead of re-reading the diff."
+    "write a `## T<id> progress` checklist of the acceptance criteria in .dotask-notes.md before your "
+    "first code edit and update it as each one is done: the next worker starts from it instead of "
+    "re-reading the diff. Before a browser check, curl the stack and leave it running if it answers. "
+    "Log in with a dev preset account, not a real one, whose video load can hang."
 )
 CHECKPOINTS = {
     "design": "Perform design/root-cause only. Write a reusable specification under docs/ and append "

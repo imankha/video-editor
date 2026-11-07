@@ -578,13 +578,20 @@ def land(args):
 # scratch. Only a clean verdict on the exact HEAD pushes (user decision, 2026-11-07); merging stays
 # with the user. Any verdict that cannot be trusted stops the loop: it never counts as a pass.
 VERIFY_FILE = ".dotask-verify.json"
-MAX_FIX_ROUNDS = 3  # a flaky test or an unfixable bug must not burn usage forever
+MAX_FIX_ROUNDS = 3
+VERIFY_ATTEMPTS = 2  # retries cover only a dispatch that errored out, never a bad verdict
+# One verifier for 10 tasks (about 45 criteria) ran out of 120 turns (g-t15220-10, 2026-11-07), so each
+# dispatch proves a few tasks and the last one also runs the regression pass.
+VERIFY_BATCH = 3
+REGRESSION_STEP = ("Regression pass: from `git diff origin/master...HEAD --stat`, exercise the flows this branch "
+                   "touches and look for anything broken that no criterion names.")
+NO_REGRESSION_STEP = "Skip the regression pass: another verifier dispatch runs it. Report bugs you happen to see."  # a flaky test or an unfixable bug must not burn usage forever
 VERIFY_STATUSES = ("pass", "fail", "human")
 BUG_SCOPES = ("group", "unrelated")
 ACCEPTANCE_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]")
 BUG_SECTION = "### Bugs found by /dotask verify"
 PLAN_TAIL_HEADING = "## Environment Configuration"
-VERIFY_INSTRUCTION = """You are the independent verifier for this group, verify round {round}. You did not write this code.
+VERIFY_INSTRUCTION = """You are the independent verifier for this group, verify round {round}, batch {batch}. You did not write this code.
 Do not trust the worker's claims, qa/proof.json or .dotask-notes.md conclusions: observe behavior yourself.
 Do NOT edit tracked files, commit, or change qa/proof.json. Keep every script you write under /tmp. HEAD is {head}.
 
@@ -594,7 +601,7 @@ The app stack was just restarted on this code: http://localhost:5173, backend :8
 2. Prove each criterion by observation. Use Playwright for anything a user can see (require('/workspace/src/frontend/node_modules/@playwright/test'), scripts under /tmp, chromium headless). Use the real API or the task's targeted tests only for what no user can see.
 3. Read each criterion literally. Code that meets the intent but not the text is a `fail`, with that said in the evidence.
 4. src/landing changes: this stack does not serve the landing site. Run `npm run build` in src/landing (`npm ci` first if node_modules is missing), then serve dist from a small node script under /tmp, mapping /x to x.html.
-5. Regression pass: from `git diff origin/master...HEAD --stat`, exercise the flows this branch touches and look for anything broken that no criterion names.
+5. {regression}
 6. Before believing a surprising result, confirm the served code is the code on disk. Pass an explicit long Bash timeout for builds, installs and e2e runs. Stop investigating a finding once you can state its steps; fixing is not your job.
 
 Write /workspace/.dotask-verify.json, exactly:
@@ -603,10 +610,10 @@ Write /workspace/.dotask-verify.json, exactly:
   "bugs": [{{"scope": "group|unrelated", "task": "T1", "title": "...", "steps": "...", "expected": "...", "actual": "..."}}]}}
 `human` is only for what no automation can observe (a real card payment, a physical phone). Never use it to save effort.
 A bug's scope is `group` if this branch caused it and `unrelated` if master has it too: check before deciding.
-Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
+Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round} batch {batch}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
 FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json: every criterion with status `fail` and every bug with scope `group`. Ignore everything else in that file. All tasks already have commits, so do not start a new one.
 Fix each finding at its root, failing test first, and run the relevant tests and lint. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
-A finding you believe is wrong: do not work around it. Append `BLOCKED <finding and why>` and stop.
+A finding you believe is wrong: do not work around it. Never edit a task file's Acceptance Criteria to make one pass: they are the user's. Append `BLOCKED <finding and why>` and stop.
 Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> fix round {round}` to /workspace/.dotask-status and stop."""
 
 
@@ -625,7 +632,7 @@ def acceptance_count(task_file):
     return count
 
 
-def read_verdict(checkout, group, head):
+def read_verdict(checkout, group, head, tasks=None):
     path = Path(checkout) / VERIFY_FILE
     try:
         verdict = json.loads(path.read_text(encoding="utf-8"))
@@ -642,7 +649,7 @@ def read_verdict(checkout, group, head):
     for bug in bugs:
         if bug.get("scope") not in BUG_SCOPES or not bug.get("title"):
             raise UntrustedVerdict(f"bug needs a title and a scope of {BUG_SCOPES}: {bug}")
-    for task_id in group["tasks"]:
+    for task_id in tasks or group["tasks"]:
         need = max(1, acceptance_count(resolve_task_file(task_id)))
         have = sum(1 for item in criteria if str(item.get("id", "")).startswith(f"{task_id}:"))
         if have < need:
@@ -717,24 +724,44 @@ def file_unrelated_bug(bug, group, head):
 
 
 def verify_once(slug, group, checkout, head, round_number):
-    """Stack up on HEAD, one fresh verifier. Returns its verdict; raises UntrustedVerdict if it cannot be used."""
+    """Stack up on HEAD, then fresh verifiers a few tasks at a time. Returns the merged verdict; raises
+    UntrustedVerdict if any batch cannot be used."""
     try:
         bring_up_stack(slug)
     except subprocess.CalledProcessError as exc:
         raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
-    (checkout / VERIFY_FILE).unlink(missing_ok=True)
-    finished = dispatch(slug, group, "qa", VERIFY_INSTRUCTION.format(
-        round=round_number, head=head, tasks=", ".join(group["tasks"]), branch=group["branch"]))
-    if not finished:
-        raise UntrustedVerdict(f"verifier did not finish: {last_status(checkout)[:200]}")
-    changed = tracked_changes(checkout)
-    if git_head(checkout) != head or changed:
-        raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
-    verdict = read_verdict(checkout, group, head)
-    archive = TASKS_ROOT / "waves" / group["wave_id"] / f"verify-round-{round_number}.json"
-    archive.parent.mkdir(parents=True, exist_ok=True)
-    archive.write_text(json.dumps(verdict, indent=2) + "\n", encoding="utf-8")
-    return verdict
+    tasks = list(group["tasks"])
+    batches = [tasks[i:i + VERIFY_BATCH] for i in range(0, len(tasks), VERIFY_BATCH)]
+    merged = {"head": head, "criteria": [], "bugs": []}
+    archive_dir = TASKS_ROOT / "waves" / group["wave_id"]
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    for number, batch in enumerate(batches, 1):
+        label = f"{number} of {len(batches)}"
+        instruction = VERIFY_INSTRUCTION.format(
+            round=round_number, batch=label, head=head, tasks=", ".join(batch), branch=group["branch"],
+            regression=REGRESSION_STEP if number == len(batches) else NO_REGRESSION_STEP)
+        for attempt in range(VERIFY_ATTEMPTS):
+            (checkout / VERIFY_FILE).unlink(missing_ok=True)
+            finished = dispatch(slug, group, "qa", instruction)
+            # A transport failure (g-t15220-10, 2026-11-07: ENOTFOUND 7 minutes in) says nothing about the code.
+            if finished or "outcome=error" not in last_status(checkout) or tracked_changes(checkout):
+                break
+            print(f"[dotask] verifier dispatch errored (attempt {attempt + 1}); retrying", file=sys.stderr)
+        if not finished:
+            raise UntrustedVerdict(f"verifier batch {label} did not finish: {last_status(checkout)[:200]}")
+        changed = tracked_changes(checkout)
+        if git_head(checkout) != head or changed:
+            raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
+        verdict = read_verdict(checkout, group, head, tasks=batch)
+        (archive_dir / f"verify-round-{round_number}-batch-{number}.json").write_text(
+            json.dumps(verdict, indent=2) + "\n", encoding="utf-8")
+        merged["criteria"] += verdict["criteria"]
+        merged["bugs"] += verdict["bugs"]
+    # The fix worker reads the whole round's findings from this one file.
+    write_lf(checkout / VERIFY_FILE, json.dumps(merged, indent=2) + "\n")
+    (archive_dir / f"verify-round-{round_number}.json").write_text(json.dumps(merged, indent=2) + "\n",
+                                                                  encoding="utf-8")
+    return merged
 
 
 def autoland(args):
