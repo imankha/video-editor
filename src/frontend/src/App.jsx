@@ -62,6 +62,7 @@ import { setPendingGame, hasPendingProject } from './utils/pendingNavigation';
 import { openEmailGameLink } from './utils/emailGameLink';
 import { markBootstrapSettled, settleBootstrapAfter } from './utils/deepLinkRecovery';
 import { dismissPreloader as dismissPreloaderEl } from './utils/preloader';
+import { pollUntilReady } from './utils/pollUntilReady';
 import './utils/syncCheck'; // T13810: installs window.__syncCheck (read-only consistency checker)
 
 /**
@@ -334,7 +335,8 @@ function App() {
           })
             .then((res) => res.json())
             .then((data) => {
-              useCreditStore.getState().fetchCredits();
+              // T15220: the auto-export below checks the balance, so it waits for this refresh.
+              const creditsRefreshed = Promise.resolve(useCreditStore.getState().fetchCredits()).catch(() => {});
               if (data.status === 'credits_granted' || data.status === 'already_processed') {
                 const credits = data.credits || 0;
                 toast.success(CREDITS.added(credits));
@@ -343,7 +345,16 @@ function App() {
                 // the button that actually mounts in that mode.
                 if (autoExport) {
                   const returnRef = returnMode === EDITOR_MODES.OVERLAY ? overlayExportButtonRef : focusExportButtonRef;
-                  setTimeout(() => returnRef.current?.triggerExport(), 500);
+                  // T15220: a one-shot 500ms timer fired before the editor had loaded the
+                  // project and its clips, so the export was silently dropped. Wait for the
+                  // credit refresh, then until the editor's export handle reports `ready`;
+                  // give up visibly (the credits are granted either way).
+                  creditsRefreshed.then(() => pollUntilReady({
+                    check: () => (returnRef.current?.ready ? returnRef.current : null),
+                    onReady: (handle) => handle.triggerExport(),
+                    onTimeout: () => toast.info(CREDITS.TAP_TO_FINISH),
+                    deadlineMs: 90000,
+                  }));
                 }
               } else {
                 toast.info('Payment is still processing. Your credits will appear shortly.');

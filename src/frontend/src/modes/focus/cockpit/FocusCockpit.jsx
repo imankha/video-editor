@@ -153,9 +153,13 @@ export default function FocusCockpit({
 
   useImperativeHandle(exportButtonRef, () => ({
     triggerExport: () => exportCtrl.handleExportRef.current?.(),
+    // T15220: Framing exports from the saved clips, so the payment-return auto-export
+    // waits until they have loaded.
+    ready: Boolean(hasClips) && !exportCtrl.isButtonDisabled && Boolean(exportCtrl.handleExportRef.current),
     isExporting: exportCtrl.isExporting,
     isCurrentlyExporting: exportCtrl.isCurrentlyExporting,
-  }), [exportCtrl.handleExportRef, exportCtrl.isExporting, exportCtrl.isCurrentlyExporting]);
+  }), [exportCtrl.handleExportRef, exportCtrl.isExporting, exportCtrl.isCurrentlyExporting,
+    exportCtrl.isButtonDisabled, hasClips]);
 
   // Output-aspect moving preview (D-preview / T9950): a re-framing of the SAME
   // player, computed at zoom=1 so the editor's inspection zoom never leaks in.

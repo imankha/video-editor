@@ -1372,6 +1372,9 @@ export const CREDITS = {
   // T14560: the one place "credit" is pluralized.
   count: (n) => `${n} credit${n === 1 ? '' : 's'}`,
   added: (n) => `${CREDITS.count(n)} added to your balance!`,
+  // T15220: shown when the payment-return auto-export gives up waiting for the
+  // editor to load (never a silent no-op). The credits are there; nothing is lost.
+  TAP_TO_FINISH: 'Credits added. Tap Sharpen my highlight to finish.',
   REFUNDED: 'The credits used for this highlight were refunded.',
   billableLine: (exactSeconds, credits) =>
     `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${CREDITS.count(credits)} · ${CREDITS.PER_SECOND_RULE}.`,

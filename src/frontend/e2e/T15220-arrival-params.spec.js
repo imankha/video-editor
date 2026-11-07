@@ -83,6 +83,40 @@ test.describe('T15220 arrival params', () => {
     expect(await page.evaluate(() => sessionStorage.getItem('paymentReturnMode'))).toBeNull();
   });
 
+  test('a Stripe return with paymentAutoExport fires the export once the editor mounts', async ({ page }) => {
+    test.setTimeout(240_000);
+    await loginAsDevPreset(page, 'full');
+    const calls = await countVerifyCalls(page);
+    await page.goto('/home');
+    await page.waitForLoadState('networkidle');
+    const projects = await page.evaluate(async () => (await fetch('/api/projects', { credentials: 'include' })).json());
+    // Avoid a project with has_working_video: true -- opening it makes useProjectLoader
+    // run extractVideoMetadataFromUrl() on the already-exported working video, a real
+    // browser video-element load that can hang for a long time in this sandbox and has
+    // nothing to do with what this test is proving (export fires once mounted).
+    const project = projects.find((p) => !p.has_working_video && p.clip_count > 0) || projects[0];
+    const projectId = project.id;
+    const exportCalls = [];
+    await page.route('**/api/export/render', (route) => {
+      exportCalls.push(route.request().url());
+      return route.fulfill({ json: { export_id: 'exp_t15220_autoexport' } });
+    });
+    await page.evaluate((id) => {
+      sessionStorage.setItem('paymentReturnMode', 'framing');
+      sessionStorage.setItem('paymentReturnProjectId', String(id));
+      sessionStorage.setItem('paymentAutoExport', 'true');
+    }, projectId);
+
+    await page.goto('/?payment=success&session_id=cs_test_t15220_autoexport');
+
+    await expect.poll(() => calls.length, { timeout: 30000 }).toBe(1);
+    await expect.poll(() => new URL(page.url()).pathname, { timeout: 30000 }).toBe(`/focus/p/${projectId}`);
+    // The editor's own bootstrap (project/clips/bootstrap fetches) can itself take tens
+    // of seconds on a loaded dev stack, on top of App's own wait for the ref to mount --
+    // give this comfortably more room than App's internal deadline (90s).
+    await expect.poll(() => exportCalls.length, { timeout: 120000 }).toBeGreaterThan(0);
+  });
+
   test('a cancelled Stripe return clears the address without verifying', async ({ page }) => {
     await loginAsDevPreset(page, 'full');
     const calls = await countVerifyCalls(page);

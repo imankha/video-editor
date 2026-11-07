@@ -94,9 +94,11 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // Expose triggerExport method to parent via ref
   useImperativeHandle(ref, () => ({
     triggerExport: () => handleExportRef?.current?.(),
+    // T15220: the payment-return auto-export waits for this before triggering.
+    ready: !isButtonDisabled && Boolean(handleExportRef?.current),
     isExporting,
     isCurrentlyExporting
-  }), [isExporting, isCurrentlyExporting, handleExportRef]);
+  }), [isExporting, isCurrentlyExporting, handleExportRef, isButtonDisabled]);
 
   // T9270: the export UI is now a full-width ActionBand. The primary CTA is the one
   // saturated element (centered, fixed 56px box — never resizes with the rail). The
