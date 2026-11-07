@@ -72,6 +72,11 @@ export default function FocusCockpit({
   // portrait path (FocusModeView) holds it.
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const boxPrePlaced = focusPointCount > 0;
+  // T14830 (owner ruling 2026-11-07, "Confirm once"): playing the clip with a
+  // pre-placed box counts as "checked" for the pre-spend warning. Derived-in-
+  // render like FocusModeView's `hasPlayed`, never a useEffect.
+  const [hasPlayed, setHasPlayed] = useState(false);
+  if (isPlaying && !hasPlayed) setHasPlayed(true);
   const [isCropDragging, setIsCropDragging] = useState(false);
   const [activeSheet, setActiveSheet] = useState(null); // 'setup' | 'trim' | null
   const [previewing, setPreviewing] = useState(false);
@@ -131,6 +136,12 @@ export default function FocusCockpit({
     isHighlightEnabled: false,
     segmentData: getSegmentExportData?.(),
     disabled: !videoUrl,
+    // T14830: "checked" here means playing with a pre-placed box -- the
+    // cockpit has no separate drag-gesture tracking of its own (unlike
+    // FocusModeView's `hasDragged`); an actual move is already reflected in
+    // the clip's real crop data, which the container's own hasUnframedClips
+    // check covers.
+    boxChecked: boxPrePlaced && hasPlayed,
     includeAudio,
     onIncludeAudioChange,
     onProceedToOverlay,

@@ -1,7 +1,8 @@
 /**
  * Focus guided steps: ONE instruction at a time (drag the box -> play -> keep the
- * box on your player). Trim and SlowMo, Preview highlight and Generate stay locked
- * until the first two steps are done; Trim and SlowMo then swaps the guide.
+ * box on your player). T14830 (owner ruling 2026-11-07, "Confirm once"): Trim and
+ * SlowMo, Preview highlight and Generate are never locked by drag or Play --
+ * guidance is advice only; Trim and SlowMo swaps the guide when pressed.
  *
  * Live-driven on the dev-fixture account (dev-login is dev-only). Each test creates
  * its own unframed draft and deletes it afterwards.
@@ -58,12 +59,12 @@ for (const vp of [{ w: 1280, h: 900 }, { w: 768, h: 1024 }, { w: 390, h: 844 }])
     await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
     await openFreshUnframedDraft(context, page);
 
-    // Step 1: one instruction, box pulses, everything locked.
+    // Step 1: one instruction, box pulses; T14830 -- never locked.
     await expect(page.locator(GUIDE)).toHaveText('Drag your box onto your player.');
     await expect(page.locator('[data-testid="focus-video-stage"] .animate-pulse').first()).toBeVisible();
-    await expect(page.locator(TRIM)).toBeDisabled();
-    await expect(page.locator(PREVIEW)).toBeDisabled();
-    await expect(page.locator(GENERATE).first()).toBeDisabled();
+    await expect(page.locator(TRIM)).toBeEnabled();
+    await expect(page.locator(PREVIEW)).toBeEnabled();
+    await expect(page.locator(GENERATE).first()).toBeEnabled();
     await expect(page.locator('[data-testid="set-focus-point-button"]')).toHaveCount(0);
     await saveEvidence(page, `guided-step1-${vp.w}x${vp.h}`);
 
@@ -72,12 +73,12 @@ for (const vp of [{ w: 1280, h: 900 }, { w: 768, h: 1024 }, { w: 390, h: 844 }])
     // Step 2: play pulses.
     await expect(page.locator(GUIDE)).toHaveText('Play the video.');
     await expect(page.locator('button[title="Play"].animate-pulse')).toBeVisible();
-    await expect(page.locator(TRIM)).toBeDisabled();
+    await expect(page.locator(TRIM)).toBeEnabled();
     await saveEvidence(page, `guided-step2-${vp.w}x${vp.h}`);
 
     await page.locator('button[title="Play"]').click();
 
-    // Step 3: keep the box on the player; all three unlock together.
+    // Step 3: keep the box on the player.
     await expect(page.locator(GUIDE)).toHaveText('Keep the box around your player.');
     await expect(page.locator(TRIM)).toBeEnabled();
     await expect(page.locator(PREVIEW)).toBeEnabled();

@@ -48,7 +48,7 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
   });
 });
 
-describe('FramingActionRow - Trim and SlowMo + locked state', () => {
+describe('FramingActionRow - Trim and SlowMo (T14830: never locked)', () => {
   it('renders Trim and SlowMo only when onToggleTrim is provided', () => {
     const { rerender } = render(<FramingActionRow onTogglePreview={vi.fn()} />);
     expect(screen.queryByTestId('trim-slowmo-button')).toBeNull();
@@ -66,17 +66,14 @@ describe('FramingActionRow - Trim and SlowMo + locked state', () => {
     expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('disables Trim and SlowMo and Preview highlight together while locked', () => {
-    const { rerender } = render(
-      <FramingActionRow locked onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />
-    );
-    expect(screen.getByTestId('trim-slowmo-button').disabled).toBe(true);
-    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(true);
-    expect(screen.getByTestId('trim-slowmo-button').title).toMatch(/finish the steps/i);
-
-    rerender(<FramingActionRow onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />);
+  // T14830 (owner ruling 2026-11-07, "Confirm once"): Trim and SlowMo and
+  // Preview highlight are never disabled -- there is no `locked` prop anymore,
+  // and no "finish the steps" copy regardless of drag/Play state.
+  it('never disables Trim and SlowMo or Preview highlight, with no lock copy', () => {
+    render(<FramingActionRow onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />);
     expect(screen.getByTestId('trim-slowmo-button').disabled).toBe(false);
     expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(false);
+    expect(document.body.textContent).not.toMatch(/finish the steps/i);
   });
 
   it('never renders a Set/Add focus point button', () => {

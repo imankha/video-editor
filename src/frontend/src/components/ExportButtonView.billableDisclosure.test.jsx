@@ -21,7 +21,6 @@ const baseProps = {
   reconnectionFailed: false,
   retrying: false,
   isFramingMode: true,
-  hasUnframedClips: false,
   isButtonDisabled: false,
   buttonTitle: undefined,
   includeAudio: true,

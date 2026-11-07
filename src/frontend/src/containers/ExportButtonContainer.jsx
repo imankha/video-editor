@@ -7,7 +7,7 @@ import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { SECTION_NAMES, EXPORT_PROGRESS, FOCUS_HINTS, FRAME_COPY, CREDITS, ERROR_COPY } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_PROGRESS, FRAME_COPY, CREDITS, ERROR_COPY } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
@@ -100,6 +100,11 @@ export function ExportButtonContainer({
   isExternallyExporting: isExternallyExportingProp,
   externalProgress: externalProgressProp,
   saveCurrentClipState = null,
+  // T14830 (owner ruling 2026-11-07, "Confirm once"): whether the parent has
+  // already "checked" the box this session -- moved it, or played the clip
+  // with a box that was already pre-placed. Framing's FocusModeView/FocusCockpit
+  // pass their own `dragDone` here; Overlay never sets it (inert there).
+  boxChecked = false,
 }) {
   // Get app state from context (provides defaults for props above)
   const {
@@ -179,6 +184,8 @@ export function ExportButtonContainer({
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(null);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  // T14830: the "Is your athlete in the box?" pre-spend warning.
+  const [showBoxConfirm, setShowBoxConfirm] = useState(false);
 
   // Refs for tracking export state
   const exportIdRef = useRef(null);
@@ -1004,31 +1011,33 @@ export function ExportButtonContainer({
 
   // T740: Extraction check removed — framing reads game video directly
 
-  // Check whether the one clip has been worked on (no crop or meaningful
-  // segment edits). T11240 naming trap: the old `isMultiClipMode` was true for
-  // every single clip too — `!clipIsFramed(clips[0])` is the REAL single-clip
-  // unframed gate (T8510), preserved verbatim here.
+  // Check whether any clip has been worked on (no crop or meaningful segment
+  // edits). T11240: a project is exactly one clip today, but a multi-clip
+  // highlight checks every clip it carries — `.some()` so this stays correct
+  // if that ever changes. Purely a PERSISTED-data signal (does not know about
+  // this session's Play taps); `boxChecked` below covers that exception.
   const hasUnframedClips = clips?.length > 0
-    ? !clipIsFramed(clips[0])
+    ? clips.some((clip) => !clipIsFramed(clip))
     : (!cropKeyframes || cropKeyframes.length === 0);
 
   // Button disabled state
-  // T8510: reverses T3700 P0, Option A (any unframed clip blocks). The 2026-09-02
-  // walkthrough showed a zero-effort export burning credits on a centered default
-  // crop indistinguishable from the raw clip, so unframed clips hard-block again.
-  // Focus mode only; Overlay export is unaffected. The server-side
-  // centered-default-crop path stays for policy-B-eligible multi-clip cases.
+  // T14830 (owner ruling 2026-11-07, "Confirm once"): Generate/Trim/Preview are
+  // never locked by drag or Play — only a missing video blocks them. An
+  // unchecked box shows a one-time warning on click instead (see
+  // needsBoxConfirm below), never a disabled button.
   const isButtonDisabled = disabled ||
     isCurrentlyExporting ||
-    (!videoFile && !projectId) ||
-    (isFramingMode && hasUnframedClips);
+    (!videoFile && !projectId);
+
+  // Whether pressing Generate should show the "Is your athlete in the box?"
+  // warning before spending credits: Framing only, at least one clip never
+  // checked (moved, or played while pre-placed) this session.
+  const needsBoxConfirm = isFramingMode && hasUnframedClips && !boxChecked;
 
   // Button title/tooltip
   const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
     ? FRAME_COPY.EDITS_NOT_THROUGH
-    : (isFramingMode && hasUnframedClips
-      ? FOCUS_HINTS.GENERATE_LOCKED
-      : undefined);
+    : undefined;
 
   return {
     // State
@@ -1051,8 +1060,22 @@ export function ExportButtonContainer({
     isButtonDisabled,
     buttonTitle,
 
+    // T14830: "Is your athlete in the box?" pre-spend warning.
+    showBoxConfirm,
+    onBoxConfirmCheck: () => setShowBoxConfirm(false),
+    onBoxConfirmContinue: () => {
+      setShowBoxConfirm(false);
+      handleExport();
+    },
+
     // Handlers
-    handleExport: () => requireAuth(() => handleExport()),
+    handleExport: () => requireAuth(() => {
+      if (needsBoxConfirm) {
+        setShowBoxConfirm(true);
+        return;
+      }
+      handleExport();
+    }),
     handleRetryConnection,
     handleDismissExport,
     handleAudioToggle,

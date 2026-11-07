@@ -28,7 +28,6 @@ import FramingGuide from './focus/FramingGuide';
 import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
-import { FRAMING_GUIDE } from '../components/instructions/catalog';
 import { useExportJobStatus } from '../components/instructions/exportJob';
 
 // T14850: below ~850px of viewport height at desktop widths, the 22rem header/timeline
@@ -81,8 +80,9 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   cropKeyframes,
   segmentData,
   disabled,
-  // Guided framing steps not finished: explain the lock in the button tooltip.
-  guideLocked = false,
+  // T14830: whether the parent has "checked" the box this session (moved it,
+  // or played the clip with a box that was already pre-placed).
+  boxChecked = false,
   includeAudio,
   onIncludeAudioChange,
   onProceedToOverlay,
@@ -108,6 +108,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
     isHighlightEnabled: false,
     segmentData,
     disabled,
+    boxChecked,
     includeAudio,
     onIncludeAudioChange,
     onProceedToOverlay,
@@ -135,7 +136,9 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         retrying={container.retrying}
         isFramingMode={container.isFramingMode}
         isDarkOverlay={container.isDarkOverlay}
-        hasUnframedClips={container.hasUnframedClips}
+        showBoxConfirm={container.showBoxConfirm}
+        onBoxConfirmCheck={container.onBoxConfirmCheck}
+        onBoxConfirmContinue={container.onBoxConfirmContinue}
         framingCtaMode={framingCtaMode}
         showBackToPreview={showBackToPreview}
         onBackToPreview={onBackToPreview}
@@ -143,7 +146,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         backToPreviewLoading={backToPreviewLoading}
         actionsAbove={actionsAbove}
         isButtonDisabled={container.isButtonDisabled}
-        buttonTitle={container.buttonTitle ?? (guideLocked ? FRAMING_GUIDE.LOCKED_TITLE : undefined)}
+        buttonTitle={container.buttonTitle}
         isHighlightEnabled={false}
         highlightEffectType={null}
         onExport={container.handleExport}
@@ -373,11 +376,13 @@ export function FocusModeView({
   // `boxPrePlaced`), and completes on a drag OR on playing -- tapping Play is itself
   // confirmation the already-placed box looked right.
   const boxPrePlaced = focusPointCount > 0;
+  // T14830 (owner ruling 2026-11-07, "Confirm once"): `dragDone` is the box's
+  // "checked" state -- moved, or played while pre-placed -- passed to
+  // ExportButtonSection as `boxChecked`. It gates the one-time pre-spend
+  // warning on an unchecked box, never a disabled button. `stepsComplete`
+  // stays drag-AND-played -- it only gates the LATER coach steps (keep-the-box
+  // onward), where having actually watched the clip play matters.
   const dragDone = hasDragged || (boxPrePlaced && hasPlayed);
-  // T14830: `dragDone` alone unlocks Generate/Trim/Preview (ruling F1 kept: drag
-  // gate only, the 2026-10-06 Play gate is removed). `stepsComplete` stays
-  // drag-AND-played -- it only gates the LATER coach steps (keep-the-box onward),
-  // where having actually watched the clip play matters.
   const stepsComplete = dragDone && hasPlayed;
   // T14770: step 1 of 6 -- "Where will you share it?" (design decision 1, Option
   // C). Done once the parent taps a shape this session, OR the box already has
@@ -1154,12 +1159,12 @@ export function FocusModeView({
             videoFile={videoFile}
             cropKeyframes={getFilteredKeyframesForExport}
             segmentData={getSegmentExportData()}
-            // T14830: Generate unlocks on the drag alone -- pressing Play is coach
-            // advice (step 2 of 6), never a lock. `stepsComplete` (drag AND played)
-            // still gates the LATER coach steps (keep-the-box, Trim/SlowMo, Preview)
-            // below; it is deliberately not used here.
-            disabled={!videoUrl || !dragDone}
-            guideLocked={!!videoUrl && !dragDone}
+            // T14830 (owner ruling 2026-11-07, "Confirm once"): only a missing
+            // video blocks Generate/Trim/Preview -- drag and Play are never a
+            // lock. `boxChecked` (dragDone) instead gates the one-time
+            // pre-spend warning the container shows on an unchecked box.
+            disabled={!videoUrl}
+            boxChecked={dragDone}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
@@ -1173,9 +1178,9 @@ export function FocusModeView({
             renderedAt={renderedAt}
             backToPreviewLoading={backToPreviewLoading}
             // [Trim and SlowMo] + [Preview highlight] sit in the band directly above
-            // Generate (same row-above-CTA shape as Annotate). Locked together with
-            // Generate until the box is dragged (T14830). Trim and SlowMo toggles
-            // the timeline's segment/speed/trim track (advancedOpen).
+            // Generate (same row-above-CTA shape as Annotate). Never locked
+            // (T14830, owner ruling 2026-11-07). Trim and SlowMo toggles the
+            // timeline's segment/speed/trim track (advancedOpen).
             actionsAbove={
               <FramingActionRow
                 inline
@@ -1183,7 +1188,6 @@ export function FocusModeView({
                 onTogglePreview={handleTogglePreview}
                 onToggleTrim={handleToggleTrim}
                 trimOpen={advancedOpen}
-                locked={!dragDone}
               />
             }
           />

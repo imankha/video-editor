@@ -31,7 +31,7 @@ const viewProps = {
   isCurrentlyExporting: false, isExporting: false, isExternallyExporting: false,
   displayProgress: 0, displayMessage: '', error: null, failedExport: null,
   disconnected: false, reconnectionFailed: false, retrying: false, isFramingMode: true,
-  hasUnframedClips: false, isButtonDisabled: false, buttonTitle: undefined, includeAudio: true,
+  isButtonDisabled: false, buttonTitle: undefined, includeAudio: true,
   onExport: vi.fn(), onRetryConnection: vi.fn(), onDismissExport: vi.fn(), onAudioToggle: vi.fn(),
   EXPORT_CONFIG: { targetFps: 30 }, showInsufficientCredits: null,
   onCloseInsufficientCredits: vi.fn(), showBuyCredits: false, onOpenBuyCredits: vi.fn(),

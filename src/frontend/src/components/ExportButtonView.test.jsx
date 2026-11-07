@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import ExportButtonView from './ExportButtonView';
 import { GuideScope } from './instructions/GuideScope';
@@ -24,7 +24,6 @@ const baseProps = {
   reconnectionFailed: false,
   retrying: false,
   isFramingMode: true,
-  hasUnframedClips: false,
   isButtonDisabled: false,
   buttonTitle: undefined,
   includeAudio: true,
@@ -93,66 +92,50 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
   });
 });
 
-describe('ExportButtonView — T8510 unframed-clip export guard (Option A, reverses T3700 P0)', () => {
-  it('(a) Focus + zero keyframes: button disabled and reason caption rendered under it', () => {
+describe('ExportButtonView — T14830 (owner ruling 2026-11-07, "Confirm once"): never locked by drag', () => {
+  it('Focus + zero keyframes: button is still enabled, no lock caption, no compact locked band', () => {
     render(<ExportButtonView {...baseProps}
-      hasUnframedClips={true} isButtonDisabled={true}
+      isButtonDisabled={false}
       estimatedCredits={12} creditBalance={42} />);
     const btn = screen.getByRole('button', { name: /Sharpen my highlight/ });
-    expect(btn.disabled).toBe(true);
-    const caption = screen.getByTestId('export-unframed-caption');
-    expect(caption.textContent).toContain('Drag the box onto your athlete to unlock');
-    expect(caption.className).toContain('text-amber-400');
-    // T9270: the disabled reason (LEFT status cell) and the credit estimate (RIGHT
-    // cost cell) are now separate ActionBand cells — the reason no longer carries
-    // the credit suffix; the estimate renders in its own line.
+    expect(btn.disabled).toBe(false);
+    expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
+    expect(screen.queryByTestId('action-band-compact')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/drag the box/i);
     expect(screen.getByTestId('export-credit-estimate').textContent).toContain('~12 credits');
   });
 
-  it('(b) framed clip: button enabled, no caption', () => {
+  it('Overlay mode unaffected: no caption, button stays enabled', () => {
     render(<ExportButtonView {...baseProps}
-      hasUnframedClips={false} isButtonDisabled={false}
-      estimatedCredits={9} creditBalance={42} />);
-    expect(screen.getByRole('button', { name: /Sharpen my highlight/ }).disabled).toBe(false);
-    expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
-  });
-
-
-  it('(d) Overlay mode unaffected: no caption, button stays enabled', () => {
-    render(<ExportButtonView {...baseProps}
-      isFramingMode={false} hasUnframedClips={true} isButtonDisabled={false} />);
+      isFramingMode={false} isButtonDisabled={false} />);
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
     expect(screen.getByRole('button', { name: 'Add spotlight to highlight' }).disabled).toBe(false);
   });
 
-  it('caption is hidden while an export is in progress', () => {
-    render(<ExportButtonView {...baseProps}
-      hasUnframedClips={true} isButtonDisabled={true} isCurrentlyExporting={true} />);
-    expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
+  it('shows the "Is your athlete in the box?" confirm dialog when showBoxConfirm is true', () => {
+    render(<ExportButtonView {...baseProps} showBoxConfirm onBoxConfirmCheck={vi.fn()} onBoxConfirmContinue={vi.fn()} />);
+    const panel = screen.getByTestId('focus-box-confirm');
+    expect(panel.textContent).toMatch(/Is your athlete in the box\?/);
+    expect(panel.textContent).toMatch(/Sharpening uses credits/);
+    expect(within(panel).getByRole('button', { name: 'Check the box' })).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Sharpen my highlight' })).toBeTruthy();
   });
 
-  it('T11720: Focus + unframed drives the compact locked band (phone-only row)', () => {
-    render(<ExportButtonView {...baseProps} hasUnframedClips={true} isButtonDisabled={true} />);
-    expect(screen.getByTestId('action-band-compact').textContent)
-      .toMatch(/Drag the box to unlock/);
+  it('"Check the box" calls onBoxConfirmCheck; "Sharpen my highlight" calls onBoxConfirmContinue', () => {
+    const onCheck = vi.fn();
+    const onContinue = vi.fn();
+    render(<ExportButtonView {...baseProps} showBoxConfirm onBoxConfirmCheck={onCheck} onBoxConfirmContinue={onContinue} />);
+    const panel = screen.getByTestId('focus-box-confirm');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Check the box' }));
+    expect(onCheck).toHaveBeenCalledTimes(1);
+    expect(onContinue).not.toHaveBeenCalled();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Sharpen my highlight' }));
+    expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
-  it('T11720: framed Focus clip does NOT get the compact locked band', () => {
-    render(<ExportButtonView {...baseProps} hasUnframedClips={false} isButtonDisabled={false} />);
-    expect(screen.queryByTestId('action-band-compact')).toBeNull();
-  });
-
-  it('T11720: Overlay mode never gets the compact locked band', () => {
-    render(<ExportButtonView {...baseProps} isFramingMode={false} hasUnframedClips={true} />);
-    expect(screen.queryByTestId('action-band-compact')).toBeNull();
-  });
-
-  it('caption omits the credit suffix when the estimate is unknown (no fabricated number)', () => {
-    render(<ExportButtonView {...baseProps}
-      hasUnframedClips={true} isButtonDisabled={true} estimatedCredits={null} />);
-    const caption = screen.getByTestId('export-unframed-caption');
-    expect(caption.textContent).toContain('Drag the box onto your athlete to unlock');
-    expect(caption.textContent).not.toContain('credit');
+  it('does not render the confirm dialog when showBoxConfirm is false', () => {
+    render(<ExportButtonView {...baseProps} showBoxConfirm={false} />);
+    expect(screen.queryByTestId('focus-box-confirm')).toBeNull();
   });
 });
 
