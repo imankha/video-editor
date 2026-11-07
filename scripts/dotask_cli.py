@@ -605,7 +605,7 @@ Write /workspace/.dotask-verify.json, exactly:
 A bug's scope is `group` if this branch caused it and `unrelated` if master has it too: check before deciding.
 Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
 FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json: every criterion with status `fail` and every bug with scope `group`. Ignore everything else in that file. All tasks already have commits, so do not start a new one.
-Fix each finding at its root, failing test first, and run the relevant tests and lint. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md.
+Fix each finding at its root, failing test first, and run the relevant tests and lint. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
 A finding you believe is wrong: do not work around it. Append `BLOCKED <finding and why>` and stop.
 Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> fix round {round}` to /workspace/.dotask-status and stop."""
 

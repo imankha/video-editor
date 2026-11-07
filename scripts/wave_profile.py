@@ -57,7 +57,11 @@ HEADLESS_RUN_NOTE = (
     "the stage's last action, not as a separate call. Never spawn an agent and never end your turn "
     "waiting for one: agents run asynchronously here, and ending the turn ends the dispatch and kills "
     "them. When the rules call for the expert, run it in the foreground instead, with a long Bash "
-    "timeout: `claude -p --model opus \"<knowledge doc names and a precise question>\"`."
+    "timeout: `claude -p --model opus \"<question>\"`. Paste the code excerpts into the question and tell it not "
+    "to use tools: left to explore, it ran past the 10-minute limit twice. Read its answer before "
+    "deciding; never report it as unavailable. A dispatch has a turn limit and can stop mid-task, so "
+    "keep a `## T<id> progress` checklist of the acceptance criteria in .dotask-notes.md and update it "
+    "as each one is done: the next worker starts from it instead of re-reading the diff."
 )
 CHECKPOINTS = {
     "design": "Perform design/root-cause only. Write a reusable specification under docs/ and append "

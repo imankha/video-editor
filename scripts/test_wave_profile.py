@@ -613,6 +613,7 @@ class HeadlessNoteTest(unittest.TestCase):
         for phase, text in wave_profile.CHECKPOINTS.items():
             self.assertIn("Never spawn an agent", text, phase)
             self.assertIn("claude -p --model opus", text, phase)
+            self.assertIn("progress` checklist", text, phase)
 
 
 if __name__ == "__main__":
