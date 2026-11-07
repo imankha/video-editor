@@ -21,7 +21,7 @@ import { PlaysOnlyPanel } from '../components/PlaysOnlyPanel';
 import { UploadPreviewNotice } from '../components/UploadPreviewNotice';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
-import { HighlightOrientationSlots } from './annotate/components/HighlightOrientationSlots';
+import { HighlightEntry, HighlightList } from './annotate/components/HighlightOrientationSlots';
 import { useCurrentProfile, useProfileStore, useProjectsList, useProjectsStore } from '../stores';
 import { useExportStore } from '../stores/exportStore';
 import PlaybackControls from './annotate/components/PlaybackControls';
@@ -279,6 +279,11 @@ export function AnnotateModeView({
   const regionStages = selectedRegion
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
+  // T14770: the one portrait instance resolveGuide tracks (catalog.annotateFacts);
+  // the row the guide pulses when its anchor is overridden onto a specific row.
+  const portraitHighlightInstance = regionStages?.instances?.find(
+    (i) => i.orientation === 'portrait' && i.projectId != null
+  ) ?? null;
   const guide = holdGuide ? null : resolveGuide(annotateFacts(selectedRegion, regionStages?.instances, {
     isPlaying: !!(playback?.isPlaybackMode ? playback.isPlaying : isPlaying),
     playCount: clipRegions?.length ?? 0,
@@ -1337,34 +1342,38 @@ export function AnnotateModeView({
                   about the create decision. Creating a new play keeps the
                   single full-width CTA. */}
               {isEditMode ? (
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {/* T11130: the T10450 Frame Now / Frame Later create row is
-                      removed. T11840: the single stage CTA above is ungated by
-                      rating; it creates the highlight for a play that has none
-                      and opens it for a play that does (H8). */}
-                  {/* T11910: ONE highlight surface in every state. Two permanent
-                      Portrait/Landscape slots (equal weight, no default) replace the
-                      legacy single stage CTA, the instance list and "Make Another
-                      Highlight", so the screen renders identically right after
-                      creating a highlight and after a reload. Instances come from
-                      server-synced region.highlightInstances. */}
+                <div className="space-y-3">
+                  {/* T14770 (decision C, 2026-11-03): Edit play is the first action
+                      (secondary row card); Make highlight is the one primary card
+                      -- the shape is picked in Frame, not here. Desktop (lg,
+                      1280px): Edit play in the first column, Make highlight
+                      across the other two. */}
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <ActionCard icon={Pencil} title={ANNOTATE.EDIT_PLAY}
+                      description={ANNOTATE.EDIT_PLAY_CARD}
+                      tooltip={isSourceExpired ? ANNOTATE.SOURCE_EXPIRED_CANT_MARK : 'Edit the selected play'}
+                      onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly}
+                      data-testid="annotate-primary-cta" />
+                    {selectedRegion && regionStages && (
+                      <div className="lg:col-span-2">
+                        <HighlightEntry
+                          pending={frameClipPending}
+                          locked={isGameUploading}
+                          onMake={handleMakeHighlight}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {/* "Highlights from this play" -- a play can get several highlights of
+                      each shape (decision C accepted cost); each row opens where it left
+                      off. Full width; its own rows go two-up from lg (design decision). */}
                   {selectedRegion && regionStages && (
-                    <HighlightOrientationSlots
+                    <HighlightList
                       instances={regionStages.instances.filter((i) => i.projectId != null)}
-                      pending={frameClipPending}
-                      locked={isGameUploading}
-                      onMake={handleMakeHighlight}
                       onOpen={handleOpenInstance}
-                      inline
+                      highlightedProjectId={guide?.pulse === GUIDE_PULSE.HIGHLIGHT_ROW ? portraitHighlightInstance?.projectId : null}
                     />
                   )}
-                  {/* T12040: the two highlight slots are the main action (a choice pair of
-                      equal primary-weight cards), so Edit play follows them as a secondary. */}
-                  <ActionCard icon={Pencil} title={ANNOTATE.EDIT_PLAY}
-                    description="Adjust the timing, rating, and tags for this play."
-                    tooltip={isSourceExpired ? ANNOTATE.SOURCE_EXPIRED_CANT_MARK : 'Edit the selected play'}
-                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly}
-                    data-testid="annotate-primary-cta" />
                 </div>
               ) : (
                 <div className={`grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3 ${SHORT_DESKTOP_TILES_CLASS}`}>

@@ -6,11 +6,11 @@ import { GUIDE_PULSE as P } from './guideTargets';
 // hand from the per-screen code (Annotate/Home/Overlay compared pulse strings; Focus derived the
 // control from the step number). Every rule not listed pulsed nothing.
 const TODAYS_TARGETS = {
-  'annotate.progress.brilliant': P.PORTRAIT_SLOT,
-  'annotate.progress.spotlight': P.PORTRAIT_SLOT,
-  'annotate.progress.preview': P.PORTRAIT_SLOT,
-  'annotate.progress.published': P.PORTRAIT_SLOT,
-  'annotate.progress.portrait': P.PORTRAIT_SLOT,
+  'annotate.progress.brilliant': P.MAKE_HIGHLIGHT,
+  'annotate.progress.spotlight': P.HIGHLIGHT_ROW,
+  'annotate.progress.preview': P.HIGHLIGHT_ROW,
+  'annotate.progress.published': P.HIGHLIGHT_ROW,
+  'annotate.progress.portrait': P.HIGHLIGHT_ROW,
   'annotate.watch.playing': P.MARK_PLAY,
   'annotate.progress.watch': [P.ANNOTATE_PLAY, P.MARK_PLAY],
   'home.games.empty': P.UPLOAD_GAME,
@@ -20,13 +20,15 @@ const TODAYS_TARGETS = {
   'home.games.finished': P.TAB_PUBLISHED,
   'home.games.keep-reviewing': P.FIRST_GAME,
   'home.games.all-done': P.UPLOAD_GAME,
-  'focus.progress.drag': P.CROP_BOX, // step 1
+  'focus.progress.shareWhere': P.FRAME_SHAPE_CHOICE, // step 1 (T14770)
+  'focus.cockpit.shareWhere': P.FRAME_SHAPE_CHOICE, // step 1 (T14770)
+  'focus.progress.drag': P.CROP_BOX, // step 2
   'focus.cockpit.drag': P.CROP_BOX, // T12770: landscape cockpit
-  'focus.progress.play': P.PLAY, // step 2
-  'focus.progress.keep': P.CROP_BOX, // step 3
-  'focus.progress.preview': P.PREVIEW, // step 4
-  'focus.progress.generate': P.EXPORT, // step 5
-  'focus.progress.generate.advanced': P.EXPORT, // step 5
+  'focus.progress.play': P.PLAY, // step 3
+  'focus.progress.keep': P.CROP_BOX, // step 4
+  'focus.progress.preview': P.PREVIEW, // step 5
+  'focus.progress.generate': P.EXPORT, // step 6
+  'focus.progress.generate.advanced': P.EXPORT, // step 6
   'focus.credits': P.EXPORT, // pulse === 'credits'
   'focus.progress.trimSplit': P.TRIM_TRACK,
   'focus.progress.trimAdjust': P.TRIM_ADJUST,
@@ -36,7 +38,9 @@ const TODAYS_TARGETS = {
   'annotate.choice': P.CHOICE_NOW,
   'annotate.editor': P.PLAY_EDITOR_DONE,
   'annotate.review': P.SHARE_PLAYS,
-  'annotate.selected.none': P.HIGHLIGHT_SLOT,
+  'annotate.selected.none': P.MAKE_HIGHLIGHT,
+  'annotate.has-highlights.one': P.MAKE_HIGHLIGHT,
+  'annotate.has-highlights.many': P.MAKE_HIGHLIGHT,
   'annotate.has-plays.many': P.FIRST_PLAY,
   'annotate.has-plays.one': P.FIRST_PLAY,
   'annotate.uploading.has-plays': P.MARK_PLAY,

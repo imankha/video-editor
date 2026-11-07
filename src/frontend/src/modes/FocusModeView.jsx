@@ -19,6 +19,7 @@ import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/Ex
 import { Button } from '../components/shared';
 import SettingsRail from '../components/settings/SettingsRail';
 import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
+import FrameShapeChoice from './focus/FrameShapeChoice';
 import { CropOverlay } from './focus';
 import { FocusTimelineBlock } from './focus/FocusTimelineBlock';
 import RotateNudge from './focus/RotateNudge';
@@ -363,6 +364,12 @@ export function FocusModeView({
   const boxPrePlaced = focusPointCount > 0;
   const dragDone = hasDragged || (boxPrePlaced && hasPlayed);
   const stepsComplete = dragDone && hasPlayed;
+  // T14770: step 1 of 6 -- "Where will you share it?" (design decision 1, Option
+  // C). Done once the parent taps a shape this session, OR the box already has
+  // positions (the shape was already settled in an earlier session).
+  const [shapeTapped, setShapeTapped] = useState(false);
+  const shapeChosen = shapeTapped || hasDragged || boxPrePlaced;
+  const handleShapeChosen = useCallback(() => setShapeTapped(true), []);
   // Step 3 -> 4: once the first play has started, reaching the clip end while
   // playing counts as one full play-through (playback loops, so the time wraps
   // right after). Derived-in-render like hasPlayed; never a useEffect, never
@@ -436,7 +443,7 @@ export function FocusModeView({
     progress: { finishedCount },
     job: { status: jobStatus === 'none' && needCredits ? 'credits' : jobStatus },
     local: {
-      dragDone, boxPrePlaced, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
+      shapeChosen, dragDone, boxPrePlaced, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
       rendered: framingCtaMode === 'preview',
       // T12790: a failed load and fullscreen each get their own sentence instead of silence.
@@ -744,7 +751,7 @@ export function FocusModeView({
         {/* Guided framing: one floating instruction near the current action. */}
         {(videoUrl || error) && !isFullscreen && !mobileFs && guide && (
           <Guide guide={guide}>
-            <FramingGuide step={guide.step} text={guide.message.title} compact={guide.compact} />
+            <FramingGuide step={guide.step} total={6} text={guide.message.title} compact={guide.compact} />
           </Guide>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
@@ -758,6 +765,20 @@ export function FocusModeView({
           {(isFullscreen || mobileFs) && (
             <div className="pointer-events-none absolute inset-x-14 top-2 z-30 flex justify-center sm:inset-x-16 sm:top-4">
               <CompactGuide guide={guide} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
+            </div>
+          )}
+          {/* T14770: "Where will you share it?" (design decision 1, Option C) —
+              prominent above the video while the highlight has no box positions
+              yet, then a small chip once the first position is placed. Not shown
+              fullscreen (no room, same as CompactGuide above). */}
+          {!isFullscreen && !mobileFs && (
+            <div className="mb-2">
+              <FrameShapeChoice
+                aspectRatio={globalAspectRatio}
+                hasPositions={boxPrePlaced}
+                onChange={onAspectRatioChange}
+                onChosen={handleShapeChosen}
+              />
             </div>
           )}
           {/* Video Player with CropOverlay. 2026-09-18 (user request): the

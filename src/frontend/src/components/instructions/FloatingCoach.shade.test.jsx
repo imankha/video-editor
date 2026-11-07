@@ -256,12 +256,12 @@ describe('T12580: rules', () => {
     const f = (screen, local, job) => resolveGuide({ screen, local, job, progress: {} });
     expect(f('annotate', {}).keepClear.length).toBeGreaterThan(0);
     expect(f('annotate', { isPlaying: true }).keepClear.length).toBeGreaterThan(0);
-    expect(f('focus', { dragDone: true, hasPlayed: false }).keepClear.length).toBeGreaterThan(0);
-    expect(f('focus', { dragDone: true, hasPlayed: true, hasPlayedThrough: true, previewing: true, hasPreviewPlayedThrough: false }).keepClear.length).toBeGreaterThan(0);
+    expect(f('focus', { shapeChosen: true, dragDone: true, hasPlayed: false }).keepClear.length).toBeGreaterThan(0);
+    expect(f('focus', { shapeChosen: true, dragDone: true, hasPlayed: true, hasPlayedThrough: true, previewing: true, hasPreviewPlayedThrough: false }).keepClear.length).toBeGreaterThan(0);
     expect(f('focus', { dragDone: false }).keepClear).toEqual([]);
   });
   it('T12630: the Play step cuts out the Play button and keeps the coach off it', () => {
-    const g = resolveGuide({ screen: 'focus', local: { dragDone: true, hasPlayed: false }, progress: {} });
+    const g = resolveGuide({ screen: 'focus', local: { shapeChosen: true, dragDone: true, hasPlayed: false }, progress: {} });
     expect(g.keepClear).toContain('[data-testid="play-button"]');
     expect(g.avoid).toContain('[data-testid="play-button"]');
   });

@@ -182,14 +182,6 @@ export function isFramingExportInProgress(activeExports, projectId) {
 export function getClipStages(region, instances, { activeExports } = {}) {
   const list = instances || [];
 
-  // Count real instances per orientation for ordinal-suffix + synthesized
-  // counterpart logic.
-  const orientationCounts = { [ORIENTATION.PORTRAIT]: 0, [ORIENTATION.LANDSCAPE]: 0 };
-  for (const instance of list) {
-    const orientation = deriveOrientation(instance.aspectRatio);
-    if (orientation) orientationCounts[orientation] += 1;
-  }
-
   const resultInstances = list.map((instance) => {
     const orientation = deriveOrientation(instance.aspectRatio);
 
@@ -220,6 +212,19 @@ export function getClipStages(region, instances, { activeExports } = {}) {
     // reads Not started, not a fabricated In progress.
     const framingInProgress = isFramingExportInProgress(activeExports, instance.projectId);
     const core = getClipStage(instanceRegion, linkedProjectShape, { framingInProgress });
+
+    // T14770: the per-instance T8070 staleness check, surfaced directly (not just
+    // used to demote the stage) — a play whose timing changed after this
+    // highlight was framed reads "Continue highlight" / "Play timing changed"
+    // instead of looking identical to a highlight nobody has touched yet.
+    // Never true for a finished/published highlight (those freeze, T11430).
+    const instanceReflectsClip =
+      instanceRegion.reelSourceStartTime != null &&
+      instanceRegion.reelSourceEndTime != null &&
+      instanceRegion.startTime === instanceRegion.reelSourceStartTime &&
+      instanceRegion.endTime === instanceRegion.reelSourceEndTime;
+    const stale = !!instance.hasFramingPoints && !instanceReflectsClip &&
+      core.stage !== CLIP_STAGE.FINAL && core.stage !== CLIP_STAGE.PUBLISHED;
 
     const ordinal = instance.highlightOrdinal;
     const ordinalSuffix = ordinal != null && ordinal >= 2 ? ` ${ordinal}` : '';
@@ -259,37 +264,11 @@ export function getClipStages(region, instances, { activeExports } = {}) {
       ordinal: ordinal ?? null,
       aspectRatio: instance.aspectRatio,
       archivedAt: instance.archivedAt,
+      stale,
     };
   });
 
   const hasAnyPublished = list.some((instance) => instance.isPublished);
-
-  // T11430 §4.6: synthesize a not-started counterpart for the missing
-  // orientation when it has zero instances and the opposite orientation has
-  // a published instance.
-  const counterparts = [
-    [ORIENTATION.PORTRAIT, ORIENTATION.LANDSCAPE],
-    [ORIENTATION.LANDSCAPE, ORIENTATION.PORTRAIT],
-  ];
-  for (const [present, missing] of counterparts) {
-    const presentHasPublished = list.some(
-      (instance) => deriveOrientation(instance.aspectRatio) === present && instance.isPublished
-    );
-    if (presentHasPublished && orientationCounts[missing] === 0) {
-      resultInstances.push({
-        stage: CLIP_STAGE.NO_PROJECT,
-        status: `${ORIENTATION_LABEL[missing]} Video ${HIGHLIGHT_STATUS.NOT_STARTED}`,
-        label: ANNOTATE.FRAME_THIS_CLIP,
-        action: 'focus-new',
-        projectId: null,
-        orientation: missing,
-        ordinal: null,
-        aspectRatio: null,
-        archivedAt: null,
-        synthesizedOrientation: missing,
-      });
-    }
-  }
 
   const primaryCta = {
     label: list.length === 0 ? ANNOTATE.FRAME_THIS_CLIP : ANNOTATE.MAKE_ANOTHER_HIGHLIGHT,

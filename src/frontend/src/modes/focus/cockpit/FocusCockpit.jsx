@@ -16,6 +16,7 @@ import ActionRail from './ActionRail';
 import CockpitTimelineStrip from './CockpitTimelineStrip';
 import CockpitSheet from './CockpitSheet';
 import CockpitIntroCard, { useCockpitIntroSeen } from './CockpitIntroCard';
+import FrameShapeChoice from '../FrameShapeChoice';
 
 const BuyCreditsModal = lazy(() =>
   import('../../../components/BuyCreditsModal').then((m) => ({ default: m.BuyCreditsModal })));
@@ -75,13 +76,18 @@ export default function FocusCockpit({
   const [previewing, setPreviewing] = useState(false);
   // T12790: memory-only; the first Preview tap moves the guide on to Generate.
   const [hasPreviewed, setHasPreviewed] = useState(false);
+  // T14770: step 1 of 6 -- "Where will you share it?", same completion rule as
+  // the portrait layout (FocusModeView): a tap this session, or positions
+  // already exist (the shape was settled in an earlier session).
+  const [shapeTapped, setShapeTapped] = useState(false);
+  const handleShapeChosen = useCallback(() => setShapeTapped(true), []);
   // T12770: the crop-box cue follows Guidance like every pulse. T12790: the cockpit walks the portrait steps
   // with its own controls, and the sentence shows in a compact strip (CompactGuide) instead of a floating card.
   const guide = resolveGuide({
     screen: 'focus',
     job: { status: jobStatus },
     local: {
-      cockpit: true, dragDone: focusPointCount > 0, previewing, hasPreviewed,
+      cockpit: true, shapeChosen: shapeTapped || focusPointCount > 0, dragDone: focusPointCount > 0, previewing, hasPreviewed,
       rendered: framingCtaMode === 'preview',
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
       videoError: !!error, canRetryVideo: !!error && !!onRetryVideo && isUrlExpiredError?.(),
@@ -276,6 +282,20 @@ export default function FocusCockpit({
           {outputLabel && (
             <div className="pointer-events-none absolute right-2 top-2 rounded bg-black/65 px-2 py-1 text-xs text-gray-200">
               {outputLabel}
+            </div>
+          )}
+
+          {/* T14770: "Where will you share it?" (step 1 of 6), same component as
+              the portrait layout. Top-center, below the passive chips. */}
+          {introSeen && (
+            <div className="absolute inset-x-2 top-10 z-20 flex justify-center">
+              <FrameShapeChoice
+                aspectRatio={globalAspectRatio}
+                hasPositions={focusPointCount > 0}
+                onChange={onAspectRatioChange}
+                onChosen={handleShapeChosen}
+                compact
+              />
             </div>
           )}
 

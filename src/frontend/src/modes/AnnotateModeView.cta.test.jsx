@@ -121,20 +121,23 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(other.className).not.toMatch(/\bbg-cyan-500\b/);
   });
 
-  it('selected play: the two highlight slots come before Edit play, and Edit play is a secondary card', () => {
+  it('selected play: Edit play comes first (secondary card), then the Make highlight entry (primary)', () => {
     renderView({
       isEditMode: true,
       playback: { isPlaybackMode: false, enterPlaybackMode: vi.fn(), getCurrentSegment: () => null },
       annotateSelectedRegionId: 'r1',
       clipRegions: [{ id: 'r1', startTime: 0, endTime: 5, rating: 3, tags: [], notes: '', highlightInstances: [] }],
     });
-    const slots = screen.getByTestId('annotate-highlight-slots');
-    const editPlay = screen.getByRole('button', { name: /edit play/i });
-    // Slots precede Edit play in document order (main action first).
-    expect(slots.compareDocumentPosition(editPlay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const editPlay = screen.getByRole('button', { name: /^edit play/i });
+    const makeHighlight = screen.getByTestId('annotate-make-highlight');
+    // Edit play precedes Make highlight in document order (T14770 decision: Edit
+    // play first, then the one primary Make highlight card).
+    expect(editPlay.compareDocumentPosition(makeHighlight) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Edit play is a secondary: no solid cyan fill, tinted card from the shared ActionCard.
     expect(editPlay.className).not.toMatch(/\bbg-cyan-500\b/);
     expect(editPlay.className).toMatch(/from-cyan-500\/20/);
+    // Make highlight is the one primary action: solid cyan fill.
+    expect(makeHighlight.className).toMatch(/\bbg-cyan-500\b/);
   });
 
   it('calls onAddClip when the primary CTA is clicked', () => {

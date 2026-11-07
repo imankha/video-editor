@@ -9,7 +9,7 @@ import { GUIDE_PULSE as P } from './guideTargets';
 const CONTROL_PHRASES = [
   { name: 'Play', re: /\bTap Play\b/, pulse: [P.ANNOTATE_PLAY, P.PLAY], keepClear: ['annotate-controls'] },
   { name: 'Mark play', re: /\bMark play\b/, pulse: [P.MARK_PLAY] },
-  { name: 'Make highlight', re: /\bTap Make highlight\b/, pulse: [P.CHOICE_NOW, P.HIGHLIGHT_SLOT] },
+  { name: 'Make highlight', re: /\bTap Make highlight\b/, pulse: [P.CHOICE_NOW, P.MAKE_HIGHLIGHT] },
   { name: 'Edit play', re: /\bEdit play\b/, keepClear: ['annotate-primary-cta'] },
   { name: 'Drag the green ends', re: /\bDrag the green ends\b/, keepClear: ['scrub-start-handle', 'scrub-end-handle'] },
   { name: 'Pick how good', re: /\bPick how good\b/, keepClear: ['rating-input'] },
@@ -19,7 +19,7 @@ const CONTROL_PHRASES = [
   { name: 'Share game', re: /\bTap Share game\b/, pulse: [P.SHARE_PLAYS] },
   { name: 'tap a play', re: /\btap a play\b/, pulse: [P.FIRST_PLAY] },
   { name: 'tap a clip', re: /\bTap a (clip|play)\b/, pulse: [P.FIRST_CLIP] },
-  { name: 'Tap it/one', re: /\bTap (it|one)\b/, pulse: [P.PORTRAIT_SLOT, P.FIRST_FINISHED] },
+  { name: 'Tap it/one', re: /\bTap (it|one)\b/, pulse: [P.HIGHLIGHT_ROW, P.FIRST_FINISHED] },
   { name: 'Upload game', re: /\bTap Upload game\b/, pulse: [P.UPLOAD_SUBMIT, P.UPLOAD_GAME, P.CLIP_SIZE_ADD_GAME] },
   { name: 'Retry', re: /\bTap Retry\b/, pulse: [P.GAMES_RETRY, P.UPLOAD_RETRY, P.VIDEO_RETRY] },
   { name: 'Open it / your game', re: /\bOpen (it now|your game)\b/, pulse: [P.FIRST_GAME] },

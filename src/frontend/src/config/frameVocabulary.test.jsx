@@ -8,7 +8,7 @@ import { render, screen } from '@testing-library/react';
 import * as names from './displayNames';
 import { exportFailureCopy } from '../utils/userError';
 import ExportButtonView from '../components/ExportButtonView';
-import { HighlightOrientationSlots } from '../modes/annotate/components/HighlightOrientationSlots';
+import { HighlightEntry } from '../modes/annotate/components/HighlightOrientationSlots';
 
 const {
   ANNOTATE, CREDITS, EDITOR_PANELS, ERROR_COPY, EXPORT_JOBS, EXPORT_PROGRESS, EXPORT_TOO_LARGE,
@@ -42,8 +42,8 @@ describe('T14620 Frame and paid-step copy', () => {
   it('T14620:C1 the button that opens Frame says Make highlight, in progress Continue highlight', () => {
     expect(ANNOTATE.FRAME_THIS_CLIP).toBe('Make highlight');
     expect(ANNOTATE.CONTINUE_HIGHLIGHT).toBe('Continue highlight');
-    render(<HighlightOrientationSlots instances={[]} onMake={vi.fn()} onOpen={vi.fn()} />);
-    expect(screen.getAllByText('Make highlight')).toHaveLength(2);
+    render(<HighlightEntry onMake={vi.fn()} />);
+    expect(screen.getAllByText('Make highlight')).toHaveLength(1);
   });
 
   it('T14620:C2 the paid step is Sharpen my highlight on the button, in progress and when done', () => {
@@ -124,7 +124,7 @@ describe('T14620 Frame and paid-step copy', () => {
   it('T14620:C8 orientation slot labels are stored in sentence case, never rewritten at runtime', () => {
     const slots = source('modes/annotate/components/HighlightOrientationSlots.jsx');
     expect(slots).not.toMatch(/\.replace\(\//);
-    for (const key of ['MAKE_PORTRAIT', 'CONTINUE_FRAMING_PORTRAIT', 'ADD_SPOTLIGHT_PORTRAIT', 'CONTINUE_SPOTLIGHT_LANDSCAPE']) {
+    for (const key of ['PORTRAIT', 'LANDSCAPE', 'ADD_SPOTLIGHT', 'CONTINUE_SPOTLIGHT', 'WATCH_HIGHLIGHT']) {
       expect(ANNOTATE[key]).toBe(ANNOTATE[key].charAt(0) + ANNOTATE[key].slice(1).toLowerCase());
     }
     expect(ANNOTATE.MAKE_ANOTHER_HIGHLIGHT).toBe('Make another highlight');

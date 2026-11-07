@@ -43,9 +43,9 @@ describe('T12620: the cutout contains every control the sentence names', () => {
   it('T12620:C5 selected play points at Make highlight, with Edit play also clear', () => {
     const g = annotate({ rating: 3 }, { playCount: 1 });
     expect(g.id).toBe('annotate.selected.none');
-    expect(g.anchor.target).toBe(t('annotate-highlight-slots'));
+    expect(g.anchor.target).toBe(t('annotate-make-highlight'));
     expect(g.keepClear).toContain(t('annotate-primary-cta'));
-    expect(g.message.title).toMatch(/Make highlight/);
+    expect(g.message.body).toMatch(/Make highlight/);
   });
 });
 

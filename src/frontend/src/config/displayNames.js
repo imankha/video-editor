@@ -195,32 +195,40 @@ export const ANNOTATE = {
   // T11430: the primary CTA once at least one highlight instance exists for
   // the play (any instance, published or in-progress — design §4.5 decision B).
   MAKE_ANOTHER_HIGHLIGHT: 'Make another highlight',
-  // T11910: orientation slots (UX consult 2026-10-06). Equal weight, no default;
-  // hints say what each is for. User frames, AI upscales: never imply auto-framing.
-  MAKE_A_HIGHLIGHT: 'Make highlight',
+  // T11910: orientation vocabulary, still used by the T14770 list rows below.
   PORTRAIT: 'Portrait',
   LANDSCAPE: 'Landscape',
-  PORTRAIT_HINT: 'Best for Instagram Reels, TikTok, and Stories',
-  LANDSCAPE_HINT: 'Best for YouTube, TV, and sending to coaches',
-  CONTINUE_FRAMING_PORTRAIT: 'Continue portrait highlight',
-  CONTINUE_FRAMING_LANDSCAPE: 'Continue landscape highlight',
-  ADD_SPOTLIGHT_PORTRAIT: 'Add spotlight to portrait highlight',
-  ADD_SPOTLIGHT_LANDSCAPE: 'Add spotlight to landscape highlight',
-  CONTINUE_SPOTLIGHT_PORTRAIT: 'Continue adding spotlight to portrait',
-  CONTINUE_SPOTLIGHT_LANDSCAPE: 'Continue adding spotlight to landscape',
-  MAKE_PORTRAIT: 'Make portrait highlight',
-  MAKE_LANDSCAPE: 'Make landscape highlight',
   HIGHLIGHT_NOT_STARTED: 'Not started',
   // A slot while its game is still uploading: the source isn't stored yet.
   HIGHLIGHT_AFTER_UPLOAD: 'Available when your upload finishes',
   // Row action for an EXISTING highlight still at the framing stage; "Make
   // Highlight" there reads like creating another one.
   CONTINUE_HIGHLIGHT: 'Continue highlight',
-  // T14620: the short visible slot labels; the orientation keys above are the aria names.
   ADD_SPOTLIGHT: 'Add spotlight',
   CONTINUE_SPOTLIGHT: 'Continue adding spotlight',
   WATCH_HIGHLIGHT: 'Watch highlight',
   startHighlight: (orientation, ordinal) => `Start ${orientation.toLowerCase()} highlight ${ordinal}`,
+  // T14770 (decision C, 2026-11-03): ONE Make highlight entry button (the shape
+  // is picked in Frame, not here) + the "Highlights from this play" list below
+  // it. Replaces the T11910 two-slot surface.
+  MAKE_HIGHLIGHT: 'Make highlight',
+  MAKE_HIGHLIGHT_CARD: 'Turn this play into a video you can share.',
+  EDIT_PLAY_CARD: 'Fix the timing, rating or tags.',
+  OPENING_FRAME: 'Opening Frame...',
+  HIGHLIGHTS_FROM_PLAY: 'Highlights from this play',
+  highlightCountChip: (orientation, n) => `${n} ${orientation.toLowerCase()}`,
+  SHOW_FEWER_HIGHLIGHTS: 'Show fewer',
+  showAllHighlights: (n) => `Show all ${n} highlights`,
+  STALE_HIGHLIGHT_SUBLINE: 'Play timing changed',
+  highlightRowName: (orientation, ordinal) => `${orientation}${ordinal >= 2 ? ` ${ordinal}` : ''}`,
+  // Frame's "Where will you share it?" shape choice (T14770 decision 1, Option C).
+  SHARE_WHERE_TITLE: 'Where will you share it?',
+  SHARE_WHERE_PORTRAIT_HINT: 'Instagram Reels, TikTok, Stories',
+  SHARE_WHERE_LANDSCAPE_HINT: 'YouTube, TV, sending to coaches',
+  switchShapeTitle: (toLabel) => `Switch to ${toLabel.toLowerCase()}?`,
+  SWITCH_SHAPE_BODY: 'Your box positions will be refit to the new shape.',
+  SWITCH_SHAPE_CONFIRM: 'Switch',
+  keepShapeLabel: (fromLabel) => `Keep ${fromLabel.toLowerCase()}`,
   // 2026-09-18 (user request): rollover on the Frame this clip button, using
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing
@@ -902,8 +910,11 @@ export const GUIDE = {
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },
     choice: { title: 'Play added. Tap Make highlight to turn it into a video you can share, or keep marking plays.', body: '' },
-    selectedNone: { title: 'Tap Make highlight to turn this play into a video, or Edit play to adjust it.', body: '' },
-    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Frame the video on your athlete, ready to share.' },
+    // T14770: Edit play now comes first on screen, so the sentence names it first too.
+    selectedNone: { title: 'You can edit this play or make a highlight from it.', body: 'Tap Edit play to fix its timing, rating or tags, or Make highlight to turn it into a video you can share.' },
+    hasHighlightsOne: { title: 'This play has 1 highlight.', body: 'Tap it to pick up where you left off, or Make highlight for another.' },
+    hasHighlightsMany: { title: 'This play has {n} highlights.', body: 'Tap one to pick up where you left off, or Make highlight for another.' },
+    brilliant: { title: 'Brilliant play. Make a highlight to share it.', body: 'Tap Make highlight and keep your athlete in the picture. Edit play is there if the timing is off.' },
     portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add a spotlight if you want.' },
     generating: { title: 'Your highlight is being sharpened. It will be ready soon.', body: '' },
     spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
@@ -940,6 +951,8 @@ export const GUIDE = {
     failed: { title: 'That upload didn’t finish. Tap Retry to try again.', body: '' },
   },
   focus: {
+    // T14770: step 1 of 6 — the shape choice shows before the box drag step.
+    shareWhere: 'Where will you share it? Portrait for Instagram and TikTok, landscape for YouTube and coaches.',
     drag: 'Drag the box onto your athlete. Your highlight shows what’s inside it.',
     dragPrePlaced: 'The box is already on your athlete. Drag it if it isn’t, then tap Play.',
     play: 'Tap Play and watch your athlete.',
