@@ -1,6 +1,6 @@
 # T14810: Upload modal: a path for parents who have no game file on this device
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-11-03

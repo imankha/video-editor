@@ -122,7 +122,21 @@ It does not write the implementation or its proof tests. Code review and proof v
 are separate verdicts. Missing reproducibility stays unverified; request more evidence from
 the implementor/tester before asking the user for a genuinely human-only observation.
 
-`/dotask land <slug>` first starts the group's app stack and stops for a human test (no push,
+A headless group lands itself (user decision, 2026-11-07): after `PUSHREADY`, `autoland` has a fresh
+verifier prove every acceptance criterion with Playwright, sends failures to a fresh worker, re-checks
+only what failed plus a regression pass (earlier passes carry forward in the verdict), and repeats for
+at most 3 fix rounds. A clean verdict on the exact HEAD replaces the human test unless a criterion
+needs a person, then pushes and opens the PR. Merging stays with the user. A headless worker has
+nobody to ask, so `start` refuses a task whose file still waits on a user ruling: record it under
+`## Ruling` first (`/nextup` collects these before the container starts). Fix rounds dispatch one owning
+task at a time (fix, commit, next; a stuck task is skipped, not blocking). A dispatch that runs out of
+turns is restarted up to twice with a handoff note; a `human` criterion the owner ruled "check on
+staging" rides in the PR body instead of stopping the push; a worker whose change makes another group
+task's criterion false stops with `CONFLICT` before committing; groups hold at most 4 tasks;
+`/dotask resume <slug>` continues a stopped group; every `/dotask` relay carries an `eta:` line and a
+change of more than 15 minutes is reported as a change.
+
+By hand, `/dotask land <slug>` first starts the group's app stack and stops for a human test (no push,
 no PR). Then `/dotask land <slug> --after-test` pushes that tested revision (it refuses if
 HEAD moved) and verifies green Branch CI for that exact SHA.
 Automatic merge requires resolved blocking/major code findings, independently VERIFIED proof,

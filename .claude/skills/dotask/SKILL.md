@@ -1,6 +1,6 @@
 ---
 name: dotask
-description: "Kick off one or more planned tasks as a GROUP in a permission-free container: one container + one checkout + one branch + one PR for the whole group, tasks worked sequentially. There is no model supervisor -- this chat runs scripts/dotask.sh and relays its few output lines, then returns immediately; the user talks to the worker directly in a new VS Code window (or headless with --headless)."
+description: "Kick off one or more planned tasks as a GROUP in a permission-free container: one container + one checkout + one branch + one PR for the whole group, tasks worked sequentially. There is no model supervisor -- this chat runs scripts/dotask.sh and relays its few output lines, then returns immediately; the group runs headless by default, one fresh conversation per task (or in a new VS Code window with --window)."
 license: MIT
 metadata:
   author: video-editor
@@ -27,14 +27,16 @@ below.
 
 | User says | This chat runs | Then |
 |---|---|---|
-| `/dotask T1 T2 ...` | `bash scripts/dotask.sh start T1 T2 ...` | Relay the 3-line summary (slug, branch, window). Return. Say nothing else. |
-| `/dotask T1 T2 ... --headless` | `bash scripts/dotask.sh start --headless T1 T2 ...` | Relay slug/branch/log path. Return. |
+| `/dotask T1 T2 ...` | `bash scripts/dotask.sh start T1 T2 ...` | Headless (the default). Relay slug/branch/log path and the `eta:` line. Return. Say nothing else. At most 4 tasks per group (`--allow-large` overrides; see [the group model](#the-group-model-user-decisions-2026-10-08----do-not-re-ask)). |
+| `/dotask T1 T2 ... --window` | `bash scripts/dotask.sh start --window T1 T2 ...` | Relay the 3-line summary (slug, branch, window). Return. |
 | `/dotask T1 T2 ... --allow-overlap` | `bash scripts/dotask.sh start --allow-overlap T1 T2 ...` | Same as a normal start, but files shared with another live group are a warning, not a refusal; the kickoff tells the worker to rebase on master before PUSHREADY. |
 | `/dotask T1 T2 ... --capture` | `bash scripts/dotask.sh start --capture T1 T2 ...` | Same, plus: this group's `land` will run captured review/proof automatically. |
+| `/dotask autoland <slug>` | `bash scripts/dotask.sh autoland <slug>` | Runs the [verify loop](#automatic-landing-headless-default) by hand: a `--window` group, or a headless run that stopped. `--no-land` stops after a clean verdict. Relay the last status line. |
+| `/dotask resume <slug>` | `bash scripts/dotask.sh resume <slug>` | Continue a headless group that stopped (a BLOCKED question answered, a CONFLICT ruled, a crash, a reboot): the build loop for every task without a commit line, then autoland, which itself resumes a fix round's focused re-check. The first headless launch runs this same command. Stop a loop still running for the group first. Relay the `eta:` line. |
 | `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Step 1 of 2. First runs `scripts/dotask_preland_check.sh` on the checkout (whitespace, non-evidence files under `qa/`, ruff/eslint growth, `ci_policy` routing) and refuses, naming the paths, while it fails. Then restarts the group's app stack and returns only once the frontend + backend `/api/health` answer. Relay the URL (`http://localhost:<5173+offset>`) WITH a test guide (see [Test guide](#test-guide-required-with-every-localhost-link)) and STOP: the human tests the app. Nothing is pushed and no PR exists yet. Records the tested HEAD. On a timeout it exits non-zero with the log paths; relay them. |
 | `/dotask land <slug> --after-test` | `bash scripts/dotask.sh land <slug> --after-test` | Step 2, only after the user says the test passed. Refuses if HEAD moved since step 1 (re-run step 1). Pushes, opens the PR, waits for CI, builds evidence scoped to the group's tasks (another group's `qa/proof.json` entries never block it), marks committed tasks completed in the wave profile. Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
 | `/dotask stack <slug>` | `bash scripts/dotask.sh stack <slug>` | Same stack (re)start + wait as land step 1, without recording a tested HEAD. Relay the URL with a test guide. |
-| `/dotask status` | `bash scripts/dotask.sh status` | Relay the one line per live group. |
+| `/dotask status` | `bash scripts/dotask.sh status` | Relay the one line per live group and its `eta:` line; say when the ETA changed (see [Status tracking](#status-tracking)). |
 | `/nextup` | see the [nextup skill](../nextup/SKILL.md) | Bundles TODO tasks by shared code area (`dotask.sh nextup`), confirms with the user, then runs `start`. |
 
 That is the entire contract. This chat never writes WAVE.md, never spawns a worker agent,
@@ -48,7 +50,9 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   whole group. Tasks are worked sequentially inside that one container, one commit per task
   (`T1: ...`, `T2: ...`), criteria namespaced per task (`T1:C1`, `T2:C1`, ...).
 - **One task per conversation** (user decision, 2026-10-08). After each task's commit the worker
-  stops and asks the user to send `/clear`, then `Implement /workspace/.dotask-kickoff.md`.
+  stops. Headless (the default, user decision 2026-11-06), the loop then starts a fresh `claude -p`
+  with the Implement instruction, which is `/clear` + resend with no human in it. With `--window`
+  the worker asks the user to send `/clear`, then `Implement /workspace/.dotask-kickoff.md`.
   The fresh conversation resumes at the first task without a `STAGE_DONE <task> commit` line,
   and `qa/proof.json` grows one task at a time. Measured on g-t12110-8: one session across 8 tasks
   re-read 48k -> 190k tokens per request. Fresh context per task is an estimated 33-51% fewer
@@ -69,11 +73,16 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   panel; the user presses Enter (the URI never submits). VS Code routes it to the last active
   window, so focusing another window during that minute sends the prefill there instead.
   `DOTASK_PREFILL=0` turns it off.
+- **At most 4 tasks per group** (user decision, 2026-11-07). One PR carries the whole group, so one
+  failing task holds back every passing one at landing: g-t15220-10's export bug held eight. `start`
+  refuses a fifth task (`--allow-large` overrides) and `nextup` prints one `start:` line per four.
+  Landing the passing tasks of a group separately would need per-task branches; not built.
 - **Parallelism = the user runs `/dotask` again** -- another group, another container, another
   window. There is no WIP-limit bookkeeping to maintain here; each group is independent.
-- **`--headless`** runs the group in the background instead of opening a window: one fresh
-  `task.sh drive` dispatch per task, stopping on `PUSHREADY` or anything unexpected.
+- **Headless is the default** (`--headless` is still accepted): the group runs in the background,
+  one fresh `task.sh drive` dispatch per task, stopping on `PUSHREADY` or anything unexpected.
   `dotask.sh start` prints the log path and returns immediately without waiting for it.
+  `--window` opens the VS Code window instead, for a group you want to talk to.
 - **Captured review/proof only with `--capture`.** Without it, `/dotask land <slug> --after-test`
   (after the human test) pushes, opens the PR, waits for CI, builds the evidence directory (`scripts/dotask_evidence.py`, reading the
   worker's `qa/proof.json`), and hands the PR + evidence path to the user -- nothing merges
@@ -87,7 +96,11 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
 
 `dotask.sh start` refuses before touching Docker if: a task id doesn't resolve to exactly one
 `docs/plans/tasks/**/T<id>-*.md` file; a task's PLAN.md status isn't `TODO`/`WIP`; a task
-already has a commit on `origin/master` matching `^T<id>[: ]`; or any task's Relevant Files
+already has a commit on `origin/master` matching `^T<id>[: ]`; a task's file still waits on a
+user ruling (a decision page, "the user picks", "owner has ruled") with no recorded ruling
+(`## Ruling` with `(owner, <date>)`, `user picked ...`, `USER PICK`; an unchecked criterion
+never counts) -- a headless worker has nobody to ask, so ask the user, record the ruling in the
+task file, commit, then start; or any task's Relevant Files
 overlap the owned files of another group whose container is currently running. Each refusal
 exits 2 with a clear reason -- relay it to the user, don't retry automatically. Files shared
 WITHIN one group are fine (its tasks run sequentially). For an overlap with another live group,
@@ -109,13 +122,54 @@ group task's file (Problem, Solution, Acceptance Criteria) and relay, per task:
 Keep it a short numbered list per task. This is the one place this chat reads task files;
 it still never edits code or drives the worker.
 
+## Automatic landing (headless default)
+
+User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `autoland` loops:
+
+1. Preland check, then restart the stack on HEAD.
+2. Fresh verifier dispatches (`qa` phase, 200 turns, no shared context with the worker), three tasks
+   per batch, prove every acceptance criterion by observation, Playwright for anything a user can see;
+   the last batch also runs a regression pass over the flows the diff touches. They write
+   `.dotask-verify.json`; each round is archived as `waves/<wave>/verify-round-N.json`.
+3. Any `fail` criterion or `group` bug goes to a fix round: one fresh worker dispatch per owning task,
+   in group order, each fixing and committing only its task's findings (findings no task owns go last).
+   A task whose dispatch commits nothing is recorded (`FIX_SKIPPED`), its leftover changes stashed, and
+   the round moves on; its findings fail again in the re-check. One worker given every finding chased
+   the hardest one and committed nothing for three hours (g-t15220-10, 2026-11-07). A fix dispatch that
+   runs out of turns is restarted up to twice with a handoff note (below). Then back to step 1, where the
+   verifier re-checks only what failed plus the regression pass; earlier passes carry forward
+   (`carried_from`). A restarted `autoland` resumes at that point.
+4. Clean verdict: `VERIFY_PASS`, then push, PR, CI, evidence (`land --after-test`). Merging stays with the user.
+
+The loop stops at `MAX_FIX_ROUNDS` (3) with `VERIFY_EXHAUSTED`. Anything it cannot trust stops it with
+`VERIFY_BLOCKED` and never counts as a pass: a missing verdict, a verdict for another HEAD, one covering
+fewer criteria than the task file has, a verifier that changed the tree, a fix that committed nothing.
+A `human` criterion (something no automation can observe) stops before the push with `VERIFY_NEEDS_USER`,
+unless the task file records the owner's ruling to check it on staging (`**<date> (owner ruling)**: C2 ...
+verified on staging after merge`, or a ruling line right under the criterion): then it is answered, the
+push goes ahead and the PR body lists it under "Check on staging after merge" (`staging_checks` on the
+group). `unrelated` bugs are filed as TODO tasks in PLAN.md (left uncommitted, like `start`'s status
+flips) and do not block. "No new bugs" means none found by these checks. A red CI on the PR is reported,
+not looped.
+
+**Running out of turns is not a stop.** A worker dispatch (build or fix round) whose run record says
+`budget_stop` left its work uncommitted; the loop appends a `## <task> handoff` section to
+`.dotask-notes.md` (the uncommitted files, a pointer to the worker's `## <task> progress` checklist),
+writes a `RESUMED` status line and dispatches again with the resume hint, up to twice per task. Three
+such stops were restarted by hand on g-t15220-10 (2026-11-07), one after an overnight gap.
+
+**A conflict between tasks stops the build, not the verifier.** The kickoff tells a worker that re-reads
+the other tasks' criteria before committing and finds its change makes one literally false to append
+`CONFLICT <task> <other>:C<n> "<why>"` and stop without committing. The build loop stops there; the
+user rules (fix the change, or amend the criterion), then `/dotask resume <slug>`.
+
 ## Landing
 
 `/dotask land <slug>` is host-side bookkeeping only (container/git/gh/evidence plumbing), run
 from THIS chat once the user says the group is done (or a `PUSHREADY` line appears in its status
 file, if the user asks this chat to check). It never edits code and never calls a model unless
-`--capture` was set. It has two steps so a human always tests the running app before a PR
-exists: `land <slug>` brings the stack up and stops, and `land <slug> --after-test` opens the
+`--capture` was set. Used by hand (a `--window` group, or a human test you want), it has two steps so a human tests the
+running app before a PR exists: `land <slug>` brings the stack up and stops, and `land <slug> --after-test` opens the
 PR for the exact HEAD that was tested. The stack restarts on every call, so it serves the
 current working tree; ports stay inside the R2 CORS allowlist because `task.sh` caps the
 offset at 10. Apply CLAUDE.md's Landing Policy as the single authority for the proof
@@ -130,3 +184,13 @@ There is no WAVE.md and no supervisor session to bootstrap. `bash scripts/dotask
 lists every live group (slug, tasks, container state, last status line) by reading
 `.dotask-group.json` + `.dotask-status` files directly -- that IS the full picture, every time,
 from any fresh chat. Nothing here needs to survive in conversation history.
+
+**ETAs are standard (user decision, 2026-11-07).** Every `status` line is followed by an `eta:` line:
+when the PR should open if nothing fails, when it should open with one fix round, and the basis (tasks
+left, verify batches, CI, and whether the minutes are this group's own medians or defaults). `start`
+prints one too. Relay it with every status or start, with the user's local clock. **When an ETA
+changes, say so**: if an earlier relay in this conversation gave a different ETA (more than 15 minutes
+apart), name the old and new figure and what moved (the basis says: a slower batch, a fix round, a
+stop). A stopped group has `eta: none (stopped ...)`: relay the reason and what unblocks it (`resume`,
+a ruling). The run log gets the same treatment: the loop prints `[dotask] eta: ...` at each milestone
+only when the figure moved, with `(was HH:MM)`.

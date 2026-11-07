@@ -54,7 +54,16 @@ EFFORTS = ("low", "medium", "high", "xhigh", "max")
 HEADLESS_RUN_NOTE = (
     " Headless run: execute every command in the foreground (a backgrounded command or "
     "ScheduleWakeup ends this dispatch). Append each status line in the same shell command as "
-    "the stage's last action, not as a separate call."
+    "the stage's last action, not as a separate call. Never spawn an agent and never end your turn "
+    "waiting for one: agents run asynchronously here, and ending the turn ends the dispatch and kills "
+    "them. When the rules call for the expert, run it in the foreground instead, with a long Bash "
+    "timeout: `claude -p --model opus \"<question>\"`. Paste the code excerpts into the question and tell it not "
+    "to use tools: left to explore, it ran past the 10-minute limit twice. Read its answer before "
+    "deciding; never report it as unavailable. A dispatch has a turn limit and can stop mid-task, so "
+    "write a `## T<id> progress` checklist of the acceptance criteria in .dotask-notes.md before your "
+    "first code edit and update it as each one is done: the next worker starts from it instead of "
+    "re-reading the diff. Before a browser check, curl the stack and leave it running if it answers. "
+    "Log in with a dev preset account, not a real one, whose video load can hang."
 )
 CHECKPOINTS = {
     "design": "Perform design/root-cause only. Write a reusable specification under docs/ and append "
@@ -430,14 +439,16 @@ def merged_task_commits(task):
     """origin/master commit subjects for `task` (CLAUDE.md: every tracked commit starts with
     the task id), or None if the check itself could not run (e.g. no origin remote offline)."""
     try:
-        result = subprocess.run(["git", "log", "origin/master", "--grep", f"^{task}[: ]", "--oneline", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
+        result = subprocess.run(["git", "log", "origin/master", "--grep", f"^{task}[: ]", "--format=%h %s", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
                                 check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     if result.returncode:
         return None
-    return [line for line in result.stdout.splitlines() if line.strip()]
+    # --grep also matches body lines, and a wrapped list of task ids can open one (5c669996f).
+    subject = re.compile(rf"\S+ {task}[: ]")
+    return [line for line in result.stdout.splitlines() if subject.match(line)]
 
 
 def design_snapshot():

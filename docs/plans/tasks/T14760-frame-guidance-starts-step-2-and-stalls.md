@@ -1,6 +1,6 @@
 # T14760: Frame guidance starts at step 2 and stalls after Got it
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-11-03

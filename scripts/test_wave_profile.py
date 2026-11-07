@@ -443,6 +443,28 @@ class Report(unittest.TestCase):
         finally:
             os.chdir(cwd)
 
+    def test_init_accepts_a_task_whose_id_only_opens_a_body_line(self):
+        # 5c669996f: T14920's body wrapped so a line opened "T14780 T14800 ...", and init refused T14780.
+        repo = self.root / "gitrepo"
+        repo.mkdir()
+
+        def git(*args):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+        git("init", "-q")
+        (repo / "f.txt").write_text("x")
+        git("add", ".")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm",
+            "T9001: other work\n\nRestores the rows for T8999\nT9000 T9002, all still TODO.")
+        sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        git("update-ref", "refs/remotes/origin/master", sha)
+        cwd = os.getcwd()
+        os.chdir(repo)
+        try:
+            self.assertEqual(self.cli("init", "--wave", "w4", "--task", "T9000", "--plan", str(self.plan)), 0)
+        finally:
+            os.chdir(cwd)
+
     def test_init_refuses_a_task_already_merged_on_origin_master(self):
         repo = self.root / "gitrepo"
         repo.mkdir()
@@ -582,6 +604,16 @@ class Report(unittest.TestCase):
                          "bash task.sh drive")
         self.assertEqual(profile.normalize_command("git diff --stat abc1234 | tail -5"), "git diff <n>")
         self.assertEqual(profile.normalize_command(""), "<empty>")
+
+
+class HeadlessNoteTest(unittest.TestCase):
+    def test_every_phase_tells_a_headless_worker_not_to_wait_on_an_agent(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import wave_profile
+        for phase, text in wave_profile.CHECKPOINTS.items():
+            self.assertIn("Never spawn an agent", text, phase)
+            self.assertIn("claude -p --model opus", text, phase)
+            self.assertIn("progress` checklist", text, phase)
 
 
 if __name__ == "__main__":

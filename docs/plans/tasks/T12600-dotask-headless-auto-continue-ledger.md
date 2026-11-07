@@ -56,6 +56,17 @@ Make headless the default auto-continue path, extending the existing `HEADLESS_L
 5. **The window stays optional.** `task.sh code <slug>` to watch. `claude --resume` in its terminal
    to answer with a screenshot.
 
+## Evidence from the first headless runs (2026-11-06)
+
+Headless is now the default, and `autoland` covers verify and fix. This task still owns questions, the watchdog, stop classification and notifying the user. Six stalls, and what each one needs here:
+
+- `npm ci` passed the 2-minute Bash limit and was backgrounded, ending the dispatch. Fixed: the container timeout is now 10 minutes. Add a `blocked:timeout` kind.
+- Stale Vite cost a worker all 120 turns (`error_max_turns`, `budget_stop`). Fixed: polling. Add a `blocked:budget` kind and let the watchdog notice repeated runs of one spec.
+- Group order contradicted a task file ("T14760 lands first"). `start` should read those lines and order the group, or refuse.
+- A stale `BLOCKED` line in `.dotask-status` overrode a corrected kickoff, because the worker trusted it and skipped the notes. Fixed for the task id: the loop now names it. Resolved blockers still need a real `RESOLVED` line, not a hand edit of the status file.
+- A worker spawned the expert agent and ended its turn to wait; agents are asynchronous under `claude -p`, so the dispatch and the expert both died (`ENDED_WITHOUT_STATUS`). Fixed: headless runs the expert as a foreground `claude -p --model opus`.
+- There is no `dotask resume <slug>`: `start` re-inits, so restarts after a crash or a stop needed a hand-written launcher.
+
 ## Context
 
 ### Relevant Files (REQUIRED)

@@ -101,7 +101,7 @@ MEASUREMENT_TEST_GATES = ("visit_to_signup", "signup_to_export_14d", "upload_fai
 # Data-derived caveats (never a task status): the text a reader attaches when the data says so.
 CAVEAT_EXPORT_EVENT = ("Frame export records no event (exports_started = 0 over 30 d); "
                        "this is an undercount until the export event is live.")
-T15200_TEXT = "registry columns arrive with T15200"
+NO_SPEND_COLUMNS_TEXT = "the campaign registry has no spend or channel columns yet"
 
 # --- channel ladder (benchmark costs, cents per sign-up; B until T15200 measures them) ------
 CHANNELS = [

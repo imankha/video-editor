@@ -1,6 +1,6 @@
 # T14770: One Make highlight button, Edit play first, shape picked in Frame, list of highlights made
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-11-03

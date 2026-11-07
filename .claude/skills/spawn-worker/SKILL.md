@@ -55,11 +55,16 @@ After the LAST task's commit line the final line is `PUSHREADY <branch> <sha>`.
 
 `dotask.sh start --headless` runs one `task.sh drive` (a fresh `claude -p`, implementation
 checkpoint) per task, for the first task without a commit line. Each dispatch must end on that
-task's `STAGE_DONE <task> commit` line or on `PUSHREADY`; any other last line (`BLOCKED`, a
-wrapper line) stops the run. `task.sh run` (implementation, then QA with `-c` only on
+task's `STAGE_DONE <task> commit` line or on `PUSHREADY`; any other last line (`BLOCKED`,
+`CONFLICT <task> <other>:C<n> "<why>"` when your change makes another group task's criterion
+literally false, a wrapper line) stops the run for the user. A dispatch that ran out of turns is
+not a stop: the loop appends a `## <task> handoff` section to `.dotask-notes.md` and dispatches
+again (up to twice); keep the uncommitted work it names. `task.sh run` (implementation, then QA with `-c` only on
 `IMPL_READY`) is a manual single-task tool, not part of the group flow.
 - Test scope is the RELEVANT SET only (~10 tests: new + regression tests for changed files + at
-  most one e2e spec). Never a full suite -- Branch CI is the full sweep.
+  most one e2e spec). Never a full suite -- Branch CI is the full sweep. After a failure, fix and
+  re-run only the test that failed (plus a test you wrote); a test that passed on this code stays
+  passed and is never re-run in a loop (user rule, 2026-11-07).
 
 ## `qa/proof.json` schema
 

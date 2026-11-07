@@ -106,6 +106,10 @@ echo "[stack] backend  -> container :$BACKEND_PORT   (reload=$STACK_RELOAD, log:
 echo "  pid $!"
 
 # --- frontend ----------------------------------------------------------------
+# Vite's watcher misses edits over this bind mount and serves stale code. A worker spent all 120
+# turns on that (g-t15220-10, 2026-11-06).
+export CHOKIDAR_USEPOLLING=true
+
 # Gate on the deps install task.sh kicked off in the background (`npm ci` writes
 # node_modules/.ready when done) -- starting vite mid-install crashes confusingly.
 if [ ! -f src/frontend/node_modules/.ready ] && [ ! -x src/frontend/node_modules/.bin/vite ]; then

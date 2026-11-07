@@ -10,9 +10,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import dotask_cli
+import ensure_sonnet_default
 
 FAKE_DOCKER = r'''#!/usr/bin/env bash
 state="$FAKE_DOCKER_STATE"
@@ -229,6 +230,14 @@ class DotaskCliTest(unittest.TestCase):
         self._push_commit("T2: the work", code_file="x.py")
         self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
 
+    def test_a_task_id_opening_a_body_line_does_not_count_as_merged_work(self):
+        # 5c669996f: T14920's body wrapped so a line opened "T14780 T14800 ...", and T14780 read as shipped.
+        self._write_task("T2", "Named in a body", "TODO", ["x.py"])
+        self._push_commit("T9: other work\n\nRestores the rows for T1\nT2 T3, all still TODO.", code_file="other.py")
+        self.assertEqual(dotask_cli.merged_commits("T2"), [])
+        self._push_commit("T2: the work", code_file="x.py")
+        self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
+
     def test_a_merge_that_files_a_task_does_not_count_as_merged_work(self):
         # PR #579: the merge's body quoted "T11500: file ..." and its diff carried another task's code.
         self._write_task("T2", "Filed only", "TODO", ["x.py"])
@@ -391,6 +400,61 @@ class DotaskCliTest(unittest.TestCase):
         ])
         self.assertEqual([b["tasks"] for b in dotask_cli.nextup_bundles()], [["T20"], ["T30"]])
 
+    # --- decision gate: a task that waits on the user is not headless work ----------
+    def test_start_refuses_a_task_that_waits_on_a_user_ruling(self):
+        path = self._write_task("T2", "Pick a name", "TODO", ["src/Name.jsx"])
+        path.write_text(path.read_text() + "\n## Solution\n\nPut the options on a decision page; the user picks.\n")
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err:
+            dotask_cli.preflight(["T1", "T2"])
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("T2: Put the options on a decision page; the user picks.", err.getvalue())
+        self.assertIn("/dotask T1", err.getvalue())
+        # An unchecked "Owner has ruled" criterion is the gate, not the ruling.
+        path.write_text(path.read_text() + "\n## Acceptance Criteria\n\n- [ ] Owner has ruled A, B or C\n")
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            dotask_cli.preflight(["T2"])
+        # The user's recorded ruling clears it.
+        path.write_text(path.read_text() + "\n## Ruling\n\n**B** (owner, 2026-11-07). Shorter header.\n")
+        files_by_task, _owned, _shared = dotask_cli.preflight(["T1", "T2"])
+        self.assertEqual(sorted(files_by_task), ["T1", "T2"])
+
+    def test_pending_decision_tells_a_recorded_ruling_from_a_worker_s_own_pick(self):
+        cases = {  # real shapes from docs/plans/tasks, 2026-11-07
+            "A, tentatively (2026-11-07, autonomous /dotask dispatch, no live owner available to rule)": True,
+            '**"Confirm once"** (owner, 2026-11-07). Replaces F1.': False,
+            "## Ruling (2026-10-11, T12310 re-run, user agreed)": False,
+            "## Approved design (user, 2026-11-03)": False,
+            "ui-designer proposed A/B/C; user picked C.": False,
+        }
+        for ruling, still_pending in cases.items():
+            path = self.root / "t.md"
+            path.write_text(f"# T9: Name the steps (decision)\n\n## Ruling\n\n{ruling}\n")
+            self.assertEqual(dotask_cli.pending_decision(path) is not None, still_pending, ruling)
+        path.write_text("# T9: Plain fix\n\n## Problem\n\nThe user picks a clip and nothing happens.\n")
+        self.assertIn("user picks", dotask_cli.pending_decision(path))  # conservative: a false gate costs one question
+        path.write_text("# T9: Plain fix\n\n## Problem\n\nSaving fails.\n")
+        self.assertIsNone(dotask_cli.pending_decision(path))
+
+    def test_nextup_sets_aside_tasks_that_wait_on_a_user_ruling(self):
+        self._plan_rows([
+            ("T20", "Name the steps", "TODO", ["src/a.py"], "a"),
+            ("T30", "Free", "TODO", ["src/b.py"], "b"),
+        ])
+        path = next((self.main_repo / "docs" / "plans" / "tasks").rglob("T20-*.md"))
+        path.write_text(path.read_text() + "\n## Solution (after the user decides)\n")
+        self.assertEqual([b["tasks"] for b in dotask_cli.nextup_bundles()], [["T30"]])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(dotask_cli.main(["nextup"]), 0)
+        self.assertIn("decision: T20: ## Solution (after the user decides)", out.getvalue())
+
+    def test_nextup_prints_one_start_line_per_four_tasks(self):
+        self._plan_rows([(f"T{n}0", f"Part {n}", "TODO", [f"src/p{n}.py"], "epic") for n in range(1, 6)])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(dotask_cli.main(["nextup"]), 0)
+        self.assertIn("[over 4: one group per start line below, in order]", out.getvalue())
+        self.assertIn("start: bash scripts/dotask.sh start T10 T20 T30 T40\n", out.getvalue())
+        self.assertIn("start: bash scripts/dotask.sh start T50\n", out.getvalue())
+
     def test_nextup_holds_back_tasks_whose_files_a_live_group_owns(self):
         self._plan_rows([
             ("T20", "Busy", "TODO", ["src/busy.py"], "a"),
@@ -438,68 +502,255 @@ class DotaskCliTest(unittest.TestCase):
         real_popen, launched = subprocess.Popen, []
 
         def popen(args, *rest, **kwargs):
-            if len(args) > 2 and args[1] == "-c":  # the background per-task task.sh run loop
+            if "resume" in args:  # the background headless run: build loop, then autoland
                 launched.append((args, kwargs["env"]))
                 return SimpleNamespace(pid=0)
             return real_popen(args, *rest, **kwargs)
 
-        with patch.object(dotask_cli.subprocess, "Popen", side_effect=popen):
+        with patch.object(dotask_cli.subprocess, "Popen", side_effect=popen), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
             code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=True, capture=False, allow_overlap=False))
         self.assertEqual(code, 0)
         args, env = launched[0]
-        # One fresh dispatch per task: the loop runs task.sh run at most len(tasks) times.
-        self.assertIn('bash "$2" drive "$3" "$4"', args[2])
-        self.assertEqual(args[4:7], ["1", (dotask_cli.REPO_ROOT / "scripts" / "task.sh").as_posix(), "g-t1-1"])
-        self.assertEqual(args[9], "T1")  # task ids: the loop picks the next one without a commit line
+        # The same command continues a stopped group, so a first launch is nothing special.
+        self.assertTrue(args[1].endswith("dotask_cli.py"))
+        self.assertEqual(args[2:], ["resume", "g-t1-1"])
         self.assertTrue(env["DOTASK_WAVE_ID"].startswith("g-t1-1-"))
         self.assertEqual(env["DOTASK_PHASE"], "implementation")
+        self.assertIn("eta: PR about", out.getvalue())  # every relay carries an ETA
         log_path = self.tasks_root / "profiles" / "g-t1-1" / "run.log"
         self.assertTrue(log_path.parent.is_dir())
         group = json.loads((self.tasks_root / "g-t1-1" / dotask_cli.GROUP_FILE).read_text())
         manifest = self.tasks_root / "waves" / group["wave_id"] / "manifest.json"
         self.assertEqual(json.loads(manifest.read_text())["mode"], "headless")
 
-    def _run_headless_loop(self, fake_drive_body, tasks=("T1", "T2", "T3"), status_text=""):
-        """HEADLESS_LOOP against a fake task.sh; returns (exit code, ["<cmd> <slug> <task>", ...])."""
-        fake = self.root / "fake_task.sh"
-        calls = self.root / "calls"
-        status = self.root / "status"
-        fake.write_bytes(("#!/usr/bin/env bash\n"
-                          f'echo "$1 $2 $DOTASK_TASK_IDS" >> "{calls.as_posix()}"\n'
-                          f'STATUS="{status.as_posix()}"; T="$DOTASK_TASK_IDS"\n'
-                          + fake_drive_body + "\n").encode())
-        status.write_bytes(status_text.encode())
-        if calls.exists():
-            calls.unlink()
-        result = subprocess.run([dotask_cli.bash(), "-c", dotask_cli.HEADLESS_LOOP, "loop", str(len(tasks)),
-                                 fake.as_posix(), "g-x", "go", status.as_posix(), " ".join(tasks)],
-                                capture_output=True, text=True)
-        return result.returncode, calls.read_text().splitlines() if calls.exists() else []
+    def test_start_caps_a_group_at_four_tasks(self):
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err:
+            dotask_cli.start(SimpleNamespace(tasks=["T1", "T2", "T3", "T4", "T5"], headless=True, capture=False,
+                                             allow_overlap=False))
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("The cap is 4", err.getvalue())
+        self.assertIn("/dotask T1 T2 T3 T4 now and /dotask T5 after it", err.getvalue())
 
-    COMMIT = 'echo "t STAGE_DONE $T commit x" >> "$STATUS"'
+    def test_kickoff_tells_the_worker_to_stop_on_a_conflict_with_another_task_s_criterion(self):
+        dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False, allow_overlap=False))
+        kickoff = (self.tasks_root / "g-t1-1" / ".dotask-kickoff.md").read_text()
+        self.assertIn("CONFLICT <your task> <other task>:C<n>", kickoff)
+        self.assertIn("do NOT edit that criterion", kickoff)
+        self.assertIn("handoff", kickoff)
+        # After a failure only the failing test runs again; a pass is final for that code (user rule).
+        self.assertIn("re-run ONLY that test", kickoff)
+        self.assertIn("Re-run only the tests that failed", dotask_cli.FIX_INSTRUCTION)
 
-    def test_headless_loop_dispatches_each_task_once_until_pushready(self):
-        body = self.COMMIT + '; [ "$T" = T3 ] && echo "t PUSHREADY feature/x abc" >> "$STATUS"; exit 0'
-        code, calls = self._run_headless_loop(body)
-        self.assertEqual((code, calls), (0, ["drive g-x T1", "drive g-x T2", "drive g-x T3"]))
+    # --- headless build loop: one fresh dispatch per task, restarts after running out of turns ---
+    def _loop(self, behavior, tasks=("T1", "T2", "T3"), status_text=""):
+        """build_loop against a fake dispatch. behavior(task, attempt) -> (status lines the dispatch
+        leaves, the run record's outcome class). Returns (exit code, calls, stderr)."""
+        checkout = self.tasks_root / "g-x"
+        (checkout / ".dotask-profile").mkdir(parents=True, exist_ok=True)
+        status = checkout / ".dotask-status"
+        status.write_text(status_text)
+        group = {"slug": "g-x", "tasks": list(tasks), "wave_id": "w", "branch": "feature/x"}
+        calls, attempts = [], {}
 
-    def test_headless_loop_resumes_at_the_first_task_without_a_commit_line(self):
-        body = self.COMMIT + '; [ "$T" = T3 ] && echo "t PUSHREADY feature/x abc" >> "$STATUS"; exit 0'
-        code, calls = self._run_headless_loop(body, status_text="t STAGE_DONE T1 commit x\n")
-        self.assertEqual((code, calls), (0, ["drive g-x T2", "drive g-x T3"]))
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            task = task_ids[0]
+            attempts[task] = attempts.get(task, 0) + 1
+            calls.append(f"{phase} {slug} {task}" + (" resumed" if "handoff section" in instruction else ""))
+            lines, outcome = behavior(task, attempts[task])
+            with status.open("a") as stream:
+                stream.write(lines)
+            (checkout / ".dotask-profile" / f"{len(calls):03d}.json").write_text(json.dumps(
+                {"schema_version": 2, "started_at": f"2026-11-07T{len(calls):02d}:00:00+00:00",
+                 "outcome_class": outcome, "requests": 120}))
+            return False
+        with patch.object(dotask_cli, "dispatch", dispatch), contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()) as err:
+            code = dotask_cli.build_loop("g-x", group, checkout)
+        return code, calls, err.getvalue()
 
-    def test_headless_loop_stops_unless_the_dispatch_ends_on_its_commit_line(self):
+    @staticmethod
+    def _commit(task, pushready=False):
+        return f"t STAGE_DONE {task} commit x\n" + (f"t PUSHREADY feature/x abc\n" if pushready else "")
+
+    def test_build_loop_dispatches_each_task_once_until_pushready(self):
+        code, calls, _ = self._loop(lambda task, n: (self._commit(task, pushready=task == "T3"), "success"))
+        self.assertEqual((code, calls), (0, ["implementation g-x T1", "implementation g-x T2", "implementation g-x T3"]))
+
+    def test_build_loop_resumes_at_the_first_task_without_a_commit_line(self):
+        code, calls, _ = self._loop(lambda task, n: (self._commit(task, pushready=task == "T3"), "success"),
+                                    status_text="t STAGE_DONE T1 commit x\n")
+        self.assertEqual((code, calls), (0, ["implementation g-x T2", "implementation g-x T3"]))
+
+    def test_build_loop_stops_unless_the_dispatch_ends_on_its_commit_line(self):
         # IMPL_READY after the first task once chained QA, whose PUSHREADY ended the run with
         # tasks undone (review of PR 576): anything but the commit line or PUSHREADY stops it.
         for last in ("t IMPL_READY", "t BLOCKED needs input", "t ENDED_WITHOUT_STATUS phase=implementation"):
-            code, calls = self._run_headless_loop(f'echo "{last}" >> "$STATUS"; exit 0')
-            self.assertEqual((code, calls), (1, ["drive g-x T1"]), last)
-        code, calls = self._run_headless_loop("exit 7")
-        self.assertEqual((code, calls), (7, ["drive g-x T1"]))
+            code, calls, _ = self._loop(lambda task, n: (last + "\n", "success"))
+            self.assertEqual((code, calls), (1, ["implementation g-x T1"]), last)
 
-    def test_headless_loop_without_pushready_after_every_commit_exits_3(self):
-        code, calls = self._run_headless_loop(self.COMMIT + "; exit 0")
+    def test_build_loop_stops_for_the_user_when_a_task_conflicts_with_another_s_criterion(self):
+        code, calls, err = self._loop(lambda task, n: ('t CONFLICT T1 T2:C1 "step count changed"\n', "success"))
+        self.assertEqual((code, calls), (1, ["implementation g-x T1"]))
+        self.assertIn("needs the user's ruling", err)
+
+    def test_build_loop_without_pushready_after_every_commit_exits_3(self):
+        code, calls, _ = self._loop(lambda task, n: (self._commit(task), "success"))
         self.assertEqual((code, len(calls)), (3, 3))
+
+    def test_build_loop_restarts_a_task_that_ran_out_of_turns_with_a_handoff_note(self):
+        # Three such stops were restarted by hand on g-t15220-10 (2026-11-07), each with the code done
+        # and only the commit missing; one of them sat overnight.
+        def behavior(task, attempt):
+            if attempt <= 2:
+                return "t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n", "budget_stop"
+            return self._commit(task, pushready=True), "success"
+        code, calls, _ = self._loop(behavior, tasks=("T1",))
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, ["implementation g-x T1", "implementation g-x T1 resumed",
+                                 "implementation g-x T1 resumed"])
+        notes = (self.tasks_root / "g-x" / ".dotask-notes.md").read_text()
+        self.assertEqual(notes.count("## T1 handoff"), 2)
+        self.assertIn("ran out of turns (120 requests)", notes)
+        self.assertIn("RESUMED T1 dispatch 2 of 3", (self.tasks_root / "g-x" / ".dotask-status").read_text())
+
+    def test_build_loop_gives_up_after_two_restarts(self):
+        body = "t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
+        code, calls, _ = self._loop(lambda task, n: (body, "budget_stop"), tasks=("T1",))
+        self.assertEqual((code, len(calls)), (1, 3))
+
+    def test_resume_refuses_an_unknown_group(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            dotask_cli.main(["resume", "g-nope"])
+
+    def test_resume_continues_a_fix_round_that_stopped_with_uncommitted_work(self):
+        # g-t15220-10, 2026-11-07: fix round 1 ran out of turns with 17 files changed. Resuming straight
+        # into autoland would have verified that dirty tree from scratch and blocked.
+        checkout = self.tasks_root / "g-x"
+        (checkout / ".dotask-profile").mkdir(parents=True)
+        group = {"slug": "g-x", "tasks": ["T1"], "wave_id": "w", "branch": "feature/x"}
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        (checkout / ".dotask-status").write_text("t STAGE_DONE T1 commit x\nt PUSHREADY feature/x aaa\n"
+                                                 "t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n")
+        verdict = {"head": "a" * 40, "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}
+        (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
+        waves = self.tasks_root / "waves" / "w"
+        waves.mkdir(parents=True)
+        (waves / "verify-round-1.json").write_text(json.dumps(verdict))
+        (checkout / ".dotask-profile" / "r1.json").write_text(json.dumps(
+            {"schema_version": 2, "started_at": "2026-11-07T20:00:00+00:00", "phase": "implementation",
+             "outcome_class": "budget_stop", "requests": 120}))
+        state = {"head": "a" * 40, "dirty": " M src/x.js"}
+        calls = []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            calls.append(instruction)
+            state["head"], state["dirty"] = "b" * 40, ""
+            (checkout / ".dotask-profile" / "r2.json").write_text(json.dumps(
+                {"schema_version": 2, "started_at": "2026-11-07T21:00:00+00:00", "phase": "implementation",
+                 "outcome_class": "success"}))
+            with (checkout / ".dotask-status").open("a") as stream:
+                stream.write("t PUSHREADY feature/x bbb fix round 1\n")
+            return True
+        autoland = MagicMock(return_value=0)
+        with patch.object(dotask_cli, "dispatch", dispatch), patch.object(dotask_cli, "autoland", autoland), \
+                patch.object(dotask_cli, "git_head", lambda c: state["head"]), \
+                patch.object(dotask_cli, "tracked_changes", lambda c: state["dirty"]), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(dotask_cli.main(["resume", "g-x"]), 0)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("## fix round 1 T1 progress", calls[0])
+        self.assertIn("handoff section", calls[0])
+        self.assertIn("## fix round 1 T1 handoff", (checkout / ".dotask-notes.md").read_text())
+        autoland.assert_called_once()
+        self.assertIn("fix round 1 stopped with uncommitted work", out.getvalue())
+
+    # --- ETA: every relay carries one; a move of more than 15 minutes is a change --------------
+    def _group_for_eta(self, status_text, tasks=("T1", "T2", "T3"), minutes=()):
+        checkout = self.tasks_root / "g-x"
+        checkout.mkdir(parents=True, exist_ok=True)
+        (checkout / ".dotask-status").write_text(status_text)
+        profiles = self.tasks_root / "profiles" / "g-x"
+        profiles.mkdir(parents=True, exist_ok=True)
+        for i, (phase, mins) in enumerate(minutes):
+            (profiles / f"r{i}.json").write_text(json.dumps(
+                {"schema_version": 2, "phase": phase, "outcome_class": "success", "duration_seconds": mins * 60}))
+        return {"slug": "g-x", "tasks": list(tasks), "wave_id": "w", "branch": "feature/x"}, checkout
+
+    def test_eta_uses_the_group_s_own_medians_and_what_is_left(self):
+        now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
+        group, checkout = self._group_for_eta("t STAGE_DONE T1 commit x\n", minutes=[
+            ("implementation", 20), ("implementation", 30), ("implementation", 40), ("qa", 40)])
+        best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
+        # 2 tasks x 30 (median) + 1 verify batch x 40 + CI 8 = 108 min; one fix round adds 30 + 40.
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=108))
+        self.assertEqual(with_fix, best + dotask_cli.dt.timedelta(minutes=70))
+        self.assertIn("2 task(s) x 30 min", basis)
+        self.assertIn("medians of 4 timed dispatch(es)", basis)
+        self.assertIn("eta: PR about 11:48 (12:58 with one fix round)", dotask_cli.eta_line(group, checkout, now))
+
+    def test_eta_after_a_clean_verdict_is_ci_only_and_a_stopped_group_has_none(self):
+        now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
+        group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\nt VERIFY_PASS abc round 1\n")
+        best, with_fix, _ = dotask_cli.estimate(group, checkout, now)
+        self.assertEqual((best, with_fix), (now + dotask_cli.dt.timedelta(minutes=8), None))
+        group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\nt BLOCKED needs a ruling\n")
+        self.assertEqual(dotask_cli.estimate(group, checkout, now)[:2], (None, None))
+        self.assertIn("eta: none (stopped", dotask_cli.eta_line(group, checkout, now))
+        # Mid-verify: only the batches still to run count.
+        group, checkout = self._group_for_eta("t PUSHREADY feature/x abc verify round 1 batch 1 of 4\n")
+        self.assertIn("3 verify batch(es)", dotask_cli.estimate(group, checkout, now)[2])
+
+    def test_eta_while_a_fix_round_runs_or_restarts(self):
+        # g-t15220-10, 2026-11-07: after the last batch found problems, and after a fix dispatch was
+        # restarted, `status` estimated a whole build plus a full verify instead of the fix round.
+        now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
+        group, checkout = self._group_for_eta(
+            "t STAGE_DONE T1 commit x\nt STAGE_DONE T2 commit x\nt STAGE_DONE T3 commit x\n"
+            "t PUSHREADY feature/x abc verify round 1 batch 2 of 2\n")
+        (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(
+            {"head": "abc", "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}))
+        best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
+        self.assertIn("fix round 25 min", basis)
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 35 + 8))
+        with (checkout / ".dotask-status").open("a") as stream:
+            stream.write("t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
+                         "t RESUMED Fix round 1 dispatch 2 of 3: ran out of turns, handoff written\n")
+        self.assertIn("fix round (restarted)", dotask_cli.estimate(group, checkout, now)[2])
+
+    def test_eta_reporter_speaks_only_when_the_estimate_moves(self):
+        group, checkout = self._group_for_eta("")
+        reporter = dotask_cli.EtaReporter(group, checkout)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            reporter.report()
+            reporter.report()  # nothing changed: silent
+            (checkout / ".dotask-status").write_text("t STAGE_DONE T1 commit x\nt STAGE_DONE T2 commit x\n")
+            reporter.report()  # two tasks fewer: 50 minutes earlier
+        lines = out.getvalue().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("(was ", lines[1])
+
+    def test_status_prints_an_eta_line_per_group(self):
+        group, checkout = self._group_for_eta("")
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        (self.docker_state / f"{dotask_cli.cname('g-x')}.running").touch()
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(dotask_cli.main(["status"]), 0)
+        self.assertIn("g-x\tT1,T2,T3\trunning", out.getvalue())
+        self.assertIn("  eta: PR about", out.getvalue())
+
+    def test_status_gives_no_eta_for_a_stopped_or_merged_group(self):
+        # A merged group's file outlived its PR, and a stopped container's PUSHREADY was weeks old:
+        # both got a made-up "PR about" time (2026-11-07).
+        group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\n")
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            dotask_cli.main(["status"])
+        self.assertIn("eta: none (container stopped; `bash scripts/dotask.sh resume g-x`", out.getvalue())
+        with patch.object(dotask_cli, "merged_pr", lambda branch: "716"), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            dotask_cli.main(["status"])
+        self.assertIn("eta: done -- PR #716 merged", out.getvalue())
 
     # --- D3 / D4: land ------------------------------------------------------------
     def _group_dir_with_ports(self, slug):
@@ -794,6 +1045,476 @@ class PrelandCheckTest(unittest.TestCase):
         git_c(self.repo, "commit", "-qm", "T1: untrack")
         code, out = self._run()
         self.assertEqual(code, 0, out)
+
+
+class StartModeFlagTests(unittest.TestCase):
+    """`start` defaults to headless; --window is the opt-out."""
+
+    def _parsed(self, *argv):
+        with patch.object(dotask_cli, "start", return_value=0) as start:
+            self.assertEqual(dotask_cli.main(["start", *argv, "T1"]), 0)
+        return start.call_args.args[0]
+
+    def test_start_is_headless_by_default(self):
+        self.assertTrue(self._parsed().headless)
+
+    def test_headless_flag_is_still_accepted(self):
+        self.assertTrue(self._parsed("--headless").headless)
+
+    def test_window_opts_out_of_headless(self):
+        self.assertFalse(self._parsed("--window").headless)
+
+    def test_window_and_headless_together_are_refused(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+            dotask_cli.main(["start", "--window", "--headless", "T1"])
+        self.assertEqual(caught.exception.code, 2)
+
+
+class ContainerDefaultsTest(unittest.TestCase):
+    def test_long_commands_stay_in_the_foreground(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "settings.json"
+            path.write_text(json.dumps({"env": {"KEEP": "1", "BASH_DEFAULT_TIMEOUT_MS": "5"}}))
+            data = ensure_sonnet_default.merge(path)
+        self.assertEqual(data["env"]["KEEP"], "1")
+        self.assertEqual(data["env"]["BASH_DEFAULT_TIMEOUT_MS"], "600000")
+        self.assertEqual(data["env"]["BASH_MAX_TIMEOUT_MS"], "600000")
+
+    def test_the_stack_watches_the_bind_mount_by_polling(self):
+        stack = (dotask_cli.REPO_ROOT / ".devcontainer" / "container-stack.sh").read_text(encoding="utf-8")
+        self.assertIn("export CHOKIDAR_USEPOLLING=true", stack)
+
+
+class AutolandTest(unittest.TestCase):
+    """verify -> fix -> verify until clean or out of rounds. Dispatches are faked: no model, no Docker."""
+    TASK_TEXT = ("# T1: Fix the thing\n\n**Status:** WIP\n\n## Acceptance Criteria\n\n"
+                 "- [ ] First\n- [x] Second\n\n## Context\n\nnothing\n")
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.main_repo = self.root / "main"
+        (self.main_repo / "docs" / "plans" / "tasks").mkdir(parents=True)
+        (self.main_repo / "docs" / "plans" / "tasks" / "T1-fix-the-thing.md").write_text(self.TASK_TEXT)
+        (self.main_repo / "docs" / "plans" / "tasks" / "T1234-old.md").write_text("# T1234: old\n")
+        self.plan = self.main_repo / "docs" / "plans" / "PLAN.md"
+        self.plan.write_text("# Plan\n\n| ID | Task |\n|---|---|\n\n## Environment Configuration\n\nx\n")
+        self.tasks_root = self.root / "tasks"
+        self.checkout = self.tasks_root / "g-t1-1"
+        (self.checkout / ".git" / "info").mkdir(parents=True)
+        (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(
+            {"slug": "g-t1-1", "tasks": ["T1"], "branch": "feature/T1-x", "wave_id": "w1", "owned_files": []}))
+        self.status = self.checkout / ".dotask-status"
+        self.status.write_text("t STAGE_DONE T1 commit \"x\"\nt PUSHREADY feature/T1-x aaa\n")
+        self.head = "a" * 40
+        self.dirty = ""
+        self.verdicts = []
+        self.fix_commits = True
+        self.dispatches = []
+        self.land = MagicMock(return_value=0)
+        self.preland = [SimpleNamespace(returncode=0, stdout="", stderr="")]
+        for name, value in (("MAIN_REPO", self.main_repo), ("TASKS_ROOT", self.tasks_root),
+                            ("dispatch", self._dispatch), ("bring_up_stack", lambda slug: "http://x"),
+                            ("git_head", lambda checkout: self.head), ("land", self.land),
+                            ("tracked_changes", lambda checkout: self.dirty),
+                            ("run_preland_check", lambda checkout: self.preland[0])):
+            patcher = patch.object(dotask_cli, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _dispatch(self, slug, group, phase, instruction, task_ids=None):
+        self.dispatches.append((phase, instruction))
+        if phase == "qa":
+            verdict = self.verdicts.pop(0)
+            if verdict is not None:
+                verdict.setdefault("head", self.head)  # None-free verdicts made before a fix moved HEAD
+                (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
+        elif self.fix_commits:
+            self.head = f"{len(self.dispatches):040d}"
+        return True
+
+    def _verdict(self, statuses=("pass", "pass"), bugs=(), head=None):
+        return {"head": head or self.head, "bugs": list(bugs),
+                "criteria": [{"id": f"T1:C{i + 1}", "status": s, "evidence": "seen"} for i, s in enumerate(statuses)]}
+
+    def _run(self, no_land=False):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return dotask_cli.autoland(SimpleNamespace(slug="g-t1-1", no_land=no_land))
+
+    def _last(self):
+        return self.status.read_text().splitlines()[-1]
+
+    def _phases(self):
+        return [phase for phase, _ in self.dispatches]
+
+    def test_a_large_group_is_verified_in_batches_and_only_the_last_runs_the_regression_pass(self):
+        ids = [f"T{n}" for n in range(1, 5)]
+        for task_id in ids[1:]:
+            (self.main_repo / "docs" / "plans" / "tasks" / f"{task_id}-x.md").write_text(
+                self.TASK_TEXT.replace("T1:", f"{task_id}:"))
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        group["tasks"] = ids
+        (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        self.status.write_text("".join(f"t STAGE_DONE {t} commit \"x\"\n" for t in ids))
+
+        def batch_verdict(task_ids, status="pass"):
+            return {"bugs": [], "criteria": [
+                {"id": f"{t}:C{i}", "status": status, "evidence": "seen"} for t in task_ids for i in (1, 2)]}
+        self.verdicts = [batch_verdict(ids[:3]), batch_verdict(ids[3:], "fail"), batch_verdict(ids[3:])]
+        self.assertEqual(self._run(no_land=True), 0)
+        qa = [text for phase, text in self.dispatches if phase == "qa"]
+        # After the fix only T4 is re-checked: one batch, which also runs the regression pass.
+        self.assertEqual(self._phases(), ["qa", "qa", "implementation", "qa"])
+        self.assertIn("T1, T2, T3", qa[0])
+        self.assertIn("Skip the regression pass", qa[0])
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[1])
+        self.assertIn("T4:C1, T4:C2", qa[2])
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[2])
+        # The fix worker saw the whole round, not just the last batch.
+        merged = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-1.json").read_text())
+        self.assertEqual(len(merged["criteria"]), 8)
+        final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
+        self.assertEqual(len(final["criteria"]), 8)
+        self.assertEqual(sum("carried_from" in c for c in final["criteria"]), 6)
+
+    def test_after_a_fix_round_only_the_failed_criteria_are_re_checked_and_earlier_passes_carry(self):
+        first_head = self.head
+        bug = {"scope": "group", "task": "T1", "title": "Crash on save", "actual": "boom"}
+        self.verdicts = [self._verdict(("pass", "fail"), bugs=[bug])]
+        original = self._dispatch
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            if phase == "implementation":
+                self.verdicts.append(None)
+            result = original(slug, group, phase, instruction)
+            if phase == "implementation":  # the re-check reports only what it was asked to prove
+                self.verdicts[-1] = {"head": self.head, "bugs": [],
+                                     "criteria": [{"id": "T1:C2", "status": "pass", "evidence": "fixed"}]}
+            return result
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        qa = [text for phase, text in self.dispatches if phase == "qa"]
+        self.assertIn("EVERY criterion", qa[0])
+        scope = next(line for line in qa[1].splitlines() if line.startswith("1. "))
+        self.assertIn("Prove ONLY these criteria", scope)
+        self.assertIn("same id: T1:C2.", scope)
+        self.assertNotIn("T1:C1", scope)  # the JSON example below step 1 always shows T1:C1
+        self.assertIn("Crash on save", scope)
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[1])
+        final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
+        self.assertEqual([c["id"] for c in final["criteria"]], ["T1:C1", "T1:C2"])
+        self.assertEqual(final["criteria"][0]["carried_from"], first_head)
+        self.assertNotIn("carried_from", final["criteria"][1])
+        self.assertIn("VERIFY_PASS", self._last())
+
+    def test_a_restart_after_the_fix_round_resumes_with_only_the_failed_criteria(self):
+        # The process that ran round 1 and its fix was stopped; HEAD has the fix commit.
+        old_head = "b" * 40
+        (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(self._verdict(("pass", "fail"), head=old_head)))
+        waves = self.tasks_root / "waves" / "w1"
+        waves.mkdir(parents=True)
+        (waves / "verify-round-1.json").write_text(json.dumps({"head": old_head}))
+        self.verdicts = [{"bugs": [], "criteria": [{"id": "T1:C2", "status": "pass", "evidence": "fixed"}]}]
+        with patch.object(dotask_cli, "is_ancestor", lambda checkout, older, newer: older == old_head):
+            self.assertEqual(self._run(no_land=True), 0)
+        qa = [text for phase, text in self.dispatches if phase == "qa"]
+        self.assertEqual(len(qa), 1)
+        self.assertIn("Prove ONLY these criteria", qa[0])
+        final = json.loads((waves / "verify-round-2.json").read_text())
+        self.assertEqual(final["criteria"][0]["carried_from"], old_head)
+        self.assertIn("VERIFY_PASS", self._last())
+
+    def test_a_restart_with_no_fix_since_the_verdict_verifies_everything(self):
+        (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(self._verdict(("pass", "fail"))))
+        self.verdicts = [self._verdict()]
+        with patch.object(dotask_cli, "is_ancestor", lambda checkout, older, newer: True):
+            self.assertEqual(self._run(no_land=True), 0)
+        qa = [text for phase, text in self.dispatches if phase == "qa"]
+        self.assertIn("EVERY criterion", qa[0])
+
+    def test_a_re_check_that_skips_a_failed_criterion_never_passes(self):
+        self.verdicts = [self._verdict(("fail", "pass"))]
+        original = self._dispatch
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            if phase == "implementation":
+                self.verdicts.append(None)
+            result = original(slug, group, phase, instruction)
+            if phase == "implementation":  # C1 failed, but the verifier reports only C2
+                self.verdicts[-1] = {"head": self.head, "bugs": [],
+                                     "criteria": [{"id": "T1:C2", "status": "pass", "evidence": "seen"}]}
+            return result
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(), 1)
+        self.land.assert_not_called()
+        self.assertIn("missing T1:C1", self._last())
+
+    def test_clean_verdict_records_the_head_and_lands_it(self):
+        self.verdicts = [self._verdict()]
+        self.assertEqual(self._run(), 0)
+        self.assertEqual(self._phases(), ["qa"])
+        self.land.assert_called_once()
+        self.assertTrue(self.land.call_args.args[0].after_test)
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual(group["tested_head"], self.head)
+        self.assertIn("VERIFY_PASS", self._last())
+
+    def test_no_land_stops_after_a_clean_verdict(self):
+        self.verdicts = [self._verdict()]
+        self.assertEqual(self._run(no_land=True), 0)
+        self.land.assert_not_called()
+
+    def test_failed_criterion_goes_to_a_fix_dispatch_then_a_fresh_verify(self):
+        self.verdicts = [self._verdict(("pass", "fail"))]
+        original = self._dispatch
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            if phase == "implementation":
+                self.verdicts.append(None)
+            result = original(slug, group, phase, instruction)
+            if phase == "implementation":
+                self.verdicts[-1] = self._verdict()
+            return result
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(), 0)
+        self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
+        self.land.assert_called_once()
+
+    def test_a_verifier_batch_that_runs_out_of_turns_is_rerun_one_task_at_a_time(self):
+        (self.checkout / ".dotask-profile").mkdir()
+        ids = [f"T{n}" for n in range(1, 5)]
+        for task_id in ids[1:]:
+            (self.main_repo / "docs" / "plans" / "tasks" / f"{task_id}-x.md").write_text(
+                self.TASK_TEXT.replace("T1:", f"{task_id}:"))
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        group["tasks"] = ids
+        (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        self.status.write_text("".join(f"t STAGE_DONE {t} commit \"x\"\n" for t in ids))
+        qa_calls = []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            qa_calls.append(instruction)
+            first = len(qa_calls) == 1
+            (self.checkout / ".dotask-profile" / f"{len(qa_calls)}.json").write_text(json.dumps(
+                {"schema_version": 2, "started_at": f"2026-11-07T{len(qa_calls):02d}:00:00+00:00",
+                 "outcome_class": "budget_stop" if first else "success", "requests": 120}))
+            if first:
+                return False  # the three-task batch ran out of turns: no verdict file
+            batch = [t for t in ids if f"({t})" in instruction or f"{t}, " in instruction or f", {t}" in instruction]
+            (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps({"head": self.head, "bugs": [], "criteria": [
+                {"id": f"{t}:C{i}", "status": "pass", "evidence": "seen"} for t in batch for i in (1, 2)]}))
+            return True
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        self.assertEqual(len(qa_calls), 5)  # T1-T3 together, then T1, T2, T3 alone, then T4
+        self.assertIn("(T1, T2, T3)", qa_calls[0])
+        self.assertIn("(T1)", qa_calls[1])
+        self.assertIn("batch 2 of 5", qa_calls[1])
+        self.assertIn("(T4)", qa_calls[4])
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa_calls[4])
+        self.assertNotIn(dotask_cli.REGRESSION_STEP, qa_calls[3])
+        merged = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-1.json").read_text())
+        self.assertEqual(len(merged["criteria"]), 8)
+
+    def test_a_fix_round_that_runs_out_of_turns_is_restarted_with_a_handoff(self):
+        (self.checkout / ".dotask-profile").mkdir()
+        self.verdicts = [self._verdict(("fail", "pass"))]
+        original, fix_attempts = self._dispatch, []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            if phase != "implementation":
+                return original(slug, group, phase, instruction)
+            self.dispatches.append((phase, instruction))
+            fix_attempts.append(instruction)
+            outcome = "budget_stop" if len(fix_attempts) == 1 else "success"
+            (self.checkout / ".dotask-profile" / f"{len(fix_attempts)}.json").write_text(json.dumps(
+                {"schema_version": 2, "started_at": f"2026-11-07T0{len(fix_attempts)}:00:00+00:00",
+                 "outcome_class": outcome, "requests": 120}))
+            if outcome == "success":  # the worker finishes: commit, then its PUSHREADY line
+                self.head = "b" * 40
+                self.verdicts.append(self._verdict(head=self.head))
+                with self.status.open("a") as stream:
+                    stream.write("t PUSHREADY feature/T1-x bbb fix round 1\n")
+            return True
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        self.assertEqual(self._phases(), ["qa", "implementation", "implementation", "qa"])
+        self.assertIn("handoff section", fix_attempts[1])
+        self.assertIn("## fix round 1 T1 handoff", (self.checkout / ".dotask-notes.md").read_text())
+        self.assertIn("RESUMED fix round 1 T1 dispatch 2 of 3", self.status.read_text())
+
+    def test_a_human_criterion_the_owner_ruled_check_on_staging_rides_in_the_pr(self):
+        (self.main_repo / "docs" / "plans" / "tasks" / "T1-fix-the-thing.md").write_text(
+            self.TASK_TEXT.replace("## Acceptance Criteria",
+                                   "**2026-11-07 (owner ruling)**: C2 verified on staging after merge.\n\n"
+                                   "## Acceptance Criteria"))
+        self.verdicts = [self._verdict(("pass", "human"))]
+        self.assertEqual(self._run(), 0)
+        self.land.assert_called_once()
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual(group["staging_checks"], [{"id": "T1:C2", "text": "Second"}])
+        self.assertIn("VERIFY_PASS", self._last())
+        self.assertIn("check on staging after merge: T1:C2", self._last())
+        body = dotask_cli.render_pr_body(group)
+        self.assertIn("Check on staging after merge", body)
+        self.assertIn("- T1:C2: Second", body)
+
+    def test_staging_deferred_reads_a_ruling_named_or_placed_under_the_criterion(self):
+        path = self.root / "T9-x.md"
+        path.write_text("# T9: x\n\n## Acceptance Criteria\n\n- [ ] a\n- [ ] b\n  Ruling (owner, 2026-11-07): "
+                        "verify on staging after merge.\n- [ ] c\n")
+        self.assertEqual(dotask_cli.staging_deferred(path), {"T9:C2"})
+        path.write_text("# T9: x\n\nWe could check C1 on staging some day.\n\n## Acceptance Criteria\n\n- [ ] a\n")
+        self.assertEqual(dotask_cli.staging_deferred(path), set())  # a thought, not an owner ruling
+
+    def test_group_bug_blocks_even_when_every_criterion_passes(self):
+        bug = {"scope": "group", "title": "New crash", "actual": "boom"}
+        self.verdicts = [self._verdict(bugs=[bug])]
+        self.fix_commits = False
+        self.assertEqual(self._run(), 1)
+        self.land.assert_not_called()
+        self.assertEqual(self._phases(), ["qa", "implementation"])
+
+    def test_stops_after_three_fix_rounds_without_landing(self):
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            self.dispatches.append((phase, instruction))
+            if phase == "qa":
+                (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(self._verdict(("fail", "pass"))))
+            else:
+                self.head = f"{len(self.dispatches):040d}"
+            return True
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(), 1)
+        self.assertEqual(self._phases(), ["qa", "implementation"] * 3 + ["qa"])
+        self.land.assert_not_called()
+        self.assertIn("VERIFY_EXHAUSTED", self._last())
+
+    def test_verdict_covering_fewer_criteria_than_the_task_file_never_passes(self):
+        self.verdicts = [self._verdict(("pass",))]
+        self.assertEqual(self._run(), 1)
+        self.land.assert_not_called()
+        self.assertIn("VERIFY_BLOCKED", self._last())
+
+    def test_verdict_for_another_head_never_passes(self):
+        self.verdicts = [self._verdict(head="b" * 40)]
+        self.assertEqual(self._run(), 1)
+        self.land.assert_not_called()
+
+    def test_missing_verdict_and_unknown_status_never_pass(self):
+        for verdict in (None, self._verdict(("pass", "probably"))):
+            self.verdicts = [verdict]
+            (self.checkout / dotask_cli.VERIFY_FILE).unlink(missing_ok=True)
+            self.assertEqual(self._run(), 1)
+        self.land.assert_not_called()
+
+    def test_verifier_that_changes_the_tree_is_not_trusted(self):
+        self.verdicts = [self._verdict()]
+        self.dirty = " M src/thing.py"
+        self.assertEqual(self._run(), 1)
+        self.land.assert_not_called()
+        self.assertIn("VERIFY_BLOCKED", self._last())
+
+    def test_human_only_criterion_stops_before_the_push(self):
+        self.verdicts = [self._verdict(("pass", "human"))]
+        self.assertEqual(self._run(), 0)
+        self.land.assert_not_called()
+        self.assertIn("VERIFY_NEEDS_USER", self._last())
+
+    def test_unrelated_bug_is_filed_once_and_does_not_block(self):
+        bug = {"scope": "unrelated", "title": "Old menu glitch", "steps": "open", "expected": "a", "actual": "b"}
+        self.verdicts = [self._verdict(bugs=[bug])]
+        self.assertEqual(self._run(), 0)
+        self.land.assert_called_once()
+        filed = self.main_repo / "docs" / "plans" / "tasks" / "T1240-old-menu-glitch.md"
+        self.assertIn("Old menu glitch", filed.read_text())
+        plan = self.plan.read_text()
+        self.assertIn("| T1240 | [Old menu glitch](tasks/T1240-old-menu-glitch.md) |", plan)
+        self.assertLess(plan.index(dotask_cli.BUG_SECTION), plan.index("## Environment Configuration"))
+        self.assertIsNone(dotask_cli.file_unrelated_bug(bug, {"slug": "g"}, "abc"))
+        self.assertEqual(self.plan.read_text().count("Old menu glitch"), 1)
+
+    def test_preland_failure_goes_to_the_worker_without_a_verify(self):
+        self.preland = [SimpleNamespace(returncode=1, stdout="FAIL: whitespace", stderr="")]
+        self.fix_commits = False
+        self.assertEqual(self._run(), 1)
+        self.assertEqual(self._phases(), ["implementation"])
+        self.assertIn("whitespace", (self.checkout / dotask_cli.VERIFY_FILE).read_text())
+
+    def test_a_fix_round_works_one_task_at_a_time_and_a_stuck_task_does_not_block_the_rest(self):
+        # g-t15220-10, 2026-11-07: one worker given every finding chased the hardest one through three
+        # restarts and committed nothing, while three easy fixes sat uncommitted.
+        (self.main_repo / "docs" / "plans" / "tasks" / "T2-x.md").write_text(self.TASK_TEXT.replace("T1:", "T2:"))
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        group["tasks"] = ["T1", "T2"]
+        (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        self.status.write_text("t STAGE_DONE T1 commit x\nt STAGE_DONE T2 commit x\n")
+        first = {"bugs": [{"scope": "group", "task": "T2", "title": "Subtitle missing"}], "criteria": [
+            {"id": "T1:C1", "status": "fail", "evidence": "x"}, {"id": "T1:C2", "status": "pass", "evidence": "x"},
+            {"id": "T2:C1", "status": "pass", "evidence": "x"}, {"id": "T2:C2", "status": "pass", "evidence": "x"}]}
+        self.verdicts = [first]
+        fixes = []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            if phase == "qa":
+                return self._dispatch(slug, group, phase, instruction)
+            fixes.append((task_ids, instruction))
+            if task_ids == ["T2"]:  # T1 is the hard one and commits nothing; T2 commits
+                self.head = "c" * 40
+                self.verdicts.append({"bugs": [], "criteria": [{"id": "T1:C1", "status": "pass", "evidence": "x"}]})
+            return True
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        self.assertEqual([t for t, _ in fixes], [["T1"], ["T2"]])
+        self.assertIn("fixes ONLY T1's findings: T1:C1.", fixes[0][1])
+        self.assertNotIn("Subtitle missing", fixes[0][1])
+        self.assertIn("T2's findings: bug: Subtitle missing", fixes[1][1])
+        self.assertIn("## fix round 1 T2 progress", fixes[1][1])
+        self.assertIn("FIX_SKIPPED fix round 1 T1: no commit", self.status.read_text())
+        self.assertIn("VERIFY_PASS", self._last())
+
+    def test_fix_dispatch_with_no_commit_stops(self):
+        self.verdicts = [self._verdict(("fail", "pass"))]
+        self.fix_commits = False
+        self.assertEqual(self._run(), 1)
+        self.assertIn("committed nothing", self._last())
+
+    def test_refuses_until_every_task_has_its_commit_line(self):
+        self.status.write_text("t STAGE_DONE T9 commit \"x\"\n")
+        with self.assertRaises(SystemExit):
+            self._run()
+        self.assertEqual(self.dispatches, [])
+
+    def test_acceptance_count_reads_only_that_section_and_numbered_items(self):
+        path = self.root / "t.md"
+        path.write_text("## Solution\n- [ ] not this\n## Acceptance Criteria\n- [ ] a\n1. [x] b\n* [ ] c\nprose\n## After\n- [ ] no\n")
+        self.assertEqual(dotask_cli.acceptance_count(path), 3)
+
+
+class DispatchTurnCapTest(unittest.TestCase):
+    """task.sh's 120-turn default starved the verifier twice on g-t15220-10 (2026-11-07): qa gets its own cap."""
+
+    def _env_seen_by_task_sh(self, phase, environ):
+        seen = {}
+
+        def run(cmd, env=None, **kwargs):
+            seen.update(env)
+            return SimpleNamespace(returncode=1)
+        with patch.dict(os.environ, environ), patch.object(dotask_cli.subprocess, "run", run), \
+                patch.object(dotask_cli, "bash", lambda: "bash"):
+            if "DOTASK_MAX_TURNS" not in environ:
+                os.environ.pop("DOTASK_MAX_TURNS", None)
+            dotask_cli.dispatch("g-t1-1", {"wave_id": "w1", "tasks": ["T1"]}, phase, "go")
+        return seen
+
+    def test_a_qa_dispatch_gets_the_higher_cap(self):
+        self.assertEqual(self._env_seen_by_task_sh("qa", {})["DOTASK_MAX_TURNS"], "200")
+
+    def test_an_implementation_dispatch_keeps_task_sh_s_default(self):
+        self.assertNotIn("DOTASK_MAX_TURNS", self._env_seen_by_task_sh("implementation", {}))
+
+    def test_an_explicit_cap_wins_for_every_phase(self):
+        self.assertEqual(self._env_seen_by_task_sh("qa", {"DOTASK_MAX_TURNS": "50"})["DOTASK_MAX_TURNS"], "50")
 
 
 if __name__ == "__main__":

@@ -160,6 +160,8 @@ jobs:
           cache: npm
           cache-dependency-path: src/landing/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Unit test (attribution.ts; node --test, no browser/Playwright)
+        run: npm test
       - name: Build (the command deploy-landing.yml ships; pulls @editor modules from src/frontend)
         run: npm run build
 

@@ -38,51 +38,33 @@ const { trail, current, ...base } = Astro.props
   <Footer />
 
   <!--
-    Carry attribution query params (utm_*, ref, etc.) across to the app, which
-    is a different host. Progressive enhancement: without JS the CTA still
-    links correctly, it just loses the params.
-
-    T7910: also relay the ORIGINAL external referrer host as `lref`. The app's
-    own document.referrer would read this landing host after the hop, losing the
-    real source (reddit, a search engine, ...), so we capture it here. Hostname
-    ONLY — never the full referrer URL. The landing sets no Referrer-Policy, so
-    the browser default (strict-origin-when-cross-origin) still yields the
-    cross-origin origin, which is all we need.
+    Carry attribution params across to the app (a different host), surviving
+    a multi-page visit: T15000 writes a per-tab first-touch record on the
+    FIRST page and merges it into every a[data-cta] href on every page after
+    that (see src/attribution.ts for the policy). Progressive enhancement:
+    without JS, or with storage blocked, the CTA still links correctly, it
+    just loses the params.
   -->
-  <script is:inline>
-    ;(function () {
-      var search = window.location.search
+  <script>
+    import { readFirstTouch, applyFirstTouch } from '../attribution'
 
-      // Strip a leading www. so apex<->www navigation isn't treated as external.
-      function bare(h) { return h.replace(/^www\./i, '') }
-
-      var lref = ''
-      try {
-        if (document.referrer) {
-          var refHost = new URL(document.referrer).hostname
-          if (refHost && bare(refHost) !== bare(window.location.hostname)) {
-            lref = refHost
-          }
-        }
-      } catch (e) { /* malformed referrer — leave lref empty */ }
-
-      if (!search && !lref) return
-
-      var incoming = new URLSearchParams(search)
-      document.querySelectorAll('a[data-cta]').forEach(function (a) {
+    try {
+      const record = readFirstTouch(
+        window.location.search,
+        document.referrer,
+        window.location.hostname,
+        window.location.pathname,
+        window.sessionStorage,
+      )
+      document.querySelectorAll<HTMLAnchorElement>('a[data-cta]').forEach((a) => {
         try {
-          var url = new URL(a.href)
-          incoming.forEach(function (v, k) {
-            if (!url.searchParams.has(k)) url.searchParams.set(k, v)
-          })
-          if (lref && !url.searchParams.has('lref') && !incoming.has('lref')) {
-            url.searchParams.set('lref', lref)
-          }
-          a.href = url.toString()
-        } catch (e) {
+          a.href = applyFirstTouch(a.href, record)
+        } catch {
           /* leave the href untouched */
         }
       })
-    })()
+    } catch {
+      /* storage unavailable — links keep their default href */
+    }
   </script>
 </BaseLayout>
