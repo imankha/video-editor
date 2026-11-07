@@ -61,7 +61,14 @@ Two bugs:
 
 ## Acceptance Criteria
 
-- [ ] Opening Frame with Guidance on shows step 1 of 5 first, including when a box is already placed
+- [ ] Opening Frame with Guidance on never skips the drag-confirmation step because a box is
+      already placed: it shows first among the steps this task owns, with the pre-placed copy
+      variant (`GUIDE.focus.dragPrePlaced`). The literal step number is no longer fixed at "1 of 5":
+      T14770 (same group, ordered to run after this task per its own task file) inserted a new,
+      legitimately-skippable shape-choice step ahead of it, so the final sequence is 6 steps and
+      this one renders as "Step 2 of 6" when the shape choice applies (confirmed in
+      `FocusModeView.guidedSteps.test.jsx`). Counting this against the original "1 of 5" wording is
+      a cross-task renumbering artifact, not a regression in this task's own fix.
 - [ ] Got it never leaves the screen shaded with no card
 - [ ] After each gesture the guide advances to the next step that applies
 - [ ] Guide copy uses glossary words (box, position, athlete, Sharpen my highlight)
