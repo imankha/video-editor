@@ -56,8 +56,7 @@ import { useCreditStore } from './stores/creditStore';
 import { useConfigStore } from './stores/configStore';
 import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
-import { captureCampaignParams, stripCampaignParams } from './utils/campaignCapture';
-import { isPublicRoute } from './stores/editorStore';
+import { captureCampaignParams } from './utils/campaignCapture';
 import { setPendingGame, hasPendingProject } from './utils/pendingNavigation';
 import { openEmailGameLink } from './utils/emailGameLink';
 import { markBootstrapSettled, settleBootstrapAfter } from './utils/deepLinkRecovery';
@@ -158,8 +157,6 @@ function App() {
   // T3455: Capture campaign params from URL (first-touch attribution)
   useEffect(() => {
     captureCampaignParams(window.location.search, document.referrer, window.location.hostname);
-    // T15220: public routes are never canonicalized, so their address stays as it arrived.
-    if (!isPublicRoute()) stripCampaignParams();
   }, []);
 
   // T7670: Upload-complete email deep link (?game=<id>&profile=<profileId>).

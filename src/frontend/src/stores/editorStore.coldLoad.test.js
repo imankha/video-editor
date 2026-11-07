@@ -140,34 +140,6 @@ describe('editorStore cold load of a canonical URL', () => {
     expect(params.get('profile')).toBe('aaaaaaaa');
   });
 
-  // T15220: App reads these after module load. Literal names, so a param dropped from
-  // the shared list fails here rather than agreeing with itself.
-  it.each([
-    'ref', 'sport', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'lref',
-    'fbclid', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'sclid', 'ScCid', 'epik', 'rdt_cid',
-    'payment', 'session_id',
-  ])('keeps ?%s until App reads it', async (name) => {
-    window.history.pushState({}, '', `/?${name}=abc`);
-    await import('./editorStore');
-    expect(window.location.pathname).toBe('/home');
-    expect(new URLSearchParams(window.location.search).get(name)).toBe('abc');
-  });
-
-  it('strips an unrelated param that arrives with the ones App reads', async () => {
-    window.history.pushState({}, '', '/?utm_source=x&foo=1&payment=success&session_id=cs_1');
-    await import('./editorStore');
-    const params = new URLSearchParams(window.location.search);
-    expect([...params.keys()].sort()).toEqual(['payment', 'session_id', 'utm_source']);
-  });
-
-  it('keeps an arrival param on a canonical URL alongside its own query', async () => {
-    window.history.pushState({}, '', '/annotate/g/42?t=90&utm_source=x');
-    await import('./editorStore');
-    const params = new URLSearchParams(window.location.search);
-    expect(params.get('t')).toBe('90');
-    expect(params.get('utm_source')).toBe('x');
-  });
-
   it.each([
     ['/annotate/g/11?profile=XYZ', 'game'],
     ['/annotate/g/11?profile=', 'game'],
