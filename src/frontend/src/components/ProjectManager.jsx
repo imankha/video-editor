@@ -690,7 +690,9 @@ export function ProjectManager({
     setActiveTabRaw(tab);
     const path = TAB_PATHS[tab];
     if (window.location.pathname !== path) {
-      window.history.replaceState(null, '', path);
+      // T15220: the tab switch owns only the pathname. A query string still
+      // holds params App hasn't read yet (e.g. a Stripe return), so keep it.
+      window.history.replaceState(null, '', path + window.location.search);
     }
   }, []);
   const seenGamesTabRequest = useRef(gamesTabRequest);

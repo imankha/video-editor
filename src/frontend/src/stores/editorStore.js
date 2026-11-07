@@ -11,6 +11,7 @@ import {
   adoptUrlProject,
 } from '../utils/pendingNavigation';
 import { getProfileId } from '../utils/sessionInit';
+import { CAMPAIGN_PARAMS } from '../utils/campaignCapture';
 import { useProfileStore } from './profileStore';
 import { useFocusStore } from './focusStore';
 import { useProjectDataStore } from './projectDataStore';
@@ -599,6 +600,8 @@ async function handlePopState() {
   });
 }
 
+const APP_READ_PARAMS = [...CAMPAIGN_PARAMS, 'payment', 'session_id'];
+
 if (window.__popstateHandler) {
   window.removeEventListener('popstate', window.__popstateHandler);
 } else if (!isPublicRoute()) {
@@ -627,6 +630,10 @@ if (window.__popstateHandler) {
     params.set('game', incoming.get('game'));
     if (incoming.has('profile')) params.set('profile', incoming.get('profile'));
   }
+  // T15220: the arrival params App reads after this runs. App removes them once read.
+  APP_READ_PARAMS.forEach((name) => {
+    if (incoming.has(name)) params.set(name, incoming.get(name));
+  });
   const query = params.toString();
   window.history.replaceState({ mode }, '', coldPath + (query ? `?${query}` : ''));
 }

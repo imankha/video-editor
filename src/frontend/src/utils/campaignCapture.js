@@ -7,6 +7,13 @@
  * visit stores it alone, so first-touch must ignore it or a later ?ref= link in
  * this tab would be dropped.
  */
+// Every query param captureCampaignParams reads. editorStore keeps these through its
+// module-load canonicalization, which runs before App can read them (T15220).
+export const CAMPAIGN_PARAMS = [
+  'ref', 'sport', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'lref',
+  'fbclid', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'sclid', 'ScCid', 'epik', 'rdt_cid',
+];
+
 function storedParams() {
   const raw = sessionStorage.getItem('campaignParams');
   return raw ? JSON.parse(raw) : {};
@@ -78,4 +85,11 @@ export function captureCampaignParams(search, referrer, hostname) {
     if (referrer_host) data.referrer_host = referrer_host;
     sessionStorage.setItem('campaignParams', JSON.stringify(data));
   }
+}
+
+/** Once read, these do not stay in the address: a copied link would pass on this visit's attribution. */
+export function stripCampaignParams() {
+  const url = new URL(window.location.href);
+  CAMPAIGN_PARAMS.forEach((name) => url.searchParams.delete(name));
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
