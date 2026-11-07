@@ -84,6 +84,9 @@ describe('FocusCockpit guide sentence (T12790)', () => {
 
   it('says to drag the box before any focus point', () => {
     renderCockpit({ keyframes: [] });
+    // T14770: step 1 asks where it will be shared; the box step follows the shape choice.
+    expect(text()).toBe(GUIDE.focus.shareWhere);
+    fireEvent.click(screen.getByTestId('focus-shape-option-portrait'));
     expect(text()).toBe(GUIDE.focus.drag);
   });
 

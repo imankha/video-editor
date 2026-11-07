@@ -1072,9 +1072,9 @@ export function ExportButtonContainer({
     handleExport: () => requireAuth(() => {
       if (needsBoxConfirm) {
         setShowBoxConfirm(true);
-        return;
+        return undefined;
       }
-      handleExport();
+      return handleExport();
     }),
     handleRetryConnection,
     handleDismissExport,
