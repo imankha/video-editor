@@ -36,7 +36,7 @@ skipOnDeployedTarget(
 );
 
 // The three IN-GRID choices (Save draft is a quiet link outside the card grid).
-const LABELS = ['Finish', 'Redo spotlight', 'Edit framing'];
+const LABELS = ['Finish', 'Redo spotlight', 'Edit zoom'];
 
 // Count resolved grid-template-columns tracks (each track resolves to a px
 // value, so the token count == the column count). The measurement the task
@@ -90,7 +90,7 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
 
     // Reapply Framing -> its own confirming toast + closes.
     await page.getByTestId('diag-reopen').click();
-    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Edit framing', exact: true }).click();
+    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Edit zoom', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'reapply-focus');
     await expect(page.getByText('Spotlight kept')).toBeVisible();
 

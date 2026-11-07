@@ -805,14 +805,14 @@ export function formatApproxMinutes(gpuSeconds) {
 // stays the toast/job-row string. No em dashes anywhere.
 // T11810: one caption pair shared by the Focus and Overlay ready screens.
 const FINISH_CAPTION = 'Moves it to Highlights. Only you can see it until you share a link.';
-const EDIT_FRAMING_CAPTION_TEXT = 'Change the framing and sharpen it again. Uses credits.';
+const EDIT_FRAMING_CAPTION_TEXT = 'Change your zoom and sharpen it again. Uses credits.';
 export const FOCUS_PUBLISH = {
   HEADLINE: 'Your highlight is ready',
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
   SPOTLIGHT_CAPTION: 'Show everyone watching which athlete is yours.',
   PUBLISH_LABEL: 'Finish without spotlight',
   PUBLISH_CAPTION: FINISH_CAPTION,
-  EDIT_FRAMING_LABEL: 'Edit framing',
+  EDIT_FRAMING_LABEL: 'Edit zoom',
   EDIT_FRAMING_CAPTION: EDIT_FRAMING_CAPTION_TEXT,
   SAVE_DRAFT_LABEL: 'Done for now',
 };
@@ -1158,7 +1158,7 @@ export const OVERLAY_PUBLISH = {
   PUBLISH_CAPTION: FINISH_CAPTION,
   REAPPLY_OVERLAY_LABEL: 'Redo spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and change the spotlight.',
-  REAPPLY_FOCUS_LABEL: 'Edit framing',
+  REAPPLY_FOCUS_LABEL: 'Edit zoom',
   REAPPLY_FOCUS_CAPTION: EDIT_FRAMING_CAPTION_TEXT,
   SAVE_DRAFT_LABEL: 'Done for now',
 };
