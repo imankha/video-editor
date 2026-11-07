@@ -71,18 +71,35 @@ describe('getExportLabel — no internal ids, ever (T8510)', () => {
   });
 });
 
-describe('resolveEtaDisplay — honest ETA (T8510)', () => {
-  it('returns the live estimate while the promise holds', () => {
-    const exp = makeExport({ percent: 50, elapsedSec: 60 });
-    const display = resolveEtaDisplay(exp, NOW, new Map(), new Map());
+describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
+  it('returns null before any frame has been reported (frames not flowing yet)', () => {
+    // T14860: the original bug -- percent=5 during "Getting your video ready" used to
+    // extrapolate a "Less than a minute remaining" promise before rendering even started.
+    const exp = makeExport({ percent: 5, elapsedSec: 2, message: 'Getting your video ready...' });
+    expect(resolveEtaDisplay(exp, NOW, new Map(), new Map(), new Map())).toBeNull();
+  });
+
+  it('returns null on the very first frame sample (no rate yet)', () => {
+    const exp = makeExport({ percent: 10, elapsedSec: 10, message: 'AI upscaling frame 20/150' });
+    const frameTracks = new Map([[exp.exportId, { frame: 20, at: NOW }]]);
+    expect(resolveEtaDisplay(exp, NOW, new Map(), new Map(), frameTracks)).toBeNull();
+  });
+
+  it('returns a live estimate from the measured per-frame rate once frames advance', () => {
+    // 50 frames in 25s -> 500ms/frame; 50 remaining -> 25s + 30s fixed tail = 55s,
+    // rounded up to the next 30s = 60s = "About 1 minute".
+    const exp = makeExport({ percent: 60, elapsedSec: 60, message: 'AI upscaling frame 100/150' });
+    const frameTracks = new Map([[exp.exportId, { frame: 50, at: NOW - 25000 }]]);
+    const display = resolveEtaDisplay(exp, NOW, new Map(), new Map(), frameTracks);
     expect(display.stale).toBe(false);
     expect(display.formatted).toBe('About 1 minute');
   });
 
   it('goes stale once the promised deadline is exceeded by the grace period', () => {
-    const exp = makeExport({ percent: 95, elapsedSec: 60, message: 'Upscaling...' });
+    const exp = makeExport({ percent: 95, elapsedSec: 60, message: 'AI upscaling frame 140/150' });
+    const frameTracks = new Map([[exp.exportId, { frame: 100, at: NOW - 50000 }]]);
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS - 1000]]);
-    const display = resolveEtaDisplay(exp, NOW, deadlines, new Map());
+    const display = resolveEtaDisplay(exp, NOW, deadlines, new Map(), frameTracks);
     expect(display.stale).toBe(true);
     // T9540: the raw engineering message is now mapped to honest N37 copy.
     // T9860 (3.3): upscaling now maps to its own "Sharpening the picture" phase, not Rendering.
@@ -90,36 +107,33 @@ describe('resolveEtaDisplay — honest ETA (T8510)', () => {
   });
 
   it('stays live inside the 15s grace window past the deadline', () => {
-    const exp = makeExport({ percent: 95, elapsedSec: 60 });
+    const exp = makeExport({ percent: 95, elapsedSec: 60, message: 'AI upscaling frame 140/150' });
+    const frameTracks = new Map([[exp.exportId, { frame: 100, at: NOW - 50000 }]]);
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS + 5000]]);
-    expect(resolveEtaDisplay(exp, NOW, deadlines, new Map()).stale).toBe(false);
+    expect(resolveEtaDisplay(exp, NOW, deadlines, new Map(), frameTracks).stale).toBe(false);
   });
 
-  it('never shows "Less than a minute" while percent has been frozen for >30s', () => {
-    // percent 95 after 60s -> remaining ~3s -> "Less than a minute"
-    const exp = makeExport({ percent: 95, elapsedSec: 60 });
+  it('never trusts a near-done ("about 1 minute") estimate while frames have been frozen for >30s', () => {
+    // frame === totalFrames -> 0 remaining frames -> the estimate is just the fixed
+    // post-upscale tail (30s = "About 1 minute"), the sub-minute case the stall rule guards.
+    const exp = makeExport({ percent: 95, elapsedSec: 60, message: 'AI upscaling frame 150/150' });
+    const frameTracks = new Map([[exp.exportId, { frame: 100, at: NOW - 50000 }]]);
     const tracks = new Map([[exp.exportId, { percent: 95, changedAt: NOW - ETA_STALL_MS - 1000 }]]);
-    const display = resolveEtaDisplay(exp, NOW, new Map(), tracks);
+    const display = resolveEtaDisplay(exp, NOW, new Map(), tracks, frameTracks);
     expect(display.stale).toBe(true);
   });
 
   it('a multi-minute estimate is NOT hidden by the stall rule (only sub-minute ones)', () => {
-    // percent 30 after 300s -> remaining 700s -> "About 12 minutes"
-    const exp = makeExport({ percent: 30, elapsedSec: 300 });
+    const exp = makeExport({ percent: 30, elapsedSec: 300, message: 'AI upscaling frame 60/150' });
+    const frameTracks = new Map([[exp.exportId, { frame: 10, at: NOW - 250000 }]]);
     const tracks = new Map([[exp.exportId, { percent: 30, changedAt: NOW - ETA_STALL_MS - 1000 }]]);
-    expect(resolveEtaDisplay(exp, NOW, new Map(), tracks).stale).toBe(false);
+    expect(resolveEtaDisplay(exp, NOW, new Map(), tracks, frameTracks).stale).toBe(false);
   });
 
-  it('falls back to "Still working..." when no stage message is available', () => {
+  it('returns null while a frame rate has not been observed, even late into the job', () => {
     const exp = makeExport({ percent: 95, elapsedSec: 60, message: '' });
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS - 1000]]);
-    // T9540: no phase + empty message -> the presenter yields the generic 'Processing...' line.
-    expect(resolveEtaDisplay(exp, NOW, deadlines, new Map()).fallbackText).toBe('Processing...');
-  });
-
-  it('returns null when there is not enough data to estimate (percent < 5)', () => {
-    const exp = makeExport({ percent: 3, elapsedSec: 60 });
-    expect(resolveEtaDisplay(exp, NOW, new Map(), new Map())).toBeNull();
+    expect(resolveEtaDisplay(exp, NOW, deadlines, new Map(), new Map())).toBeNull();
   });
 });
 
@@ -187,21 +201,36 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
     expect(document.body.textContent).not.toMatch(/export/i);
   });
 
-  it('switches a busted "Less than a minute" to the stage message within the grace window', () => {
-    // percent 95 after 60s -> promised ~3s remaining; the export then stalls.
+  it('switches a busted frame-rate estimate to "Time remaining varies." within the grace window (T14860)', () => {
     useExportStore.setState({
       activeExports: {
-        export_3: makeExport({ exportId: 'export_3', percent: 95, elapsedSec: 60, message: 'Upscaling...' }),
+        export_3: makeExport({ exportId: 'export_3', percent: 5, elapsedSec: 2, message: 'AI upscaling frame 10/160' }),
       },
     });
     render(<GlobalExportIndicator />);
-    expect(document.body.textContent).toContain('Less than a minute');
+    // First frame sample alone gives no rate yet.
+    expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
 
-    // Advance past deadline (+~3s) + 15s grace; the 1s ticker re-evaluates.
+    // 20s later, a second frame sample arrives (10 -> 60 of 160, 400ms/frame):
+    // remaining 100 frames * 400ms + 30s tail = 70s, rounded up to 90s = "About 2 minutes".
     act(() => {
       vi.advanceTimersByTime(20000);
     });
-    expect(document.body.textContent).not.toContain('Less than a minute');
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_3: makeExport({ exportId: 'export_3', percent: 40, elapsedSec: 22, message: 'AI upscaling frame 60/160' }),
+        },
+      });
+    });
+    expect(document.body.textContent).toContain('About 2 minutes remaining');
+    expect(document.body.textContent).not.toContain(EXPORT_PROGRESS.ETA_VARIES);
+
+    // Advance past the promised 90s deadline + 15s grace with no further frame update -> stale.
+    act(() => {
+      vi.advanceTimersByTime(110000);
+    });
+    expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
     expect(document.body.textContent).toContain('Sharpening the picture');
   });
 });
