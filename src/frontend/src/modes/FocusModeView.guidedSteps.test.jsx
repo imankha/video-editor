@@ -6,8 +6,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /**
  * Guided framing steps: ONE instruction at a time (drag the box -> play -> keep the
  * box on your player). Preview highlight, Trim and SlowMo, and Generate are all
- * locked until the first two steps are done. Pressing Trim and SlowMo swaps the
- * guide to trim instructions.
+ * locked until the box is dragged (T14830: pressing Play is coach advice, not a
+ * lock). Pressing Trim and SlowMo swaps the guide to trim instructions.
  */
 
 const exportContainerSpy = vi.fn(() => ({}));
@@ -212,24 +212,25 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 6');
   });
 
-  it('locks Trim and SlowMo, Preview highlight and Generate until steps 1 and 2 are done', () => {
+  it('locks Trim and SlowMo, Preview highlight and Generate until the box is dragged', () => {
     render(<Harness />);
     expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(true);
     expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(true);
     expect(lastDisabled()).toBe(true);
   });
 
-  it('dragging the box advances to step 2: play pulses, box stops', () => {
+  it('T14830: dragging the box alone unlocks Trim/SlowMo, Preview and Generate; play is still advice', () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId('crop-box'));
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.play);
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('false');
     expect(screen.getByTestId('play').dataset.pulse).toBe('true');
-    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(true);
-    expect(lastDisabled()).toBe(true);
+    expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(false);
+    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(false);
+    expect(lastDisabled()).toBe(false);
   });
 
-  it('pressing play advances to step 3 and unlocks all three buttons together', () => {
+  it('pressing play (without unlocking anything new) advances the coach to step 3', () => {
     const { rerender } = render(<Harness />);
     fireEvent.click(screen.getByTestId('crop-box'));
     // The screen flips isPlaying once the play gesture lands.

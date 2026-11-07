@@ -363,6 +363,10 @@ export function FocusModeView({
   // confirmation the already-placed box looked right.
   const boxPrePlaced = focusPointCount > 0;
   const dragDone = hasDragged || (boxPrePlaced && hasPlayed);
+  // T14830: `dragDone` alone unlocks Generate/Trim/Preview (ruling F1 kept: drag
+  // gate only, the 2026-10-06 Play gate is removed). `stepsComplete` stays
+  // drag-AND-played -- it only gates the LATER coach steps (keep-the-box onward),
+  // where having actually watched the clip play matters.
   const stepsComplete = dragDone && hasPlayed;
   // T14770: step 1 of 6 -- "Where will you share it?" (design decision 1, Option
   // C). Done once the parent taps a shape this session, OR the box already has
@@ -1139,8 +1143,12 @@ export function FocusModeView({
             videoFile={videoFile}
             cropKeyframes={getFilteredKeyframesForExport}
             segmentData={getSegmentExportData()}
-            disabled={!videoUrl || !stepsComplete}
-            guideLocked={!!videoUrl && !stepsComplete}
+            // T14830: Generate unlocks on the drag alone -- pressing Play is coach
+            // advice (step 2 of 6), never a lock. `stepsComplete` (drag AND played)
+            // still gates the LATER coach steps (keep-the-box, Trim/SlowMo, Preview)
+            // below; it is deliberately not used here.
+            disabled={!videoUrl || !dragDone}
+            guideLocked={!!videoUrl && !dragDone}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
@@ -1155,8 +1163,8 @@ export function FocusModeView({
             backToPreviewLoading={backToPreviewLoading}
             // [Trim and SlowMo] + [Preview highlight] sit in the band directly above
             // Generate (same row-above-CTA shape as Annotate). Locked together with
-            // Generate until the guided steps are done. Trim and SlowMo toggles the
-            // timeline's segment/speed/trim track (advancedOpen).
+            // Generate until the box is dragged (T14830). Trim and SlowMo toggles
+            // the timeline's segment/speed/trim track (advancedOpen).
             actionsAbove={
               <FramingActionRow
                 inline
@@ -1164,7 +1172,7 @@ export function FocusModeView({
                 onTogglePreview={handleTogglePreview}
                 onToggleTrim={handleToggleTrim}
                 trimOpen={advancedOpen}
-                locked={!stepsComplete}
+                locked={!dragDone}
               />
             }
           />

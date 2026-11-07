@@ -11,9 +11,10 @@ import { EDITOR_PANELS, FRAMING_GUIDE } from '../../config/displayNames';
  * 48px tiles side by side, the CTA beneath (same row-above-CTA shape as
  * Annotate's Edit play / Make Highlight buttons).
  *
- * Both buttons are locked together with Generate Highlight until the guided
- * steps (drag the box, press play) are done; `locked` carries that. Trim and
- * SlowMo toggles the timeline's segment/speed/trim track (`trimOpen`).
+ * Both buttons are locked together with Generate Highlight until the box has
+ * been dragged (T14830: pressing Play is coach advice, not a lock); `locked`
+ * carries that. Trim and SlowMo toggles the timeline's segment/speed/trim
+ * track (`trimOpen`).
  */
 export default function FramingActionRow({
   previewing = false,

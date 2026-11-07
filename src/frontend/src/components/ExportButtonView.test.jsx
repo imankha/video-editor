@@ -101,7 +101,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     const btn = screen.getByRole('button', { name: /Sharpen my highlight/ });
     expect(btn.disabled).toBe(true);
     const caption = screen.getByTestId('export-unframed-caption');
-    expect(caption.textContent).toContain('Drag the box onto your athlete, then tap Play, to unlock');
+    expect(caption.textContent).toContain('Drag the box onto your athlete to unlock');
     expect(caption.className).toContain('text-amber-400');
     // T9270: the disabled reason (LEFT status cell) and the credit estimate (RIGHT
     // cost cell) are now separate ActionBand cells — the reason no longer carries
@@ -134,7 +134,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
   it('T11720: Focus + unframed drives the compact locked band (phone-only row)', () => {
     render(<ExportButtonView {...baseProps} hasUnframedClips={true} isButtonDisabled={true} />);
     expect(screen.getByTestId('action-band-compact').textContent)
-      .toMatch(/Drag the box, then tap Play, to unlock/);
+      .toMatch(/Drag the box to unlock/);
   });
 
   it('T11720: framed Focus clip does NOT get the compact locked band', () => {
@@ -151,7 +151,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       hasUnframedClips={true} isButtonDisabled={true} estimatedCredits={null} />);
     const caption = screen.getByTestId('export-unframed-caption');
-    expect(caption.textContent).toContain('Drag the box onto your athlete, then tap Play, to unlock');
+    expect(caption.textContent).toContain('Drag the box onto your athlete to unlock');
     expect(caption.textContent).not.toContain('credit');
   });
 });
