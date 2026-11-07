@@ -24,6 +24,14 @@ def merge(path):
     permissions["defaultMode"] = "bypassPermissions"
     data["permissions"] = permissions
     data["model"] = "sonnet"
+    # Past the 2-minute default, a command is backgrounded, which ends a headless dispatch. `npm ci` on
+    # the Windows bind mount takes about 3 minutes (g-t15000-2, 2026-11-06).
+    env = data.get("env")
+    if not isinstance(env, dict):
+        env = {}
+    env["BASH_DEFAULT_TIMEOUT_MS"] = "600000"
+    env["BASH_MAX_TIMEOUT_MS"] = "600000"
+    data["env"] = env
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return data

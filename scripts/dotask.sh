@@ -13,6 +13,7 @@
 #   bash scripts/dotask.sh stack <slug>               # app stack up + healthy; prints the URL
 #   bash scripts/dotask.sh land <slug>                # stack up for the human test; stops (no push)
 #   bash scripts/dotask.sh land <slug> --after-test   # push + PR + CI + evidence for the tested HEAD
+#   bash scripts/dotask.sh autoland <slug> [--no-land] # verify -> fix -> verify, then push (headless runs this itself)
 #   bash scripts/dotask.sh status
 #   bash scripts/dotask.sh nextup [--limit N]         # TODO tasks bundled by shared code area (/nextup)
 # ============================================================================

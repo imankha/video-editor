@@ -35,7 +35,7 @@ __TASK_LIST__
    Paste its last line into the PUSHREADY detail. `/dotask land` runs the same check and refuses to
    start the test stack while it fails.
 4. After the LAST task's commit line: append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY __BRANCH__ <sha>`
-   (the one final line; a headless run stops on it), then tell the
+   (the one final line; a headless run stops on it and then verifies and lands itself), then tell the
    user: **run `/dotask land __SLUG__`**. It starts the app stack and prints a URL for the
    human test; after testing, `/dotask land __SLUG__ --after-test` pushes and opens the PR.
 

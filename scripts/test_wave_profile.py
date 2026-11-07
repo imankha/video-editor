@@ -606,5 +606,14 @@ class Report(unittest.TestCase):
         self.assertEqual(profile.normalize_command(""), "<empty>")
 
 
+class HeadlessNoteTest(unittest.TestCase):
+    def test_every_phase_tells_a_headless_worker_not_to_wait_on_an_agent(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import wave_profile
+        for phase, text in wave_profile.CHECKPOINTS.items():
+            self.assertIn("Never spawn an agent", text, phase)
+            self.assertIn("claude -p --model opus", text, phase)
+
+
 if __name__ == "__main__":
     unittest.main()

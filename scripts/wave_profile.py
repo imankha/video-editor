@@ -54,7 +54,10 @@ EFFORTS = ("low", "medium", "high", "xhigh", "max")
 HEADLESS_RUN_NOTE = (
     " Headless run: execute every command in the foreground (a backgrounded command or "
     "ScheduleWakeup ends this dispatch). Append each status line in the same shell command as "
-    "the stage's last action, not as a separate call."
+    "the stage's last action, not as a separate call. Never spawn an agent and never end your turn "
+    "waiting for one: agents run asynchronously here, and ending the turn ends the dispatch and kills "
+    "them. When the rules call for the expert, run it in the foreground instead, with a long Bash "
+    "timeout: `claude -p --model opus \"<knowledge doc names and a precise question>\"`."
 )
 CHECKPOINTS = {
     "design": "Perform design/root-cause only. Write a reusable specification under docs/ and append "

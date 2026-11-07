@@ -10,6 +10,7 @@ Commands (see scripts/dotask.sh, the thin bash entry point):
   python scripts/dotask_cli.py stack <slug>              # app stack up + healthy, prints the URLs
   python scripts/dotask_cli.py land <slug>               # stack up for a human test; no push yet
   python scripts/dotask_cli.py land <slug> --after-test  # push, PR, CI, evidence (HEAD must be the tested one)
+  python scripts/dotask_cli.py autoland <slug> [--no-land]  # verify -> fix -> verify, then push (headless runs this itself)
   python scripts/dotask_cli.py status
   python scripts/dotask_cli.py nextup [--limit N]          # TODO tasks bundled by shared code area
 """
@@ -24,6 +25,7 @@ import tempfile
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import dotask_evidence
 import wave_profile
@@ -65,12 +67,13 @@ HEADLESS_INSTRUCTION = ("Implement /workspace/.dotask-kickoff.md: the next task 
 # $4 instruction, $5 status file, $6 space-separated task ids. Each dispatch must end on the next
 # task's commit line (continue) or PUSHREADY (done); anything else (BLOCKED, DISPATCH_FAILED,
 # ENDED_WITHOUT_STATUS, ...) stops with exit 1, and running out of dispatches without PUSHREADY is 3.
+# The dispatch names its task: a worker left to derive it trusted a stale BLOCKED line instead (2026-11-07).
 HEADLESS_LOOP = r'''
 for i in $(seq 1 "$1"); do
   next=""
   for t in $6; do grep -q "STAGE_DONE $t commit" "$5" 2>/dev/null || { next="$t"; break; }; done
   [ -n "$next" ] || break
-  DOTASK_TASK_IDS="$next" bash "$2" drive "$3" "$4" || exit $?
+  DOTASK_TASK_IDS="$next" bash "$2" drive "$3" "$4 Your task is $next." || exit $?
   last="$(tail -n 1 "$5" 2>/dev/null)"
   case "$last" in
     *" PUSHREADY "*) exit 0 ;;
@@ -82,6 +85,8 @@ tail -n 1 "$5" 2>/dev/null | grep -q " PUSHREADY " && exit 0
 echo "[dotask] headless stopped: no PUSHREADY after $1 dispatch(es)" >&2
 exit 3
 '''
+# $7 python, $8 dotask_cli.py. The subshell keeps the loop's `exit` from skipping the verify stage.
+HEADLESS_THEN_VERIFY = "(" + HEADLESS_LOOP + ') && "$7" "$8" autoland "$3"\n'
 
 
 def die(message, code=2):
@@ -334,9 +339,10 @@ def start(args):
         log_path = TASKS_ROOT / "profiles" / sanitize(slug) / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("w", encoding="utf-8") as log:
-            subprocess.Popen([bash(), "-c", HEADLESS_LOOP, "dotask-headless", str(len(task_ids)),
+            subprocess.Popen([bash(), "-c", HEADLESS_THEN_VERIFY, "dotask-headless", str(len(task_ids)),
                               (REPO_ROOT / "scripts" / "task.sh").as_posix(), slug, HEADLESS_INSTRUCTION,
-                              bash_path(checkout / ".dotask-status"), " ".join(task_ids)],
+                              bash_path(checkout / ".dotask-status"), " ".join(task_ids),
+                              Path(sys.executable).as_posix(), Path(__file__).resolve().as_posix()],
                              env={**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
                                   "DOTASK_WAVE_ID": wave_id, "DOTASK_PHASE": "implementation"},
                              stdout=log, stderr=subprocess.STDOUT)
@@ -566,6 +572,234 @@ def land(args):
     return 0
 
 
+# --- autoland: verify -> fix -> verify, then push -----------------------------------
+# After PUSHREADY a fresh verifier drives the running app against every acceptance criterion and
+# the flows the diff touches. Failures go back to a fresh worker, and the result is verified from
+# scratch. Only a clean verdict on the exact HEAD pushes (user decision, 2026-11-07); merging stays
+# with the user. Any verdict that cannot be trusted stops the loop: it never counts as a pass.
+VERIFY_FILE = ".dotask-verify.json"
+MAX_FIX_ROUNDS = 3  # a flaky test or an unfixable bug must not burn usage forever
+VERIFY_STATUSES = ("pass", "fail", "human")
+BUG_SCOPES = ("group", "unrelated")
+ACCEPTANCE_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]")
+BUG_SECTION = "### Bugs found by /dotask verify"
+PLAN_TAIL_HEADING = "## Environment Configuration"
+VERIFY_INSTRUCTION = """You are the independent verifier for this group, verify round {round}. You did not write this code.
+Do not trust the worker's claims, qa/proof.json or .dotask-notes.md conclusions: observe behavior yourself.
+Do NOT edit tracked files, commit, or change qa/proof.json. Keep every script you write under /tmp. HEAD is {head}.
+
+The app stack was just restarted on this code: http://localhost:5173, backend :8000, dev accounts ?dev_account=empty|upload|full.
+
+1. For EACH task ({tasks}), read the `## Acceptance Criteria` of its file under docs/plans/tasks and give EVERY criterion one entry, in order, named T<id>:C1, T<id>:C2, ...
+2. Prove each criterion by observation. Use Playwright for anything a user can see (require('/workspace/src/frontend/node_modules/@playwright/test'), scripts under /tmp, chromium headless). Use the real API or the task's targeted tests only for what no user can see.
+3. Read each criterion literally. Code that meets the intent but not the text is a `fail`, with that said in the evidence.
+4. src/landing changes: this stack does not serve the landing site. Run `npm run build` in src/landing (`npm ci` first if node_modules is missing), then serve dist from a small node script under /tmp, mapping /x to x.html.
+5. Regression pass: from `git diff origin/master...HEAD --stat`, exercise the flows this branch touches and look for anything broken that no criterion names.
+6. Before believing a surprising result, confirm the served code is the code on disk. Pass an explicit long Bash timeout for builds, installs and e2e runs. Stop investigating a finding once you can state its steps; fixing is not your job.
+
+Write /workspace/.dotask-verify.json, exactly:
+{{"head": "{head}",
+  "criteria": [{{"id": "T1:C1", "status": "pass|fail|human", "evidence": "what you observed"}}],
+  "bugs": [{{"scope": "group|unrelated", "task": "T1", "title": "...", "steps": "...", "expected": "...", "actual": "..."}}]}}
+`human` is only for what no automation can observe (a real card payment, a physical phone). Never use it to save effort.
+A bug's scope is `group` if this branch caused it and `unrelated` if master has it too: check before deciding.
+Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
+FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json: every criterion with status `fail` and every bug with scope `group`. Ignore everything else in that file. All tasks already have commits, so do not start a new one.
+Fix each finding at its root, failing test first, and run the relevant tests and lint. Commit with explicit paths, one commit per owning task, subject `T<id>: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md.
+A finding you believe is wrong: do not work around it. Append `BLOCKED <finding and why>` and stop.
+Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> fix round {round}` to /workspace/.dotask-status and stop."""
+
+
+class UntrustedVerdict(Exception):
+    pass
+
+
+def acceptance_count(task_file):
+    """Checkbox items in a task file's Acceptance Criteria: the floor a verdict must cover."""
+    count, inside = 0, False
+    for line in Path(task_file).read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            inside = line.lower().startswith("## acceptance")
+        elif inside and ACCEPTANCE_ITEM.match(line):
+            count += 1
+    return count
+
+
+def read_verdict(checkout, group, head):
+    path = Path(checkout) / VERIFY_FILE
+    try:
+        verdict = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise UntrustedVerdict(f"no readable {VERIFY_FILE}: {exc}") from exc
+    if not isinstance(verdict, dict) or verdict.get("head") != head:
+        raise UntrustedVerdict(f"verdict is not for HEAD {head[:9]}")
+    criteria, bugs = verdict.get("criteria"), verdict.get("bugs")
+    if not isinstance(criteria, list) or not isinstance(bugs, list):
+        raise UntrustedVerdict("verdict needs `criteria` and `bugs` lists")
+    for item in criteria:
+        if item.get("status") not in VERIFY_STATUSES:
+            raise UntrustedVerdict(f"{item.get('id')}: unknown status {item.get('status')!r}")
+    for bug in bugs:
+        if bug.get("scope") not in BUG_SCOPES or not bug.get("title"):
+            raise UntrustedVerdict(f"bug needs a title and a scope of {BUG_SCOPES}: {bug}")
+    for task_id in group["tasks"]:
+        need = max(1, acceptance_count(resolve_task_file(task_id)))
+        have = sum(1 for item in criteria if str(item.get("id", "")).startswith(f"{task_id}:"))
+        if have < need:
+            raise UntrustedVerdict(f"{task_id}: verdict covers {have} of {need} criteria")
+    return verdict
+
+
+def tracked_changes(checkout):
+    return subprocess.run([tool("git"), "-C", str(checkout), "status", "--porcelain", "--untracked-files=no"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def last_status(checkout):
+    path = Path(checkout) / ".dotask-status"
+    lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+    return lines[-1] if lines else ""
+
+
+def append_status(checkout, text):
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M")
+    with (Path(checkout) / ".dotask-status").open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(f"{stamp} {text}\n")
+    print(f"[dotask] {text}")
+
+
+def dispatch(slug, group, phase, instruction):
+    """One fresh `claude -p` in the group's container. True only if it ended on PUSHREADY."""
+    env = {**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
+           "DOTASK_WAVE_ID": group["wave_id"], "DOTASK_PHASE": phase, "DOTASK_TASK_IDS": ",".join(group["tasks"])}
+    result = subprocess.run([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "drive", slug, instruction],
+                            env=env, check=False)
+    return result.returncode == 0 and " PUSHREADY " in last_status(TASKS_ROOT / sanitize(slug))
+
+
+def file_unrelated_bug(bug, group, head):
+    """A bug this branch did not cause must not hold its PR up: file it as a TODO task instead.
+    Returns the new id, or None if PLAN.md already names that title."""
+    plan_path = MAIN_REPO / "docs" / "plans" / "PLAN.md"
+    plan = plan_path.read_bytes().decode("utf-8")
+    title = " ".join(str(bug["title"]).replace("|", "/").split())
+    if f"[{title}](" in plan:
+        return None
+    tasks_dir = MAIN_REPO / "docs" / "plans" / "tasks"
+    used = [int(found.group(1)) for found in (re.match(r"T(\d+)", p.name) for p in tasks_dir.rglob("T*.md")) if found]
+    task_id = f"T{(max(used, default=0) // 10 + 1) * 10}"
+    name = f"{task_id}-{'-'.join(re.findall(r'[a-z0-9]+', title.lower())[:6])}.md"
+    today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
+    write_lf(tasks_dir / name, (
+        f"# {task_id}: {title}\n\n**Status:** TODO\n**Impact:** 5\n**Complexity:** 3\n**Created:** {today}\n"
+        f"**Updated:** {today}\n\n## Problem\n\nFound by the /dotask verifier on group {group['slug']} at {head[:9]}, "
+        f"which judged it unrelated to that branch. Impact and complexity are unscored defaults.\n\n"
+        f"**Steps:** {bug.get('steps', 'not recorded')}\n\n**Expected:** {bug.get('expected', 'not recorded')}\n\n"
+        f"**Actual:** {bug.get('actual', 'not recorded')}\n\n## Acceptance Criteria\n\n- [ ] The steps above give the "
+        f"expected result.\n\n## Context\n\n### Relevant Files (REQUIRED)\n\n- To be found.\n"))
+
+    newline = "\r\n" if "\r\n" in plan else "\n"
+    row = f"| {task_id} | [{title}](tasks/{name}) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |"
+    lines = plan.replace("\r\n", "\n").split("\n")
+    if BUG_SECTION in lines:
+        at = lines.index(BUG_SECTION) + 1
+        while at < len(lines) and (not lines[at].strip() or lines[at].startswith("|")):
+            at += 1
+        while not lines[at - 1].strip():
+            at -= 1
+        lines[at:at] = [row]
+    else:
+        at = lines.index(PLAN_TAIL_HEADING) if PLAN_TAIL_HEADING in lines else len(lines)
+        lines[at:at] = [BUG_SECTION, "", "| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |",
+                        "|---|---|---|---|---|---|---|---|", row, ""]
+    plan_path.write_bytes(newline.join(lines).encode("utf-8"))
+    return task_id
+
+
+def verify_once(slug, group, checkout, head, round_number):
+    """Stack up on HEAD, one fresh verifier. Returns its verdict; raises UntrustedVerdict if it cannot be used."""
+    try:
+        bring_up_stack(slug)
+    except subprocess.CalledProcessError as exc:
+        raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
+    (checkout / VERIFY_FILE).unlink(missing_ok=True)
+    finished = dispatch(slug, group, "qa", VERIFY_INSTRUCTION.format(
+        round=round_number, head=head, tasks=", ".join(group["tasks"]), branch=group["branch"]))
+    if not finished:
+        raise UntrustedVerdict(f"verifier did not finish: {last_status(checkout)[:200]}")
+    changed = tracked_changes(checkout)
+    if git_head(checkout) != head or changed:
+        raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
+    verdict = read_verdict(checkout, group, head)
+    archive = TASKS_ROOT / "waves" / group["wave_id"] / f"verify-round-{round_number}.json"
+    archive.parent.mkdir(parents=True, exist_ok=True)
+    archive.write_text(json.dumps(verdict, indent=2) + "\n", encoding="utf-8")
+    return verdict
+
+
+def autoland(args):
+    slug = args.slug
+    checkout = TASKS_ROOT / sanitize(slug)
+    group_path = checkout / GROUP_FILE
+    if not group_path.is_file():
+        die(f"no group file at {group_path}; is {slug} a live /dotask group?")
+    group = json.loads(group_path.read_text(encoding="utf-8"))
+    status_path = checkout / ".dotask-status"
+    status_text = status_path.read_text(encoding="utf-8") if status_path.is_file() else ""
+    unfinished = [t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in status_text]
+    if unfinished:
+        die(f"{slug} still has tasks without a commit line: {' '.join(unfinished)}")
+    exclude_path = checkout / ".git" / "info" / "exclude"
+    exclude_path.parent.mkdir(parents=True, exist_ok=True)
+    if VERIFY_FILE not in (exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""):
+        with exclude_path.open("a", encoding="utf-8") as stream:
+            stream.write(VERIFY_FILE + "\n")
+
+    for fix_round in range(MAX_FIX_ROUNDS + 1):
+        round_number = fix_round + 1
+        head = git_head(checkout)
+        check = run_preland_check(checkout)
+        if check.returncode:  # hygiene is the worker's to fix; a browser pass on it would be wasted
+            summary = f"pre-land check failed on {head[:9]}"
+            write_lf(checkout / VERIFY_FILE, json.dumps({"head": head, "criteria": [], "bugs": [
+                {"scope": "group", "title": "pre-land check failed", "actual": check.stdout + check.stderr}]}, indent=2) + "\n")
+        else:
+            try:
+                verdict = verify_once(slug, group, checkout, head, round_number)
+            except UntrustedVerdict as exc:
+                append_status(checkout, f"VERIFY_BLOCKED round {round_number}: {exc}")
+                return 1
+            for bug in verdict["bugs"]:
+                if bug["scope"] == "unrelated":
+                    filed = file_unrelated_bug(bug, group, head)
+                    print(f"[dotask] unrelated bug {bug['title']!r}: {filed or 'already filed'}")
+            failed = [c.get("id") for c in verdict["criteria"] if c["status"] == "fail"]
+            bugs = [b["title"] for b in verdict["bugs"] if b["scope"] == "group"]
+            human = [c.get("id") for c in verdict["criteria"] if c["status"] == "human"]
+            if not failed and not bugs:
+                group["tested_head"] = head
+                save_group(checkout, group)
+                if human:
+                    append_status(checkout, f"VERIFY_NEEDS_USER {head[:9]}: check {' '.join(human)}, "
+                                            f"then run /dotask land {slug} --after-test")
+                    return 0
+                append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}")
+                return 0 if args.no_land else land(SimpleNamespace(slug=slug, after_test=True))
+            summary = f"round {round_number} on {head[:9]}: failed {failed}, new bugs {bugs}"
+        if fix_round == MAX_FIX_ROUNDS:
+            append_status(checkout, f"VERIFY_EXHAUSTED after {MAX_FIX_ROUNDS} fix rounds; {summary}")
+            return 1
+        print(f"[dotask] {summary}; sending it back to a worker")
+        if not dispatch(slug, group, "implementation", FIX_INSTRUCTION.format(
+                head=head, branch=group["branch"], round=round_number)):
+            append_status(checkout, f"VERIFY_BLOCKED fix round {round_number} did not finish: {last_status(checkout)[:200]}")
+            return 1
+        if git_head(checkout) == head:
+            append_status(checkout, f"VERIFY_BLOCKED fix round {round_number} committed nothing")
+            return 1
+    return 1
+
+
 # --- nextup ----------------------------------------------------------------------
 # One group's tasks share a container and a notes file, so a bundle whose tasks touch the same
 # code lets each fresh conversation start from what the previous task learned (2026-10-09).
@@ -700,6 +934,11 @@ def main(argv=None):
     finish.add_argument("--after-test", action="store_true",
                         help="the human tested the stack `land <slug>` started: push, open the PR, wait for CI")
 
+    auto = sub.add_parser("autoland", help="verify every criterion with Playwright, send failures back to a "
+                                           "worker, push once clean")
+    auto.add_argument("slug")
+    auto.add_argument("--no-land", action="store_true", help="stop after a clean verdict; push nothing")
+
     app = sub.add_parser("stack")
     app.add_argument("slug")
 
@@ -710,7 +949,8 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     try:
-        return {"start": start, "land": land, "stack": stack, "status": status, "nextup": nextup}[args.action](args)
+        return {"start": start, "land": land, "autoland": autoland, "stack": stack, "status": status,
+                "nextup": nextup}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)
         return 1

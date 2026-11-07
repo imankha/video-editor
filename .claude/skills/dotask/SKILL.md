@@ -31,6 +31,7 @@ below.
 | `/dotask T1 T2 ... --window` | `bash scripts/dotask.sh start --window T1 T2 ...` | Relay the 3-line summary (slug, branch, window). Return. |
 | `/dotask T1 T2 ... --allow-overlap` | `bash scripts/dotask.sh start --allow-overlap T1 T2 ...` | Same as a normal start, but files shared with another live group are a warning, not a refusal; the kickoff tells the worker to rebase on master before PUSHREADY. |
 | `/dotask T1 T2 ... --capture` | `bash scripts/dotask.sh start --capture T1 T2 ...` | Same, plus: this group's `land` will run captured review/proof automatically. |
+| `/dotask autoland <slug>` | `bash scripts/dotask.sh autoland <slug>` | Runs the [verify loop](#automatic-landing-headless-default) by hand: a `--window` group, or a headless run that stopped. `--no-land` stops after a clean verdict. Relay the last status line. |
 | `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Step 1 of 2. First runs `scripts/dotask_preland_check.sh` on the checkout (whitespace, non-evidence files under `qa/`, ruff/eslint growth, `ci_policy` routing) and refuses, naming the paths, while it fails. Then restarts the group's app stack and returns only once the frontend + backend `/api/health` answer. Relay the URL (`http://localhost:<5173+offset>`) WITH a test guide (see [Test guide](#test-guide-required-with-every-localhost-link)) and STOP: the human tests the app. Nothing is pushed and no PR exists yet. Records the tested HEAD. On a timeout it exits non-zero with the log paths; relay them. |
 | `/dotask land <slug> --after-test` | `bash scripts/dotask.sh land <slug> --after-test` | Step 2, only after the user says the test passed. Refuses if HEAD moved since step 1 (re-run step 1). Pushes, opens the PR, waits for CI, builds evidence scoped to the group's tasks (another group's `qa/proof.json` entries never block it), marks committed tasks completed in the wave profile. Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
 | `/dotask stack <slug>` | `bash scripts/dotask.sh stack <slug>` | Same stack (re)start + wait as land step 1, without recording a tested HEAD. Relay the URL with a test guide. |
@@ -112,13 +113,32 @@ group task's file (Problem, Solution, Acceptance Criteria) and relay, per task:
 Keep it a short numbered list per task. This is the one place this chat reads task files;
 it still never edits code or drives the worker.
 
+## Automatic landing (headless default)
+
+User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `autoland` loops:
+
+1. Preland check, then restart the stack on HEAD.
+2. A fresh verifier dispatch (`qa` phase, no shared context with the worker) proves every acceptance
+   criterion by observation, Playwright for anything a user can see, then runs a regression pass over
+   the flows the diff touches. It writes `.dotask-verify.json`; each round is archived as
+   `waves/<wave>/verify-round-N.json`.
+3. Any `fail` criterion or `group` bug goes to a fresh worker dispatch, then back to step 1.
+4. Clean verdict: `VERIFY_PASS`, then push, PR, CI, evidence (`land --after-test`). Merging stays with the user.
+
+The loop stops at `MAX_FIX_ROUNDS` (3) with `VERIFY_EXHAUSTED`. Anything it cannot trust stops it with
+`VERIFY_BLOCKED` and never counts as a pass: a missing verdict, a verdict for another HEAD, one covering
+fewer criteria than the task file has, a verifier that changed the tree, a fix that committed nothing.
+A `human` criterion (something no automation can observe) stops before the push with `VERIFY_NEEDS_USER`.
+`unrelated` bugs are filed as TODO tasks in PLAN.md (left uncommitted, like `start`'s status flips) and
+do not block. "No new bugs" means none found by these checks. A red CI on the PR is reported, not looped.
+
 ## Landing
 
 `/dotask land <slug>` is host-side bookkeeping only (container/git/gh/evidence plumbing), run
 from THIS chat once the user says the group is done (or a `PUSHREADY` line appears in its status
 file, if the user asks this chat to check). It never edits code and never calls a model unless
-`--capture` was set. It has two steps so a human always tests the running app before a PR
-exists: `land <slug>` brings the stack up and stops, and `land <slug> --after-test` opens the
+`--capture` was set. Used by hand (a `--window` group, or a human test you want), it has two steps so a human tests the
+running app before a PR exists: `land <slug>` brings the stack up and stops, and `land <slug> --after-test` opens the
 PR for the exact HEAD that was tested. The stack restarts on every call, so it serves the
 current working tree; ports stay inside the R2 CORS allowlist because `task.sh` caps the
 offset at 10. Apply CLAUDE.md's Landing Policy as the single authority for the proof
