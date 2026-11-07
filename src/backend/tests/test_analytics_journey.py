@@ -29,7 +29,7 @@ def _node(folded, key):
 
 class TestLadder:
     def test_fourteen_stages_in_three_bands(self):
-        assert len(JOURNEY_LADDER) == 14
+        assert len(JOURNEY_LADDER) == 16
         assert [b["key"] for b in aj._bands(JOURNEY_LADDER)] == [
             "get_footage_in", "make_highlight", "take_it_away"]
 
@@ -56,6 +56,8 @@ class TestLadder:
             ("signed_up", "Signed up"),
             ("started", "Started"),
             ("add_footage", "Opened upload"),
+            ("file_picked", "Picked a file"),
+            ("upload_started", "Upload started"),
             ("footage_landed", "Video uploaded"),
             ("clipped", "First play"),
             ("frame_opened", "Opened Frame"),

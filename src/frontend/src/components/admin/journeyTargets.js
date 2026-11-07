@@ -19,7 +19,7 @@ export const END_TO_END_KEY = 'signed_up->took_away';
 export const JOURNEY_TARGETS = {
   'signed_up->started': { from: 'signed_up', to: 'started', baseline: 88, target: 92 },
   'started->add_footage': { from: 'started', to: 'add_footage', baseline: 83, target: 88 },
-  'add_footage->footage_landed': { from: 'add_footage', to: 'footage_landed', baseline: 66, target: 78 },
+  'add_footage->footage_landed': { from: 'add_footage', via: ['file_picked', 'upload_started'], to: 'footage_landed', baseline: 66, target: 78 },
   'footage_landed->clipped': { from: 'footage_landed', to: 'clipped', baseline: 78, target: 85 },
   'clipped->frame_opened': { from: 'clipped', to: 'frame_opened', baseline: 62, target: 78 },
   'frame_opened->framed': { from: 'frame_opened', to: 'framed', baseline: 87, target: 92 },
