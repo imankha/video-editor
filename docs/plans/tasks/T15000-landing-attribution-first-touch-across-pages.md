@@ -1,6 +1,6 @@
 # T15000: Landing attribution survives a multi-page visit (first-touch record relayed from every page)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 2
 **Tier:** M (landing only; one layout script becomes a small pure module plus a test)

@@ -1,6 +1,6 @@
 # T15270: Spend gate 1 unblock text names a task id
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 2
 **Complexity:** 1
 **Tier:** S (backend text, no schema change)
