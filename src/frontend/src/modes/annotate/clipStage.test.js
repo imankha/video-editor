@@ -214,16 +214,11 @@ describe('getClipStages (T11430)', () => {
     const result = getClipStages(region, instances);
     expect(result.primaryCta).toEqual({ label: 'Make another highlight', action: 'focus-new' });
     expect(result.hasAnyPublished).toBe(true);
-    // T11430 implementor note: this test's own instances array (one published
-    // portrait, zero landscape) exactly matches the later
-    // "synthesizes a counterpart instance..." test below, which asserts
-    // toHaveLength(2) — a published-portrait-only instance set should
-    // synthesize the missing landscape counterpart per design §4.6. Updated
-    // this length assertion from 1 to 2 (and scoped the status assertion to
-    // the real portrait instance) to match that explicit, more detailed test
-    // rather than leave a self-contradictory spec.
+    // T14770: getClipStages no longer synthesizes a missing-orientation
+    // counterpart (that T11430 behavior was dropped along with the
+    // per-orientation slots) -- one real instance in, one instance out.
     const portrait = result.instances.find((i) => i.orientation === 'portrait');
-    expect(result.instances).toHaveLength(2);
+    expect(result.instances).toHaveLength(1);
     expect(portrait.status).toBe('Portrait Video Finished');
     expect(portrait.orientation).toBe('portrait');
   });
@@ -361,53 +356,11 @@ describe('getClipStages (T11430)', () => {
     expect(result.instances[0].stage).toBe(CLIP_STAGE.PUBLISHED);
   });
 
-  it('synthesizes a counterpart instance for the missing orientation when the other orientation has a published instance (design §4.6)', () => {
-    const instances = [
-      {
-        projectId: 42,
-        aspectRatio: '9:16',
-        highlightOrdinal: 1,
-        hasWorkingVideo: true,
-        hasFinalVideo: true,
-        isPublished: true,
-        archivedAt: '2026-09-01T00:00:00Z',
-      },
-    ];
-    const result = getClipStages(region, instances);
-    expect(result.instances).toHaveLength(2);
-    const synthesized = result.instances.find((i) => i.orientation === 'landscape');
-    expect(synthesized).toBeDefined();
-    expect(synthesized.status).toBe('Landscape Video Not started');
-    // "which orientation to create" field for a synthesized not-started
-    // instance: documented here as `action: 'focus-new'` plus an explicit
-    // `synthesizedOrientation` field carrying the target orientation, since
-    // `action` alone does not say WHICH orientation to create. Adjust this
-    // assertion if the implementor names the field differently, but the
-    // field must exist and must read 'landscape'.
-    expect(synthesized.action).toBe('focus-new');
-    expect(synthesized.synthesizedOrientation).toBe('landscape');
-    expect(synthesized.projectId).toBeNull();
-  });
-
-  // MAJOR 4(e): the mirror direction -- a landscape publish synthesizes a
-  // PORTRAIT not-started counterpart (only the portrait-published direction was
-  // tested before).
-  it('synthesizes a PORTRAIT counterpart when a landscape instance is published', () => {
-    const instances = [
-      {
-        projectId: 55, aspectRatio: '16:9', highlightOrdinal: 1,
-        hasWorkingVideo: true, hasFinalVideo: true, isPublished: true,
-        archivedAt: '2026-09-01T00:00:00Z',
-      },
-    ];
-    const result = getClipStages(region, instances);
-    expect(result.instances).toHaveLength(2);
-    const synthesized = result.instances.find((i) => i.orientation === 'portrait');
-    expect(synthesized).toBeDefined();
-    expect(synthesized.status).toBe('Portrait Video Not started');
-    expect(synthesized.synthesizedOrientation).toBe('portrait');
-    expect(synthesized.projectId).toBeNull();
-  });
+  // T14770 removed the T11430 missing-orientation synthesis described here
+  // (design §4.6, MAJOR 4e): getClipStages now reflects only real instances --
+  // a play with a published portrait and no landscape highlight shows exactly
+  // one instance, and the parent makes a landscape highlight explicitly via
+  // Make highlight + the Frame shape choice, not an auto-synthesized slot.
 
   // MAJOR 4(f): mixed in-progress states across BOTH orientations simultaneously
   // (no publish, so no synthesized counterpart -- both real instances stand).
