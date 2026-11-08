@@ -2024,10 +2024,23 @@ def analytics_journey_step(
     sport: SportFilter = None,
 ):
     _require_admin()
-    from ..services.analytics_journey import build_step
-
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
+    if stage == "visited":
+        # T14960: not a per-user ladder stage -- no Postgres read, no people tab.
+        from ..analytics import VISIT_BEACON_INSTRUMENTED_AT
+        from ..services.analytics_journey import build_head_step
+        from ..services.analytics_store import load_visit_totals
+
+        totals, partial = load_visit_totals()
+        result = build_head_step(
+            totals, d_from=d_from or date.fromisoformat(VISIT_BEACON_INSTRUMENTED_AT),
+            d_to=d_to, sport=sport,
+        )
+        result["partial"] = partial
+        return result
+    from ..services.analytics_journey import build_step
+
     with get_pg() as conn:
         cur = conn.cursor()
         try:

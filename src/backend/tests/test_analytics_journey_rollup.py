@@ -20,7 +20,7 @@ import pytest
 
 from app import storage
 from app.analytics import JOURNEY_LADDER
-from app.services.analytics_store import AnalyticsStore, _ensure_schema
+from app.services.analytics_store import _SCHEMA_STEPS, AnalyticsStore, _ensure_schema
 
 
 def newest_journey_rollup(conns):
@@ -181,7 +181,7 @@ def test_rollup_tables_hold_no_user_or_event_columns():
     from app.services.analytics_store import JOURNEY_ROLLUP_TABLES
     conn = sqlite3.connect(":memory:")
     _ensure_schema(conn)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == max(_SCHEMA_STEPS)
     for table in (*JOURNEY_ROLLUP_TABLES, "rollup_meta"):
         cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
         assert cols, table

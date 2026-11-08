@@ -16,10 +16,15 @@ session is present, else logged anonymous. Always returns 204.
 """
 
 import logging
+import re
+import threading
+import time
+from collections import defaultdict
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
+from ..services.ip_rate_limit import client_ip
 from ..user_context import get_current_impersonator_id, get_current_user_id
 from ..utils.offload import run_in_context
 
@@ -222,4 +227,87 @@ async def report_session_breadcrumbs(payload: SessionBreadcrumbReport) -> Respon
         await run_in_context(record_session_exit, user_id, payload.last_screen, payload.dwell, payload.trail)
     except Exception:
         logger.exception("[Telemetry] record_session_exit failed (ignored)")
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# T7410: first-party visit beacon (landing + app pre-auth + share pages)
+# ---------------------------------------------------------------------------
+# Cookie-free, aggregate-only: no cookies, no localStorage, no user/session id is
+# ever read or stored by this endpoint. The IP is used ONLY to key the in-memory
+# rate limiter below and is never written anywhere (not logged, not persisted).
+# The whole stored payload is exactly (day, source bucket, page_class) -> count --
+# small enough to quote verbatim on the kids-privacy page (T7120).
+
+_PAGE_CLASS_RE = re.compile(r"^(landing(:[a-z0-9_-]{1,40})?|app|share)$")
+
+# Cheap-and-honest bot filter: obvious non-browser UAs. Perfect filtering is out of
+# scope -- investor charts care about trend shape, not pixel-perfect bot exclusion.
+_BOT_UA_RE = re.compile(r"bot|crawler|spider|headless|curl|wget|python-requests", re.IGNORECASE)
+
+_VISIT_RATE_WINDOW_SECONDS = 60
+_VISIT_RATE_LIMIT_PER_WINDOW = 120  # generous: a real tab fires this beacon once per page class
+
+
+class _InMemoryVisitRateLimiter:
+    """Fixed-window per-IP counter, memory only (T7410 explicitly wants in-memory,
+    not the Postgres-backed ip_rate_limit.py -- that path is sized for auth actions,
+    not a high-volume anonymous beacon). Never persisted; lost on restart, which is
+    fine for a soft abuse guard."""
+
+    def __init__(self, limit: int, window_s: float):
+        self._limit = limit
+        self._window_s = window_s
+        self._lock = threading.Lock()
+        self._windows: dict[str, tuple[float, int]] = defaultdict(lambda: (0.0, 0))
+
+    def allow(self, ip: str) -> bool:
+        now = time.monotonic()
+        with self._lock:
+            window_start, count = self._windows[ip]
+            if now - window_start >= self._window_s:
+                window_start, count = now, 0
+            count += 1
+            self._windows[ip] = (window_start, count)
+            return count <= self._limit
+
+
+_visit_rate_limiter = _InMemoryVisitRateLimiter(_VISIT_RATE_LIMIT_PER_WINDOW, _VISIT_RATE_WINDOW_SECONDS)
+
+
+class VisitBeaconReport(BaseModel):
+    """Payload is deliberately this small -- see the module comment above. `click_id`
+    is the raw query-param NAME the client saw (e.g. "fbclid"), never a resolved
+    network name: the name->network mapping lives in ONE place server-side
+    (analytics.CLICK_ID_NETWORK) so it is never forked into a per-client copy."""
+
+    page_class: str
+    ref: str | None = None
+    utm_campaign: str | None = None
+    click_id: str | None = None
+    referrer_host: str | None = None  # hostname only, never a full URL
+
+
+@router.post("/api/t", status_code=204)
+async def report_visit(payload: VisitBeaconReport, request: Request) -> Response:
+    """Fire-and-forget anonymous visit counter. Always 204 (even when dropped by the
+    rate limiter or bot filter) -- a beacon must never surface an error to the page."""
+    ua = request.headers.get("user-agent") or ""
+    if _BOT_UA_RE.search(ua):
+        return Response(status_code=204)
+    if not _visit_rate_limiter.allow(client_ip(request)):
+        return Response(status_code=204)
+    if not _PAGE_CLASS_RE.match(payload.page_class):
+        logger.warning(f"[Telemetry] visit beacon dropped: invalid page_class={payload.page_class!r}")
+        return Response(status_code=204)
+
+    from app.analytics import bucket_visit_source
+    from app.services.analytics_store import current_store
+
+    source = bucket_visit_source(payload.ref, payload.utm_campaign, payload.click_id, payload.referrer_host)
+    store = current_store()
+    if store is None:
+        logger.warning("[Telemetry] visit beacon dropped: analytics store not started")
+        return Response(status_code=204)
+    store.record_visit(source, payload.page_class)
     return Response(status_code=204)

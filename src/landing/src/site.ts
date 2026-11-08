@@ -17,6 +17,14 @@ export const SITE_URL = 'https://reelballers.com'
 /** Where the actual editor lives. All CTAs point here. */
 export const APP_URL = 'https://app.reelballers.com'
 
+/**
+ * The backend API host. Hardcoded per-env the same way APP_URL is (landing is a
+ * static Astro build with no backend-facing env var at build time) -- used only by
+ * the T7410 visit beacon. CORS_ORIGINS on the backend must allow this origin
+ * (fly.production.toml) or the beacon silently fails (cross-origin, fire-and-forget).
+ */
+export const API_URL = 'https://reel-ballers-api.fly.dev'
+
 /** Consistent entity name. Never "Reel Ballers" in prose or schema (T-SEO). */
 export const BRAND = 'ReelBallers'
 

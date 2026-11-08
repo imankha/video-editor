@@ -556,6 +556,11 @@ EVENT_INSTRUMENTED_AT = {
     "game_created": "2026-05-20",
 }
 
+# T14960: the anonymous visit beacon (T7410) never writes a user_actions row, so it has
+# no entry in EVENT_INSTRUMENTED_AT above -- this is its own instrumented-at date, the day
+# visit_daily started filling.
+VISIT_BEACON_INSTRUMENTED_AT = "2026-11-08"
+
 # T14940: internal-only context key a call site uses to hand record_milestone
 # the firing profile's id (never the resolved sport) so the sport lookup can
 # run on the connection record_milestone already opens for the user_action_log
@@ -584,6 +589,7 @@ SPORT_TAG_INSTRUMENTED_AT = {
     "share_completed": "2026-11-08",
     "credit_purchased": "2026-11-08",
 }
+
 
 def _get_user_origin(user_id: str) -> str:
     with get_pg() as conn:
@@ -675,6 +681,59 @@ def bucket_referrer_host(host: str | None) -> str | None:
     if host == "google" or _GOOGLE_HOST_RE.match(host):
         return "seo"
     return None
+
+
+# ---------------------------------------------------------------------------
+# Visit beacon bucketing (T7410)
+# ---------------------------------------------------------------------------
+# The ONE place a click-id query-param NAME maps to a network. Clients (landing,
+# app) send the raw param name they saw (e.g. "fbclid"), never a resolved network
+# string -- so this mapping has exactly one copy, here, instead of forking into a
+# client-side copy per surface. Order matters: first id present wins, mirroring
+# campaignCapture.js's existing client-side priority (facebook > google > tiktok >
+# snapchat > pinterest > reddit) for the id names that double up (gclid/gbraid/wbraid).
+CLICK_ID_NETWORK: dict[str, str] = {
+    "fbclid": "facebook",
+    "gclid": "google",
+    "gbraid": "google",
+    "wbraid": "google",
+    "ttclid": "tiktok",
+    "sclid": "snapchat",
+    "ScCid": "snapchat",
+    "epik": "pinterest",
+    "rdt_cid": "reddit",
+}
+
+
+def bucket_visit_source(
+    ref: str | None,
+    utm_campaign: str | None,
+    click_id: str | None,
+    referrer_host: str | None,
+) -> str:
+    """Anonymous, pre-signup visit bucketing for the first-party beacon (T7410).
+
+    A deliberately CLOSED, small vocabulary (unlike _determine_origin's open-ended
+    origin string) -- investor charts need trend shape, not per-campaign ids for
+    visitors who never sign up. Mirrors _determine_origin's PRIORITY order with the
+    DB-dependent steps dropped (campaign registry lookup, share-based lookup): those
+    require resolving against Postgres state keyed by a signed-up user, which an
+    anonymous visit has none of.
+
+    Priority: invite ref -> referral (raw ref or utm_campaign) -> click-id social ->
+    referrer host (seo / social-<network> / community) -> direct.
+    """
+    if ref and INVITE_CODE_RE.match(ref):
+        return "invite"
+    if ref or utm_campaign:
+        return "referral"
+    network = CLICK_ID_NETWORK.get(click_id) if click_id else None
+    if network:
+        return f"social-{network}"
+    referrer_bucket = bucket_referrer_host(referrer_host)
+    if referrer_bucket:
+        return referrer_bucket
+    return "direct"
 
 
 # ---------------------------------------------------------------------------

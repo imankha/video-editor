@@ -18,8 +18,43 @@ import { useGamesDataStore } from '../stores/gamesDataStore.js';
 import { useProjectDataStore } from '../stores/projectDataStore.js';
 import { useVideoStore } from '../stores/videoStore.js';
 import { useExportStore } from '../stores/exportStore.js';
+import { API_BASE } from '../config.js';
+import { firstClickIdKey } from './campaignCapture.js';
 
 const TOKEN = import.meta.env.VITE_CF_ANALYTICS_TOKEN;
+
+/**
+ * T7410: first-party, cookie-free visit beacon. Fire-and-forget -- never blocks
+ * rendering, never throws. No cookies/localStorage/IDs: the whole payload is the
+ * same shape documented on the task (page_class + coarse attribution hints), and
+ * the server stores only an aggregate (day, source, page_class) -> count row.
+ * `pageClass` is "app" pre-auth, or "share" on a shared-reel viewer page.
+ */
+export function sendVisitBeacon(pageClass, search = window.location.search, referrer = document.referrer) {
+  const params = new URLSearchParams(search);
+  let referrerHost = null;
+  if (referrer) {
+    try {
+      const h = new URL(referrer).hostname;
+      if (h && h !== window.location.hostname) referrerHost = h;
+    } catch { /* malformed referrer -- no hint */ }
+  }
+  const body = JSON.stringify({
+    page_class: pageClass,
+    ref: params.get('ref') || null,
+    utm_campaign: params.get('utm_campaign') || null,
+    click_id: firstClickIdKey(search),
+    referrer_host: referrerHost,
+  });
+
+  const url = `${API_BASE}/api/t`;
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+    return;
+  }
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true })
+    .catch(() => { /* fire-and-forget: a dropped beacon is not an error */ });
+}
 
 // Inject beacon script once on module load — only when token is configured
 if (TOKEN && !document.querySelector('[data-cf-beacon]')) {

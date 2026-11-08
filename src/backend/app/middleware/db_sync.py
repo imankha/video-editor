@@ -767,6 +767,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return True
         path = request.url.path
+        # T7410: exact-match -- "/api/t" as a startswith prefix would also allowlist
+        # /api/telemetry and /api/test/* (already separately listed), which must keep
+        # going through their own auth checks.
+        if path == "/api/t":
+            return True
         return any(path.startswith(prefix) for prefix in self.AUTH_ALLOWLIST_PREFIXES)
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -1104,7 +1109,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     set_current_profile_id(profile_id)
 
             # --- Skip sync for certain paths ---
-            should_sync = R2_ENABLED and meta["route_label"] not in self.LIGHT_WRITE_ROUTES and not any(
+            # T7410: exact-match, not a SKIP_SYNC_PATHS prefix -- "/api/t" as a prefix would
+            # also swallow /api/telemetry, /api/test/*, and any future /api/t... route.
+            should_sync = R2_ENABLED and meta["route_label"] not in self.LIGHT_WRITE_ROUTES and request.url.path != "/api/t" and not any(
                 request.url.path.startswith(prefix) for prefix in self.SKIP_SYNC_PATHS
             )
 

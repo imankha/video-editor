@@ -14,6 +14,17 @@ export const CAMPAIGN_PARAMS = [
   'fbclid', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'sclid', 'ScCid', 'epik', 'rdt_cid',
 ];
 
+// T7410: priority order for the visit beacon's click_id field. The raw param KEY is
+// sent (e.g. "fbclid"), never a resolved network name -- the key->network mapping is
+// server-side only (analytics.CLICK_ID_NETWORK), so it has exactly one copy.
+const CLICK_ID_KEYS = ['fbclid', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'sclid', 'ScCid', 'epik', 'rdt_cid'];
+
+/** The first click-id param NAME present in `search`, or null. */
+export function firstClickIdKey(search) {
+  const params = new URLSearchParams(search);
+  return CLICK_ID_KEYS.find((key) => params.has(key)) || null;
+}
+
 function storedParams() {
   const raw = sessionStorage.getItem('campaignParams');
   return raw ? JSON.parse(raw) : {};

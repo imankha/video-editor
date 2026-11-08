@@ -9,6 +9,19 @@
 persistence) ships first as T15280 so the visit beacon (T7410) can start. This task is now the
 rollup sweep and the rollup tables, built on T15280's store.
 
+**T15280 resolved 2026-11-08:** `analytics_store.py` already existed (T13930's per-writer-shard
+store, extended by T14030's Journey rollup at schema step 2) — code had moved past this doc's
+"NEW file, single env-prefixed key, drip.sqlite precedent" description before T15280 started.
+T15280's three acceptance criteria (open/create + env-prefixed-key persistence + etag-CAS refusal;
+fresh-file and version-1-file both reach the current `PRAGMA user_version`; no Postgres DDL, no
+per-user/per-event rows) all already held; T15280 added the one missing test
+(`test_analytics_store.py`, the schema-ladder-from-an-older-version case) and this note. This
+task's `rollup_action_weekly`/`rollup_engagement_monthly` tables are schema step 3, per the
+module's own docstring ("T7400's rollup_action_weekly takes step 3"), landing on the per-writer
+shards the store already has — NOT a flat single-writer file. Update "Schema" below accordingly
+when this task starts: shard-aware (summed across shards, since each writer reduces its own users)
+rather than a single store-wide table.
+
 ## Problem
 
 Cohort × action × time questions ("% of the Fall cohort still exporting in week 6", "clip-library usage over the season") cannot be answered today: per-event history exists only inside each user's SQLite `user_action_log`, and the shared stores hold lifetime counts (`user_actions`) or global-not-per-user daily aggregates (`daily_counters`). Per the epic's binding directives we may NOT solve this with a Postgres event table or any per-event shared store.

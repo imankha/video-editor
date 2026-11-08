@@ -84,7 +84,8 @@ describe('T14650 retired landing words', () => {
   it.each(RETIRED)('%s', (name, pattern, applies = () => true) => {
     const hits = FILES.filter(({ rel }) => applies(rel)).flatMap(({ rel, text }) =>
       text.split('\n').flatMap((line) => {
-        const match = line.match(pattern);
+        // URLs are addresses, not copy (T7410: the API host is reel-ballers-api.fly.dev).
+        const match = line.replace(/https?:\/\/[^\s'"`)]+/g, '').match(pattern);
         return match ? [`${rel}: "${match[0]}" in ${line.trim().slice(0, 110)}`] : [];
       }),
     );

@@ -10,7 +10,8 @@ primary_region = "lax"
   DEBUG = "false"
   CLEAR_PENDING_JOBS_ON_STARTUP = "false"
   MODAL_ENABLED = "true"
-  CORS_ORIGINS = "https://app.reelballers.com"
+  # T7410: reelballers.com added for the landing site's visit beacon (POST /api/t).
+  CORS_ORIGINS = "https://app.reelballers.com,https://reelballers.com"
   # T14380: local per-user DB cache cap. Derivation (prod measured 2026-11-02) is in
   # docs/plans/tasks/T14380-local-user-db-lru-eviction.md; re-derive if the rootfs changes.
   DB_CACHE_HIGH_WATER_BYTES = "4000000000"

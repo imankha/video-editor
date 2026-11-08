@@ -474,3 +474,92 @@ class TestWhy:
             {"event": "game_upload_failed", "reason": "timeout", "users": 2},
             {"event": "game_upload_failed", "reason": "network", "users": 1}]
         assert out["impressions"] == [{"slug": "dialog_impression:file_too_large", "users": 2}]
+
+
+class TestHeadNode:
+    """T14960: the aggregate 'Visited' head node -- read-only over T7410's visit_daily,
+    never joined to users, never a fold_journey node."""
+
+    INSTRUMENTED = "2026-11-08"
+
+    def test_ratio_shows_both_counts(self):
+        totals = {
+            ("2026-11-08", "direct", "landing"): 3000,
+            ("2026-11-08", "seo", "landing"): 400,
+            ("2026-11-09", "direct", "app"): 50,
+        }
+        node = aj.build_head_node(
+            totals, d_from=date(2026, 11, 8), d_to=date(2026, 11, 9), signups=174,
+            instrumented_at=self.INSTRUMENTED)
+        assert node["visits"] == 3450
+        assert node["signups"] == 174
+        assert node["ratio"]["k"] == 174
+        assert node["ratio"]["n"] == 3450
+        assert node["ratio"]["pct"] == round(100 * 174 / 3450, 2)
+        assert node["aggregate"] is True
+        assert node["badge"] == aj.HEAD_NODE_BADGE
+        assert node["not_instrumented"] is False
+
+    def test_not_instrumented_before_the_beacons_first_day(self):
+        node = aj.build_head_node(
+            {("2026-11-08", "direct", "landing"): 100}, d_from=date(2026, 10, 1),
+            d_to=date(2026, 10, 31), signups=50, instrumented_at=self.INSTRUMENTED)
+        assert node["not_instrumented"] is True
+        assert node["visits"] is None
+        assert node["ratio"] is None
+
+    def test_partial_from_when_window_straddles_the_first_day(self):
+        node = aj.build_head_node(
+            {("2026-11-08", "direct", "landing"): 100}, d_from=date(2026, 11, 1),
+            d_to=date(2026, 11, 10), signups=10, instrumented_at=self.INSTRUMENTED)
+        assert node["not_instrumented"] is False
+        assert node["partial_from"] == self.INSTRUMENTED
+        assert node["visits"] == 100
+
+    def test_sport_filter_narrows_to_the_sport_landing_page_class(self):
+        totals = {
+            ("2026-11-08", "direct", "landing"): 500,
+            ("2026-11-08", "direct", "landing:basketball"): 80,
+            ("2026-11-08", "direct", "landing:soccer"): 20,
+            ("2026-11-08", "direct", "app"): 10,
+        }
+        node = aj.build_head_node(
+            totals, d_from=date(2026, 11, 8), d_to=date(2026, 11, 8), signups=5,
+            sport="basketball", instrumented_at=self.INSTRUMENTED)
+        assert node["visits"] == 80
+
+    def test_no_sport_filter_includes_every_landing_variant_and_app_not_share(self):
+        totals = {
+            ("2026-11-08", "direct", "landing"): 500,
+            ("2026-11-08", "direct", "landing:basketball"): 80,
+            ("2026-11-08", "direct", "app"): 10,
+            ("2026-11-08", "direct", "share"): 999,
+        }
+        node = aj.build_head_node(
+            totals, d_from=date(2026, 11, 8), d_to=date(2026, 11, 8), signups=5,
+            instrumented_at=self.INSTRUMENTED)
+        assert node["visits"] == 590
+
+    def test_head_node_is_not_a_fold_journey_node_and_conservation_is_unaffected(self):
+        rows = [_pat(["started"], "stuck", n=4)]
+        folded = aj.fold_journey(rows, JOURNEY_LADDER)
+        aj.check_conservation(folded["nodes"], folded["edges"])  # raises on violation
+        assert all(n["key"] != aj.HEAD_NODE_KEY for n in folded["nodes"])
+
+    def test_build_head_step_breaks_down_by_source_and_page_class(self):
+        totals = {
+            ("2026-11-08", "direct", "landing"): 100,
+            ("2026-11-08", "seo", "landing"): 50,
+            ("2026-11-08", "seo", "app"): 5,
+        }
+        step = aj.build_head_step(totals, d_from=date(2026, 11, 8), d_to=date(2026, 11, 8),
+                                  instrumented_at=self.INSTRUMENTED)
+        assert step["total"] == 155
+        assert step["by_source"] == [{"key": "direct", "visits": 100}, {"key": "seo", "visits": 55}]
+        assert {r["key"]: r["visits"] for r in step["by_page_class"]} == {"landing": 150, "app": 5}
+
+    def test_build_head_step_not_instrumented(self):
+        step = aj.build_head_step({}, d_from=date(2026, 1, 1), d_to=date(2026, 1, 31),
+                                  instrumented_at=self.INSTRUMENTED)
+        assert step["not_instrumented"] is True
+        assert step["by_source"] == []

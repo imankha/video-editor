@@ -80,4 +80,4 @@ Add a **Visited** node to the left of "Signed up", drawn as an aggregate band:
 - [ ] Visited node shows visits and the visit -> sign-up ratio with both counts, badged aggregate.
 - [ ] Before the beacon's first day the node reads "not instrumented", never 0%.
 - [ ] Conservation and loss ranking are unchanged; the head node is separate in the payload.
-- [ ] Sport pill filters the node when the beacon carries the landing sport.
+- [ ] The `sport` parameter on the journey and Visited step endpoints narrows the node to `landing:<sport>` visits. The Sport pill itself is T14930's (group g-t14930-3, 2026-11-08 re-scope: the two tasks were put in separate groups); it passes this parameter once both land.

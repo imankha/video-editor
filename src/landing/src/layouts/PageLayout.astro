@@ -24,8 +24,9 @@ export interface Props {
   trail?: { name: string; path: string }[]
   /** Nav item to mark as current. */
   current?: string
-  /** Set only by a per-sport page (T14930): the sport key filled into `utm_content`
-   * when the visit doesn't already have one (an ad's own value always wins). */
+  /** Set only by a per-sport page: the sport id (tagRegistry key, the same key the
+   * admin Sport filter uses). T14930 fills it into `utm_content` when the visit has none
+   * (an ad's own value always wins); T7410's beacon reports `landing:<sport>`. */
   sport?: string
 }
 
@@ -52,17 +53,19 @@ const { trail, current, sport, ...base } = Astro.props
     just loses the params.
   -->
   <script>
-    import { readFirstTouch, applyFirstTouch, applyArrivalSport } from '../attribution'
+    import { readFirstTouch, applyFirstTouch, applyArrivalSport, sendVisitBeacon } from '../attribution'
+    import { API_URL } from '../site'
 
+    const sportKey = document.getElementById('main')?.dataset.sport || null
+    let record = null
     try {
-      const record = readFirstTouch(
+      record = readFirstTouch(
         window.location.search,
         document.referrer,
         window.location.hostname,
         window.location.pathname,
         window.sessionStorage,
       )
-      const sportKey = document.getElementById('main')?.dataset.sport || null
       const withSport = sportKey ? applyArrivalSport(record, sportKey, window.sessionStorage) : record
       document.querySelectorAll<HTMLAnchorElement>('a[data-cta]').forEach((a) => {
         try {
@@ -74,5 +77,10 @@ const { trail, current, sport, ...base } = Astro.props
     } catch {
       /* storage unavailable — links keep their default href */
     }
+
+    // T7410: anonymous visit beacon, fired once per page load regardless of
+    // whether the first-touch record above was readable (sendVisitBeacon
+    // tolerates a null record -- it just has no attribution hints to send).
+    sendVisitBeacon(record, sportKey ? `landing:${sportKey}` : 'landing', API_URL)
   </script>
 </BaseLayout>
