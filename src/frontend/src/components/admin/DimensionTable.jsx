@@ -66,6 +66,7 @@ export function DimensionTable({
           <tr className="border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider">
             <th className="text-left px-3 py-2.5" title={labelTitle}>{labelHeader}</th>
             <th className="text-right px-3 py-2.5">Signups</th>
+            <th className="text-right px-3 py-2.5" title="Account deleted, analytics kept (T15290)">Deleted</th>
             <th className="text-right px-3 py-2.5">Revenue</th>
             <th className="text-center px-3 py-2.5">Upload Success</th>
             <th className="text-center px-3 py-2.5" title="Users who tried / users who succeeded">Upload tries</th>
@@ -90,6 +91,7 @@ export function DimensionTable({
               >
                 <td className="px-3 py-2 text-gray-200 text-xs whitespace-nowrap">{renderLabel(row)}</td>
                 <td className="px-3 py-2 text-right text-gray-300 text-xs">{row.signups}</td>
+                <td className="px-3 py-2 text-right text-gray-400 text-xs">{row.deleted || 0}</td>
                 <td className="px-3 py-2 text-right text-green-400 text-xs">{formatRevenue(row.revenue_cents)}</td>
                 <td className="px-1 py-1 text-center">
                   {row.upload_success_pct == null
@@ -121,7 +123,7 @@ export function DimensionTable({
           })}
           {unattributedRevenueCents ? (
             <tr className="border-t border-white/10">
-              <td className="px-3 py-2 text-gray-400 text-xs italic" colSpan={2}>
+              <td className="px-3 py-2 text-gray-400 text-xs italic" colSpan={3}>
                 Unattributed <span className="text-gray-500">(deleted or out-of-window payers)</span>
               </td>
               <td className="px-3 py-2 text-right text-green-400 text-xs">{formatRevenue(unattributedRevenueCents)}</td>

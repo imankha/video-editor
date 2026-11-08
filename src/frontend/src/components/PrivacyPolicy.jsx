@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 
-const LAST_UPDATED = 'May 7, 2026';
+const LAST_UPDATED = 'November 8, 2026';
 
 export function PrivacyPolicy() {
   return (
@@ -139,7 +139,8 @@ export function PrivacyPolicy() {
             <li>OTP codes: expire after 10 minutes</li>
           </ul>
           <p className="mt-3">Upon deletion request, your personal data is permanently removed immediately (within 45 days if via email), apart from the limited records described next.</p>
-          <p className="mt-3">Transaction records (payment amounts keyed to an opaque account id, with no name, email, or card details) are retained after account deletion to meet our tax and accounting obligations. We also keep a record that the account was deleted, including when and through which path, to evidence that the erasure happened, and, where support staff accessed the account, the security log of that access to protect the account and our systems. We also keep the text of any bug reports you submitted, with your email, device details, and attachments removed, to help us fix the problems you reported, and usage and activity statistics in de-identified form (no name, email, or contact details) keyed to an opaque account id to understand how the product is used. Retaining these records does not delay or limit erasure of your personal data.</p>
+          <p className="mt-3">Transaction records (payment amounts keyed to an opaque account id, with no name, email, or card details) are retained after account deletion to meet our tax and accounting obligations. We also keep a record that the account was deleted, including when and through which path, to evidence that the erasure happened, and, where support staff accessed the account, the security log of that access to protect the account and our systems. We also keep the text of any bug reports you submitted, with your email, device details, and attachments removed, to help us fix the problems you reported.</p>
+          <p className="mt-3">We also keep, under the same opaque account id, usage and activity statistics and the attribution signals that first brought you to ReelBallers (such as which campaign, referral link, or page you arrived from, and which sport you were browsing), collectively our &ldquo;retained usage statistics,&rdquo; to understand how the product is used and which channels bring people to it. To let us recognize a person who deletes their account and signs up again, without restoring any of their deleted data, we keep a one-way cryptographic hash of the deleted account&apos;s email address; the original email cannot be recovered from it. Retaining these records does not delay or limit erasure of your personal data.</p>
         </Section>
 
         {/* Section 5 */}
@@ -147,7 +148,7 @@ export function PrivacyPolicy() {
           <p className="mb-3">California residents (and others where required by law) have the following rights:</p>
           <ul className="list-disc pl-5 space-y-2 mb-4">
             <li><strong className="text-white">Right to Know/Access:</strong> Request a copy of your data via &ldquo;Download My Data&rdquo; in Account Settings</li>
-            <li><strong className="text-white">Right to Delete:</strong> Delete your account via &ldquo;Delete My Account&rdquo; in Account Settings. Deletion is permanent and immediate. A limited set of records survives deletion (transaction records, the record that the account was deleted, security logs of any staff access, de-identified bug reports, and de-identified usage and activity statistics), each described in the Data Retention section above; retaining them never delays or limits erasure of your personal data.</li>
+            <li><strong className="text-white">Right to Delete:</strong> Delete your account via &ldquo;Delete My Account&rdquo; in Account Settings. Deletion is permanent and immediate. A limited set of records survives deletion (transaction records, the record that the account was deleted, security logs of any staff access, de-identified bug reports, a one-way hash of your email so a future sign-up can be recognized as returning, and the retained usage statistics described in the Data Retention section above); retaining them never delays or limits erasure of your personal data.</li>
             <li><strong className="text-white">Right to Correct:</strong> Contact us to correct inaccurate information</li>
             <li><strong className="text-white">Right to Opt-Out of Sale/Sharing:</strong> We do not sell or share your data. This right is automatically honored.</li>
             <li><strong className="text-white">Right to Limit Sensitive PI:</strong> Video content is used only as you direct</li>

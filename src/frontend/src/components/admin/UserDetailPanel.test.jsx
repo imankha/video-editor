@@ -99,6 +99,19 @@ describe('UserDetailPanel attempted vs succeeded (T7510)', () => {
   });
 });
 
+describe('UserDetailPanel landing page (T15010)', () => {
+  it('shows the landing page next to origin when present', () => {
+    const data = { ...BASE_DATA, landing_path: '/works-with/trace' };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+    expect(screen.getByText(/Landed on \/works-with\/trace/)).toBeTruthy();
+  });
+
+  it('omits the landing page when absent (direct arrival / pre-T15010 signup)', () => {
+    render(<UserDetailPanel data={{ ...BASE_DATA, landing_path: null }} onClose={() => {}} />);
+    expect(screen.queryByText(/Landed on/)).toBeNull();
+  });
+});
+
 describe('UserDetailPanel clip-phase inventory (T7860)', () => {
   const CLIP_PHASES = {
     clips: { created: 5, focus_started: 3, focused: 2 },

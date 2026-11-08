@@ -7,11 +7,12 @@ import { BuildsGrid } from './BuildsGrid';
 
 // T13990: the three dimension tables show ONE column set; only the label differs.
 const KPIS = {
-  signups: 3, revenue_cents: 1234, upload_success_pct: 75,
+  signups: 3, deleted: 0, revenue_cents: 1234, upload_success_pct: 75,
   first_highlight_14d: { aged: 24, hit: 3, pct: 12.5 }, upload_attempted: 7, upload_succeeded: 5, paywall_shown: 4, buy_modal_opened: 2, payers: 1,
   uploaded_pct: 67, clipped_pct: 33, exported_pct: 33, shared_pct: 0, purchased_pct: 33,
 };
-const KPI_HEADERS = ['Signups', 'Revenue', 'Upload Success', 'Upload tries', 'First highlight 14d', 'Paywall', 'Opened buy', 'Payers', 'Uploaded', 'Clipped', 'Exported', 'Shared', 'Purchased'];
+// T15290: Deleted sits right after Signups (account deleted, analytics kept).
+const KPI_HEADERS = ['Signups', 'Deleted', 'Revenue', 'Upload Success', 'Upload tries', 'First highlight 14d', 'Paywall', 'Opened buy', 'Payers', 'Uploaded', 'Clipped', 'Exported', 'Shared', 'Purchased'];
 
 const TABLES = [
   ['Campaigns', <ChannelsTable key="c" data={{ channels: [{ origin: 'tiktok', campaign_name: null, ...KPIS }] }} />, 'Campaign'],
@@ -32,12 +33,20 @@ describe('Dimension tables share one KPI column set (T13990)', () => {
   it.each(TABLES)('%s: renders the KPI values the same way', (_name, table) => {
     const { container } = render(table);
     const cells = [...container.querySelectorAll('tbody tr:first-child td')].slice(1).map(td => td.textContent);
-    expect(cells).toEqual(['3', '$12.34', '75.00%', '7 / 5', '12.50% (3/24)', '4', '2', '1', '67.00%', '33.00%', '33.00%', '0.00%', '33.00%']);
+    expect(cells).toEqual(['3', '0', '$12.34', '75.00%', '7 / 5', '12.50% (3/24)', '4', '2', '1', '67.00%', '33.00%', '33.00%', '0.00%', '33.00%']);
   });
 
   it('upload success with no upload outcome reads "--"', () => {
     render(<CohortGrid data={{ cohorts: [{ cohort_period: '2026-10-05', ...KPIS, upload_success_pct: null }] }} />);
     expect(screen.getByText('--')).toBeTruthy();
+  });
+
+  it('T15290: shows a nonzero deleted count', () => {
+    const { container } = render(
+      <ChannelsTable data={{ channels: [{ origin: 'tiktok', campaign_name: null, ...KPIS, deleted: 5 }] }} />
+    );
+    const cells = [...container.querySelectorAll('tbody tr:first-child td')].map(td => td.textContent);
+    expect(cells).toContain('5');
   });
 
   it('a row click passes the row key; the selected row is highlighted', () => {

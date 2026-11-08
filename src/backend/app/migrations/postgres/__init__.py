@@ -45,6 +45,8 @@ from .v041_ip_rate_events import V041IpRateEvents
 from .v042_upload_observability import V042UploadObservability
 from .v043_user_segments_country import V043UserSegmentsCountry
 from .v044_campaign_spend import V044CampaignSpend
+from .v045_user_segments_landing_path import V045UserSegmentsLandingPath
+from .v046_account_deletion_hash_and_returning import V046AccountDeletionHashAndReturning
 
 MIGRATIONS = [
     V001Baseline(),
@@ -91,6 +93,8 @@ MIGRATIONS = [
     V042UploadObservability(),
     V043UserSegmentsCountry(),
     V044CampaignSpend(),
+    V045UserSegmentsLandingPath(),
+    V046AccountDeletionHashAndReturning(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL

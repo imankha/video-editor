@@ -46,14 +46,20 @@ _RESET = "t8630r4_reset"
 _R4_IDS = (_MAIN, _REFERRER, _SUB, _RESET)
 _ORIGIN = "t8630r4_paid_channel"
 
+# T15290 (owner ruling 2026-11-07) reverses this round's wider strip list:
+# deletion means the email becomes a one-way keyed hash and the account's data
+# is gone, so no user_segments column identifies a person any more -- only the
+# live-session field is stripped. See analytics.py _DEIDENTIFY_SEGMENT_COLUMNS.
 _STRIPPED_COLS = (
-    "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
-    "click_source", "current_session_start", "last_active_at",
-    "total_usage_seconds",
+    "current_session_start",
 )
 _KEPT_SEGMENT_COLS = (
     "origin", "acquired_at", "referrer_id", "signup_method",
     "total_spent_cents",
+)
+_KEPT_ATTRIBUTION_COLS = (
+    "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+    "click_source", "last_active_at", "total_usage_seconds",
 )
 
 
@@ -166,6 +172,8 @@ def _assert_analytics_kept(conn, user_id):
     assert seg is not None, "user_segments row must SURVIVE deletion (kept, de-identified)"
     for col in _STRIPPED_COLS:
         assert seg[col] is None, f"user_segments.{col} must be stripped to NULL"
+    for col in _KEPT_ATTRIBUTION_COLS:
+        assert seg[col] is not None, f"user_segments.{col} must be KEPT (T15290 owner ruling)"
     assert seg["origin"] == _ORIGIN, "origin (channel) must be KEPT"
     assert str(seg["acquired_at"]) == "2026-09-01", "acquired_at (cohort) must be KEPT"
     assert seg["referrer_id"] == _REFERRER, "referrer_id (opaque) must be KEPT"
@@ -410,6 +418,8 @@ class TestDeleteUserScriptKeepsAnalytics:
         assert seg is not None, "user_segments row must survive the script deletion"
         for col in _STRIPPED_COLS:
             assert seg[col] is None, f"{col} must be stripped"
+        for col in _KEPT_ATTRIBUTION_COLS:
+            assert seg[col] is not None, f"{col} must be KEPT (T15290 owner ruling)"
         assert seg["origin"] == _ORIGIN and seg["referrer_id"] == _REFERRER
         assert _count(raw_pg_conn, "user_actions", "user_id", _SUB) == 1
         assert _count(raw_pg_conn, "user_usage_daily", "user_id", _SUB) == 2
