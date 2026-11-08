@@ -1,6 +1,6 @@
 # T15250: T14970 e2e spec can hang on a profile the store never loaded
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 1
 **Tier:** S (test only)

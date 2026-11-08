@@ -1,6 +1,6 @@
 # T15010: Landing page that converted: `landing_path` stored at sign-up and readable in admin
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Tier:** L (schema change: one nullable column on `user_segments`; landing + frontend + backend; Migration agent)

@@ -1,6 +1,6 @@
 # T14930: Arrival sport on sign-ups: landing sport pages tag `utm_content`, admin filters by it
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Tier:** M (landing one-file change + read-only admin filter; no schema change)
