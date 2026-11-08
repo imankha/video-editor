@@ -221,6 +221,16 @@ class DotaskCliTest(unittest.TestCase):
         self._push_commit("T2: the work", code_file="x.py")
         self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
 
+    def test_a_reverted_commit_does_not_count_as_merged_work(self):
+        # T15220 (2026-11-08): reverted out of PR #717, then refused a restart for the reverted commits.
+        self._write_task("T2", "Reverted", "TODO", ["x.py"])
+        self._push_commit("T2: the first attempt", code_file="x.py")
+        self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
+        git_c(self.main_repo, "revert", "--no-edit", "HEAD")
+        git(self.main_repo, "push", "-q", "origin", "HEAD:master")
+        git(self.main_repo, "fetch", "-q", "origin")
+        self.assertEqual(dotask_cli.merged_commits("T2"), [])
+
     def test_agent_doc_commits_do_not_count_as_merged_work(self):
         # 5e3c33f8c: filing T14970 also touched .claude/agents, and T14970 read as already shipped.
         self._write_task("T2", "Filed only", "TODO", ["x.py"])

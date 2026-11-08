@@ -172,12 +172,19 @@ def merged_commits(task_id):
     # --grep also matches body lines, and a wrapped list of task ids can open one (5c669996f), so the
     # subject decides: only a subject that starts with the id is that task's work.
     result = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--no-merges", "--grep",
-                             f"^{task_id}[: ]", "--format=%h %s", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
+                             f"^{task_id}[: ]", "--format=%H %s", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
                             capture_output=True, text=True, timeout=60, check=False)
     if result.returncode:
         return []
+    # A commit undone by a `git revert` on master is not work done: T15220 was reverted out of PR #717
+    # and its restart was refused for the reverted commits (2026-11-08).
+    reverts = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--grep",
+                              "This reverts commit", "--format=%B"],
+                             capture_output=True, text=True, timeout=60, check=False)
+    reverted = set(re.findall(r"This reverts commit ([0-9a-f]{40})", reverts.stdout))
     subject = re.compile(rf"\S+ {task_id}[: ]")
-    return [line for line in result.stdout.splitlines() if subject.match(line)]
+    return [f"{line[:9]}{line[40:]}" for line in result.stdout.splitlines()
+            if subject.match(line) and line[:40] not in reverted]
 
 
 def live_groups():
