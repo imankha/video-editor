@@ -1,6 +1,6 @@
 # T15330: dotask: seven stall gaps that needed a person
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M (tooling only: scripts/dotask_cli.py, scripts/task.sh, their tests, the dotask skill)

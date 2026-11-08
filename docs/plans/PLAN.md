@@ -345,7 +345,7 @@ User request 2026-10-31: "we should be ready for 10K users". An audit on 2026-10
 | T13740 | [Close cross-tree scan + doc-drift blind spots](tasks/T13740-ci-scan-and-drift-blind-spots.md) | 3 | 4 | 0.75 | TODO | [ ] |  |
 | T13750 | [Require ci-ready via GitHub branch protection](tasks/T13750-require-ci-ready-branch-protection.md) | 6 | 1 | 6.0 | TODO | [ ] |  |
 | T13760 | [Branch CI frontend job runs only the tests related to the change](tasks/T13760-branch-ci-frontend-runs-related-tests-only.md) | 6 | 4 | 1.5 | TODO | [ ] |  |
-| T15330 | [dotask: seven stall gaps that needed a person (auth retry, red CI, disputes, cross-group criteria, filed-bug commit, tool noise, run lock)](tasks/T15330-dotask-stall-gaps.md) | 7 | 3 | 2.3 | WIP | [ ] | Owner approved 2026-11-08. |
+| T15330 | [dotask: seven stall gaps that needed a person (auth retry, red CI, disputes, cross-group criteria, filed-bug commit, tool noise, run lock)](tasks/T15330-dotask-stall-gaps.md) | 7 | 3 | 2.3 | STAGING | [ ] | Owner approved 2026-11-08. |
 
 #### After the deploy (user-ordered 2026-10-13)
 
