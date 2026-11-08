@@ -1,6 +1,6 @@
 # T15200: Paid-ads tracking: registry spend entry, live-campaign block, kept separate from the referral programme
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Tier:** L (postgres migration on `campaigns`, Migration agent; one admin write gesture; admin read blocks)

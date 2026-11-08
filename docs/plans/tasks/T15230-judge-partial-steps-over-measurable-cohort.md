@@ -1,6 +1,6 @@
 # T15230: Judge partial Journey steps over the sign-ups that can be measured
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M (backend + frontend, read only, no schema change)

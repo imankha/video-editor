@@ -1,6 +1,6 @@
 # T15280: analytics.sqlite store module (carved out of T7400 so the visit beacon can start)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M (backend only, new flat SQLite store; no Postgres change)

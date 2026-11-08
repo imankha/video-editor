@@ -1,6 +1,6 @@
 # T15290: Account deletion keeps analytics: hashed email, attribution kept, deletion visible in the admin
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Tier:** L (postgres migration, Migration agent; backend + admin read)
