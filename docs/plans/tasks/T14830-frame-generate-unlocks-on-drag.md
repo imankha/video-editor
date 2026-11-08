@@ -1,6 +1,6 @@
 # T14830: Frame: Generate unlocks on the first box drag; pressing Play becomes advice, not a lock (decision)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-11-03

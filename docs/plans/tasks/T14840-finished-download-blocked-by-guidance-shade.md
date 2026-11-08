@@ -1,6 +1,6 @@
 # T14840: Finished: Download is dead under the last Guidance card (shade has no cutout for it)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-03

@@ -1,6 +1,6 @@
 # T14850: Frame and Spotlight on short desktop viewports: the video is a thumbnail or hidden under the action bar
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-11-03

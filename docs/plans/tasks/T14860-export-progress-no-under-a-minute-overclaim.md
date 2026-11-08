@@ -1,6 +1,6 @@
 # T14860: Export progress: never say "Less than a minute remaining" before the render has started
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-03
