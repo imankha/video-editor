@@ -44,7 +44,39 @@ The code does not match the ruling (checked 2026-11-07):
 - **Deletion visible.** Admin reads (Journey users list, user detail, Channels, Landing page table
   when present) take "deleted" from `account_deletions`, not from `last_active_at IS NULL`, and show
   it as a status chip; dimension tables gain a "deleted" count column.
-- Privacy page copy: say that anonymised usage analytics is kept after deletion.
+- Privacy policy and terms: reviewed and updated in this PR (section below).
+
+## Privacy policy and terms review (owner request 2026-11-07)
+
+This task changes what survives account deletion, so the privacy policy and terms must be reviewed
+and updated in the same PR. Read both in full; the points below are where the current text is
+known to touch this change (checked 2026-11-07):
+
+- `src/frontend/src/components/PrivacyPolicy.jsx` Data Retention (line ~142) says de-identified
+  usage statistics are kept "(no name, email, or contact details)" keyed to an opaque id. A keyed
+  hash of the email that can recognise a returning person is pseudonymised personal data (GDPR
+  Art. 4(5)), not anonymous. Say plainly that a one-way keyed hash of the email is kept, why
+  (recognising a returning person in analytics only), and that it never restores data.
+- Same section: attribution kept after deletion (`utm_*`, click source, landing page, arrival
+  sport) must be covered by the retained-statistics wording. If `click_source` can hold a platform
+  click id (gclid, fbclid, ...), check whether that is an identifier and either drop it at
+  deletion or disclose it.
+- Right to Delete bullet (line ~150) lists what survives deletion: add the email hash.
+- Analytics claims (lines ~58, ~93, ~123, ~194, ~201: "anonymous", "no PII"): confirm each stays
+  true. They describe page-view analytics; make sure none now reads as covering the retained
+  per-account statistics.
+- Children and parental rights (line ~173): confirm nothing kept after deletion relates to a
+  child (intro cards, athlete data); it must not.
+- `src/frontend/src/components/TermsOfService.jsx` section 13 Termination ("Upon termination,
+  your content is permanently deleted") and the survival list: confirm consistent; add a pointer
+  to the privacy policy's retention section if needed.
+- Changes notice (PrivacyPolicy line ~220): a material change needs the in-app notice and a new
+  `LAST_UPDATED` in both files. Check how the in-app notice is shown today and use it; if no
+  mechanism exists, stop and say so rather than building one silently.
+- The legal wording is the owner's call: draft the exact before/after text in this task file
+  under "Policy diff" and list it in the PR body as a staging check for the owner. Do not ship a
+  policy change that the code in this PR does not implement, or code that the policy does not
+  disclose.
 
 ## Context
 
@@ -56,7 +88,7 @@ The code does not match the ruling (checked 2026-11-07):
 - `src/backend/app/migrations/postgres/` (next free version) and `src/backend/app/services/pg.py` `_SCHEMA_DDL`
 - `src/backend/app/services/analytics_journey.py`, `src/backend/app/routers/admin.py` - deleted from the record
 - `src/frontend/src/components/admin/UserDetailPanel.jsx`, `DimensionTable.jsx`
-- `src/landing/src/pages/privacy*` - the copy line
+- `src/frontend/src/components/PrivacyPolicy.jsx`, `TermsOfService.jsx` - retention, deletion and analytics wording, `LAST_UPDATED`
 - Tests: deletion keeps attribution columns, writes the hash, hash is keyed; admin reads deleted from the record
 
 ### Related Tasks
@@ -70,3 +102,4 @@ The code does not match the ruling (checked 2026-11-07):
 - [ ] A new sign-up whose email hash matches a deletion is marked `returning_after_deletion` in analytics and nothing else changes.
 - [ ] Admin user list and detail show "deleted" from `account_deletions`; dimension tables show a deleted count.
 - [ ] Migration applies on dev, staging and prod via the admin endpoint; fresh DDL matches.
+- [ ] Privacy policy and terms reviewed: every statement about deletion, retention and analytics matches the shipped behaviour; the email hash and the kept attribution are disclosed; `LAST_UPDATED` bumped and the change notice shown; the before/after text is in the task file and the PR body names it as an owner check on staging.
