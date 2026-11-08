@@ -22,7 +22,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTT
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.analytics import record_milestone
+from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
 from app.constants import ACCOUNT_UPDATING_MESSAGE, MAX_CLIP_DURATION_S
 from app.database import (
     column_exists,
@@ -1723,7 +1723,10 @@ async def save_raw_clip(
         highlight_instances = _get_highlight_instances_by_clip(cursor, [raw_clip_id]).get(raw_clip_id, [])
         conn.commit()
         _finish_highlight_make(made_events)
-        record_milestone(get_current_user_id(), "clip_created", {"clip_id": raw_clip_id, "game_id": clip_data.game_id, "rating": clip_data.rating})
+        record_milestone(get_current_user_id(), "clip_created", {
+            "clip_id": raw_clip_id, "game_id": clip_data.game_id, "rating": clip_data.rating,
+            SPORT_PROFILE_ID_CONTEXT_KEY: get_current_profile_id(),
+        })
         if clip_data.create_project:
             logger.info(f"[CreateReel] save_raw_clip NEW clip response: project_created={project_created}, project_id={project_id}")
         logger.info(f"Saved clip {raw_clip_id} for game {clip_data.game_id}")
@@ -2598,7 +2601,9 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
     # clip_uploaded events, matching clip_created's per-clip grain. Only for
     # NEWLY created rows this call (an idempotent re-post must not re-emit).
     for raw_clip_id in created_clip_ids:
-        record_milestone(user_id, "clip_uploaded", {"clip_id": raw_clip_id})
+        record_milestone(user_id, "clip_uploaded", {
+            "clip_id": raw_clip_id, SPORT_PROFILE_ID_CONTEXT_KEY: profile_id,
+        })
 
     return {"results": results, "charged": charged, "balance": balance}
 

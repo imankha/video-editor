@@ -4,6 +4,15 @@ import { useAdminStore } from '../../stores/adminStore';
 
 const NAME_MAX = 80;
 
+// T15200: admin.CampaignChannel, mirrored (checked server-side; this is display only).
+const CHANNEL_OPTIONS = [
+  { value: 'coach_credits', label: 'Coach credits' },
+  { value: 'coach_gift', label: 'Coach gift' },
+  { value: 'reddit', label: 'Reddit' },
+  { value: 'meta', label: 'Meta' },
+  { value: 'club', label: 'Club' },
+];
+
 /**
  * CampaignsModal — create a named campaign and copy its attribution link (T13980).
  *
@@ -90,10 +99,23 @@ export function CampaignsModal({ onClose }) {
 
 function CampaignRow({ campaign }) {
   const renameCampaign = useAdminStore(s => s.renameCampaign);
+  const updateCampaignSpend = useAdminStore(s => s.updateCampaignSpend);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(campaign.name);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  // T15200: a separate gesture from the name pencil -- its own draft state and its own
+  // Save button, so renaming never touches spend and saving spend never touches the name.
+  const [channel, setChannel] = useState(campaign.channel || '');
+  const [spendDollars, setSpendDollars] = useState(
+    campaign.spend_cents != null ? String(campaign.spend_cents / 100) : '');
+  const [landingViews, setLandingViews] = useState(
+    campaign.landing_views != null ? String(campaign.landing_views) : '');
+  const [platformConversions, setPlatformConversions] = useState(
+    campaign.platform_conversions != null ? String(campaign.platform_conversions) : '');
+  const [spendError, setSpendError] = useState(null);
+  const [savingSpend, setSavingSpend] = useState(false);
 
   async function handleRename(e) {
     e.preventDefault();
@@ -104,6 +126,24 @@ function CampaignRow({ campaign }) {
       setError(null);
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  async function handleSaveSpend(e) {
+    e.preventDefault();
+    setSavingSpend(true);
+    setSpendError(null);
+    try {
+      await updateCampaignSpend(campaign.id, {
+        channel: channel || null,
+        spend_cents: spendDollars === '' ? null : Math.round(Number(spendDollars) * 100),
+        landing_views: landingViews === '' ? null : Number(landingViews),
+        platform_conversions: platformConversions === '' ? null : Number(platformConversions),
+      });
+    } catch (err) {
+      setSpendError(err.message);
+    } finally {
+      setSavingSpend(false);
     }
   }
 
@@ -170,6 +210,52 @@ function CampaignRow({ campaign }) {
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
+      <form onSubmit={handleSaveSpend} className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-white/5">
+        <select
+          value={channel}
+          onChange={e => setChannel(e.target.value)}
+          aria-label={`Channel for ${campaign.name}`}
+          className="bg-gray-700 border border-white/10 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-purple-500"
+        >
+          <option value="">Channel…</option>
+          {CHANNEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <input
+          type="number" min="0" step="0.01"
+          value={spendDollars}
+          onChange={e => setSpendDollars(e.target.value)}
+          placeholder="Spend $"
+          aria-label={`Spend for ${campaign.name}`}
+          className="w-24 bg-gray-700 border border-white/10 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-purple-500"
+        />
+        <input
+          type="number" min="0" step="1"
+          value={landingViews}
+          onChange={e => setLandingViews(e.target.value)}
+          placeholder="Landing views"
+          aria-label={`Landing views for ${campaign.name}`}
+          className="w-28 bg-gray-700 border border-white/10 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-purple-500"
+        />
+        <input
+          type="number" min="0" step="1"
+          value={platformConversions}
+          onChange={e => setPlatformConversions(e.target.value)}
+          placeholder="Platform conversions"
+          aria-label={`Platform conversions for ${campaign.name}`}
+          className="w-32 bg-gray-700 border border-white/10 rounded px-2 py-1 text-white text-xs focus:outline-none focus:border-purple-500"
+        />
+        <button
+          type="submit"
+          disabled={savingSpend}
+          className="text-xs text-purple-300 hover:text-purple-200 disabled:opacity-50"
+        >
+          Save spend
+        </button>
+        {campaign.spend_updated_at && (
+          <span className="text-gray-500 text-[11px]">updated {campaign.spend_updated_at.slice(0, 10)}</span>
+        )}
+      </form>
+      {spendError && <p className="text-red-400 text-xs mt-1">{spendError}</p>}
     </li>
   );
 }

@@ -26,7 +26,7 @@ from ..services import payments_ledger
 from ..services.auth_db import get_user_by_id
 from ..services.credit_ledger import CreditsUnavailable, credit_key, grant, has_processed_payment
 from ..services.pg import get_pg
-from ..services.user_db import get_stripe_customer_id, set_stripe_customer_id
+from ..services.user_db import get_default_profile_sport, get_stripe_customer_id, set_stripe_customer_id
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -423,7 +423,10 @@ async def confirm_payment_intent(request: ConfirmIntentRequest, background_tasks
     # double-count milestone events (see _grant_or_503).
     if result["applied"]:
         record_milestone(user_id, "payment_completed", {"amount_cents": pack_info["price_cents"] if pack_info else 0, "credits": credits})
-        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+        record_milestone(user_id, "credit_purchased", {
+            "amount": credits, "cents": pack_info["price_cents"] if pack_info else 0,
+            "sport": get_default_profile_sport(user_id) or "no_sport",
+        })
 
     # Site A: ledger insert runs on EVERY observation, not gated on `applied`
     # (design §4, ruling 4). amount_cents from Stripe's captured amount, never
@@ -531,7 +534,10 @@ async def stripe_webhook(request: Request):
             pack_info = CREDIT_PACKS.get(pack)
 
         if result["applied"]:
-            record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+            record_milestone(user_id, "credit_purchased", {
+            "amount": credits, "cents": pack_info["price_cents"] if pack_info else 0,
+            "sport": get_default_profile_sport(user_id) or "no_sport",
+        })
 
         # Site B: ledger insert runs on EVERY observation, not gated on
         # `applied` (design §4, ruling 4). Amount from session.amount_total
@@ -605,7 +611,10 @@ async def stripe_webhook(request: Request):
             pack_info = CREDIT_PACKS.get(pack)
 
         if result["applied"]:
-            record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+            record_milestone(user_id, "credit_purchased", {
+            "amount": credits, "cents": pack_info["price_cents"] if pack_info else 0,
+            "sport": get_default_profile_sport(user_id) or "no_sport",
+        })
 
         # Site C: ledger insert runs on EVERY observation, not gated on
         # `applied` (design §4, ruling 4). Amount from intent["amount_received"]
@@ -944,7 +953,10 @@ async def verify_session(request: Request, background_tasks: BackgroundTasks = N
 
     pack_info = CREDIT_PACKS.get(pack)
     if result["applied"]:
-        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
+        record_milestone(user_id, "credit_purchased", {
+            "amount": credits, "cents": pack_info["price_cents"] if pack_info else 0,
+            "sport": get_default_profile_sport(user_id) or "no_sport",
+        })
 
     # Site D: ledger insert runs on EVERY observation, not gated on `applied`
     # (design §4, ruling 4). Amount from session.amount_total (already

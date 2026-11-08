@@ -426,6 +426,152 @@ class TestAttemptOutcomeTaxonomy:
         assert _json.loads(rows[0][1])["reason"] == "refused"
 
 
+class TestMilestoneSportTag:
+    """T14940: the context dict passed to record_milestone carries the firing
+    profile's sport, resolved on record_milestone's OWN already-open
+    user_db connection (no extra DB open) via an internal `_sport_profile_id`
+    context key that call sites set and record_milestone pops."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, pg_conn):
+        create_user("user-a", email="a@test.com")
+        create_user_segment("user-a", "organic", None, "otp")
+
+    def _log_context(self, user_id: str, action: str) -> dict:
+        import json as _json
+
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection(user_id) as conn:
+            rows = conn.execute(
+                "SELECT context FROM user_action_log WHERE action = ? ORDER BY id DESC LIMIT 1",
+                (action,),
+            ).fetchall()
+        assert rows, f"{action} not written to user_action_log"
+        return _json.loads(rows[0][0]) if rows[0][0] else {}
+
+    def _make_profile(self, user_id: str, sport: str = "hockey") -> str:
+        from uuid import uuid4
+
+        from app.services.user_db import create_profile, ensure_user_database
+        profile_id = uuid4().hex[:8]
+        ensure_user_database(user_id)
+        create_profile(user_id, profile_id, "P1", "#3B82F6", is_default=True, sport=sport)
+        return profile_id
+
+    def test_sport_profile_id_resolves_to_sport_in_context(self, pg_conn):
+        profile_id = self._make_profile("user-a", sport="hockey")
+        record_milestone(
+            "user-a", "clip_created",
+            context={"clip_id": 1, "_sport_profile_id": profile_id},
+        )
+        ctx = self._log_context("user-a", "clip_created")
+        assert ctx["sport"] == "hockey"
+        assert "_sport_profile_id" not in ctx
+        assert ctx["clip_id"] == 1
+
+    def test_default_no_sport_profile_tags_no_sport(self, pg_conn):
+        profile_id = self._make_profile("user-a", sport="no_sport")
+        record_milestone("user-a", "clip_uploaded", context={"_sport_profile_id": profile_id})
+        ctx = self._log_context("user-a", "clip_uploaded")
+        assert ctx["sport"] == "no_sport"
+
+    def test_no_sport_profile_id_key_omits_sport(self, pg_conn):
+        # session_started et al never carry a profile -- no key, no sport.
+        record_milestone("user-a", "session_started", context={"foo": "bar"})
+        ctx = self._log_context("user-a", "session_started")
+        assert "sport" not in ctx
+        assert ctx["foo"] == "bar"
+
+    def test_unknown_profile_id_omits_sport_without_crashing(self, pg_conn):
+        record_milestone(
+            "user-a", "video_downloaded",
+            context={"video_id": 9, "_sport_profile_id": "does-not-exist"},
+        )
+        ctx = self._log_context("user-a", "video_downloaded")
+        assert "sport" not in ctx
+        assert ctx["video_id"] == 9
+
+    def test_funnel_event_framing_point_added_tags_sport(self, pg_conn):
+        # record_funnel_event sanitizes context to an allow-list BEFORE calling
+        # record_milestone -- the sport profile id must survive that step.
+        from app.analytics import record_funnel_event
+        from app.profile_context import reset_profile_id, set_current_profile_id
+        from app.user_context import reset_user_id, set_current_user_id
+
+        profile_id = self._make_profile("user-a", sport="soccer")
+        set_current_user_id("user-a")
+        set_current_profile_id(profile_id)
+        try:
+            record_funnel_event("framing_point_added", {"clip_id": "c1"})
+        finally:
+            reset_user_id()
+            reset_profile_id()
+
+        ctx = self._log_context("user-a", "framing_point_added")
+        assert ctx["sport"] == "soccer"
+        assert ctx["clip_id"] == "c1"
+
+
+class TestCreditPurchasedSportTag:
+    """T14940: credit_purchased has no request-scoped profile_id (one of its
+    four call sites is a true server-to-server Stripe webhook), so it resolves
+    the user's DEFAULT profile sport instead (get_default_profile_sport)."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, pg_conn, monkeypatch):
+        create_user("user-a", email="a@test.com")
+        create_user_segment("user-a", "organic", None, "otp")
+        from app.routers import payments as payments_mod
+        monkeypatch.setattr(payments_mod, "STRIPE_SECRET_KEY", "sk_test_dummy")
+        monkeypatch.setattr(payments_mod, "get_current_user_id", lambda: "user-a")
+        self._calls = []
+        monkeypatch.setattr(
+            payments_mod, "record_milestone",
+            lambda user_id, event, context=None, reason=None: self._calls.append((event, context)),
+        )
+
+    def _confirm(self, monkeypatch, pi_id="pi_1", credits=40, user_id="user-a"):
+        import asyncio
+        import types
+
+        from app.routers import payments as payments_mod
+
+        intent = types.SimpleNamespace(
+            status="succeeded",
+            metadata={"user_id": user_id, "credits": str(credits), "pack": "starter"},
+        )
+        monkeypatch.setattr(payments_mod.stripe.PaymentIntent, "retrieve", lambda *a, **k: intent)
+        request = payments_mod.ConfirmIntentRequest(payment_intent_id=pi_id)
+        return asyncio.run(payments_mod.confirm_payment_intent(request))
+
+    def _context_for(self, event):
+        return next(c for e, c in self._calls if e == event)
+
+    def test_credit_purchased_uses_default_profile_sport(self, monkeypatch):
+        from uuid import uuid4
+
+        from app.services.user_db import create_profile, ensure_user_database
+        profile_id = uuid4().hex[:8]
+        ensure_user_database("user-a")
+        create_profile("user-a", profile_id, "P1", "#3B82F6", is_default=True, sport="hockey")
+
+        self._confirm(monkeypatch, pi_id="pi_default_sport")
+
+        assert self._context_for("credit_purchased")["sport"] == "hockey"
+
+    def test_credit_purchased_no_profile_defaults_to_no_sport(self, monkeypatch):
+        # A distinct user with NO profiles at all (unlike "user-a" in the sibling
+        # test above, which gains a profile once that test runs).
+        from app.routers import payments as payments_mod
+        create_user("user-c", email="c@test.com")
+        create_user_segment("user-c", "organic", None, "otp")
+        monkeypatch.setattr(payments_mod, "get_current_user_id", lambda: "user-c")
+
+        self._confirm(monkeypatch, pi_id="pi_no_profile", user_id="user-c")
+
+        assert self._context_for("credit_purchased")["sport"] == "no_sport"
+
+
 class TestRecordImpression:
     """T7515 tier 3: blocking-dialog / error-toast impression counting."""
 

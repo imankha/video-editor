@@ -89,6 +89,7 @@ def _finalize_overlay_export(
     user_id: str,
     gpu_seconds: float | None = None,
     modal_function: str | None = None,
+    profile_id: str | None = None,
 ) -> tuple[int, tuple[float, float] | None, float, float | None]:
     """Save final_videos record, update project, update export_jobs, archive.
 
@@ -138,9 +139,13 @@ def _finalize_overlay_export(
     if not result["keep_prior"]:
         delete_prior_final_object(user_id, result["prior_filename"], output_filename)
 
-    from app.analytics import record_milestone
-    record_milestone(user_id, "export_completed", {"export_id": export_id, "type": "overlay"})
-    record_milestone(user_id, "overlay_exported", {"export_id": export_id, "project_id": project_id})
+    from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
+    record_milestone(user_id, "export_completed", {
+        "export_id": export_id, "type": "overlay", SPORT_PROFILE_ID_CONTEXT_KEY: profile_id,
+    })
+    record_milestone(user_id, "overlay_exported", {
+        "export_id": export_id, "project_id": project_id, SPORT_PROFILE_ID_CONTEXT_KEY: profile_id,
+    })
 
     return (
         result["final_video_id"], result["slowmo_section"],
@@ -2558,6 +2563,7 @@ async def _run_overlay_export_background(
             _finalize_overlay_export,
             project_id, output_filename, export_id, user_id,
             gpu_seconds=result.get("gpu_seconds"), modal_function=result.get("modal_function"),
+            profile_id=profile_id,
         )
         logger.info(f"[T1110] _finalize_overlay_export (background) took {time_module.monotonic() - _t0:.2f}s (threaded)")
 
@@ -2858,7 +2864,8 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
             _t0 = time_module.monotonic()
             final_video_id, slowmo_section, final_duration, poster_marker_time = await asyncio.to_thread(
-                _finalize_overlay_export, project_id, output_filename, export_id, user_id
+                _finalize_overlay_export, project_id, output_filename, export_id, user_id,
+                profile_id=profile_id,
             )
             logger.info(f"[T1110] _finalize_overlay_export (no GPU) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             logger.info(f"[Overlay Render] Complete (no GPU): final_video_id={final_video_id}")
@@ -2933,7 +2940,8 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
             _t0 = time_module.monotonic()
             final_video_id, slowmo_section, final_duration, poster_marker_time = await asyncio.to_thread(
-                _finalize_overlay_export, project_id, output_filename, export_id, user_id
+                _finalize_overlay_export, project_id, output_filename, export_id, user_id,
+                profile_id=profile_id,
             )
             logger.info(f"[T1110] _finalize_overlay_export (test mode) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             logger.info(f"[Overlay Render] TEST MODE complete: final_video_id={final_video_id}")

@@ -843,8 +843,12 @@ async def finalize_upload(
     # row (its own `clip_uploaded` milestone). Emitting game_upload_succeeded
     # for a clip would count it as a game upload in T8220's tried/succeeded pair.
     if kind == UploadKind.GAME.value and released_here:
-        from app.analytics import record_milestone
-        record_milestone(user_id, "game_upload_succeeded", context={"blake3_hash": blake3_hash})
+        from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
+        from app.profile_context import get_current_profile_id
+        record_milestone(user_id, "game_upload_succeeded", context={
+            "blake3_hash": blake3_hash,
+            SPORT_PROFILE_ID_CONTEXT_KEY: get_current_profile_id(),
+        })
 
     # Game creation is handled separately by POST /api/games
     return {

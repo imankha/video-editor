@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from app.migrations import MigrationBlocked
+from app.profile_context import get_current_profile_id
 from app.services.pg import get_pg
 from app.user_context import (
     get_current_impersonator_id,
@@ -560,6 +561,35 @@ EVENT_INSTRUMENTED_AT = {
 # visit_daily started filling.
 VISIT_BEACON_INSTRUMENTED_AT = "2026-11-08"
 
+# T14940: internal-only context key a call site uses to hand record_milestone
+# the firing profile's id (never the resolved sport) so the sport lookup can
+# run on the connection record_milestone already opens for the user_action_log
+# INSERT -- never a second DB open. Popped before the context is persisted;
+# never appears in a stored user_action_log row.
+SPORT_PROFILE_ID_CONTEXT_KEY = "_sport_profile_id"
+
+# T14940: date each event started carrying "sport" in its user_action_log
+# context (distinct from EVENT_INSTRUMENTED_AT, which is about the event's
+# existence at all). A reader (T14950) uses this to badge history from before
+# this date as "no sport recorded", never as the `no_sport` sentinel -- those
+# mean different things (unknown vs. genuinely sport-less).
+SPORT_TAG_INSTRUMENTED_AT = {
+    "game_upload_succeeded": "2026-11-08",
+    "game_upload_failed": "2026-11-08",
+    "clip_uploaded": "2026-11-08",
+    "clip_created": "2026-11-08",
+    "framing_opened": "2026-11-08",
+    "crop_adjusted": "2026-11-08",
+    "framing_point_added": "2026-11-08",
+    "credits_consumed": "2026-11-08",
+    "export_completed": "2026-11-08",
+    "framing_exported": "2026-11-08",
+    "overlay_exported": "2026-11-08",
+    "video_downloaded": "2026-11-08",
+    "share_completed": "2026-11-08",
+    "credit_purchased": "2026-11-08",
+}
+
 
 def _get_user_origin(user_id: str) -> str:
     with get_pg() as conn:
@@ -1051,7 +1081,25 @@ def record_milestone(
         log_context = dict(context) if context else {}
         if reason:
             log_context["reason"] = reason
+        # T14940: a call site may pass the firing profile's id under this
+        # internal-only key instead of a resolved sport string, so the lookup
+        # can happen on the connection opened below (no SEPARATE DB open).
+        sport_profile_id = log_context.pop(SPORT_PROFILE_ID_CONTEXT_KEY, None)
         with get_user_db_connection(user_id) as conn:
+            if sport_profile_id:
+                row = conn.execute(
+                    "SELECT sport FROM profiles WHERE id = ?", (sport_profile_id,)
+                ).fetchone()
+                if row:
+                    log_context["sport"] = row["sport"]
+                else:
+                    # Internal bug (stale/bad profile id), not external data --
+                    # warn loudly and omit the key rather than guessing "no_sport"
+                    # (coding-standards §5: no silent fallback for internal data).
+                    logger.warning(
+                        "[Analytics] sport lookup: profile %s not found for user=%s action=%s",
+                        sport_profile_id, user_id, action,
+                    )
             now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             conn.execute(
                 "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
@@ -1251,6 +1299,15 @@ def record_funnel_event(event: str, context: dict | None = None):
     except RuntimeError:
         logger.warning("[Analytics] funnel event %s with no user context — dropped", event)
         return
+
+    # T14940: added AFTER sanitization (the allow-list above would otherwise
+    # strip this internal-only key, same as any other unrecognized field).
+    if event in SPORT_TAG_INSTRUMENTED_AT:
+        try:
+            clean = dict(clean) if clean else {}
+            clean[SPORT_PROFILE_ID_CONTEXT_KEY] = get_current_profile_id()
+        except RuntimeError:
+            pass
 
     record_milestone(user_id, event, clean or None)
 
