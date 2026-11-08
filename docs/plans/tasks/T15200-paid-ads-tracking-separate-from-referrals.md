@@ -12,6 +12,12 @@ admin; the current design focus is the funnel, so this is not prepared until the
 green. Carved out of T14910's revision-2 design (sections 5 and 6 there) so T14910 stays read-only
 and funnel-centred.
 
+## Ruling
+
+Owner ruling 2026-11-07: T15200 may be built now, before the funnel gates read green. The
+2026-11-05 "not prepared until the funnel gates read green" line below no longer applies. No date
+is a blocker.
+
 ## Problem
 
 `campaigns` (v038) has `id, name, created_by, created_at` and nothing else. Measured cost per

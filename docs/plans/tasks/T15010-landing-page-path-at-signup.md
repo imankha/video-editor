@@ -1,6 +1,6 @@
 # T15010: Landing page that converted: `landing_path` stored at sign-up and readable in admin
 
-**Status:** TODO (after T15000)
+**Status:** TODO
 **Impact:** 7
 **Complexity:** 4
 **Tier:** L (schema change: one nullable column on `user_segments`; landing + frontend + backend; Migration agent)
@@ -9,6 +9,14 @@
 
 Owner question 2026-11-03 on attribution across the landing -> app hop. Piece 2: which landing
 PAGE brought the sign-up. Today nothing records it.
+
+## Ruling
+
+Owner ruling 2026-11-07: when a user deletes their account they lose all user data, their email is
+replaced with a hash, and analytics on them is kept and knows they deleted. So `landing_path` is
+kept on deletion (never on the strip list) and the admin Landing page table shows a deleted count
+from `account_deletions` once T15290 lands (same group). The page-class list in step 5 is approved
+as written. T15000 landed in PR #716 and T15220 (params reach `captureCampaignParams`) in PR #718.
 
 ## Problem
 
@@ -79,7 +87,7 @@ judged by what they convert, only by clicks. T14930 covers sport pages alone, by
 ## Implementation
 
 ### Steps
-1. [ ] Design gate (short): strip-on-delete decision, path class list.
+1. [x] Design gate: settled by the owner ruling above.
 2. [ ] Failing backend tests: valid path stored; invalid dropped with warning; absent column
        tolerated; `by=landing_path` groups and labels "unknown".
 3. [ ] Migration + DDL; backend; frontend capture + auth bodies; landing `lp`.

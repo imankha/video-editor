@@ -24,7 +24,7 @@ See [EPIC.md](EPIC.md) for the no-external-tools / aggregates-only / no-new-PG d
 - `src/backend/app/services/analytics_store.py` — `visit_daily` table (bump `PRAGMA user_version` to 2; depends on T7400's store module)
 
 ### Related Tasks
-- Depends on: T7400 (`analytics_store.py`)
+- Depends on: T15280 (`analytics_store.py`, carved out of T7400 on 2026-11-07); not on T7400's sweep
 - Blocks: T7440 (visit → signup conversion by source)
 - Supersedes: T3000 (fix-cloudflare-web-analytics) — mark it accordingly if this lands
 

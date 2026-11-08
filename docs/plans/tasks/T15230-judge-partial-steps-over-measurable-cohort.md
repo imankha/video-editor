@@ -38,6 +38,17 @@ a narrower cohort will not add up with its neighbours. Decide where the measured
 (marks and chips, not node counts is the likely answer) and how `biggestLeak` compares steps judged
 over different cohorts (users lost favours the step with the older start date).
 
+## Ruling
+
+Owner approved 2026-11-07 (decision page, decision 3, option B):
+
+- The cohort rate shows on edge labels, the inspector chip and the Next Step row ("71.00% of 212
+  since 2026-08-26"). Node counts are unchanged and keep conserving.
+- `biggestLeak` ranks by projected loss: the step's cohort loss rate times the users entering the
+  step in the selected window (node counts). The row reads "about 156 lost (projected from 18 of 30
+  since 2026-11-04)". Only cohorts at or above the small-N floor are ranked; a step under the floor
+  stays partial and unranked.
+
 ## Context
 
 ### Relevant Files (REQUIRED)

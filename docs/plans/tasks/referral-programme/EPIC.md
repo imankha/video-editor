@@ -1,6 +1,6 @@
 # Referral programme: 50% of revenue for two months, no codes
 
-**Status:** BLOCKED (starts when T14910 reads every funnel gate settled green; owner rule 2026-11-05: no prep before the funnel is fixed)
+**Status:** BLOCKED (starts when every funnel gate that has a reading is green; gates grey by design, such as gate 1 before the beacon or gate 8 before payers are six months old, never block, and no date is a blocker (owner, 2026-11-07); owner rule 2026-11-05: no prep before the funnel is fixed)
 **Started:** not started
 **Filed:** 2026-11-05
 

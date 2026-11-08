@@ -1,6 +1,6 @@
 # T14950: Sport key in the analytics.sqlite rollup + "By sport" admin table (Total exports by sport)
 
-**Status:** TODO (blocked by T7400, after T14940)
+**Status:** BLOCKED (by T7400's sweep, after T14940)
 **Impact:** 6
 **Complexity:** 4
 **Tier:** M (extends T7400's rollup and adds one read-only admin table)

@@ -5,6 +5,10 @@
 **Complexity:** 5
 **Created:** 2026-08-20
 
+**Split 2026-11-07 (owner approved):** the store module (`analytics_store.py`, schema open/create, R2
+persistence) ships first as T15280 so the visit beacon (T7410) can start. This task is now the
+rollup sweep and the rollup tables, built on T15280's store.
+
 ## Problem
 
 Cohort × action × time questions ("% of the Fall cohort still exporting in week 6", "clip-library usage over the season") cannot be answered today: per-event history exists only inside each user's SQLite `user_action_log`, and the shared stores hold lifetime counts (`user_actions`) or global-not-per-user daily aggregates (`daily_counters`). Per the epic's binding directives we may NOT solve this with a Postgres event table or any per-event shared store.
