@@ -1,6 +1,6 @@
 # T15220: Payment return and campaign params are stripped before the app reads them
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Tier:** M (bug fix, frontend only, no schema change)

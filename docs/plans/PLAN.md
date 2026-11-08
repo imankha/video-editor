@@ -10,7 +10,7 @@
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T15220 | [Payment return and campaign params are stripped before the app reads them](tasks/T15220-arrival-params-stripped-before-app-reads-them.md) | 9 | 3 | 3.0 | TODO | [ ] | M-tier, frontend only. Keep the params App owns through the `editorStore.js` module-load canonicalization. Measure the prod attribution impact first (read-only aggregate). Blocked by T14970, which rewrites the same block; start the moment it lands. |
+| T15220 | [Payment return and campaign params are stripped before the app reads them](tasks/T15220-arrival-params-stripped-before-app-reads-them.md) | 9 | 3 | 3.0 | STAGING | [ ] | M-tier, frontend only. Keep the params App owns through the `editorStore.js` module-load canonicalization. Measure the prod attribution impact first (read-only aggregate). Blocked by T14970, which rewrites the same block; start the moment it lands. |
 
 ### Production incident 2026-11-04: upload success rate 43.8% (BUGS FIRST)
 
