@@ -1035,7 +1035,7 @@ def _channel_row(client, origin):
 class TestUniformDimensionKpis:
     def test_campaign_cohort_build_rows_carry_the_same_kpis(self, client, builds_setup):
         ch = _channel_row(client, T14000_ORIGIN)
-        assert set(ch) - {"origin", "campaign_name"} == _DIMENSION_KPIS
+        assert set(ch) - {"origin", "campaign_name", "group"} == _DIMENSION_KPIS  # T15200: group is a label (Paid ads / Referral programme), not a KPI
         cohorts = client.get(f"/api/admin/analytics/cohorts?origin={T14000_ORIGIN}", headers=_auth()).json()["cohorts"]
         assert cohorts and all(set(c) - {"cohort_period"} == _DIMENSION_KPIS for c in cohorts)
         builds = client.get(f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()["builds"]

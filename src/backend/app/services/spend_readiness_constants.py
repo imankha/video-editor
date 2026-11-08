@@ -101,7 +101,10 @@ MEASUREMENT_TEST_GATES = ("visit_to_signup", "signup_to_export_14d", "upload_fai
 # Data-derived caveats (never a task status): the text a reader attaches when the data says so.
 CAVEAT_EXPORT_EVENT = ("Frame export records no event (exports_started = 0 over 30 d); "
                        "this is an undercount until the export event is live.")
-NO_SPEND_COLUMNS_TEXT = "the campaign registry has no spend or channel columns yet"
+# T15200 shipped the spend columns (v044); gates 10/11 still have no real reader, so this
+# stays accurate either way the text was written before the columns existed, now it
+# just means nobody has entered spend on a campaign yet.
+NO_SPEND_COLUMNS_TEXT = "no campaign has spend entered yet"
 
 # --- channel ladder (benchmark costs, cents per sign-up; B until T15200 measures them) ------
 CHANNELS = [
@@ -118,3 +121,21 @@ CHANNELS = [
     {"key": "club_placement", "label": "Club placement", "platform": "club",
      "cost_cents": None, "fee_cents": 30000, "note": "$300 fee over attributed sign-ups"},
 ]
+
+# --- T15200: campaign registry spend -> measured ladder values ----------------------------
+# A campaign's `channel` (admin.CampaignChannel) maps to the CHANNELS platform it measures.
+# 'club' is deliberately absent: its ladder cost is the fixed fee over attributed sign-ups,
+# already "measured" without an admin entering ad spend.
+CAMPAIGN_CHANNEL_PLATFORM = {
+    "coach_credits": "coach",
+    "coach_gift": "coach",
+    "reddit": "reddit",
+    "meta": "meta",
+}
+# The label a measured platform's single collapsed ladder row uses (replaces every benchmark
+# row of that platform -- "one measured Reddit row replaces both Reddit benchmark rows").
+PLATFORM_LABELS = {
+    "coach": "Coach codes",
+    "reddit": "Reddit",
+    "meta": "Meta Reels",
+}

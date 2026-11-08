@@ -173,20 +173,39 @@ def _dollars(cents: float) -> str:
 def channel_rows(*, point: float | None, lower: float | None, upper: float | None,
                  payers_per_signup: float | None = None, signups: int | None = None,
                  revenue_per_payer_cents: float | None = None, variable_cents: float | None = None,
-                 club_attributed: int = 0, no_estimate: str | None = None) -> list[dict[str, Any]]:
-    """The ladder: one benchmark row per channel, ordered by cost, coloured by the break-even
-    against the channel's cost per sign-up. A state whose bounds disagree is provisional and
-    names the other reading and the payers needed to settle. With no break-even estimate at all
+                 club_attributed: int = 0, no_estimate: str | None = None,
+                 measured: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """The ladder: one row per channel, ordered by cost, coloured by the break-even against
+    the channel's cost per sign-up. A state whose bounds disagree is provisional and names
+    the other reading and the payers needed to settle. With no break-even estimate at all
     (`no_estimate` names the unmeasured factor; the bounds are None) every priced row is grey,
-    like a gate under its floor: there is no upper bound, so nothing can be settled either way."""
+    like a gate under its floor: there is no upper bound, so nothing can be settled either way.
+
+    `measured` (T15200): {platform: {"cost_cents", "n", "names"}} for every platform whose
+    campaigns have spend entered and >= MEASURED_MIN_SIGNUPS attributed sign-ups. A measured
+    platform COLLAPSES every benchmark row of that platform into one row (label_kind "M",
+    naming the contributing campaigns) -- "one measured Reddit row replaces both Reddit
+    benchmark rows". club is never in `measured` (see spend_readiness_constants)."""
     if (no_estimate is None) != (point is not None and lower is not None and upper is not None):
         raise ValueError(f"channel_rows: bounds and no_estimate disagree ({point}, {lower}, {upper}, {no_estimate!r})")
     rows = []
+    collapsed_platforms: set[str] = set()
     for ch in C.CHANNELS:
-        row = {"key": ch["key"], "label": ch["label"], "platform": ch["platform"], "label_kind": "B",
-               "note": ch["note"], "n": None, "cost_cents": ch["cost_cents"], "state": None,
-               "confidence": None, "reason": ""}
-        if ch["cost_cents"] is None:  # club placement: a fixed fee over attributed sign-ups
+        m = measured.get(ch["platform"]) if measured else None
+        if m is not None:
+            if ch["platform"] in collapsed_platforms:
+                continue  # already emitted this platform's one measured row
+            collapsed_platforms.add(ch["platform"])
+            row = {"key": ch["platform"], "label": C.PLATFORM_LABELS[ch["platform"]],
+                   "platform": ch["platform"], "label_kind": "M",
+                   "note": None, "measured_campaigns": m["names"], "n": m["n"],
+                   "cost_cents": round(m["cost_cents"], 2), "state": None,
+                   "confidence": None, "reason": ""}
+        else:
+            row = {"key": ch["key"], "label": ch["label"], "platform": ch["platform"], "label_kind": "B",
+                   "note": ch["note"], "measured_campaigns": None, "n": None, "cost_cents": ch["cost_cents"],
+                   "state": None, "confidence": None, "reason": ""}
+        if ch["cost_cents"] is None and m is None:  # club placement: fixed fee over attributed sign-ups
             row["n"] = club_attributed
             if club_attributed < C.CLUB_MIN_SIGNUPS:
                 row["state"] = "grey"
@@ -752,9 +771,105 @@ def _break_even(g6: dict, g7: dict, inputs: dict, purchases_per_payer: float) ->
             "text": text}
 
 
+# ---------------------------------------------------------------------------
+# T15200: campaign registry spend -- live campaigns block and measured ladder values.
+# ---------------------------------------------------------------------------
+
+def _campaign_spend_columns_present(cur) -> bool:
+    """Migration-window guard (v044): mirrors admin._campaign_spend_columns_present. Checked
+    here too because this module is read directly by tests and has no FastAPI route to
+    guard it for them."""
+    cur.execute("SELECT to_regclass('campaigns') AS t")
+    if cur.fetchone()["t"] is None:
+        return False
+    cur.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = 'campaigns' AND column_name = 'spend_cents'"
+    )
+    return cur.fetchone() is not None
+
+
+def _campaigns_with_spend(cur) -> list[dict]:
+    """Every campaign with spend entered (the Save gesture stamps spend_updated_at), or []
+    before v044 runs -- grey/absent live block and benchmark-only ladder, logged once here."""
+    if not _campaign_spend_columns_present(cur):
+        logger.error("[spend-readiness] campaigns spend columns missing (v044 not applied; "
+                    "live campaigns and the measured ladder stay benchmark-only)")
+        return []
+    cur.execute("""
+        SELECT id, name, channel, spend_cents, landing_views, platform_conversions, spend_updated_at
+        FROM campaigns WHERE spend_cents IS NOT NULL
+    """)
+    return [dict(r) for r in cur.fetchall()]
+
+
+def _direct_attributed_signups(cur, excl: str, campaign_ids: list[str]) -> dict[str, int]:
+    """Attributed sign-ups per campaign id, DIRECT only: a referred sign-up inherits its
+    referrer's origin (_determine_origin), so without this exclusion a referral chain
+    through someone who joined via a paid campaign would double as a paid attribution for
+    that campaign (the same separation rule as admin._origin_group_expr)."""
+    if not campaign_ids:
+        return {}
+    where = [excl] if excl else []
+    where += ["s.origin = ANY(%(ids)s)", "ref.referred_id IS NULL"]
+    cur.execute(f"""
+        SELECT s.origin, COUNT(*) AS n
+        FROM user_segments s
+        LEFT JOIN users u ON u.user_id = s.user_id
+        LEFT JOIN referrals ref ON ref.referred_id = s.user_id
+        WHERE {' AND '.join(where)}
+        GROUP BY s.origin
+    """, {"ids": campaign_ids})
+    return {r["origin"]: r["n"] for r in cur.fetchall()}
+
+
+def _measured_platform_costs(campaigns: list[dict], attributed: dict[str, int]) -> dict[str, dict]:
+    """Aggregates attributed sign-ups and spend by platform (C.CAMPAIGN_CHANNEL_PLATFORM);
+    a platform qualifies once its total attributed sign-ups reach MEASURED_MIN_SIGNUPS."""
+    agg: dict[str, dict] = {}
+    for c in campaigns:
+        platform = C.CAMPAIGN_CHANNEL_PLATFORM.get(c["channel"])
+        if platform is None:
+            continue
+        n = attributed.get(c["id"], 0)
+        bucket = agg.setdefault(platform, {"n": 0, "spend_cents": 0, "names": []})
+        bucket["n"] += n
+        bucket["spend_cents"] += c["spend_cents"]
+        if n:
+            bucket["names"].append(c["name"])
+    return {
+        platform: {"cost_cents": b["spend_cents"] / b["n"], "n": b["n"], "names": b["names"]}
+        for platform, b in agg.items() if b["n"] >= C.MEASURED_MIN_SIGNUPS
+    }
+
+
+def live_campaigns_rows(campaigns: list[dict], attributed: dict[str, int],
+                        break_even_point_cents: float | None) -> list[dict[str, Any]]:
+    """One row per campaign with spend entered: spend, direct attributed sign-ups, cost per
+    sign-up, coverage against the platform's reported conversions, and the same GO/TEST/NO
+    state as the ladder (against this campaign's own measured cost, not the benchmark)."""
+    rows = []
+    for c in campaigns:
+        n = attributed.get(c["id"], 0)
+        cost = c["spend_cents"] / n if n else None
+        coverage = n / c["platform_conversions"] if c["platform_conversions"] else None
+        state = channel_state(break_even_point_cents, cost) if (
+            break_even_point_cents is not None and cost is not None) else None
+        rows.append({
+            "id": c["id"], "name": c["name"], "channel": c["channel"],
+            "spend_cents": c["spend_cents"], "attributed_signups": n,
+            "cost_per_signup_cents": round(cost, 2) if cost is not None else None,
+            "landing_views": c["landing_views"], "platform_conversions": c["platform_conversions"],
+            "coverage": round(coverage, 4) if coverage is not None else None,
+            "spend_updated_at": c["spend_updated_at"].isoformat() if c["spend_updated_at"] else None,
+            "state": state,
+        })
+    return rows
+
+
 def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
     """The whole panel in one read: eleven gates in order, focus, both verdicts, break-even,
-    the channel ladder and sign-ups by country."""
+    the channel ladder, the live campaigns block and sign-ups by country."""
     today = now.date()
     export_live = _export_event_live(cur, today)
     caveats = [] if export_live else [C.CAVEAT_EXPORT_EVENT]
@@ -850,12 +965,19 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
     inputs = _cohort_inputs(cur, excl, today)
     purchases_per_payer = _ratio(r7["purchases"], r7["n"])
     break_even = _break_even(gates[5], gates[6], inputs, purchases_per_payer)
+
+    # T15200: campaign registry spend -> live campaigns block + measured ladder values.
+    campaigns_with_spend = _campaigns_with_spend(cur)
+    attributed = _direct_attributed_signups(cur, excl, [c["id"] for c in campaigns_with_spend])
+    measured = _measured_platform_costs(campaigns_with_spend, attributed)
+    live_campaigns = live_campaigns_rows(campaigns_with_spend, attributed, break_even["point_cents"])
+
     channels = channel_rows(point=break_even["point_cents"], lower=break_even["lower_cents"],
                             upper=break_even["upper_cents"],
                             payers_per_signup=break_even["inputs"]["payers_per_signup"], signups=inputs["signups"],
                             revenue_per_payer_cents=break_even["inputs"]["revenue_per_payer_cents"],
                             variable_cents=break_even["inputs"]["variable_cents"],
-                            no_estimate=break_even["no_estimate"])
+                            no_estimate=break_even["no_estimate"], measured=measured or None)
     focus_ = focus(gates)
     measurement = measurement_test(gates)
     return {
@@ -869,6 +991,7 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
         "gates": gates,
         "break_even": break_even,
         "channels": channels,
+        "live_campaigns": live_campaigns,
         "signups_by_country": _signups_by_country(cur, excl, today),
     }
 

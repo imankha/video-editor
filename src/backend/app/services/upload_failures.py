@@ -198,9 +198,13 @@ def record_upload_failure(
             logger.exception("[UPLOAD_FAILURE] row insert failed -- swallowed (never blocks the aggregate below)")
 
         if terminal and not impersonated and resolved_user_id:
-            from app.analytics import record_milestone
+            from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
             event = "clip_upload_failed" if kind == "clip" else "game_upload_failed"
-            record_milestone(resolved_user_id, event, reason=MILESTONE_REASON_BY_UPLOAD_REASON[reason])
+            # T14940: only game_upload_failed is in the sport-tag scope.
+            milestone_kwargs = {"reason": MILESTONE_REASON_BY_UPLOAD_REASON[reason]}
+            if event == "game_upload_failed" and profile_id:
+                milestone_kwargs["context"] = {SPORT_PROFILE_ID_CONTEXT_KEY: profile_id}
+            record_milestone(resolved_user_id, event, **milestone_kwargs)
 
         logger.error(
             "[UPLOAD_FAILURE] kind=%s stage=%s reason=%s terminal=%s origin=%s "

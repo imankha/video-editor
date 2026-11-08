@@ -1,4 +1,4 @@
-"""v045 (T15290): owner ruling 2026-11-07 on account deletion --
+"""v046 (T15290): owner ruling 2026-11-07 on account deletion --
 
 1. `account_deletions.email_hash` -- a keyed (HMAC-SHA256) hash of the deleted
    account's normalised email, written by `record_account_deletion` for the
@@ -18,8 +18,8 @@ without them (logged), so neither a deletion nor a sign-up ever fails.
 from ..base import BaseMigration
 
 
-class V045AccountDeletionHashAndReturning(BaseMigration):
-    version = 45
+class V046AccountDeletionHashAndReturning(BaseMigration):
+    version = 46
     description = (
         "Add account_deletions.email_hash + user_segments.returning_after_deletion "
         "(T15290 account deletion keeps analytics)"

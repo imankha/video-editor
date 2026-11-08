@@ -31,7 +31,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.analytics import record_milestone
+from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
 from app.database import get_db_connection
 from app.migrations import MigrationBlocked
 from app.profile_context import get_current_profile_id
@@ -1602,6 +1602,7 @@ async def create_collection_share_endpoint(body: CollectionShareRequest):
     record_milestone(user_id, "share_completed", {
         "recipient_count": len(recipient_emails),
         "share_type": "collection_public" if body.is_public else "collection_direct",
+        SPORT_PROFILE_ID_CONTEXT_KEY: profile_id,
     })
 
     email_results: dict = {}

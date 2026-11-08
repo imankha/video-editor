@@ -78,4 +78,31 @@ describe('CampaignsModal (T13980)', () => {
     expect(opts.method).toBe('PATCH');
     expect(useAdminStore.getState().channelsData.channels[0].campaign_name).toBe('Spring Clinic (U10)');
   });
+
+  it('Save spend patches only the spend fields, and nothing saves until the gesture', async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse({
+      id: 'p4q9r', name: 'Spring Clinic', channel: 'coach_credits', spend_cents: 5000,
+      landing_views: 400, platform_conversions: 50, spend_updated_at: '2026-11-08T00:00:00+00:00',
+    }));
+    render(<CampaignsModal onClose={() => {}} />);
+
+    expect(apiFetch).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Channel for Spring Clinic'), { target: { value: 'coach_credits' } });
+    fireEvent.change(screen.getByLabelText('Spend for Spring Clinic'), { target: { value: '50' } });
+    fireEvent.change(screen.getByLabelText('Landing views for Spring Clinic'), { target: { value: '400' } });
+    fireEvent.change(screen.getByLabelText('Platform conversions for Spring Clinic'), { target: { value: '50' } });
+    expect(apiFetch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Save spend'));
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+    const [url, opts] = apiFetch.mock.calls[0];
+    expect(url).toMatch(/\/api\/admin\/campaigns\/p4q9r$/);
+    expect(opts.method).toBe('PATCH');
+    expect(JSON.parse(opts.body)).toEqual({
+      channel: 'coach_credits', spend_cents: 5000, landing_views: 400, platform_conversions: 50,
+    });
+    await waitFor(() => expect(useAdminStore.getState().campaigns[0].spend_cents).toBe(5000));
+    expect(screen.getByText(/updated 2026-11-08/)).toBeTruthy();
+  });
 });

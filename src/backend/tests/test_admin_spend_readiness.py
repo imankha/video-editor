@@ -178,6 +178,28 @@ class TestLadder:
         costs = [r["cost_cents"] for r in rows if r["key"] != "club_placement"]
         assert costs == sorted(costs)
 
+    def test_measured_platform_collapses_its_benchmark_rows_into_one(self):
+        """T15200: 'one measured Reddit row replaces both Reddit benchmark rows' --
+        coach_credits and coach_gift_cards both carry platform 'coach'."""
+        measured = {"coach": {"cost_cents": 90.0, "n": 50, "names": ["Winter Clinic"]}}
+        rows = channel_rows(point=154, lower=154, upper=154, measured=measured)
+        coach_rows = [r for r in rows if r["platform"] == "coach"]
+        assert len(coach_rows) == 1
+        row = coach_rows[0]
+        assert row["label_kind"] == "M"
+        assert row["cost_cents"] == 90.0
+        assert row["n"] == 50
+        assert row["measured_campaigns"] == ["Winter Clinic"]
+        assert row["state"] == "GO"  # break-even 154 covers 90
+        # Untouched platforms keep their normal benchmark rows.
+        assert {r["key"] for r in rows if r["platform"] != "coach"} == {
+            "reddit_cheapest", "reddit_central", "meta_reels", "club_placement"}
+
+    def test_unmeasured_platform_keeps_its_benchmark_rows_and_null_measured_campaigns(self):
+        rows = {r["key"]: r for r in channel_rows(point=154, lower=154, upper=154)}
+        assert rows["coach_credits"]["measured_campaigns"] is None
+        assert rows["coach_credits"]["label_kind"] == "B"
+
 
 def _gates(**overrides):
     """A full ladder of eleven rows, every one settled green unless overridden
@@ -337,6 +359,18 @@ def _referral(referrer, referred):
             (referrer, referred))
 
 
+def _campaign(cid, name, *, channel=None, spend_cents=None, landing_views=None,
+             platform_conversions=None, created_by="admin-user"):
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM campaigns WHERE id = %s", (cid,))
+        cur.execute(
+            "INSERT INTO campaigns (id, name, created_by, channel, spend_cents, landing_views, "
+            "platform_conversions, spend_updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, "
+            + ("now()" if spend_cents is not None else "NULL") + ")",
+            (cid, name, created_by, channel, spend_cents, landing_views, platform_conversions))
+
+
 def _read(excl=True):
     from app.routers.admin import _test_exclusion
     with get_pg() as conn:
@@ -363,6 +397,68 @@ def _diag(key, excl=True):
 @pytest.fixture()
 def pg(pg_conn):
     return pg_conn
+
+
+class TestCampaignSpend:
+    """T15200: the live campaigns block, the measured ladder override, and the Paid-ads /
+    Referral-programme separation, all read through build_spend_readiness."""
+
+    @pytest.fixture(autouse=True)
+    def _cleanup_campaign(self, pg):
+        yield
+        with get_pg() as conn:
+            conn.cursor().execute("DELETE FROM campaigns WHERE id = 'c1'")
+
+    def test_live_campaigns_empty_until_a_campaign_has_spend(self, pg):
+        _campaign("c1", "No Spend Yet")
+        assert _read()["live_campaigns"] == []
+
+    def test_live_campaign_shows_spend_attributed_signups_and_cost(self, pg):
+        _campaign("c1", "Winter Clinic", channel="coach_credits", spend_cents=10000,
+                 landing_views=500, platform_conversions=40)
+        for i in range(10):
+            _user(f"lc-{i}", origin="c1")
+        data = _read()
+        assert len(data["live_campaigns"]) == 1
+        row = data["live_campaigns"][0]
+        assert row["id"] == "c1" and row["name"] == "Winter Clinic"
+        assert row["spend_cents"] == 10000
+        assert row["attributed_signups"] == 10
+        assert row["cost_per_signup_cents"] == 1000.0
+        assert row["landing_views"] == 500
+        assert row["platform_conversions"] == 40
+        assert row["coverage"] == pytest.approx(0.25)
+        assert row["spend_updated_at"] is not None
+
+    def test_live_campaign_excludes_referred_through_signups(self, pg):
+        """A referred sign-up inherits its referrer's origin, so a referral chain through
+        someone who joined via this campaign must not count as another attributed paid
+        sign-up for it (separation rule, shared with the origin dimension)."""
+        _campaign("c1", "Winter Clinic", channel="coach_credits", spend_cents=10000)
+        direct = _user("lc-direct", origin="c1")
+        referred = _user("lc-referred", origin="c1")  # inherits c1 as _determine_origin would
+        _referral(direct, referred)
+        row = _read()["live_campaigns"][0]
+        assert row["attributed_signups"] == 1
+
+    def test_measured_ladder_replaces_benchmark_once_the_floor_is_reached(self, pg):
+        _campaign("c1", "Winter Clinic", channel="coach_credits", spend_cents=4300 * 90)
+        for i in range(C.MEASURED_MIN_SIGNUPS):
+            _user(f"ml-{i}", origin="c1")
+        channels = {r["key"]: r for r in _read()["channels"]}
+        assert "coach_credits" not in channels  # collapsed into the platform row
+        row = channels["coach"]
+        assert row["label_kind"] == "M"
+        assert row["cost_cents"] == 9000.0
+        assert row["measured_campaigns"] == ["Winter Clinic"]
+
+    def test_measured_ladder_stays_benchmark_below_the_floor(self, pg):
+        _campaign("c1", "Winter Clinic", channel="coach_credits", spend_cents=1000)
+        for i in range(C.MEASURED_MIN_SIGNUPS - 1):
+            _user(f"ml-{i}", origin="c1")
+        channels = {r["key"]: r for r in _read()["channels"]}
+        assert channels["coach_credits"]["label_kind"] == "B"
+        assert "coach" not in channels
 
 
 class TestGateReaders:

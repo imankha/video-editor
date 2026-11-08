@@ -126,10 +126,11 @@ function channelsLine(channels) {
 
 function ChannelRow({ c }) {
   const cost = c.cost_cents == null ? `$300 fee / ${c.n} sign-ups` : `${money(c.cost_cents)} ${c.label_kind}`;
+  const title = c.measured_campaigns ? `Measured from ${c.measured_campaigns.join(', ')}` : c.note;
   return (
     <li data-testid={`spend-channel-${c.key}`} className="grid grid-cols-2 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.5fr)_minmax(0,0.7fr)_minmax(0,2fr)] gap-x-3 py-1 border-b border-white/5 text-xs text-gray-300">
       <span className="text-white">{c.label}</span>
-      <span title={c.note}>{cost}</span>
+      <span title={title}>{cost}</span>
       <span className="text-gray-500">{c.n == null ? '-' : c.n}</span>
       <RagChip testId={`spend-channel-chip-${c.key}`} rag={CHANNEL_RAG[c.state]} confidence={c.confidence} text={c.state} title={c.reason} />
       <span className="col-span-2 md:col-span-1 text-gray-400">{c.reason}</span>
@@ -215,6 +216,39 @@ function Tier({ tier, data, diagnosis, onDiagnose, onListUsers, onShowUploadFail
   );
 }
 
+// T15200: one row per campaign with spend entered (CampaignsModal's Save-spend gesture).
+// Hidden entirely when no campaign has spend yet -- this is the "nothing shows without
+// the gesture" half of AC1; the data half is build_spend_readiness's `live_campaigns`.
+function LiveCampaignRow({ row }) {
+  return (
+    <li data-testid={`spend-live-campaign-${row.id}`} className="grid grid-cols-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] gap-x-3 py-1 border-b border-white/5 text-xs text-gray-300">
+      <span className="text-white">{row.name}</span>
+      <span>{money(row.spend_cents)}</span>
+      <span className="text-gray-500">{row.attributed_signups}</span>
+      <span>{row.cost_per_signup_cents == null ? '-' : money(row.cost_per_signup_cents)}</span>
+      <span className="text-gray-500">{row.coverage == null ? '-' : fmtPct(row.coverage * 100)}</span>
+      {row.state ? (
+        <RagChip testId={`spend-live-campaign-chip-${row.id}`} rag={CHANNEL_RAG[row.state]} text={row.state} />
+      ) : <span className="text-gray-600">-</span>}
+    </li>
+  );
+}
+
+function LiveCampaigns({ rows }) {
+  if (!rows || rows.length === 0) return null;
+  return (
+    <div data-testid="spend-live-campaigns" className="mt-3 text-xs text-gray-300">
+      <div className="uppercase text-gray-400 mb-1">Live campaigns</div>
+      <ul>
+        <li className="hidden md:grid grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.7fr)_minmax(0,0.6fr)] gap-x-3 text-[10px] uppercase text-gray-500">
+          <span>Campaign</span><span>Spend</span><span>Attributed</span><span>Cost / sign-up</span><span>Coverage</span><span>State</span>
+        </li>
+        {rows.map(row => <LiveCampaignRow key={row.id} row={row} />)}
+      </ul>
+    </div>
+  );
+}
+
 function Countries({ rows, days }) {
   if (!rows || rows.length === 0) return null;
   return (
@@ -255,6 +289,7 @@ export function SpendReadinessPanel({ data, loading, error, onRefresh, onListUse
                 <Tier key={tier} tier={tier} data={data} diagnosis={diagnosis} onDiagnose={onDiagnose}
                       onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} onInspectStage={onInspectStage} />
               ))}
+              <LiveCampaigns rows={data.live_campaigns} />
               <Countries rows={data.signups_by_country} days={data.meta.cohort_days} />
               <p className="text-[11px] text-gray-500">
                 {data.meta.small_n_floor} judged is the floor for a colour. Cohort gates judge sign-ups

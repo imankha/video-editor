@@ -1,4 +1,4 @@
-"""v044 (T15010): `user_segments.landing_path` -- the landing page (app-relative pathname)
+"""v045 (T15010): `user_segments.landing_path` -- the landing page (app-relative pathname)
 that first brought the visit, relayed by the landing's attribution.ts as `lp=` and
 validated by routers/auth.py before create_user_segment writes it. Feeds the admin step
 inspector's "landing_path" breakdown and the user detail panel.
@@ -14,8 +14,8 @@ writes the segment without it (logged), so a sign-up never fails.
 from ..base import BaseMigration
 
 
-class V044UserSegmentsLandingPath(BaseMigration):
-    version = 44
+class V045UserSegmentsLandingPath(BaseMigration):
+    version = 45
     description = "Add user_segments.landing_path (T15010 landing page dimension)"
 
     def up(self, conn):

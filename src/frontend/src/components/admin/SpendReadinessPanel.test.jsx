@@ -375,6 +375,32 @@ describe('SpendReadinessPanel (T14910)', () => {
   });
 });
 
+// T15200: the live campaigns block -- hidden until a campaign has spend entered.
+describe('Live campaigns block (T15200)', () => {
+  it('is absent when no campaign has spend entered', () => {
+    panel({ data: { ...DATA, live_campaigns: [] } });
+    expand();
+    expect(screen.queryByTestId('spend-live-campaigns')).toBeNull();
+  });
+
+  it('shows spend, attributed sign-ups, cost per sign-up, coverage and state once a campaign has spend', () => {
+    panel({ data: { ...DATA, live_campaigns: [{
+      id: 'c1', name: 'Winter Clinic', channel: 'coach_credits', spend_cents: 10000,
+      attributed_signups: 10, cost_per_signup_cents: 1000, landing_views: 500,
+      platform_conversions: 40, coverage: 0.25, spend_updated_at: '2026-11-05T00:00:00+00:00',
+      state: 'GO',
+    }] } });
+    expand();
+    expect(screen.getByTestId('spend-live-campaigns')).toBeTruthy();
+    expect(screen.getByText('Winter Clinic')).toBeTruthy();
+    expect(screen.getByText('$100.00')).toBeTruthy();
+    expect(screen.getByText('$10.00')).toBeTruthy();
+    expect(screen.getByText('25.00%')).toBeTruthy();
+    const chip = screen.getByTestId('spend-live-campaign-chip-c1');
+    expect(chip.textContent).toBe('GO');
+  });
+});
+
 // T14910 / T14900: gate 4's green threshold and the Journey map's finished->took_away target
 // are the same number, in two languages.
 describe('gate 4 threshold matches journeyTargets (T14910)', () => {

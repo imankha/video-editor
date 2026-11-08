@@ -59,6 +59,21 @@ describe('ChannelsTable campaign label (T13980)', () => {
   });
 });
 
+describe('ChannelsTable paid-ads vs referral-programme (T15200)', () => {
+  it('labels a paid campaign row "Paid ads" and a referral_programme row "Referral programme", never crossed', () => {
+    render(<ChannelsTable data={{
+      channels: [
+        { ...CH, origin: 'k7x2m', campaign_name: 'Fall Tryouts 2026', group: 'paid' },
+        { ...CH, origin: 'referral_programme', campaign_name: null, group: 'referral' },
+      ],
+    }} />);
+    const name = screen.getByText('Fall Tryouts 2026');
+    expect(name.textContent).toContain('Paid ads');
+    expect(screen.getByText('Referral programme')).toBeTruthy();
+    expect(screen.queryByText('referral_programme')).toBeNull();
+  });
+});
+
 describe('ChannelsTable dimension read-out (T15120)', () => {
   const SRC = { ...CH, origin: undefined, utm_source: 'meta', campaign_name: null };
 
