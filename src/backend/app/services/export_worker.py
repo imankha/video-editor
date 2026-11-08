@@ -15,7 +15,7 @@ import asyncio
 import logging
 import os
 
-from ..analytics import record_milestone
+from ..analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
 from ..constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from ..database import get_db_connection, get_working_videos_path
 from ..r2_usage import R2Source, r2_source_scope
@@ -190,8 +190,14 @@ async def process_export_job(job_id: str):
 
         credit_user_id = config.get("credit_user_id")
         if credit_user_id:
-            record_milestone(credit_user_id, "export_completed", {"export_id": job_id, "type": "framing"})
-            record_milestone(credit_user_id, "framing_exported", {"export_id": job_id, "project_id": project_id})
+            record_milestone(credit_user_id, "export_completed", {
+                "export_id": job_id, "type": "framing",
+                SPORT_PROFILE_ID_CONTEXT_KEY: config.get("profile_id"),
+            })
+            record_milestone(credit_user_id, "framing_exported", {
+                "export_id": job_id, "project_id": project_id,
+                SPORT_PROFILE_ID_CONTEXT_KEY: config.get("profile_id"),
+            })
         await send_progress(job_id, 100, "Export complete!", "complete")
 
         logger.info(f"[ExportWorker] Job {job_id} completed successfully")

@@ -529,8 +529,14 @@ def record_achievement(key: str):
         )
     milestone_event = ACHIEVEMENT_TO_MILESTONE.get(key)
     if milestone_event:
-        from ..analytics import record_milestone
-        record_milestone(user_id, milestone_event, {})
+        from ..analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
+        # T14940: sport-tag scope is just these two framing-step milestones.
+        if milestone_event in ("framing_opened", "crop_adjusted"):
+            from ..profile_context import get_current_profile_id
+            context = {SPORT_PROFILE_ID_CONTEXT_KEY: get_current_profile_id()}
+        else:
+            context = {}
+        record_milestone(user_id, milestone_event, context)
 
     logger.info(f"[Quests] Achievement recorded: {key} ({total_ms:.0f}ms)")
     # T6270: `progress` is ADDITIVE — existing callers reading key/achieved_at are
