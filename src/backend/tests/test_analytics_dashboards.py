@@ -1022,6 +1022,8 @@ _DIMENSION_KPIS = {
     # T15120
     "upload_attempted", "upload_succeeded", "first_highlight_14d",
     "paywall_shown", "buy_modal_opened", "payers",
+    # T15290: kept segment rows of deleted accounts, counted per group
+    "deleted",
 }
 
 
