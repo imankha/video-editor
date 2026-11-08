@@ -98,6 +98,42 @@ known to touch this change (checked 2026-11-07):
 - Same group as T14930 and T15010 (both add attribution that must survive deletion).
 - Revisits: T8630 rounds 4 and 5.
 
+## Policy diff (for the record)
+
+`src/frontend/src/components/PrivacyPolicy.jsx`, `LAST_UPDATED` May 7 2026 -> November 8 2026:
+
+- Data Retention: before, "usage and activity statistics in de-identified form (no name,
+  email, or contact details) keyed to an opaque account id". After: separated bug-report
+  retention from a new sentence naming the retained usage/attribution statistics (origin,
+  campaign, sport, landing page) and disclosing the one-way keyed hash of the deleted email,
+  stating plainly it is kept only to recognise a returning sign-up and never restores data.
+- Right to Delete bullet: added "a one-way hash of your email so a future sign-up can be
+  recognized as returning" to the list of records that survive deletion.
+- The existing "anonymous"/"no PII" claims (Information We Collect, How We Use, the
+  Cloudflare Web Analytics table row) all describe cookieless page-view analytics, a
+  different system from the retained per-account statistics above -- left unchanged because
+  they stay true.
+- Children's Privacy: unchanged -- nothing kept after deletion is intro-card or player data;
+  retained statistics are signup/attribution fields only.
+
+`src/frontend/src/components/TermsOfService.jsx`, `LAST_UPDATED` May 8 2026 -> November 8 2026:
+
+- Section 13 Termination: "your content is permanently deleted" -> "your content and account
+  data are permanently deleted", with a pointer to the Privacy Policy's Data Retention
+  section for the limited surviving records.
+
+**Change notice gap (found while doing this review, not built here):** Section 10/14
+("Changes to This Policy"/"Changes to Terms") says changes are announced "by displaying a
+notice in the application." Checked how that fires today: `useAuthStore.needsTermsAcceptance`
+(`sessionInit.js`) is set when the backend's `needs_terms_acceptance` flag is true, but the
+code immediately and silently POSTs `/api/auth/accept-terms` with no UI shown to the user --
+there is no modal, banner, or any visible notice component. Per this task's instruction
+("if no mechanism exists, stop and say so rather than building one silently"), this PR does
+NOT build one. The wording change above is a genuine update to what the policy discloses,
+but today's users will not see an in-app notice of it beyond the updated `LAST_UPDATED` date
+rendered on the page itself. Building a real change-notice UI is separate, user-facing scope
+and should be its own task.
+
 ## Acceptance Criteria
 
 - [ ] After a real deletion: no `users` row, no user data in R2 or local, `account_deletions.email_hash` set, `user_segments` keeps `utm_*`, `click_source` and `landing_path`.

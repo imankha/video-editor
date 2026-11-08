@@ -8,6 +8,7 @@ import { RAG_STYLES, endToEndTransition, journeyTransitions, stageTransition, tr
 import { RagChip } from './RagChip';
 import { SpendReadinessPanel } from './SpendReadinessPanel';
 import { StepInspector } from './StepInspector';
+import { SUPPORTED_SPORTS } from '../../modes/annotate/constants/tagRegistry';
 
 // T14010: Journey section of AdminScreen. Signup range, origin (campaign), build and
 // the Real (exclude test) pill are AdminScreen's GLOBAL filters, read from adminStore so
@@ -24,6 +25,14 @@ const PLATFORM_OPTIONS = [
   { value: 'all', label: 'all' },
   { value: 'mobile', label: 'mobile' },
   { value: 'desktop', label: 'desktop' },
+];
+// T14930: "arrival sport (landing page)" -- the landing page the visitor came from, never
+// the profile's own sport. SUPPORTED_SPORTS is the same tagRegistry id list the landing
+// site mirrors into sportTags.json (src/landing/src/data/sports.ts).
+const SPORT_OPTIONS = [
+  { value: 'all', label: 'all' },
+  ...SUPPORTED_SPORTS.map(s => ({ value: s.id, label: s.name })),
+  { value: 'unknown', label: 'unknown' },
 ];
 
 // Segmented pill group, same look as the T13990 dimension pills: one pressed button.
@@ -277,6 +286,8 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
   const to = useAdminStore(s => s.segmentTo);
   const build = useAdminStore(s => s.segmentBuild);
   const country = useAdminStore(s => s.segmentCountry);
+  const sport = useAdminStore(s => s.segmentSport);
+  const setSegmentSport = useAdminStore(s => s.setSegmentSport);
   const excludeTest = useAdminStore(s => s.excludeTest);
 
   const [platform, setPlatform] = useState('all');
@@ -292,11 +303,12 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
     origin: origin || undefined,
     build: build ?? undefined,
     country: country ?? undefined,
+    sport: sport ?? undefined,
     platform: platform === 'all' ? undefined : platform,
     excludeTest,
     windowDays,
     inactiveDays,
-  }), [from, to, origin, build, country, platform, excludeTest, windowDays, inactiveDays]);
+  }), [from, to, origin, build, country, sport, platform, excludeTest, windowDays, inactiveDays]);
 
   // Read-only: re-query the map when a global filter or a journey control changes.
   useEffect(() => { fetchJourney(filters); }, [fetchJourney, filters]);
@@ -348,6 +360,12 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
           <PillGroup label="Conversion window" options={DAY_OPTIONS} value={windowDays} onChange={changeControl(setWindowDays, windowDays)} />
           <PillGroup label="Inactive after" options={DAY_OPTIONS} value={inactiveDays} onChange={changeControl(setInactiveDays, inactiveDays)} />
           <PillGroup label="Platform" options={PLATFORM_OPTIONS} value={platform} onChange={changeControl(setPlatform, platform)} />
+          <PillGroup
+            label="Sport"
+            options={SPORT_OPTIONS}
+            value={sport || 'all'}
+            onChange={changeControl(v => setSegmentSport(v === 'all' ? null : v), sport || 'all')}
+          />
           <span className="text-[11px] text-gray-500">Signups, campaign, build, country and Real follow the filters above.</span>
         </div>
         {document.fullscreenEnabled && (

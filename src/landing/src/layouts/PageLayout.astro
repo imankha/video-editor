@@ -24,21 +24,19 @@ export interface Props {
   trail?: { name: string; path: string }[]
   /** Nav item to mark as current. */
   current?: string
-  /**
-   * T7410/T14960: the tagRegistry sport id for a per-sport landing page
-   * ([sport].astro's `sport.slug`), so the visit beacon can report
-   * `page_class="landing:<sportKey>"`. Omit on every non-sport page.
-   */
-  sportKey?: string
+  /** Set only by a per-sport page: the sport id (tagRegistry key, the same key the
+   * admin Sport filter uses). T14930 fills it into `utm_content` when the visit has none
+   * (an ad's own value always wins); T7410's beacon reports `landing:<sport>`. */
+  sport?: string
 }
 
-const { trail, current, sportKey, ...base } = Astro.props
+const { trail, current, sport, ...base } = Astro.props
 ---
 
 <BaseLayout {...base}>
   <Header current={current} />
   {trail && trail.length > 0 && <Breadcrumbs trail={trail} />}
-  <main id="main" data-sport={sportKey}>
+  <main id="main" data-sport={sport}>
     <slot />
   </main>
   <Footer />
@@ -47,14 +45,18 @@ const { trail, current, sportKey, ...base } = Astro.props
     Carry attribution params across to the app (a different host), surviving
     a multi-page visit: T15000 writes a per-tab first-touch record on the
     FIRST page and merges it into every a[data-cta] href on every page after
-    that (see src/attribution.ts for the policy). Progressive enhancement:
+    that (see src/attribution.ts for the policy). T14930: a sport page also
+    fills `utm_content` with its sport key the first time one is seen, via the
+    `data-sport` attribute above (kept out of the module script's closure so
+    the script itself never changes per page). Progressive enhancement:
     without JS, or with storage blocked, the CTA still links correctly, it
     just loses the params.
   -->
   <script>
-    import { readFirstTouch, applyFirstTouch, sendVisitBeacon } from '../attribution'
+    import { readFirstTouch, applyFirstTouch, applyArrivalSport, sendVisitBeacon } from '../attribution'
     import { API_URL } from '../site'
 
+    const sportKey = document.getElementById('main')?.dataset.sport || null
     let record = null
     try {
       record = readFirstTouch(
@@ -64,9 +66,10 @@ const { trail, current, sportKey, ...base } = Astro.props
         window.location.pathname,
         window.sessionStorage,
       )
+      const withSport = sportKey ? applyArrivalSport(record, sportKey, window.sessionStorage) : record
       document.querySelectorAll<HTMLAnchorElement>('a[data-cta]').forEach((a) => {
         try {
-          a.href = applyFirstTouch(a.href, record)
+          a.href = applyFirstTouch(a.href, withSport)
         } catch {
           /* leave the href untouched */
         }
@@ -78,7 +81,6 @@ const { trail, current, sportKey, ...base } = Astro.props
     // T7410: anonymous visit beacon, fired once per page load regardless of
     // whether the first-touch record above was readable (sendVisitBeacon
     // tolerates a null record -- it just has no attribution hints to send).
-    const sportKey = document.getElementById('main')?.dataset.sport
     sendVisitBeacon(record, sportKey ? `landing:${sportKey}` : 'landing', API_URL)
   </script>
 </BaseLayout>

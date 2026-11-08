@@ -144,7 +144,7 @@ def delete_destination_user(dst_cur, old_id: str, dst_email: str) -> list[str]:
         stamp_account_deleted(dst_cur, old_id)
     record_account_deletion(
         dst_cur, user_id=old_id, actor=DeletionActor.SCRIPT,
-        path=DeletionPath.COPY_USER_BETWEEN_ENVS,
+        path=DeletionPath.COPY_USER_BETWEEN_ENVS, email=dst_email,
     )
     bug_r2_keys = anonymize_bug_reports(dst_cur, dst_email)
     for table in ("game_storage_refs", "sessions",

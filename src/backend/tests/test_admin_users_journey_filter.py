@@ -209,7 +209,8 @@ class TestMatchesTheMap:
 
 
     def test_step_inspector_survives_a_deleted_account(self, client):
-        # Its last_active_at is NULL. The map's SQL calls that gone; classify_user must agree.
+        # T15290: a deleted account keeps its analytics (last_active_at included), so it is
+        # ordered by activity like any other; the inspector must still list it as gone.
         from app.services.pg import get_pg
         _seed("live-1")
         _seed("deleted-1")
@@ -220,7 +221,7 @@ class TestMatchesTheMap:
         resp = client.get("/api/admin/analytics/journey/step/clipped", headers=_auth(),
                           params={"build": TEST_BUILD})
         assert resp.status_code == 200, resp.text
-        assert [p["user_id"] for p in resp.json()["people"]["gone"]] == ["live-1", "deleted-1"]
+        assert sorted(p["user_id"] for p in resp.json()["people"]["gone"]) == ["deleted-1", "live-1"]
 
 
 class TestListBehaviour:

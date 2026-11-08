@@ -900,6 +900,69 @@ def segment_has_country(cur) -> bool:
     return _country_column_present
 
 
+# T15010: sticky once seen, like _signup_build_column_present / _country_column_present.
+_landing_path_column_present = False
+
+
+def segment_has_landing_path(cur) -> bool:
+    """Migration-window guard: v045 adds user_segments.landing_path, and Postgres
+    migrations run after deploy. Until then the signup INSERT must not name the column."""
+    global _landing_path_column_present
+    if not _landing_path_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_segments' AND column_name = 'landing_path'"
+        )
+        _landing_path_column_present = cur.fetchone() is not None
+    return _landing_path_column_present
+
+
+# T15290: sticky once seen, like the other segment-column guards above.
+_returning_after_deletion_column_present = False
+
+
+def segment_has_returning_after_deletion(cur) -> bool:
+    """Migration-window guard: v046 adds user_segments.returning_after_deletion,
+    and Postgres migrations run after deploy. Until then the signup INSERT must
+    not name the column."""
+    global _returning_after_deletion_column_present
+    if not _returning_after_deletion_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_segments' AND column_name = 'returning_after_deletion'"
+        )
+        _returning_after_deletion_column_present = cur.fetchone() is not None
+    return _returning_after_deletion_column_present
+
+
+def _was_account_deleted(cur, email: str) -> bool:
+    """T15290: does this email's keyed hash match a past account_deletions row?
+    Analytics only -- the caller marks the new sign-up `returning_after_deletion`
+    and nothing else changes (no data is restored, the sign-up never blocks).
+    Tolerant of a pre-v046/pre-v031 environment (missing column/table -> False,
+    same to_regclass tolerance as record_account_deletion)."""
+    from .services.account_deletions import _account_deletions_has_email_hash, hash_email
+
+    cur.execute("SELECT to_regclass('public.account_deletions') IS NOT NULL AS ok")
+    if not cur.fetchone()["ok"] or not _account_deletions_has_email_hash(cur):
+        return False
+    cur.execute(
+        "SELECT 1 FROM account_deletions WHERE email_hash = %s LIMIT 1",
+        (hash_email(email),),
+    )
+    return cur.fetchone() is not None
+
+
+# T14930: the known arrival-sport keys `utm_content` can carry from a landing sport page
+# (src/landing/src/attribution.ts applyArrivalSport). MIRRORS the frontend's tagRegistry ids
+# (src/frontend/src/modes/annotate/constants/tagRegistry.js SUPPORTED_SPORTS) -- there is no
+# shared import between the two trees, so keep both lists in sync by hand. Any utm_content
+# NOT in this set (an ad's own value, or none) is the "unknown" bucket; never inferred.
+ARRIVAL_SPORT_KEYS = frozenset({
+    "soccer", "flag_football", "american_football", "basketball", "lacrosse",
+    "rugby", "volleyball", "hockey", "tennis", "baseball", "softball",
+})
+
 # XX is Cloudflare's "no country data": it fits the format but names no place.
 _COUNTRY_CODE = re.compile(r"[A-Z]{2}")
 _NO_COUNTRY_DATA = "XX"
@@ -922,6 +985,8 @@ def create_user_segment(
     utm_term: str | None = None,
     click_source: str | None = None,
     country: str | None = None,
+    landing_path: str | None = None,
+    email: str | None = None,
 ):
     try:
         with get_pg() as conn:
@@ -950,6 +1015,25 @@ def create_user_segment(
                     "POST /api/admin/migrate-postgres) -- segment for %s written without its country",
                     user_id,
                 )
+            if segment_has_landing_path(cur):
+                columns.append("landing_path")
+                values.append(landing_path)
+            else:
+                logger.error(
+                    "[Analytics] user_segments.landing_path missing (v045 not applied; run "
+                    "POST /api/admin/migrate-postgres) -- segment for %s written without its landing_path",
+                    user_id,
+                )
+            if segment_has_returning_after_deletion(cur):
+                columns.append("returning_after_deletion")
+                values.append(bool(email) and _was_account_deleted(cur, email))
+            else:
+                logger.error(
+                    "[Analytics] user_segments.returning_after_deletion missing (v046 not "
+                    "applied; run POST /api/admin/migrate-postgres) -- segment for %s written "
+                    "without it",
+                    user_id,
+                )
             cur.execute(
                 f"""INSERT INTO user_segments ({", ".join(columns)})
                    VALUES ({", ".join(["%s"] * len(values))})
@@ -974,10 +1058,19 @@ def create_user_segment(
 # (privacy.delete_account, delete_user.py, copy_user_between_envs.py).
 # T14000: signup_build / signup_commit are deploy identifiers, not personal data,
 # so they are KEPT too (the Builds dimension still counts a deleted account).
+# T15010: landing_path is a page class, not identity, so it is KEPT too (owner ruling,
+# 2026-11-07) -- deliberately NOT in this strip list.
+# T15290 (owner ruling 2026-11-07, reverses T8630 round 4's rationale): deletion
+# means the USER'S DATA is gone and their email is replaced with a keyed hash
+# (account_deletions.email_hash) -- not that analytics goes dark. Once the email
+# is a one-way hash and the account's data is purged, no column here identifies
+# a person any more, so only the LIVE-SESSION fields are stripped (a stale
+# session start/end has no analytic value once the account is gone). utm_*,
+# click_source, last_active_at, total_usage_seconds and landing_path (T15010)
+# are KEPT so attribution and arrival sport (T14930, utm_content) survive
+# deletion, per the ruling's point 3.
 _DEIDENTIFY_SEGMENT_COLUMNS = (
-    "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
-    "click_source", "current_session_start", "last_active_at",
-    "total_usage_seconds",
+    "current_session_start",
 )
 
 
@@ -987,6 +1080,10 @@ def deidentify_user_segments(cur, user_id: str, was_test_account: bool | None = 
     the caller's open transaction (cursor passed in), same contract as
     payments_ledger.stamp_account_deleted / account_deletions.record_account_deletion.
     Returns the number of rows updated (0 if the user had no segment).
+
+    T15290: only `_DEIDENTIFY_SEGMENT_COLUMNS` above are cleared now (live-session
+    fields) -- utm_*/click_source/last_active_at/total_usage_seconds/landing_path
+    are KEPT (owner ruling 2026-11-07 supersedes T8630 round 4's wider strip list).
 
     T8630 round 5: also SNAPSHOTS the account's is_test_account flag into
     was_test_account (read by the caller BEFORE it deletes the `users` row). The

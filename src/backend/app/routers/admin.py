@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from ..analytics import RETRY_BURST_ACTIONS, usage_daily_has_upload_outcomes
+from ..analytics import ARRIVAL_SPORT_KEYS, RETRY_BURST_ACTIONS, usage_daily_has_upload_outcomes
 from ..analytics import detect_retry_bursts as _detect_retry_bursts
 from ..services import credit_ledger
 from ..services.auth_db import (
@@ -66,6 +66,23 @@ def _append_country(where_parts: list, params: list, country: str | None) -> Non
     elif country:
         where_parts.append("s.country = %s")
         params.append(country)
+
+
+# T14930: "arrival sport (landing page)" -- a predicate on user_segments.utm_content
+# restricted to ARRIVAL_SPORT_KEYS. `unknown` covers BOTH an ad's own utm_content and no
+# utm_content at all: there is no inference between the two, only the known/unknown split.
+SPORT_UNKNOWN = "unknown"
+SportFilter = Annotated[str | None, Query(pattern=f"^({'|'.join(sorted(ARRIVAL_SPORT_KEYS))}|unknown)$")]
+
+
+def _append_sport(where_parts: list, params: list, sport: str | None) -> None:
+    """The segment condition for a SportFilter value, on alias `s`."""
+    if sport == SPORT_UNKNOWN:
+        where_parts.append("(s.utm_content IS NULL OR s.utm_content != ALL(%s))")
+        params.append(list(ARRIVAL_SPORT_KEYS))
+    elif sport:
+        where_parts.append("s.utm_content = %s")
+        params.append(sport)
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +423,7 @@ def list_users(
     inactive_days: Annotated[int, Query(ge=1, le=365)] = 14,
     platform: Annotated[str | None, Query(pattern="^(mobile|desktop)$")] = None,
     country: CountryFilter = None,
+    sport: SportFilter = None,
 ):
     """List users with milestone stats from Postgres. Paginated by user count. Admin only.
 
@@ -426,7 +444,7 @@ def list_users(
         raise HTTPException(status_code=422, detail="journey_stage and filter are exclusive")
     if spend_gate and (journey_stage or filter):
         raise HTTPException(status_code=422, detail="spend_gate excludes journey_stage and filter")
-    if spend_gate and (origin or acquired_from or acquired_to or build is not None or country):
+    if spend_gate and (origin or acquired_from or acquired_to or build is not None or country or sport):
         raise HTTPException(status_code=422, detail="spend_gate is the whole gate; segment filters would narrow it")
 
     # `sort`/`sort_dir` are validated to a hard whitelist BEFORE any DB work -- an
@@ -434,10 +452,11 @@ def list_users(
     order_fragment = _order_by(sort, sort_dir)
 
     seg_parts, params = _build_segment_filter(
-        origin, acquired_from, acquired_to, filter, user_alias="u", build=build, country=country
+        origin, acquired_from, acquired_to, filter, user_alias="u", build=build, country=country,
+        sport=sport,
     )
     funnel_seg_parts, funnel_params = _build_segment_filter(
-        origin, acquired_from, acquired_to, filter, build=build, country=country
+        origin, acquired_from, acquired_to, filter, build=build, country=country, sport=sport,
     )
     excl = _test_exclusion(exclude_test)
     where_parts = [*seg_parts]
@@ -1970,10 +1989,7 @@ def analytics_journey_map(
     window_days: int = Query(14, ge=1, le=365),
     inactive_days: int = Query(14, ge=1, le=365),
     country: CountryFilter = None,
-    # T14960: narrows the "Visited" head node to one sport's landing page_class
-    # (T14930's arrival-sport pill feeds this; the per-user ladder ignores it, since
-    # user_segments carries no sport dimension).
-    sport: str | None = Query(None, pattern="^[a-z0-9_-]{1,40}$"),
+    sport: SportFilter = None,
 ):
     _require_admin()
     from ..services.analytics_journey import build_journey
@@ -1985,9 +2001,8 @@ def analytics_journey_map(
         cur = conn.cursor()
         return build_journey(
             cur, d_from=d_from, d_to=d_to, origin=origin, build=build, country=country,
-            platform=platform, excl=_test_exclusion(exclude_test),
+            platform=platform, excl=_test_exclusion(exclude_test), sport=sport,
             window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
-            sport=sport,
         )
 
 
@@ -1996,7 +2011,7 @@ def analytics_journey_map(
 # when the breakdown tab changes. Reads Postgres only except the retry-burst sample.
 def analytics_journey_step(
     stage: str,
-    by: str = Query("platform", pattern="^(platform|origin|build|cohort_month|country)$"),
+    by: str = Query("platform", pattern="^(platform|origin|build|cohort_month|country|arrival_sport|landing_path)$"),
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
     origin: str = Query("all"),
@@ -2006,7 +2021,7 @@ def analytics_journey_step(
     window_days: int = Query(14, ge=1, le=365),
     inactive_days: int = Query(14, ge=1, le=365),
     country: CountryFilter = None,
-    sport: str | None = Query(None, pattern="^[a-z0-9_-]{1,40}$"),
+    sport: SportFilter = None,
 ):
     _require_admin()
     d_from = date.fromisoformat(date_from) if date_from else None
@@ -2031,7 +2046,7 @@ def analytics_journey_step(
         try:
             result = build_step(
                 cur, stage, by, d_from=d_from, d_to=d_to, origin=origin, build=build, country=country,
-                platform=platform, excl=_test_exclusion(exclude_test),
+                platform=platform, excl=_test_exclusion(exclude_test), sport=sport,
                 window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
             )
         except KeyError:
@@ -2066,7 +2081,9 @@ def analytics_journey_rollup():
 # T14910: plain def -> threadpool (T8000 pattern). Read-only; the rules and the per-gate
 # readers live in services/analytics_spend_readiness.py, thresholds in
 # services/spend_readiness_constants.py.
-def analytics_spend_readiness(exclude_test: bool = True):
+def analytics_spend_readiness(exclude_test: bool = True, sport: SportFilter = None):
+    # T14930: `sport` is accepted (and validated) so the admin's global Sport pill never 422s
+    # here; the gate payload itself has no segment filters of any kind yet (not just sport).
     _require_admin()
     from ..services.analytics_spend_readiness import build_spend_readiness
 
@@ -2076,7 +2093,7 @@ def analytics_spend_readiness(exclude_test: bool = True):
 
 @router.get("/analytics/spend-readiness/gate/{key}")
 # T14910: one gate's Diagnose drawer (weekly, by build, by platform, by country), read on open.
-def analytics_spend_readiness_gate(key: str, exclude_test: bool = True):
+def analytics_spend_readiness_gate(key: str, exclude_test: bool = True, sport: SportFilter = None):
     _require_admin()
     from ..services.analytics_spend_readiness import build_gate_diagnosis, has_diagnosis
 
@@ -2186,7 +2203,8 @@ def _campaign_name_join(cur, origin_col: str = "s.origin") -> tuple[str, str]:
     campaign). Migration-window guard: before v038 runs there is no campaigns
     table, so every row reads NULL (logged) instead of the admin view 500ing."""
     cur.execute("SELECT to_regclass('campaigns') AS t")
-    if cur.fetchone()["t"] is None:
+    row = cur.fetchone()
+    if row is None or row["t"] is None:
         logger.error("[Admin] campaigns table missing (v038 not applied; run POST /api/admin/migrate-postgres)")
         return "NULL::text AS campaign_name", ""
     return "camp.name AS campaign_name", f"LEFT JOIN campaigns camp ON camp.id = {origin_col}"
@@ -2557,9 +2575,16 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
             -- T8650: revenue from the payments ledger (pre-aggregated per user). T8630
             -- r5: a deleted payer KEEPS its segment row and the users join is LEFT, so
             -- it stays in its real group instead of dropping to the unattributed remainder.
-            COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
+            COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents,
+            -- T15290: deleted_u is its OWN unconditional LEFT JOIN (excl_join above only
+            -- joins `users` when exclude_test is on) -- a deleted account's email is
+            -- always NULL (account_deletions.record_account_deletion commits the
+            -- DELETE FROM users and the audit row together), so this count is exactly
+            -- "how many of this group's kept segment rows belong to a deleted account".
+            COUNT(*) FILTER (WHERE deleted_u.user_id IS NULL) AS deleted
         FROM user_segments s
         LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
+        LEFT JOIN users deleted_u ON deleted_u.user_id = s.user_id
         {excl_join}
         {where_clause}
         GROUP BY grp
@@ -2569,6 +2594,7 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
         r["grp"]: {
             "signups": r["signups"],
             "revenue_cents": r["revenue_cents"] or 0,
+            "deleted": r["deleted"],
             "first_highlight_14d": {
                 "aged": r["aged"],
                 "hit": r["hit"],
@@ -2838,12 +2864,22 @@ def analytics_journey(user_id: str):
         cur = conn.cursor()
         cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
         user_row = cur.fetchone()
-        if not user_row:
-            raise HTTPException(status_code=404, detail="User not found")
+        # T15290: a deleted account's `users` row is gone BUT its de-identified
+        # user_segments row is kept (T8630 r4) -- 404ing here made every deleted
+        # account invisible in the admin detail panel, the opposite of "deletion
+        # visible in the admin". Fall through with email=None instead; deleted_at
+        # below (from account_deletions, the audit trail, not a last_active_at
+        # guess) is what the panel shows as the deletion status.
+        email = user_row["email"] if user_row else None
 
         name_select, name_join = _campaign_name_join(cur)
+        # T15010: landing_path probed like signup_build/country -- this page loads
+        # on every admin user click, so it must not 500 before v044 has run.
+        from ..analytics import segment_has_landing_path
+        landing_path_select = "s.landing_path" if segment_has_landing_path(cur) else "NULL::text AS landing_path"
         cur.execute(f"""
-            SELECT s.origin, {name_select}, s.referrer_id, s.acquired_at, s.last_active_at, s.created_at
+            SELECT s.origin, {name_select}, s.referrer_id, s.acquired_at, s.last_active_at, s.created_at,
+                   {landing_path_select}
             FROM user_segments s {name_join} WHERE s.user_id = %s
         """, (user_id,))
         seg = cur.fetchone()
@@ -2860,6 +2896,8 @@ def analytics_journey(user_id: str):
             ORDER BY MIN(first_at) NULLS LAST
         """, (user_id,))
         action_rows = cur.fetchall()
+
+    deleted_at = _deletions_for([user_id]).get(user_id)
 
     completed = []
 
@@ -2957,9 +2995,12 @@ def analytics_journey(user_id: str):
 
     return {
         "user_id": user_id,
-        "email": user_row["email"],
+        "email": "Deleted account" if email is None else email,
+        "is_deleted": email is None,
+        "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "origin": seg["origin"],
         "campaign_name": seg["campaign_name"],
+        "landing_path": seg["landing_path"],
         "acquired_at": str(seg["acquired_at"]) if seg["acquired_at"] else None,
         "milestones": milestones,
         "session_count": session_count,
@@ -3045,7 +3086,7 @@ def analytics_user_actions(
 
 
 def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_alias="s", build=None,
-                          country=None):
+                          country=None, sport=None):
     where_parts = []
     params = []
     if origin:
@@ -3056,6 +3097,7 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_
         where_parts.append("s.signup_build = %s")
         params.append(build)
     _append_country(where_parts, params, country)
+    _append_sport(where_parts, params, sport)
     if acquired_from:
         where_parts.append("s.acquired_at >= %s")
         params.append(date.fromisoformat(acquired_from))

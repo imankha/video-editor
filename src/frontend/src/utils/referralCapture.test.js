@@ -118,6 +118,20 @@ describe('campaign param capture (App.jsx logic)', () => {
     const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
     expect(stored).toEqual({ utm_term: 'k7x2m' });
   });
+
+  // T15010: the landing page that converted, relayed as `lp=`. Captured on its own,
+  // even with no other attribution signal -- it's page tracking, not ad attribution.
+  it('captures landing_path (lp) alone', () => {
+    simulateCampaignCapture('?lp=/works-with/trace');
+    const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
+    expect(stored).toEqual({ landing_path: '/works-with/trace' });
+  });
+
+  it('captures landing_path alongside other attribution fields', () => {
+    simulateCampaignCapture('?utm_source=instagram&lp=/soccer');
+    const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
+    expect(stored).toEqual({ utm_source: 'instagram', landing_path: '/soccer' });
+  });
 });
 
 describe('T7910: referrer-host capture', () => {
@@ -179,6 +193,14 @@ describe('T7910: referrer-host capture', () => {
     const authBody = { token: 'mock' };
     if (campaign.referrer_host) authBody.referrer_host = campaign.referrer_host;
     expect(authBody).toEqual({ token: 'mock', referrer_host: 'www.google.com' });
+  });
+
+  // T15010: landing_path rides the same campaignParams passthrough as referrer_host.
+  it('sends landing_path in the auth request body', () => {
+    const campaign = { landing_path: '/works-with/trace' };
+    const authBody = { token: 'mock' };
+    if (campaign.landing_path) authBody.landing_path = campaign.landing_path;
+    expect(authBody).toEqual({ token: 'mock', landing_path: '/works-with/trace' });
   });
 });
 

@@ -303,6 +303,7 @@ async def delete_account(request: Request):
             stamp_account_deleted(cur, user_id)
             record_account_deletion(
                 cur, user_id=user_id, actor=DeletionActor.SELF, path=DeletionPath.PRIVACY_ENDPOINT,
+                email=email,
             )
             # T8630 round 3: keep the TEXT of the user's bug reports (to fix
             # problems) but clear every identifying/device/attachment column, in

@@ -18,10 +18,60 @@ One row per DELETION EVENT, not one row per user: `id BIGSERIAL PRIMARY KEY`
 row, not collide on a duplicate key.
 """
 
+import hashlib
+import hmac
 import logging
+import os
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+_EMAIL_HASH_SECRET_ENV = "ACCOUNT_DELETION_EMAIL_HASH_SECRET"
+# Dev/test convenience only -- a real deployment MUST set the env var or every
+# deleted email hashes under this well-known string, which is not a secret at
+# all. Guarded loudly in hash_email below.
+_INSECURE_DEV_SECRET = "dev-insecure-account-deletion-hash-secret"
+
+
+def hash_email(email: str) -> str:
+    """Keyed (HMAC-SHA256) hash of a normalised email, for `account_deletions.email_hash`
+    and the returning-after-deletion lookup at signup (T15290 owner ruling).
+
+    KEYED, never a bare `sha256(email)` -- a bare hash is reversed by a dictionary
+    of emails in seconds, defeating the point of hashing it. The key is
+    ACCOUNT_DELETION_EMAIL_HASH_SECRET; missing it in staging/production is a
+    config error (CRITICAL log, falls back to the insecure dev secret rather than
+    crashing a deletion request -- the hash is for recognising a returning person,
+    never for restoring data or blocking the request).
+    """
+    secret = os.getenv(_EMAIL_HASH_SECRET_ENV)
+    if not secret:
+        app_env = os.getenv("APP_ENV", "dev")
+        if app_env in ("staging", "production"):
+            logger.critical(
+                "[AccountDeletions] %s is not set in APP_ENV=%s -- using the "
+                "insecure dev secret. Set it before this reaches real users.",
+                _EMAIL_HASH_SECRET_ENV, app_env,
+            )
+        secret = _INSECURE_DEV_SECRET
+    normalized = email.strip().lower().encode("utf-8")
+    return hmac.new(secret.encode("utf-8"), normalized, hashlib.sha256).hexdigest()
+
+
+_email_hash_column_present = False
+
+
+def _account_deletions_has_email_hash(cur) -> bool:
+    """Migration-window guard, same pattern as analytics.segment_has_country: v045
+    adds account_deletions.email_hash, and Postgres migrations run after deploy."""
+    global _email_hash_column_present
+    if not _email_hash_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'account_deletions' AND column_name = 'email_hash'"
+        )
+        _email_hash_column_present = cur.fetchone() is not None
+    return _email_hash_column_present
 
 
 class DeletionActor(str, Enum):
@@ -57,7 +107,8 @@ class DeletionPath(str, Enum):
 
 
 def record_account_deletion(
-    cur, *, user_id: str, actor: DeletionActor, path: DeletionPath, note: str | None = None
+    cur, *, user_id: str, actor: DeletionActor, path: DeletionPath, note: str | None = None,
+    email: str | None = None,
 ) -> None:
     """Insert one `account_deletions` row for this deletion event.
 
@@ -74,9 +125,22 @@ def record_account_deletion(
         rather than raise. The erasure request must still succeed; a missing
         audit row in that narrow deployed-but-not-migrated window is an
         operational note, not a ledger-integrity failure (design §5.5).
+
+    T15290 (owner ruling 2026-11-07): `email`, when given, is hashed (keyed,
+    `hash_email`) and stored as `email_hash` so a later sign-up with the same
+    email can be recognised as `returning_after_deletion` in analytics -- never
+    to restore data, never to block the sign-up. Deliberately omitted by
+    `_reset_test_account`/`reset-test-user.py`: those paths recreate the SAME
+    user_id under the SAME email immediately, so a hash there would just mark
+    every post-reset test login as "returning after deletion", which is noise,
+    not the real signal this column exists for. v045 adds the column; until it
+    runs the insert below probes for it first (same migration-window guard as
+    `segment_has_country`), so a deletion request never fails on a missing
+    column.
     """
     actor_value = DeletionActor(actor).value
     path_value = DeletionPath(path).value
+    email_hash = hash_email(email) if email else None
 
     cur.execute("SELECT to_regclass('public.payments') IS NOT NULL AS ok")
     payments_present = cur.fetchone()["ok"]
@@ -102,13 +166,28 @@ def record_account_deletion(
         )
         return
 
-    cur.execute(
-        """
-        INSERT INTO account_deletions (user_id, actor, path, had_payments, net_cents, note)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """,
-        (user_id, actor_value, path_value, had_payments, net_cents, note),
-    )
+    if email_hash is not None and _account_deletions_has_email_hash(cur):
+        cur.execute(
+            """
+            INSERT INTO account_deletions (user_id, actor, path, had_payments, net_cents, note, email_hash)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (user_id, actor_value, path_value, had_payments, net_cents, note, email_hash),
+        )
+    else:
+        if email_hash is not None:
+            logger.error(
+                "[AccountDeletions] account_deletions.email_hash missing (v045 not applied; "
+                "run POST /api/admin/migrate-postgres) -- deletion for %s recorded without it",
+                user_id,
+            )
+        cur.execute(
+            """
+            INSERT INTO account_deletions (user_id, actor, path, had_payments, net_cents, note)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (user_id, actor_value, path_value, had_payments, net_cents, note),
+        )
     logger.info(
         "[AccountDeletions] recorded deletion: user=%s actor=%s path=%s "
         "had_payments=%s net_cents=%s",
