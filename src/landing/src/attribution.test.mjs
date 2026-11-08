@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFirstTouch, applyFirstTouch, computeLref } from './attribution.ts'
+import { readFirstTouch, applyFirstTouch, applyArrivalSport, computeLref } from './attribution.ts'
 
 function memoryStore(initial = {}) {
   const data = { ...initial }
@@ -80,4 +80,27 @@ test('a null record (storage blocked) leaves the href untouched', () => {
   assert.equal(record, null)
   const href = 'https://app.reelballers.com/signup?a=1'
   assert.equal(applyFirstTouch(href, record), href)
+})
+
+// T14930: a sport page fills utm_content with its sport key when absent.
+test('a sport page fills utm_content with the arrival sport when absent', () => {
+  const store = memoryStore()
+  const record = readFirstTouch('', '', 'reelballers.com', '/hockey', store)
+  const withSport = applyArrivalSport(record, 'hockey', store)
+  assert.equal(withSport.params.utm_content, 'hockey')
+  const href = applyFirstTouch('https://app.reelballers.com/signup', withSport)
+  assert.equal(new URL(href).searchParams.get('utm_content'), 'hockey')
+  // Persisted, so a later page in the same visit sees it already filled.
+  assert.equal(JSON.parse(store._data.rbFirstTouch).params.utm_content, 'hockey')
+})
+
+test('an ad utm_content wins over the arrival sport', () => {
+  const store = memoryStore()
+  const record = readFirstTouch('?utm_content=ad1', '', 'reelballers.com', '/hockey', store)
+  const withSport = applyArrivalSport(record, 'hockey', store)
+  assert.equal(withSport.params.utm_content, 'ad1')
+})
+
+test('applyArrivalSport is a no-op without a record', () => {
+  assert.equal(applyArrivalSport(null, 'hockey', memoryStore()), null)
 })

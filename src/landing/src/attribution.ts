@@ -114,6 +114,28 @@ export function readFirstTouch(
   return record
 }
 
+/**
+ * Fills `utm_content` with the arrival sport (T14930), but only when nothing already
+ * claimed that slot -- an ad's own `utm_content` always wins, and so does an earlier
+ * sport page in the same visit (first sport page wins, matching first-touch policy).
+ * Mutates and re-persists the record so a LATER sport page in the same visit sees it
+ * already filled. No-op when storage is unavailable (private mode) or there is no record.
+ */
+export function applyArrivalSport(
+  record: FirstTouchRecord | null,
+  sportKey: string,
+  store: Storage,
+): FirstTouchRecord | null {
+  if (!record || record.params.utm_content) return record
+  record.params.utm_content = sportKey
+  try {
+    store.setItem(STORAGE_KEY, JSON.stringify(record))
+  } catch {
+    // storage write blocked — the mutated record still applies to this page's own links
+  }
+  return record
+}
+
 /** Merges a first-touch record into a CTA href, never overwriting a param the link already carries. */
 export function applyFirstTouch(href: string, record: FirstTouchRecord | null): string {
   if (!record) return href

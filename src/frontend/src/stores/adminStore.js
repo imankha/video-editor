@@ -4,7 +4,7 @@ import apiFetch from '../utils/apiFetch';
 import { useCreditStore } from './creditStore';
 
 // T14010/T14020: query string shared by the Journey map and the step inspector.
-// filters = { from, to, origin, build, country, platform, excludeTest, windowDays, inactiveDays }.
+// filters = { from, to, origin, build, country, sport, platform, excludeTest, windowDays, inactiveDays }.
 function journeyParams(filters) {
   const params = new URLSearchParams();
   if (filters.from) params.set('from', filters.from);
@@ -12,6 +12,8 @@ function journeyParams(filters) {
   if (filters.origin) params.set('origin', filters.origin);
   if (filters.build != null) params.set('build', filters.build);
   if (filters.country) params.set('country', filters.country);
+  // T14930: arrival sport (landing page) -- same known-key/unknown predicate as country.
+  if (filters.sport) params.set('sport', filters.sport);
   if (filters.platform) params.set('platform', filters.platform);
   if (filters.excludeTest !== undefined) params.set('exclude_test', String(filters.excludeTest));
   if (filters.windowDays) params.set('window_days', filters.windowDays);
@@ -59,6 +61,9 @@ export const useAdminStore = create((set, get) => ({
   // compose with it; only Clear all drops it. 'unknown' = no country on the segment.
   segmentCountry: null,
   countries: [],  // the selector's options for the current window
+  // T14930: arrival sport (landing page) global filter, same shape/rules as segmentCountry
+  // ('unknown' = an ad's own utm_content OR none at all; never inferred).
+  segmentSport: null,
   // T13990: which filter dimension's table the panel shows ('campaigns' | 'cohorts' |
   // 'builds'). View state only -- resets to campaigns on reload, never persisted.
   dimension: 'campaigns',
@@ -134,6 +139,13 @@ export const useAdminStore = create((set, get) => ({
     state.fetchChannels();
     state.fetchCohorts();
     if (state.buildsData) state.fetchBuilds();
+  },
+
+  // T14930: unlike country, sport has no Channels/Cohorts/Builds breakdown dependency yet
+  // (T14940/T14950 are siblings) -- only the users list follows it directly here.
+  setSegmentSport: (sport) => {
+    set({ segmentSport: sport, journeyUserFilter: null });
+    get().fetchUsers(1);
   },
 
   // T13990: pill click. Shows that dimension's table and loads its data if the
@@ -234,7 +246,7 @@ export const useAdminStore = create((set, get) => ({
     const hadBuild = get().segmentBuild !== null;
     const hadCountry = get().segmentCountry !== null;
     const hadWindow = get().segmentFrom !== null || get().segmentTo !== null;
-    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, segmentCountry: null, userFilter: null, journeyUserFilter: null });
+    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, segmentCountry: null, segmentSport: null, userFilter: null, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
     if (hadBuild) get().fetchPlatforms();
@@ -263,6 +275,7 @@ export const useAdminStore = create((set, get) => ({
         if (state.segmentTo) params.set('acquired_to', state.segmentTo);
         if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
         if (state.segmentCountry) params.set('country', state.segmentCountry);
+        if (state.segmentSport) params.set('sport', state.segmentSport);
       }
       if (state.userFilter) params.set('filter', state.userFilter);
       if (journey && journey.gate) {

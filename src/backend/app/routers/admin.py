@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from ..analytics import RETRY_BURST_ACTIONS, usage_daily_has_upload_outcomes
+from ..analytics import ARRIVAL_SPORT_KEYS, RETRY_BURST_ACTIONS, usage_daily_has_upload_outcomes
 from ..analytics import detect_retry_bursts as _detect_retry_bursts
 from ..services import credit_ledger
 from ..services.auth_db import (
@@ -66,6 +66,23 @@ def _append_country(where_parts: list, params: list, country: str | None) -> Non
     elif country:
         where_parts.append("s.country = %s")
         params.append(country)
+
+
+# T14930: "arrival sport (landing page)" -- a predicate on user_segments.utm_content
+# restricted to ARRIVAL_SPORT_KEYS. `unknown` covers BOTH an ad's own utm_content and no
+# utm_content at all: there is no inference between the two, only the known/unknown split.
+SPORT_UNKNOWN = "unknown"
+SportFilter = Annotated[str | None, Query(pattern=f"^({'|'.join(sorted(ARRIVAL_SPORT_KEYS))}|unknown)$")]
+
+
+def _append_sport(where_parts: list, params: list, sport: str | None) -> None:
+    """The segment condition for a SportFilter value, on alias `s`."""
+    if sport == SPORT_UNKNOWN:
+        where_parts.append("(s.utm_content IS NULL OR s.utm_content != ALL(%s))")
+        params.append(list(ARRIVAL_SPORT_KEYS))
+    elif sport:
+        where_parts.append("s.utm_content = %s")
+        params.append(sport)
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +423,7 @@ def list_users(
     inactive_days: Annotated[int, Query(ge=1, le=365)] = 14,
     platform: Annotated[str | None, Query(pattern="^(mobile|desktop)$")] = None,
     country: CountryFilter = None,
+    sport: SportFilter = None,
 ):
     """List users with milestone stats from Postgres. Paginated by user count. Admin only.
 
@@ -426,7 +444,7 @@ def list_users(
         raise HTTPException(status_code=422, detail="journey_stage and filter are exclusive")
     if spend_gate and (journey_stage or filter):
         raise HTTPException(status_code=422, detail="spend_gate excludes journey_stage and filter")
-    if spend_gate and (origin or acquired_from or acquired_to or build is not None or country):
+    if spend_gate and (origin or acquired_from or acquired_to or build is not None or country or sport):
         raise HTTPException(status_code=422, detail="spend_gate is the whole gate; segment filters would narrow it")
 
     # `sort`/`sort_dir` are validated to a hard whitelist BEFORE any DB work -- an
@@ -434,10 +452,11 @@ def list_users(
     order_fragment = _order_by(sort, sort_dir)
 
     seg_parts, params = _build_segment_filter(
-        origin, acquired_from, acquired_to, filter, user_alias="u", build=build, country=country
+        origin, acquired_from, acquired_to, filter, user_alias="u", build=build, country=country,
+        sport=sport,
     )
     funnel_seg_parts, funnel_params = _build_segment_filter(
-        origin, acquired_from, acquired_to, filter, build=build, country=country
+        origin, acquired_from, acquired_to, filter, build=build, country=country, sport=sport,
     )
     excl = _test_exclusion(exclude_test)
     where_parts = [*seg_parts]
@@ -1970,6 +1989,7 @@ def analytics_journey_map(
     window_days: int = Query(14, ge=1, le=365),
     inactive_days: int = Query(14, ge=1, le=365),
     country: CountryFilter = None,
+    sport: SportFilter = None,
 ):
     _require_admin()
     from ..services.analytics_journey import build_journey
@@ -1981,7 +2001,7 @@ def analytics_journey_map(
         cur = conn.cursor()
         return build_journey(
             cur, d_from=d_from, d_to=d_to, origin=origin, build=build, country=country,
-            platform=platform, excl=_test_exclusion(exclude_test),
+            platform=platform, excl=_test_exclusion(exclude_test), sport=sport,
             window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
         )
 
@@ -1991,7 +2011,7 @@ def analytics_journey_map(
 # when the breakdown tab changes. Reads Postgres only except the retry-burst sample.
 def analytics_journey_step(
     stage: str,
-    by: str = Query("platform", pattern="^(platform|origin|build|cohort_month|country)$"),
+    by: str = Query("platform", pattern="^(platform|origin|build|cohort_month|country|arrival_sport)$"),
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
     origin: str = Query("all"),
@@ -2001,6 +2021,7 @@ def analytics_journey_step(
     window_days: int = Query(14, ge=1, le=365),
     inactive_days: int = Query(14, ge=1, le=365),
     country: CountryFilter = None,
+    sport: SportFilter = None,
 ):
     _require_admin()
     from ..services.analytics_journey import build_step
@@ -2012,7 +2033,7 @@ def analytics_journey_step(
         try:
             result = build_step(
                 cur, stage, by, d_from=d_from, d_to=d_to, origin=origin, build=build, country=country,
-                platform=platform, excl=_test_exclusion(exclude_test),
+                platform=platform, excl=_test_exclusion(exclude_test), sport=sport,
                 window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
             )
         except KeyError:
@@ -2047,7 +2068,9 @@ def analytics_journey_rollup():
 # T14910: plain def -> threadpool (T8000 pattern). Read-only; the rules and the per-gate
 # readers live in services/analytics_spend_readiness.py, thresholds in
 # services/spend_readiness_constants.py.
-def analytics_spend_readiness(exclude_test: bool = True):
+def analytics_spend_readiness(exclude_test: bool = True, sport: SportFilter = None):
+    # T14930: `sport` is accepted (and validated) so the admin's global Sport pill never 422s
+    # here; the gate payload itself has no segment filters of any kind yet (not just sport).
     _require_admin()
     from ..services.analytics_spend_readiness import build_spend_readiness
 
@@ -2057,7 +2080,7 @@ def analytics_spend_readiness(exclude_test: bool = True):
 
 @router.get("/analytics/spend-readiness/gate/{key}")
 # T14910: one gate's Diagnose drawer (weekly, by build, by platform, by country), read on open.
-def analytics_spend_readiness_gate(key: str, exclude_test: bool = True):
+def analytics_spend_readiness_gate(key: str, exclude_test: bool = True, sport: SportFilter = None):
     _require_admin()
     from ..services.analytics_spend_readiness import build_gate_diagnosis, has_diagnosis
 
@@ -2916,7 +2939,7 @@ def analytics_user_actions(
 
 
 def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_alias="s", build=None,
-                          country=None):
+                          country=None, sport=None):
     where_parts = []
     params = []
     if origin:
@@ -2927,6 +2950,7 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_
         where_parts.append("s.signup_build = %s")
         params.append(build)
     _append_country(where_parts, params, country)
+    _append_sport(where_parts, params, sport)
     if acquired_from:
         where_parts.append("s.acquired_at >= %s")
         params.append(date.fromisoformat(acquired_from))

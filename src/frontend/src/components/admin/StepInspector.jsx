@@ -15,6 +15,9 @@ export const BREAKDOWN_TABS = [
   { value: 'build', label: 'Build' },
   { value: 'cohort_month', label: 'Signup month' },
   { value: 'country', label: 'Country' },
+  // T14930: "arrival sport (landing page)" -- the visitor's interest at arrival, not the
+  // profile's own sport.
+  { value: 'arrival_sport', label: 'Arrival sport' },
 ];
 const OUTCOMES = [
   { value: 'stuck', label: 'stuck' },

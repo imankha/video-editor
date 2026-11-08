@@ -24,15 +24,18 @@ export interface Props {
   trail?: { name: string; path: string }[]
   /** Nav item to mark as current. */
   current?: string
+  /** Set only by a per-sport page (T14930): the sport key filled into `utm_content`
+   * when the visit doesn't already have one (an ad's own value always wins). */
+  sport?: string
 }
 
-const { trail, current, ...base } = Astro.props
+const { trail, current, sport, ...base } = Astro.props
 ---
 
 <BaseLayout {...base}>
   <Header current={current} />
   {trail && trail.length > 0 && <Breadcrumbs trail={trail} />}
-  <main id="main">
+  <main id="main" data-sport={sport}>
     <slot />
   </main>
   <Footer />
@@ -41,12 +44,15 @@ const { trail, current, ...base } = Astro.props
     Carry attribution params across to the app (a different host), surviving
     a multi-page visit: T15000 writes a per-tab first-touch record on the
     FIRST page and merges it into every a[data-cta] href on every page after
-    that (see src/attribution.ts for the policy). Progressive enhancement:
+    that (see src/attribution.ts for the policy). T14930: a sport page also
+    fills `utm_content` with its sport key the first time one is seen, via the
+    `data-sport` attribute above (kept out of the module script's closure so
+    the script itself never changes per page). Progressive enhancement:
     without JS, or with storage blocked, the CTA still links correctly, it
     just loses the params.
   -->
   <script>
-    import { readFirstTouch, applyFirstTouch } from '../attribution'
+    import { readFirstTouch, applyFirstTouch, applyArrivalSport } from '../attribution'
 
     try {
       const record = readFirstTouch(
@@ -56,9 +62,11 @@ const { trail, current, ...base } = Astro.props
         window.location.pathname,
         window.sessionStorage,
       )
+      const sportKey = document.getElementById('main')?.dataset.sport || null
+      const withSport = sportKey ? applyArrivalSport(record, sportKey, window.sessionStorage) : record
       document.querySelectorAll<HTMLAnchorElement>('a[data-cta]').forEach((a) => {
         try {
-          a.href = applyFirstTouch(a.href, record)
+          a.href = applyFirstTouch(a.href, withSport)
         } catch {
           /* leave the href untouched */
         }

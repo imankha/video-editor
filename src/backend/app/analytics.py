@@ -811,6 +811,16 @@ def segment_has_country(cur) -> bool:
     return _country_column_present
 
 
+# T14930: the known arrival-sport keys `utm_content` can carry from a landing sport page
+# (src/landing/src/attribution.ts applyArrivalSport). MIRRORS the frontend's tagRegistry ids
+# (src/frontend/src/modes/annotate/constants/tagRegistry.js SUPPORTED_SPORTS) -- there is no
+# shared import between the two trees, so keep both lists in sync by hand. Any utm_content
+# NOT in this set (an ad's own value, or none) is the "unknown" bucket; never inferred.
+ARRIVAL_SPORT_KEYS = frozenset({
+    "soccer", "flag_football", "american_football", "basketball", "lacrosse",
+    "rugby", "volleyball", "hockey", "tennis", "baseball", "softball",
+})
+
 # XX is Cloudflare's "no country data": it fits the format but names no place.
 _COUNTRY_CODE = re.compile(r"[A-Z]{2}")
 _NO_COUNTRY_DATA = "XX"
