@@ -892,6 +892,21 @@ class DotaskCliTest(unittest.TestCase):
         manifest = json.loads((self.tasks_root / "waves" / group["wave_id"] / "manifest.json").read_text())
         self.assertEqual(manifest["tasks"][0]["status"], "completed")
 
+    def test_land_hands_red_ci_back_to_autoland_only_when_asked(self):
+        # T15330: autoland asks (fix_on_red) and gets CI_RED before any evidence; a person running
+        # --after-test by hand still gets the full report and a 0.
+        slug = "g-t1-red"
+        _checkout, _group, _head, gh_runs = self._build_group_checkout(slug, capture=False)
+        landing_root = self.root / "landing"
+        for fix_on_red, want in ((True, dotask_cli.CI_RED), (False, 0)):
+            with patch.object(dotask_cli, "LANDING_ROOT", landing_root), \
+                    patch.object(dotask_cli, "wait_for_ci", return_value="failure"), \
+                    patch.dict(os.environ, {"FAKE_GH_RUNS": str(gh_runs), "FAKE_GH_PR_EXISTS": "1"}), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                code = dotask_cli.land(SimpleNamespace(slug=slug, after_test=True, fix_on_red=fix_on_red))
+            self.assertEqual(code, want)
+            self.assertEqual((landing_root / "evidence" / slug / "evidence.json").exists(), not fix_on_red)
+
     def test_land_after_test_reuses_an_existing_pr_on_a_rerun(self):
         # A fix push after a red CI run means --after-test runs again for the same branch;
         # `gh pr create` then refuses ("already exists"). The landing must reuse that PR and
@@ -1102,7 +1117,7 @@ class ContainerDefaultsTest(unittest.TestCase):
         self.assertIn("export CHOKIDAR_USEPOLLING=true", stack)
 
 
-class AutolandTest(unittest.TestCase):
+class AutolandBase(unittest.TestCase):
     """verify -> fix -> verify until clean or out of rounds. Dispatches are faked: no model, no Docker."""
     TASK_TEXT = ("# T1: Fix the thing\n\n**Status:** WIP\n\n## Acceptance Criteria\n\n"
                  "- [ ] First\n- [x] Second\n\n## Context\n\nnothing\n")
@@ -1165,6 +1180,8 @@ class AutolandTest(unittest.TestCase):
     def _phases(self):
         return [phase for phase, _ in self.dispatches]
 
+
+class AutolandTest(AutolandBase):
     def test_a_large_group_is_verified_in_batches_and_only_the_last_runs_the_regression_pass(self):
         ids = [f"T{n}" for n in range(1, 5)]
         for task_id in ids[1:]:
@@ -1510,6 +1527,160 @@ class AutolandTest(unittest.TestCase):
         path = self.root / "t.md"
         path.write_text("## Solution\n- [ ] not this\n## Acceptance Criteria\n- [ ] a\n1. [x] b\n* [ ] c\nprose\n## After\n- [ ] no\n")
         self.assertEqual(dotask_cli.acceptance_count(path), 3)
+
+
+class StallGapsTest(AutolandBase):
+    """T15330: the seven ways headless groups stalled on 2026-11-07/08 and needed a person."""
+
+    def _fix_dispatch(self, on_fix):
+        """dispatch(): verifiers pop self.verdicts; a fix worker runs on_fix(instruction) -> finished."""
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            self.dispatches.append((phase, instruction))
+            if phase == "qa":
+                verdict = self.verdicts.pop(0)
+                verdict.setdefault("head", self.head)
+                verdict["head"] = self.head
+                (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
+                return True
+            return on_fix(instruction)
+        return dispatch
+
+    def _commit_fix(self, instruction):
+        self.head = f"{len(self.dispatches):040d}"
+        return True
+
+    # Gap 2: PRs #720, #722, #723 went red after a clean verdict and waited for a person.
+    def test_red_branch_ci_after_a_clean_verdict_goes_to_a_fix_round_then_lands(self):
+        self.verdicts = [self._verdict(), self._verdict()]
+        self.land.side_effect = [dotask_cli.CI_RED, 0]
+        report = "Run 7, failed jobs: backend-shard (2).\nFAILED tests/test_x.py::test_kpis"
+        with patch.object(dotask_cli, "dispatch", self._fix_dispatch(self._commit_fix)), \
+                patch.object(dotask_cli, "ci_failure_report", lambda branch, head: report):
+            self.assertEqual(self._run(), 0)
+        self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
+        self.assertEqual(self.land.call_count, 2)
+        self.assertTrue(all(c.args[0].fix_on_red for c in self.land.call_args_list))
+        self.assertIn("Branch CI failed", self.dispatches[1][1])
+        self.assertIn("test_x.py::test_kpis", self.dispatches[2][1])  # the re-check gets the failing tests
+        self.assertIn("CI_RED", self.status.read_text())
+
+    # Gap 3: g-t14940-1, a fixer disputed a flake and the loop stopped as VERIFY_BLOCKED.
+    def _dispute(self, instruction):
+        label = instruction.split("`## ", 1)[1].split(" progress`", 1)[0]
+        with self.status.open("a") as stream:
+            stream.write(f"t DISPUTED {label} T1:C1: also fails on origin/master; a timing flake\n")
+        return False
+
+    def test_a_disputed_finding_goes_to_a_fresh_verifier_with_the_fixers_evidence(self):
+        self.verdicts = [self._verdict(("fail", "pass")), self._verdict()]
+        with patch.object(dotask_cli, "dispatch", self._fix_dispatch(self._dispute)):
+            self.assertEqual(self._run(), 0)
+        self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
+        self.assertIn("also fails on origin/master; a timing flake", self.dispatches[2][1])
+        self.assertIn("deferring to neither side", self.dispatches[2][1])
+        self.land.assert_called_once()
+        self.assertNotIn("VERIFY_BLOCKED", self.status.read_text())
+        self.assertEqual(json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())["disputes"], [])
+
+    def test_a_dispute_the_fresh_verifier_upholds_goes_to_the_owner(self):
+        self.verdicts = [self._verdict(("fail", "pass")), self._verdict(("fail", "pass"))]
+        with patch.object(dotask_cli, "dispatch", self._fix_dispatch(self._dispute)):
+            self.assertEqual(self._run(), 1)
+        self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
+        self.land.assert_not_called()
+        self.assertIn("VERIFY_NEEDS_USER", self._last())
+        self.assertIn("T1:C1 (fixer: T1:C1: also fails on origin/master", self._last())
+
+    # Gap 6: npm churn and landing build logs read as "verifier changed the tree".
+    def test_tool_output_the_verifier_rewrote_is_put_back_and_the_verdict_stands(self):
+        self.verdicts = [self._verdict()]
+        self.dirty = " M src/frontend/package-lock.json\n M qa/landing-build.log"
+        restored = []
+        with patch.object(dotask_cli, "restore_tool_noise", lambda checkout, paths: restored.extend(paths)):
+            self.assertEqual(self._run(), 0)
+        self.land.assert_called_once()
+        self.assertEqual(restored, ["src/frontend/package-lock.json", "qa/landing-build.log"])
+
+    def test_a_real_edit_next_to_tool_output_still_blocks(self):
+        self.verdicts = [self._verdict()]
+        self.dirty = " M src/frontend/package-lock.json\n M src/thing.py"
+        with patch.object(dotask_cli, "restore_tool_noise", lambda checkout, paths: None):
+            self.assertEqual(self._run(), 1)
+        self.assertIn("src/thing.py", self._last())
+        self.assertNotIn("package-lock", self._last())
+
+    # Gap 5: an uncommitted auto-filed T15300 collided with a hand-filed id and was swept into a plan commit.
+    def _git_main_repo(self):
+        git(self.main_repo, "init", "-q", "-b", "master")
+        git(self.main_repo, "add", "-A")
+        git_c(self.main_repo, "commit", "-q", "-m", "base")
+
+    def _bug(self, title="Old menu glitch"):
+        return {"scope": "unrelated", "title": title, "steps": "open", "expected": "a", "actual": "b"}
+
+    def test_a_filed_bug_is_committed_alone_and_skips_ids_plan_already_uses(self):
+        self.plan.write_text(self.plan.read_text().replace("|---|---|\n", "|---|---|\n| T1240 | [x](elsewhere.md) |\n"))
+        self._git_main_repo()
+        (self.main_repo / "unrelated.txt").write_text("someone else's work")
+        with contextlib.redirect_stdout(io.StringIO()), \
+                patch.dict(os.environ, {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t.com",
+                                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.com"}):
+            self.assertEqual(dotask_cli.file_unrelated_bug(self._bug(), {"slug": "g"}, "abc"), "T1250")
+        log = subprocess.run(["git", "-C", str(self.main_repo), "log", "-1", "--name-only", "--format=%s"],
+                             capture_output=True, text=True, check=True).stdout
+        self.assertIn("T1250: file Old menu glitch", log)
+        self.assertEqual(sorted(log.split()[-2:]), ["docs/plans/PLAN.md", "docs/plans/tasks/T1250-old-menu-glitch.md"])
+        left = subprocess.run(["git", "-C", str(self.main_repo), "status", "--porcelain"],
+                              capture_output=True, text=True, check=True).stdout
+        self.assertEqual(left.strip(), "?? unrelated.txt")
+
+    def test_a_filed_bug_is_not_committed_over_someone_elses_plan_edit(self):
+        self._git_main_repo()
+        self.plan.write_text(self.plan.read_text() + "half-done edit\n")
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            task_id = dotask_cli.file_unrelated_bug(self._bug(), {"slug": "g"}, "abc")
+        self.assertIn("did not commit it (PLAN.md already had uncommitted edits)", err.getvalue())
+        count = subprocess.run(["git", "-C", str(self.main_repo), "rev-list", "--count", "HEAD"],
+                               capture_output=True, text=True, check=True).stdout.strip()
+        self.assertEqual(count, "1")
+        self.assertIn(task_id, self.plan.read_text())
+
+    # Gap 7: a relaunch while the first resume still ran gave two autolands on one checkout.
+    def test_a_second_driver_is_refused_while_the_first_lives_and_a_stale_lock_is_taken_over(self):
+        ran = []
+        lock = self.checkout / dotask_cli.RUN_LOCK
+        lock.write_text(json.dumps({"pid": os.getpid(), "since": "now"}))
+        err = io.StringIO()
+        with patch.object(dotask_cli, "resume", lambda args: ran.append(args.slug) or 0), \
+                contextlib.redirect_stderr(err):
+            with self.assertRaises(SystemExit):
+                dotask_cli.main(["resume", "g-t1-1"])
+            self.assertEqual(ran, [])
+            self.assertIn("already being driven by process", err.getvalue())
+            lock.write_text(json.dumps({"pid": 2 ** 31 - 2, "since": "then"}))  # no such process
+            self.assertEqual(dotask_cli.main(["resume", "g-t1-1"]), 0)
+        self.assertEqual(ran, ["g-t1-1"])
+        self.assertFalse(lock.exists())  # released on the way out
+        self.assertIn(dotask_cli.RUN_LOCK, (self.checkout / ".git" / "info" / "exclude").read_text())
+
+    def test_pid_alive(self):
+        self.assertTrue(dotask_cli.pid_alive(os.getpid()))
+        self.assertFalse(dotask_cli.pid_alive(2 ** 31 - 2))
+        self.assertFalse(dotask_cli.pid_alive(0))
+
+    # Gap 4: T14960:C4 needed T14930, which ran in another group (g-t15280-3).
+    def test_a_criterion_naming_a_task_that_has_not_landed_is_warned_about(self):
+        tasks = self.main_repo / "docs" / "plans" / "tasks"
+        (tasks / "T1-fix-the-thing.md").write_text(self.TASK_TEXT.replace(
+            "- [ ] First", "- [ ] First, using T2's sport parameter and T3's table and T1 itself"))
+        (tasks / "T2-sport.md").write_text("# T2: sport\n\n**Status:** WIP\n")
+        (tasks / "T3-table.md").write_text("# T3: table\n\n**Status:** STAGING\n")
+        with patch.object(dotask_cli, "live_groups", lambda: [{"slug": "g-t2-1", "tasks": ["T2"]}]):
+            lines = dotask_cli.criteria_waiting_elsewhere(["T1"])
+            self.assertEqual(len(lines), 1)
+            self.assertIn("T1:C1 names T2 (WIP, running in live group g-t2-1)", lines[0])
+            self.assertEqual(dotask_cli.criteria_waiting_elsewhere(["T1", "T2"]), [])
 
 
 class DispatchTurnCapTest(unittest.TestCase):

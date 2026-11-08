@@ -108,6 +108,11 @@ the refusal names each task and file and prints the command for the clear tasks;
 instead re-run with `--allow-overlap`, which starts the group and has the worker rebase on
 master before PUSHREADY so a conflict surfaces in its own container, not in the PR.
 
+`start` also warns (never refuses) about an acceptance criterion that names a task outside the group
+which has not landed (status not STAGING/DONE), with the live group running it if any: its verifier may
+not be able to prove that criterion until the other task merges (T14960:C4 needed T14930 on g-t15280-3,
+2026-11-08). Relay the warning; the user can add the task to the group, wait, or re-scope the criterion.
+
 ## Test guide (required with every localhost link)
 
 A bare URL is not a handoff (user feedback, 2026-10-09: on T12100 the user had to ask what
@@ -141,18 +146,35 @@ User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `au
    runs out of turns is restarted up to twice with a handoff note (below). Then back to step 1, where the
    verifier re-checks only what failed plus the regression pass; earlier passes carry forward
    (`carried_from`). A restarted `autoland` resumes at that point.
+   A fix worker that believes a finding is wrong (a flake, not this branch's, a misread criterion) ends on
+   `DISPUTED <label> <finding>: <evidence>` instead of working around it. The dispute is not a stop: the
+   next verifier gets the fixer's evidence and re-examines the finding fresh (one that also fails on
+   origin/master becomes an `unrelated` bug). Only a finding that verifier still upholds stops the loop,
+   with `VERIFY_NEEDS_USER` naming both sides (g-t14940-1, 2026-11-08, needed the owner for a flake).
 4. Clean verdict: `VERIFY_PASS`, then push, PR, CI, evidence (`land --after-test`). Merging stays with the user.
+   Red Branch CI on that head is a finding too: `CI_RED`, and the failed jobs and the tail of their logs
+   become a `group` bug for a fix round, then the re-check and a new push to the same PR (PRs #720, #722,
+   #723 waited on a person for this, 2026-11-08). It counts against `MAX_FIX_ROUNDS`.
 
 The loop stops at `MAX_FIX_ROUNDS` (3) with `VERIFY_EXHAUSTED`. Anything it cannot trust stops it with
 `VERIFY_BLOCKED` and never counts as a pass: a missing verdict, a verdict for another HEAD, one covering
 fewer criteria than the task file has, a verifier that changed the tree, a fix that committed nothing.
+What the verifier's own tooling rewrites (`package-lock.json` from `npm install`, files under `qa/` from a
+landing build) is put back with `git checkout` and is not "changed the tree"; any other edit still is.
+
+One driver per group: `resume` and `autoland` hold `.dotask-run.lock` (the process id) for the whole run,
+and a second launch for the same group is refused while that process lives; a lock whose process is gone
+is taken over. Two autolands once raced on one checkout after a launch that looked dead was relaunched.
+`task.sh drive` retries a failed `claude auth status` up to 3 times (20 s apart, re-seeding credentials
+each time) before `AUTH_DEAD`; every AUTH_DEAD seen so far cleared on a plain resume.
 A `human` criterion (something no automation can observe) stops before the push with `VERIFY_NEEDS_USER`,
 unless the task file records the owner's ruling to check it on staging (`**<date> (owner ruling)**: C2 ...
 verified on staging after merge`, or a ruling line right under the criterion): then it is answered, the
 push goes ahead and the PR body lists it under "Check on staging after merge" (`staging_checks` on the
-group). `unrelated` bugs are filed as TODO tasks in PLAN.md (left uncommitted, like `start`'s status
-flips) and do not block. "No new bugs" means none found by these checks. A red CI on the PR is reported,
-not looped.
+group). `unrelated` bugs are filed as TODO tasks in PLAN.md and do not block. The filing is committed at
+once to master in the main checkout (the task file and its PLAN row only, not pushed), so no one else takes
+the id; if PLAN.md already held someone's uncommitted edit, it is left uncommitted with a warning. "No
+new bugs" means none found by these checks.
 
 **Running out of turns is not a stop.** A worker dispatch (build or fix round) whose run record says
 `budget_stop` left its work uncommitted; the loop appends a `## <task> handoff` section to
