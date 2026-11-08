@@ -2163,7 +2163,8 @@ def _campaign_name_join(cur, origin_col: str = "s.origin") -> tuple[str, str]:
     campaign). Migration-window guard: before v038 runs there is no campaigns
     table, so every row reads NULL (logged) instead of the admin view 500ing."""
     cur.execute("SELECT to_regclass('campaigns') AS t")
-    if cur.fetchone()["t"] is None:
+    row = cur.fetchone()
+    if row is None or row["t"] is None:
         logger.error("[Admin] campaigns table missing (v038 not applied; run POST /api/admin/migrate-postgres)")
         return "NULL::text AS campaign_name", ""
     return "camp.name AS campaign_name", f"LEFT JOIN campaigns camp ON camp.id = {origin_col}"
