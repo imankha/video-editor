@@ -201,11 +201,10 @@ def record_upload_failure(
             from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
             event = "clip_upload_failed" if kind == "clip" else "game_upload_failed"
             # T14940: only game_upload_failed is in the sport-tag scope.
-            context = {SPORT_PROFILE_ID_CONTEXT_KEY: profile_id} if event == "game_upload_failed" and profile_id else None
-            record_milestone(
-                resolved_user_id, event, context=context,
-                reason=MILESTONE_REASON_BY_UPLOAD_REASON[reason],
-            )
+            milestone_kwargs = {"reason": MILESTONE_REASON_BY_UPLOAD_REASON[reason]}
+            if event == "game_upload_failed" and profile_id:
+                milestone_kwargs["context"] = {SPORT_PROFILE_ID_CONTEXT_KEY: profile_id}
+            record_milestone(resolved_user_id, event, **milestone_kwargs)
 
         logger.error(
             "[UPLOAD_FAILURE] kind=%s stage=%s reason=%s terminal=%s origin=%s "
