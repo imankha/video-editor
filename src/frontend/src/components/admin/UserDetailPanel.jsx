@@ -239,7 +239,9 @@ export function UserDetailPanel({ data, onClose }) {
             <div>
               <h3 className="text-white font-medium text-lg">{data.email}</h3>
               <div className="text-gray-400 text-xs mt-0.5">
-                <OriginLabel origin={data.origin} campaignName={data.campaign_name} /> · Joined {data.acquired_at || '--'} · {data.session_count} sessions
+                <OriginLabel origin={data.origin} campaignName={data.campaign_name} />
+                {data.landing_path && <> · Landed on {data.landing_path}</>}
+                {' '}· Joined {data.acquired_at || '--'} · {data.session_count} sessions
                 {data.last_active_at && ` · Last active ${new Date(data.last_active_at).toLocaleString()}`}
               </div>
             </div>

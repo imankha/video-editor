@@ -44,6 +44,7 @@ from .v040_sweep_candidate_index import V040SweepCandidateIndex
 from .v041_ip_rate_events import V041IpRateEvents
 from .v042_upload_observability import V042UploadObservability
 from .v043_user_segments_country import V043UserSegmentsCountry
+from .v044_user_segments_landing_path import V044UserSegmentsLandingPath
 
 MIGRATIONS = [
     V001Baseline(),
@@ -89,6 +90,7 @@ MIGRATIONS = [
     V041IpRateEvents(),
     V042UploadObservability(),
     V043UserSegmentsCountry(),
+    V044UserSegmentsLandingPath(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL

@@ -10,7 +10,7 @@
 // Every query param captureCampaignParams reads. editorStore keeps these through its
 // module-load canonicalization, which runs before App can read them (T15220).
 export const CAMPAIGN_PARAMS = [
-  'ref', 'sport', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'lref',
+  'ref', 'sport', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'lref', 'lp',
   'fbclid', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'sclid', 'ScCid', 'epik', 'rdt_cid',
 ];
 
@@ -53,6 +53,11 @@ export function captureCampaignParams(search, referrer, hostname) {
   else if (params.has('epik'))                                                 click_source = 'pinterest';
   else if (params.has('rdt_cid'))                                              click_source = 'reddit';
 
+  // T15010: the landing page that converted (relayed by the landing as `lp=`). Not ad
+  // attribution -- captured even with no other signal, so a plain organic landing hop
+  // still records which page brought the sign-up. Backend re-validates before storing.
+  const lp = params.get('lp');
+
   // T7910: external referrer hint (hostname ONLY — never query strings/paths).
   // Prefer `lref`, the original external host the landing relays across the
   // landing->app hop (PageLayout.astro); otherwise fall back to our own
@@ -71,7 +76,7 @@ export function captureCampaignParams(search, referrer, hostname) {
   // T13980: ANY attribution field, not just ref/utm_campaign: an admin campaign
   // id may survive a platform's link rewrite only in utm_source/content/term.
   if (ref || utm_source || utm_medium || utm_campaign || utm_content || utm_term
-      || click_source || referrer_host) {
+      || click_source || referrer_host || lp) {
     const data = {};
     if (country)      data.country = country;
     if (ref)          data.ref = ref;
@@ -83,6 +88,7 @@ export function captureCampaignParams(search, referrer, hostname) {
     if (utm_term)     data.utm_term = utm_term;
     if (click_source) data.click_source = click_source;
     if (referrer_host) data.referrer_host = referrer_host;
+    if (lp)           data.landing_path = lp;
     sessionStorage.setItem('campaignParams', JSON.stringify(data));
   }
 }

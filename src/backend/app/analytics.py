@@ -811,6 +811,23 @@ def segment_has_country(cur) -> bool:
     return _country_column_present
 
 
+# T15010: sticky once seen, like _signup_build_column_present / _country_column_present.
+_landing_path_column_present = False
+
+
+def segment_has_landing_path(cur) -> bool:
+    """Migration-window guard: v044 adds user_segments.landing_path, and Postgres
+    migrations run after deploy. Until then the signup INSERT must not name the column."""
+    global _landing_path_column_present
+    if not _landing_path_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_segments' AND column_name = 'landing_path'"
+        )
+        _landing_path_column_present = cur.fetchone() is not None
+    return _landing_path_column_present
+
+
 # T14930: the known arrival-sport keys `utm_content` can carry from a landing sport page
 # (src/landing/src/attribution.ts applyArrivalSport). MIRRORS the frontend's tagRegistry ids
 # (src/frontend/src/modes/annotate/constants/tagRegistry.js SUPPORTED_SPORTS) -- there is no
@@ -843,6 +860,7 @@ def create_user_segment(
     utm_term: str | None = None,
     click_source: str | None = None,
     country: str | None = None,
+    landing_path: str | None = None,
 ):
     try:
         with get_pg() as conn:
@@ -871,6 +889,15 @@ def create_user_segment(
                     "POST /api/admin/migrate-postgres) -- segment for %s written without its country",
                     user_id,
                 )
+            if segment_has_landing_path(cur):
+                columns.append("landing_path")
+                values.append(landing_path)
+            else:
+                logger.error(
+                    "[Analytics] user_segments.landing_path missing (v044 not applied; run "
+                    "POST /api/admin/migrate-postgres) -- segment for %s written without its landing_path",
+                    user_id,
+                )
             cur.execute(
                 f"""INSERT INTO user_segments ({", ".join(columns)})
                    VALUES ({", ".join(["%s"] * len(values))})
@@ -895,6 +922,8 @@ def create_user_segment(
 # (privacy.delete_account, delete_user.py, copy_user_between_envs.py).
 # T14000: signup_build / signup_commit are deploy identifiers, not personal data,
 # so they are KEPT too (the Builds dimension still counts a deleted account).
+# T15010: landing_path is a page class, not identity, so it is KEPT too (owner ruling,
+# 2026-11-07) -- deliberately NOT in this strip list.
 _DEIDENTIFY_SEGMENT_COLUMNS = (
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
     "click_source", "current_session_start", "last_active_at",

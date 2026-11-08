@@ -28,7 +28,7 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.analytics import _determine_origin, close_session, create_user_segment, record_milestone, update_session
 from app.database import USER_DATA_BASE
@@ -196,6 +196,22 @@ def _reset_test_account(user_id: str, email: str) -> None:
     logger.info(f"[Auth] Cleared auth DB records for {user_id}")
 
 
+# T15010: the landing page that converted (relayed as `lp=` by the landing's
+# attribution.ts, whitelisted into campaignParams.landing_path by the frontend). Dropped
+# (never 4xx) when it isn't a bare app-relative path -- an ad platform's link rewrite or a
+# tampered value must never block a sign-up.
+_LANDING_PATH_RE = re.compile(r"^/[a-zA-Z0-9/_-]*$")
+
+
+def _clean_landing_path(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if len(value) <= 120 and _LANDING_PATH_RE.fullmatch(value):
+        return value
+    logger.warning(f"[Auth] dropped invalid landing_path: {value!r}")
+    return None
+
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
@@ -309,6 +325,12 @@ class GoogleAuthRequest(BaseModel):
     click_source: str | None = None
     referrer_host: str | None = None  # T7910: external referrer hostname (hint, hostname only)
     country: str | None = None  # T15100: edge country hint; create_user_segment validates it
+    landing_path: str | None = None  # T15010: landing page that converted
+
+    @field_validator("landing_path")
+    @classmethod
+    def _validate_landing_path(cls, v):
+        return _clean_landing_path(v)
 
 
 class AuthResponse(BaseModel):
@@ -489,6 +511,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             utm_term=body.utm_term,
             click_source=body.click_source,
             country=body.country,
+            landing_path=body.landing_path,
         )
         await _send_welcome_email(user_id, email)
 
@@ -660,6 +683,12 @@ class VerifyOtpRequest(BaseModel):
     click_source: str | None = None
     referrer_host: str | None = None  # T7910: external referrer hostname (hint, hostname only)
     country: str | None = None  # T15100: edge country hint; create_user_segment validates it
+    landing_path: str | None = None  # T15010: landing page that converted
+
+    @field_validator("landing_path")
+    @classmethod
+    def _validate_landing_path(cls, v):
+        return _clean_landing_path(v)
 
 
 @router.post("/send-otp")
@@ -799,6 +828,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             utm_term=body.utm_term,
             click_source=body.click_source,
             country=body.country,
+            landing_path=body.landing_path,
         )
         await _send_welcome_email(user_id, email)
 

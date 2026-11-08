@@ -2011,7 +2011,7 @@ def analytics_journey_map(
 # when the breakdown tab changes. Reads Postgres only except the retry-burst sample.
 def analytics_journey_step(
     stage: str,
-    by: str = Query("platform", pattern="^(platform|origin|build|cohort_month|country|arrival_sport)$"),
+    by: str = Query("platform", pattern="^(platform|origin|build|cohort_month|country|arrival_sport|landing_path)$"),
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
     origin: str = Query("all"),
@@ -2736,8 +2736,13 @@ def analytics_journey(user_id: str):
             raise HTTPException(status_code=404, detail="User not found")
 
         name_select, name_join = _campaign_name_join(cur)
+        # T15010: landing_path probed like signup_build/country -- this page loads
+        # on every admin user click, so it must not 500 before v044 has run.
+        from ..analytics import segment_has_landing_path
+        landing_path_select = "s.landing_path" if segment_has_landing_path(cur) else "NULL::text AS landing_path"
         cur.execute(f"""
-            SELECT s.origin, {name_select}, s.referrer_id, s.acquired_at, s.last_active_at, s.created_at
+            SELECT s.origin, {name_select}, s.referrer_id, s.acquired_at, s.last_active_at, s.created_at,
+                   {landing_path_select}
             FROM user_segments s {name_join} WHERE s.user_id = %s
         """, (user_id,))
         seg = cur.fetchone()
@@ -2854,6 +2859,7 @@ def analytics_journey(user_id: str):
         "email": user_row["email"],
         "origin": seg["origin"],
         "campaign_name": seg["campaign_name"],
+        "landing_path": seg["landing_path"],
         "acquired_at": str(seg["acquired_at"]) if seg["acquired_at"] else None,
         "milestones": milestones,
         "session_count": session_count,

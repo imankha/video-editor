@@ -101,7 +101,7 @@ export function readFirstTouch(
   const record: FirstTouchRecord = {
     params,
     lref: computeLref(referrer, hostname),
-    lp: pathname,
+    lp: pathname.toLowerCase().slice(0, 120),
     landed_at: new Date().toISOString(),
   }
 
@@ -146,6 +146,9 @@ export function applyFirstTouch(href: string, record: FirstTouchRecord | null): 
     }
     if (record.lref && !url.searchParams.has('lref')) {
       url.searchParams.set('lref', record.lref)
+    }
+    if (record.lp && !url.searchParams.has('lp')) {
+      url.searchParams.set('lp', record.lp)
     }
     return url.toString()
   } catch {

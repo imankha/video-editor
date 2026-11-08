@@ -104,3 +104,19 @@ test('an ad utm_content wins over the arrival sport', () => {
 test('applyArrivalSport is a no-op without a record', () => {
   assert.equal(applyArrivalSport(null, 'hockey', memoryStore()), null)
 })
+
+// T15010: the landing page that converted rides to the app as `lp=`.
+test('applyFirstTouch relays lp as a query param', () => {
+  const store = memoryStore()
+  const record = readFirstTouch('', '', 'reelballers.com', '/works-with/trace', store)
+  const href = applyFirstTouch('https://app.reelballers.com/signup', record)
+  assert.equal(new URL(href).searchParams.get('lp'), '/works-with/trace')
+})
+
+test('lp is lowercased and capped at 120 characters', () => {
+  const store = memoryStore()
+  const longPath = '/' + 'A'.repeat(200)
+  const record = readFirstTouch('', '', 'reelballers.com', longPath, store)
+  assert.equal(record.lp.length, 120)
+  assert.equal(record.lp, longPath.toLowerCase().slice(0, 120))
+})

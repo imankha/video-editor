@@ -293,6 +293,11 @@ CREATE TABLE IF NOT EXISTS user_segments (
     signup_commit TEXT,
     -- T15100 (v043): ISO alpha-2 country the edge saw at signup. NULL = unknown.
     country TEXT,
+    -- T15010 (v044): the landing page (app-relative pathname, lowercased, max 120 chars)
+    -- that first brought this visit, relayed by the landing's attribution.ts as `lp=`.
+    -- A page class, not identity -- kept on account deletion (not in
+    -- _DEIDENTIFY_SEGMENT_COLUMNS). NULL = direct app arrival, or signed up before capture.
+    landing_path TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);

@@ -277,6 +277,39 @@ def _bucket_arrival_sport(utm_content: str | None) -> str:
     return utm_content if utm_content in ARRIVAL_SPORT_KEYS else "unknown"
 
 
+# T15010: landing_path page classes (design step 5). Mirrors the landing's own page
+# structure (src/landing/src/data/sports.ts slugs, src/landing/src/pages/{works-with,vs,
+# guides}/, for-clubs/for-coaches/for-parents) by hand -- no shared import between the
+# two trees. A path that matches none of these is "other", never inferred further.
+_LANDING_PATH_AUDIENCE_PAGES = frozenset({"/for-clubs", "/for-coaches", "/for-parents"})
+_LANDING_PATH_SPORT_SLUGS = frozenset({
+    "soccer", "basketball", "football", "flag-football", "baseball", "softball",
+    "volleyball", "lacrosse", "hockey", "rugby", "tennis",
+})
+
+
+def _bucket_landing_path(landing_path: str | None) -> str:
+    """The step inspector's landing_path breakdown groups by page CLASS, not the exact
+    path (small N per exact path otherwise). NULL (direct app arrival, or signed up before
+    T15010) is the explicit 'unknown' bucket -- never inferred."""
+    if not landing_path:
+        return "unknown"
+    if landing_path == "/":
+        return "home"
+    if landing_path.startswith("/works-with/"):
+        return "works-with"
+    if landing_path.startswith("/vs/"):
+        return "vs"
+    if landing_path.startswith("/guides/"):
+        return "guides"
+    if landing_path in _LANDING_PATH_AUDIENCE_PAGES:
+        return "audience"
+    first_segment = landing_path[1:].split("/", 1)[0]
+    if first_segment in _LANDING_PATH_SPORT_SLUGS:
+        return "sport"
+    return "other"
+
+
 def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from: date | None,
                    d_to: date, origin: str, build: int | None, platform: str | None, excl: str,
                    window_days: int, inactive_days: int, country: str | None = None,
@@ -386,6 +419,8 @@ BREAKDOWN_DIMENSIONS = {
     "country": "country",
     # T14930: bucketed by fetch_step_users (with_sport), never the raw utm_content column.
     "arrival_sport": "arrival_sport",
+    # T15010: bucketed by fetch_step_users (with_landing_path), never the raw path column.
+    "landing_path": "landing_path",
 }
 # Side-action lift is shown only when BOTH groups have at least this many users with A.
 MIN_LIFT_USERS = 5
@@ -613,11 +648,13 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
                      origin: str, build: int | None, platform: str | None, excl: str,
                      now: datetime, window_days: int, inactive_days: int,
                      with_country: bool = False, country: str | None = None,
-                     with_sport: bool = False, sport: str | None = None) -> list[dict]:
+                     with_sport: bool = False, sport: str | None = None,
+                     with_landing_path: bool = False) -> list[dict]:
     """Every user who reached stage `s_rank` (furthest >= s_rank, so a user who skipped it
     counts) under the map's filters, classified. Same population joins as
-    `build_patterns_sql`, but one row per user. `with_country`/`with_sport` select their
-    column only for the tab that reads it (T14930 mirrors T15100's `with_country`)."""
+    `build_patterns_sql`, but one row per user. `with_country`/`with_sport`/
+    `with_landing_path` select their column only for the tab that reads it (T14930 mirrors
+    T15100's `with_country`; T15010 mirrors both)."""
     cols, _mask, _furthest_at = _ladder_sql(ladder, "fa_")
     conds = ["s.acquired_at <= %(d_to)s"]
     params: dict[str, Any] = {"d_to": d_to, "actions": sorted({a for st in ladder for a in st["actions"]})}
@@ -642,9 +679,10 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
     stage_cols = ",\n                   ".join(cols)
     country_col = ", s.country" if with_country else ""
     sport_col = ", s.utm_content" if with_sport else ""
+    landing_path_col = ", s.landing_path" if with_landing_path else ""
     sql = f"""
         WITH per_user AS (
-            SELECT s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at{country_col}{sport_col},
+            SELECT s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at{country_col}{sport_col}{landing_path_col},
                    (array_agg(a.platform ORDER BY a.first_at NULLS LAST))[1] AS platform,
                    to_char(s.acquired_at, 'YYYY-MM') AS signup_month,
                    {stage_cols}
@@ -652,7 +690,7 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
             LEFT JOIN users u ON u.user_id = s.user_id
             LEFT JOIN user_actions a ON a.user_id = s.user_id AND a.action = ANY(%(actions)s)
             WHERE {" AND ".join(conds)}
-            GROUP BY s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at{country_col}{sport_col}
+            GROUP BY s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at{country_col}{sport_col}{landing_path_col}
         )
         SELECT * FROM per_user WHERE {" AND ".join(outer)}
     """
@@ -663,6 +701,8 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
         row["platform"] = row["platform"] or "unknown"
         if with_sport:
             row["arrival_sport"] = _bucket_arrival_sport(row.pop("utm_content"))
+        if with_landing_path:
+            row["landing_path"] = _bucket_landing_path(row.pop("landing_path"))
         row["firsts"] = [row.pop(f"fa_{i}") for i in range(len(ladder))]
         users.append(classify_user(row, ladder, now, window_days, inactive_days))
     return users
@@ -721,7 +761,8 @@ def build_step(cur, stage: str, by: str, *, d_from: date | None, d_to: date, ori
                              build=build, platform=platform, excl=excl, now=now,
                              window_days=window_days, inactive_days=inactive_days,
                              with_country=by == "country", country=country,
-                             with_sport=by == "arrival_sport" or sport is not None, sport=sport)
+                             with_sport=by == "arrival_sport" or sport is not None, sport=sport,
+                             with_landing_path=by == "landing_path")
     side = fetch_side_actions(cur, [u["user_id"] for u in users])
     emails = {u["user_id"]: u["email"] for u in users}
     return {

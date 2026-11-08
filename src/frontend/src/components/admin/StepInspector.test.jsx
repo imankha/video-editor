@@ -108,6 +108,13 @@ describe('StepInspector (T14020)', () => {
     expect(onChangeBy).toHaveBeenCalledWith('country');
   });
 
+  it('offers a Landing page breakdown tab (T15010)', () => {
+    const onChangeBy = vi.fn();
+    show({ onChangeBy });
+    fireEvent.click(screen.getByRole('button', { name: 'Landing page' }));
+    expect(onChangeBy).toHaveBeenCalledWith('landing_path');
+  });
+
   it('instead carries the correlation label; why lists failures, impressions, bursts', () => {
     show();
     expect(screen.getByTestId('step-instead').textContent).toContain('correlation, not cause');

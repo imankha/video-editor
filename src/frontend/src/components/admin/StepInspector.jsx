@@ -18,6 +18,9 @@ export const BREAKDOWN_TABS = [
   // T14930: "arrival sport (landing page)" -- the visitor's interest at arrival, not the
   // profile's own sport.
   { value: 'arrival_sport', label: 'Arrival sport' },
+  // T15010: the landing page that converted, bucketed by page class (sport/works-with/
+  // vs/guides/audience/home/other), "unknown" for direct app arrivals and pre-T15010 signups.
+  { value: 'landing_path', label: 'Landing page' },
 ];
 const OUTCOMES = [
   { value: 'stuck', label: 'stuck' },
