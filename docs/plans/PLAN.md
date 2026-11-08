@@ -1312,6 +1312,12 @@ features cut, sample reels, FAQ) deferred to For Launch. Pricing dropped (freemi
 
 ---
 
+### Bugs found by /dotask verify
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|---|---|---|---|---|---|---|---|
+| T15300 | [pg_conn test fixture can silently drop and empty the shared dev Postgres analytics tables](tasks/T15300-pg-conn-test-fixture-can-silently.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
+
 ## Environment Configuration
 
 ### Credentials (Found)
