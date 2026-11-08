@@ -190,6 +190,60 @@ class TestHonesty:
             aj.annotate_coverage([{}], [{"key": "q", "actions": ["nope"]}],
                                  date(2026, 1, 1), date(2026, 2, 1), {})
 
+    def test_cohort_fold_attaches_to_every_node_at_the_partial_cutoff(self):
+        # T15230: a partial end's cohort is computed over ALL nodes (not just the partial one),
+        # so the other end of a transition can read its reached-at-cutoff too.
+        nodes = [{"key": "x"}, {"key": "y"}, {"key": "z"}]
+        ladder = [
+            {"key": "x", "actions": []},
+            {"key": "y", "actions": ["new_a"]},
+            {"key": "z", "actions": ["old_b"]},
+        ]
+        instr = {"new_a": "2026-08-26", "old_b": "2026-01-01"}
+        cohort_payload = [{"reached": 10, "continued": 10, "in_window": 0, "stuck": 0, "gone": 0, "judged": 10},
+                          {"reached": 7, "continued": 5, "in_window": 0, "stuck": 1, "gone": 1, "judged": 7},
+                          {"reached": 7, "continued": 0, "in_window": 0, "stuck": 0, "gone": 7, "judged": 7}]
+        calls = []
+
+        def cohort_fold(cutoff):
+            calls.append(cutoff)
+            return cohort_payload
+
+        aj.annotate_coverage(nodes, ladder, date(2026, 5, 1), date(2026, 10, 1), instr,
+                             cohort_fold=cohort_fold)
+        assert calls == [date(2026, 8, 26)]
+        for node in nodes:
+            assert node["cohort_at"]["2026-08-26"] == cohort_payload[nodes.index(node)]
+
+    def test_cohort_fold_called_once_per_distinct_cutoff(self):
+        nodes = [{"key": "x"}, {"key": "y"}, {"key": "z"}]
+        ladder = [
+            {"key": "x", "actions": []},
+            {"key": "y", "actions": ["new_a"]},
+            {"key": "z", "actions": ["new_a"]},  # same instrumentation date as y
+        ]
+        instr = {"new_a": "2026-08-26"}
+        calls = []
+
+        def cohort_fold(cutoff):
+            calls.append(cutoff)
+            return [{"reached": 0, "continued": 0, "in_window": 0, "stuck": 0, "gone": 0, "judged": 0}] * 3
+
+        aj.annotate_coverage(nodes, ladder, date(2026, 5, 1), date(2026, 10, 1), instr,
+                             cohort_fold=cohort_fold)
+        assert calls == [date(2026, 8, 26)]
+
+    def test_no_data_end_never_gets_a_cohort(self):
+        nodes = [{"key": "x"}, {"key": "y"}]
+        ladder = [{"key": "x", "actions": []}, {"key": "y", "actions": ["too_new"]}]
+        instr = {"too_new": "2026-12-01"}
+        calls = []
+        aj.annotate_coverage(nodes, ladder, date(2026, 5, 1), date(2026, 10, 1), instr,
+                             cohort_fold=lambda cutoff: calls.append(cutoff))
+        assert nodes[1]["no_data"] is True
+        assert "cohort_at" not in nodes[1]
+        assert calls == []
+
 
 # ---------------------------------------------------------------------------
 # T14020: Step inspector folds (timing, Wilson, breakdown, lift, why)

@@ -147,6 +147,24 @@ describe('NextStepPanel: biggest leak (T14920:C1)', () => {
     panel({ journey: null });
     expect(screen.getByTestId('next-step-leak').textContent).toMatch(/Loading journey/);
   });
+
+  it('judges a partial step over its cohort and projects the loss over users entering it (T15230)', () => {
+    // framed->exported: exported is partial (too new for the whole window), but its cohort
+    // since 2026-11-04 clears the floor at 60.00% (18 of 30) -- yellow, not partial. The loss
+    // is PROJECTED over the full-window users entering framed (1000), not the cohort's 30.
+    const nodes = ladder(1000);
+    nodes.find(n => n.key === 'framed').cohort_at = { '2026-11-04': { reached: 30, in_window: 0 } };
+    const exported = nodes.find(n => n.key === 'exported');
+    exported.partial_from = '2026-11-04';
+    exported.cohort_at = { '2026-11-04': { reached: 18, in_window: 0 } };
+    panel({ journey: journeyOf(nodes) });
+    const leak = screen.getByTestId('next-step-leak');
+    expect(leak.getAttribute('data-key')).toBe('framed->exported');
+    expect(leak.textContent).toContain('about 400 lost (projected from 18 of 30 since 2026-11-04)');
+    const chip = screen.getByTestId('next-step-leak-chip');
+    expect(chip.getAttribute('data-rag')).toBe('yellow');
+    expect(chip.textContent).toBe('60.00% of 30 since 2026-11-04, target 65.00%');
+  });
 });
 
 describe('NextStepPanel: do next (T14920:C1, C2)', () => {

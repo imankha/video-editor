@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
   JOURNEY_TARGETS, END_TO_END_KEY, TERMINAL_STAGE, SMALL_N_FLOOR,
   ragFor, journeyTransitions, endToEndTransition, stageTransition, worstTransition, foldedMark,
+  transitionChipText,
 } from './journeyTargets';
 
 // The real ladder, read from the backend so a new stage without a target fails here.
@@ -119,6 +120,26 @@ describe('journeyTransitions (T14900)', () => {
     expect(partialEnd['frame_opened->framed'].rag).toBe('green');
     const noData = byKey(ladderNodes(100, {}, { framed: { no_data: true } }));
     expect(noData['frame_opened->framed'].rag).toBe('partial');
+  });
+
+  it('judges a partial end over its own cohort instead of giving up (T15230)', () => {
+    const nodes = ladderNodes(500, {}, {
+      framed: { cohort_at: { '2026-11-04': { reached: 30, in_window: 0 } } },
+      exported: { partial_from: '2026-11-04', cohort_at: { '2026-11-04': { reached: 18, in_window: 0 } } },
+    });
+    const t = byKey(nodes)['framed->exported'];
+    expect(t).toMatchObject({ k: 18, n: 30, pct: 60, rag: 'yellow', since: '2026-11-04' });
+    expect(transitionChipText(t)).toBe('60.00% of 30 since 2026-11-04, target 65.00%');
+  });
+
+  it('stays partial when the cohort itself is under the floor, never over one old sign-up', () => {
+    const nodes = ladderNodes(500, {}, {
+      framed: { cohort_at: { '2026-11-04': { reached: 19, in_window: 0 } } },
+      exported: { partial_from: '2026-11-04', cohort_at: { '2026-11-04': { reached: 10, in_window: 0 } } },
+    });
+    const t = byKey(nodes)['framed->exported'];
+    expect(t.rag).toBe('partial');
+    expect(t.since).toBe(null);
   });
 
   it('keeps partial ahead of grey when both apply', () => {
