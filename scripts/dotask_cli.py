@@ -16,6 +16,7 @@ Commands (see scripts/dotask.sh, the thin bash entry point):
   python scripts/dotask_cli.py nextup [--limit N]          # TODO tasks bundled by shared code area
 """
 import argparse
+import contextlib
 import datetime as dt
 import json
 import os
@@ -228,6 +229,30 @@ def task_sh(*args, check=True, capture_output=False):
 
 
 # --- start ---------------------------------------------------------------------
+def criteria_waiting_elsewhere(task_ids):
+    """One line per acceptance criterion that names a task outside this group which has not landed
+    (status not STAGING or DONE): its verifier may find the criterion unprovable until that task merges.
+    T14960:C4 needed T14930's sport parameter while T14930 ran in another group, and the group stalled on
+    it (g-t15280-3, 2026-11-08). A warning, not a refusal: the criterion may only mention the task."""
+    lines = []
+    live = {t: g.get("slug") for g in live_groups() for t in g.get("tasks", [])}
+    for task_id in task_ids:
+        for number, text in enumerate(acceptance_items(resolve_task_file(task_id)), start=1):
+            for other in dict.fromkeys(re.findall(r"\bT\d+\b", text)):
+                if other in task_ids:
+                    continue
+                files = [m for m in (MAIN_REPO / "docs" / "plans" / "tasks").rglob(f"{other}-*.md")
+                         if not m.name.endswith("-design.md")]
+                status = task_status(files[0]) if len(files) == 1 else None
+                if status is None or status.split()[0] in ("STAGING", "DONE"):
+                    continue
+                where = f", running in live group {live[other]}" if other in live else ""
+                lines.append(f"{task_id}:C{number} names {other} ({status}{where}), which has not landed; "
+                             f"its verifier may not be able to prove it until {other} merges. Add {other} to "
+                             "this group, wait for it, or re-scope the criterion.")
+    return lines
+
+
 def preflight(task_ids, allow_overlap=False):
     files_by_task = {}
     waiting = {}  # task -> the line that makes it wait on the user
@@ -250,6 +275,8 @@ def preflight(task_ids, allow_overlap=False):
         die("these tasks wait on a user ruling, which a headless worker cannot give:\n" + "\n".join(lines) +
             "\nAsk the user, record the answer in the task file under `## Ruling` (e.g. `**B** (owner, 2026-11-07)` "
             "plus the reasoning), commit it, then start.\n" + hint)
+    for line in criteria_waiting_elsewhere(task_ids):
+        print(f"WARNING: {line}", file=sys.stderr)
     owned = sorted({f for files in files_by_task.values() for f in files})
     conflicts = {}  # task -> ["file (live group slug)"]
     for group in live_groups():
@@ -416,6 +443,28 @@ def wait_for_ci(branch, head, interval=30, cap_minutes=30):
         time.sleep(interval)
 
 
+CI_RED = 4  # land's return when autoland asked it to hand red Branch CI back instead of stopping
+
+
+def ci_failure_report(branch, head, log_lines=120):
+    """The failed jobs of the Branch CI run for `head` and the tail of their failed-step logs, for a fix
+    worker to start from. Never raises: a report it cannot fetch says so and names the command."""
+    try:
+        runs = json.loads(subprocess.run(
+            [tool("gh"), "run", "list", "--workflow", "Branch CI", "--branch", branch, "--limit", "20",
+             "--json", "databaseId,headSha"], capture_output=True, text=True, check=True).stdout or "[]")
+        run_id = next(r["databaseId"] for r in runs if r.get("headSha") == head)
+        jobs = json.loads(subprocess.run([tool("gh"), "run", "view", str(run_id), "--json", "jobs"],
+                                         capture_output=True, text=True, check=True).stdout or "{}")
+        failed = [j["name"] for j in jobs.get("jobs", []) if j.get("conclusion") == "failure"]
+        log = subprocess.run([tool("gh"), "run", "view", str(run_id), "--log-failed"],
+                             capture_output=True, text=True, check=False).stdout
+    except (OSError, subprocess.SubprocessError, ValueError, StopIteration, KeyError) as exc:
+        return f"Could not fetch the Branch CI run for {head[:9]} ({exc}); run `gh run list --branch {branch}`."
+    tail = "\n".join(log.splitlines()[-log_lines:])
+    return f"Run {run_id}, failed jobs: {', '.join(failed) or 'unknown'}.\nLast {log_lines} failed-step log lines:\n{tail}"
+
+
 def ingest_transcripts(slug, group):
     dest_root = TASKS_ROOT / "profiles" / sanitize(slug) / "transcripts"
     dest_root.mkdir(parents=True, exist_ok=True)
@@ -574,6 +623,8 @@ def land(args):
 
     verdict = wait_for_ci(branch, head)
     print(f"CI verdict: {verdict}")
+    if verdict == "failure" and getattr(args, "fix_on_red", False):
+        return CI_RED  # autoland turns the failed jobs into a fix round; evidence waits for a green head
 
     evidence_dir = LANDING_ROOT / "evidence" / slug
     evidence_path = evidence_dir / "evidence.json"
@@ -637,6 +688,12 @@ FULL_SCOPE_STEP = ("For EACH task ({tasks}), read the `## Acceptance Criteria` o
 FOCUSED_SCOPE_STEP = ("This is a re-check after fix round {fix_round}. Prove ONLY these criteria from the task files "
                       "under docs/plans/tasks, one entry each with the same id: {criteria}. {bugs_step}Every other "
                       "criterion passed on the previous HEAD and is not re-checked here; do not list it.")
+# A fixer that disputed a finding stopped the whole loop as VERIFY_BLOCKED, and the owner had to rule on
+# a flake by hand (g-t14940-1, 2026-11-08). The dispute now goes to a fresh verifier first; only a
+# finding the verifier still upholds after reading the dispute reaches the owner.
+DISPUTE_STEP = (" The fix worker disputed these findings instead of fixing them; re-examine each one fresh, deferring "
+                "to neither side. Keep a finding only if you reproduce it on this HEAD; one that also happens on "
+                "origin/master is an `unrelated` bug (run it there before deciding). Disputes: {disputes}")
 BUGS_STEP = ("Re-run the steps of each of these bugs and list any still present under `bugs` with the same title "
              "(a fixed bug gets no entry): {titles}. ")
 VERIFY_STATUSES = ("pass", "fail", "human")
@@ -670,7 +727,7 @@ Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {roun
 FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json. This dispatch fixes ONLY {scope}: {items}. Every other finding in that file gets its own dispatch after this one: do not touch it. All tasks already have commits, so do not start a new one.
 Before your first code edit, append a `## {label} progress` checklist to .dotask-notes.md with one line per finding above (unless one with that exact heading is already there: then continue it), and tick each line as it is fixed: a dispatch can run out of turns, and the next worker resumes from that list. A progress checklist under any other heading is from another task or round: ignore it.
 Fix each finding at its root, failing test first. Re-run only the tests that failed and the ones you wrote; a test that already passed on this code stays passed and is not run again (user rule, 2026-11-07). Lint the files you changed. Commit with explicit paths, subject `{subject}: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
-A finding you believe is wrong: do not work around it. Never edit a task file's Acceptance Criteria to make one pass: they are the user's. Append `BLOCKED <finding and why>` and stop.
+A finding you believe is wrong (this branch did not cause it, it is a flake, or the verifier misread the criterion): do not work around it, and never edit a task file's Acceptance Criteria to make one pass: they are the user's. Commit any finished fix first, then append `<UTC yyyy-mm-ddTHH:MM> DISPUTED {label} <finding id or bug title>: <your evidence: what you ran on this branch and on origin/master, and what you saw>` to /workspace/.dotask-status and stop. A fresh verifier re-examines it with your evidence. Append `BLOCKED <reason>` only if you cannot work at all.
 Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> {label}` to /workspace/.dotask-status and stop."""
 
 
@@ -770,6 +827,36 @@ def read_verdict(checkout, group, head, tasks=None, criteria_ids=None):
 def tracked_changes(checkout):
     return subprocess.run([tool("git"), "-C", str(checkout), "status", "--porcelain", "--untracked-files=no"],
                           capture_output=True, text=True, check=True).stdout.strip()
+
+
+# What a verifier's own tooling rewrites without editing code: `npm install` churns package-lock.json and
+# a landing build writes logs under qa/. Either one blocked a clean verdict as "verifier changed the tree"
+# (g-t15280-3 and g-t14930-3, 2026-11-08). They are put back and the rest of the check stands.
+TOOL_NOISE = (re.compile(r"(^|/)package-lock\.json$"), re.compile(r"^qa/"))
+
+
+def porcelain_path(line):
+    path = line[3:].strip()
+    return path.split(" -> ")[-1].strip('"')
+
+
+def split_tool_noise(changes):
+    """(noise paths, the porcelain lines that are real edits) from `git status --porcelain` output."""
+    noise, real = [], []
+    for line in filter(str.strip, changes.splitlines()):
+        path = porcelain_path(line)
+        if any(pattern.search(path) for pattern in TOOL_NOISE):
+            noise.append(path)
+        else:
+            real.append(line)
+    return noise, "\n".join(real)
+
+
+def restore_tool_noise(checkout, paths):
+    if paths:
+        subprocess.run([tool("git"), "-C", str(checkout), "checkout", "--", *paths],
+                       capture_output=True, text=True, check=False)
+        print(f"[dotask] put back tool output the verifier rewrote: {' '.join(paths)}", file=sys.stderr)
 
 
 def last_status(checkout):
@@ -897,6 +984,81 @@ def build_loop(slug, group, checkout):
         return 1
 
 
+# One driver per group. A launch that looked dead was relaunched while the first still ran, and two
+# autolands raced on one checkout (g-t14930-3, 2026-11-08). The lock names its process; one whose
+# process is gone is stale and taken over.
+RUN_LOCK = ".dotask-run.lock"
+
+
+def pid_alive(pid):
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        kernel = ctypes.windll.kernel32
+        handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        code = ctypes.c_ulong()
+        ok = kernel.GetExitCodeProcess(handle, ctypes.byref(code))
+        kernel.CloseHandle(handle)
+        return bool(ok) and code.value == 259  # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)  # signal 0 only checks; on Windows os.kill would terminate, hence the branch above
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+@contextlib.contextmanager
+def run_lock(checkout, slug):
+    if not Path(checkout).is_dir():  # the action itself reports the unknown group
+        yield
+        return
+    path = Path(checkout) / RUN_LOCK
+    exclude = Path(checkout) / ".git" / "info" / "exclude"
+    if exclude.parent.is_dir() and RUN_LOCK not in (exclude.read_text(encoding="utf-8") if exclude.exists() else ""):
+        with exclude.open("a", encoding="utf-8") as stream:
+            stream.write(RUN_LOCK + "\n")
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M")
+    for _ in range(2):
+        try:
+            fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                holder = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                holder = {}
+            if pid_alive(int(holder.get("pid") or 0)):
+                die(f"{slug} is already being driven by process {holder['pid']} (since {holder.get('since', '?')}); "
+                    f"watch its run.log instead of starting a second one. If that process is not dotask, delete {path}.")
+            print(f"[dotask] taking over a stale lock from process {holder.get('pid', '?')}", file=sys.stderr)
+            path.unlink(missing_ok=True)
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump({"pid": os.getpid(), "since": stamp}, stream)
+        break
+    try:
+        yield
+    finally:
+        try:
+            if json.loads(path.read_text(encoding="utf-8")).get("pid") == os.getpid():
+                path.unlink()
+        except (OSError, ValueError):
+            pass
+
+
+def locked(action):
+    """Wrap a resume/autoland entry point so the whole run holds the group's lock (resume calls autoland
+    and land inside it; those inner calls go to the unwrapped functions)."""
+    def run(args):
+        with run_lock(TASKS_ROOT / sanitize(args.slug), args.slug):
+            return action(args)
+    return run
+
+
 def resume(args):
     """Continue a headless group from wherever it stopped: the build loop for every task without a
     commit line, then autoland (which itself resumes a fix round's focused re-check). `start --headless`
@@ -922,8 +1084,11 @@ def resume(args):
         # focused re-check.
         print(f"[dotask] fix round {fix_round} stopped with uncommitted work; continuing it")
         verdict = json.loads((checkout / VERIFY_FILE).read_text(encoding="utf-8"))
-        fixed, skipped = run_fix_round(slug, group, checkout, fix_round, verdict, resuming=True)
-        if not fixed:
+        fixed, skipped, disputed = run_fix_round(slug, group, checkout, fix_round, verdict, resuming=True)
+        if disputed:
+            group["disputes"] = disputed
+            save_group(checkout, group)
+        if not fixed and not disputed:
             append_status(checkout, f"VERIFY_BLOCKED fix round {fix_round} committed nothing on resume"
                                     f" (skipped: {' '.join(skipped) or 'none'})")
             return 1
@@ -961,8 +1126,10 @@ def run_fix_round(slug, group, checkout, round_number, verdict, resuming=False):
     """One dispatch per owning task: fix, commit, next. A task whose dispatch commits nothing is recorded
     (FIX_SKIPPED), its leftover changes stashed, and the round moves on: one hard finding cannot block
     the others. A task whose `PUSHREADY ... fix round N T<id>` line is already in the status file was
-    fixed before a restart and is not dispatched again. Returns ([fixed labels], [skipped labels])."""
-    fixed, skipped = [], []
+    fixed before a restart and is not dispatched again. A worker that ends on `DISPUTED <label> ...` instead
+    of fixing is neither: its dispute goes to the next verifier. Returns ([fixed labels], [skipped labels],
+    [disputes as {task, items, reason}])."""
+    fixed, skipped, disputed = [], [], []
     head = git_head(checkout)
     dirty_from_before = resuming and bool(tracked_changes(checkout))
     for task, criteria, bugs in fix_units(group, verdict):
@@ -987,11 +1154,19 @@ def run_fix_round(slug, group, checkout, round_number, verdict, resuming=False):
         if finished and git_head(checkout) != before:
             fixed.append(name)
             continue
+        last = last_status(checkout)
+        if f" DISPUTED {label} " in f"{last} ":
+            reason = last.split(f" DISPUTED {label}", 1)[1].strip()
+            disputed.append({"task": name, "items": [*criteria, *bugs], "reason": reason[:1500]})
+            if git_head(checkout) != before:
+                fixed.append(name)  # a dispute after a committed partial fix: both stand
+            stash_unfinished(checkout, label)
+            continue
         skipped.append(name)
         parked = stash_unfinished(checkout, label)
         append_status(checkout, f"FIX_SKIPPED {label}: {'no commit' if finished else last_status(checkout)[:160]}"
                                 + (f"; {parked}" if parked else ""))
-    return fixed, skipped
+    return fixed, skipped, disputed
 
 
 def interrupted_fix_round(checkout, group):
@@ -1025,6 +1200,7 @@ def file_unrelated_bug(bug, group, head):
         return None
     tasks_dir = MAIN_REPO / "docs" / "plans" / "tasks"
     used = [int(found.group(1)) for found in (re.match(r"T(\d+)", p.name) for p in tasks_dir.rglob("T*.md")) if found]
+    used += [int(n) for n in re.findall(r"^\| T(\d+) \|", plan, flags=re.M)]  # a row whose file is elsewhere
     task_id = f"T{(max(used, default=0) // 10 + 1) * 10}"
     name = f"{task_id}-{'-'.join(re.findall(r'[a-z0-9]+', title.lower())[:6])}.md"
     today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
@@ -1050,8 +1226,45 @@ def file_unrelated_bug(bug, group, head):
         at = lines.index(PLAN_TAIL_HEADING) if PLAN_TAIL_HEADING in lines else len(lines)
         lines[at:at] = [BUG_SECTION, "", "| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |",
                         "|---|---|---|---|---|---|---|---|", row, ""]
+    plan_was_dirty = git_paths_dirty(MAIN_REPO, [plan_path])
     plan_path.write_bytes(newline.join(lines).encode("utf-8"))
+    commit_filed_bug(task_id, title, [plan_path, tasks_dir / name], plan_was_dirty)
     return task_id
+
+
+def git_paths_dirty(repo, paths):
+    result = subprocess.run([tool("git"), "-C", str(repo), "status", "--porcelain", "--", *map(str, paths)],
+                            capture_output=True, text=True, check=False)
+    return result.returncode != 0 or bool(result.stdout.strip())
+
+
+def commit_filed_bug(task_id, title, paths, plan_was_dirty):
+    """Commit the filed task (its file and PLAN row, nothing else) to master in the main checkout at once.
+    Left uncommitted, another session took the same id by hand (T15300, 2026-11-08) and a later
+    plan commit swept the filed file in under an unrelated subject. A PLAN.md that already held
+    someone's uncommitted edit is left alone: committing it would publish their half-done change."""
+    repo = str(MAIN_REPO)
+    branch = subprocess.run([tool("git"), "-C", repo, "rev-parse", "--abbrev-ref", "HEAD"],
+                            capture_output=True, text=True, check=False)
+    why = None
+    if branch.returncode != 0:
+        why = "the main checkout is not a git repository"
+    elif branch.stdout.strip() != "master":
+        why = f"the main checkout is on {branch.stdout.strip()}, not master"
+    elif plan_was_dirty:
+        why = "PLAN.md already had uncommitted edits"
+    if why is None:
+        subprocess.run([tool("git"), "-C", repo, "add", "--", *map(str, paths)], capture_output=True, check=False)
+        done = subprocess.run([tool("git"), "-C", repo, "commit", "-m",
+                               f"{task_id}: file {title} (found by /dotask verify)", "--", *map(str, paths)],
+                              capture_output=True, text=True, check=False)
+        if done.returncode == 0:
+            print(f"[dotask] committed {task_id} to master in {repo} (not pushed)")
+            return True
+        why = f"git commit failed: {(done.stderr or done.stdout).strip()[:200]}"
+    print(f"WARNING: filed {task_id} but did not commit it ({why}); commit its task file and PLAN row "
+          "before anyone else takes an id", file=sys.stderr)
+    return False
 
 
 def verify_once(slug, group, checkout, head, round_number, focus=None):
@@ -1085,11 +1298,16 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
             wanted = [c for c in focus["criteria"] if c.split(":")[0] in batch]
             bugs = [b for b in focus["bugs"]
                     if b.get("task") in batch or (last and b.get("task") not in group["tasks"])]
-            bugs_step = BUGS_STEP.format(titles="; ".join(str(b["title"]) for b in bugs)) if bugs else ""
+            # The verdict file is cleared before each verifier, so the steps travel in the instruction.
+            bugs_step = BUGS_STEP.format(titles="; ".join(
+                f"{b['title']} (steps: {str(b.get('steps') or 'see the title')[:3000]})" for b in bugs)) if bugs else ""
             scope = FOCUSED_SCOPE_STEP.format(fix_round=round_number - 1, criteria=", ".join(wanted) or "(none)",
                                               bugs_step=bugs_step)
         else:
             scope = FULL_SCOPE_STEP.format(tasks=", ".join(batch))
+        disputes = [d for d in group.get("disputes", []) if d["task"] in batch or (last and d["task"] not in tasks)]
+        if disputes:
+            scope += DISPUTE_STEP.format(disputes="; ".join(f"[{', '.join(d['items'])}] {d['reason']}" for d in disputes))
         instruction = VERIFY_INSTRUCTION.format(
             round=round_number, batch=label, head=head, scope=scope, branch=group["branch"],
             regression=REGRESSION_STEP if last else NO_REGRESSION_STEP)
@@ -1109,7 +1327,8 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
             continue
         if not finished:
             raise UntrustedVerdict(f"verifier batch {label} did not finish: {last_status(checkout)[:200]}")
-        changed = tracked_changes(checkout)
+        noise, changed = split_tool_noise(tracked_changes(checkout))
+        restore_tool_noise(checkout, noise)
         if git_head(checkout) != head or changed:
             raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
         verdict = read_verdict(checkout, group, head, tasks=batch, criteria_ids=wanted)
@@ -1208,6 +1427,16 @@ def autoland(args):
                     print(f"[dotask] unrelated bug {bug['title']!r}: {filed or 'already filed'}")
             failed = [c.get("id") for c in verdict["criteria"] if c["status"] == "fail"]
             bugs = [b["title"] for b in verdict["bugs"] if b["scope"] == "group"]
+            disputes, group["disputes"] = group.get("disputes", []), []
+            save_group(checkout, group)
+            upheld = [d for d in disputes if set(d["items"]) & {*failed, *bugs}]
+            if upheld:
+                # Worker and a fresh verifier disagree after each saw the other's evidence: the owner rules.
+                append_status(checkout, f"VERIFY_NEEDS_USER {head[:9]}: the verifier upholds findings the fixer "
+                                        "disputes: " + "; ".join(f"{', '.join(sorted(set(d['items']) & {*failed, *bugs}))}"
+                                                                 f" (fixer: {d['reason'][:200]})" for d in upheld)
+                                        + f". Rule in the task file, then /dotask resume {slug}")
+                return 1
             human = [c.get("id") for c in verdict["criteria"] if c["status"] == "human"]
             # A `human` criterion the owner already ruled "check on staging" is answered: it rides
             # along in the PR body instead of stopping the push.
@@ -1225,7 +1454,21 @@ def autoland(args):
                     return 0
                 staging_note = f"; check on staging after merge: {' '.join(deferred)}" if deferred else ""
                 append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}{staging_note}")
-                return 0 if args.no_land else land(SimpleNamespace(slug=slug, after_test=True))
+                if args.no_land:
+                    return 0
+                code = land(SimpleNamespace(slug=slug, after_test=True, fix_on_red=True))
+                if code != CI_RED:
+                    return code
+                # Red Branch CI after a clean verdict waited for a person to read the logs and push a
+                # fix (PRs #720, #722, #723, 2026-11-08). It is a finding like any other.
+                report = ci_failure_report(group["branch"], head)
+                ci_bug = {"scope": "group", "task": None, "title": "Branch CI failed after a clean verdict",
+                          "steps": f"On {head[:9]}, run each test that failed in this CI report on its own: {report}",
+                          "expected": "Every applicable Branch CI job passes.", "actual": report}
+                verdict = {**verdict, "bugs": [*verdict["bugs"], ci_bug]}
+                write_lf(checkout / VERIFY_FILE, json.dumps(verdict, indent=2) + "\n")
+                append_status(checkout, f"CI_RED {head[:9]}: Branch CI failed after VERIFY_PASS; sending it to a fix round")
+                failed, bugs = [], [ci_bug["title"]]
             summary = f"round {round_number} on {head[:9]}: failed {failed}, new bugs {bugs}"
             focus = {"criteria": failed, "bugs": [b for b in verdict["bugs"] if b["scope"] == "group"],
                      "previous": verdict}
@@ -1234,8 +1477,13 @@ def autoland(args):
             return 1
         print(f"[dotask] {summary}; sending it back to workers, one task at a time")
         verdict_now = json.loads((checkout / VERIFY_FILE).read_text(encoding="utf-8"))
-        fixed, skipped = run_fix_round(slug, group, checkout, round_number, verdict_now)
-        if not fixed:
+        fixed, skipped, disputed = run_fix_round(slug, group, checkout, round_number, verdict_now)
+        if disputed:  # the next verifier reads them (verify_once) and the check above settles them
+            group["disputes"] = disputed
+            save_group(checkout, group)
+            print(f"[dotask] fix round {round_number}: disputed {' '.join(d['task'] for d in disputed)}; "
+                  "a fresh verifier re-examines them")
+        if not fixed and not disputed:
             append_status(checkout, f"VERIFY_BLOCKED fix round {round_number} committed nothing"
                                     f" (skipped: {' '.join(skipped) or 'none'})")
             return 1
@@ -1575,7 +1823,7 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     try:
-        return {"start": start, "land": land, "autoland": autoland, "resume": resume, "stack": stack,
+        return {"start": start, "land": land, "autoland": locked(autoland), "resume": locked(resume), "stack": stack,
                 "status": status, "nextup": nextup}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)

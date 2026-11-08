@@ -212,6 +212,41 @@ else
   echo "SKIP (needs Linux /proc)"
 fi
 
+echo "=== drive retries a failed auth check with fresh credentials before AUTH_DEAD (T15330) ==="
+# shellcheck source=/dev/null
+source ./task.sh "" >/dev/null 2>&1 || true   # the real drive(): an earlier section shadowed it
+mkdir -p "$TASKS_ROOT/auth"
+auth_status="$TASKS_ROOT/auth/.dotask-status"; auth_calls="$root/auth_calls"
+container_running() { return 0; }
+seed_creds() { echo seed >> "$auth_calls"; }
+sleep() { :; }
+archive_profiles() { :; }
+ensure_excludes() { :; }
+docker() {
+  if [[ "$*" == *"auth status"* ]]; then
+    echo auth >> "$auth_calls"
+    [ "$(grep -c auth "$auth_calls")" -gt "$AUTH_FAILS" ]
+    return
+  fi
+  return 0
+}
+for case in "1 0" "3 1"; do  # fails once: recovers; fails every try: AUTH_DEAD
+  read -r AUTH_FAILS want_rc <<<"$case"
+  : > "$auth_status"; : > "$auth_calls"
+  rc=0; ( DOTASK_WAVE_ID=w drive auth "go" ) >/dev/null 2>&1 || rc=$?
+  [ "$rc" != 0 ] && rc=1
+  if [ "$rc" != "$want_rc" ]; then echo "FAIL: $AUTH_FAILS auth failure(s): drive rc=$rc, want $want_rc"; fail=1; fi
+  if [ "$want_rc" = 0 ] && grep -q AUTH_DEAD "$auth_status"; then echo "FAIL: a transient failure wrote AUTH_DEAD"; fail=1; fi
+  if [ "$want_rc" = 1 ] && ! grep -q "AUTH_DEAD auth status failed 3 times" "$auth_status"; then
+    echo "FAIL: AUTH_DEAD missing after 3 failures: $(cat "$auth_status")"; fail=1; fi
+  # one seed before the first check, one more before each retry
+  want_seeds=$(( AUTH_FAILS < 3 ? AUTH_FAILS + 1 : 3 ))
+  if [ "$(grep -c seed "$auth_calls")" != "$want_seeds" ]; then
+    echo "FAIL: $AUTH_FAILS failure(s): $(grep -c seed "$auth_calls") seeds, want $want_seeds"; fail=1; fi
+done
+unset -f container_running seed_creds sleep archive_profiles ensure_excludes docker
+[ "$fail" = 0 ] && echo "PASS"
+
 if [ "$fail" = 0 ]; then
   echo "ALL PASS"
 else

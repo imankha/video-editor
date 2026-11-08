@@ -318,11 +318,22 @@ drive() {
   fi
   t="$(now_s)"; seed_creds "$cn"; meta_log "$id" seed_creds "$t" 0
 
-  t="$(now_s)"; rc=0
-  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" claude auth status --text >/dev/null || rc=$?
-  meta_log "$id" auth_status "$t" "$rc"
+  # A failed check is retried with fresh credentials before AUTH_DEAD: every AUTH_DEAD so far
+  # (2026-11-07/08) cleared on a plain resume, which only re-seeds, so the first failure was
+  # transient (a token mid-refresh on the host, a slow container). DOTASK_AUTH_TRIES / _WAIT tune it.
+  local tries="${DOTASK_AUTH_TRIES:-3}" wait_s="${DOTASK_AUTH_WAIT:-20}" try
+  for ((try = 1; try <= tries; try++)); do
+    t="$(now_s)"; rc=0
+    MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" claude auth status --text >/dev/null || rc=$?
+    meta_log "$id" auth_status "$t" "$rc"
+    [ "$rc" = 0 ] && break
+    [ "$try" -lt "$tries" ] || break
+    echo "[task] auth status failed (try $try of $tries); re-seeding credentials in ${wait_s}s" >&2
+    sleep "$wait_s"
+    seed_creds "$cn"
+  done
   if [ "$rc" != 0 ]; then
-    [ -d "$dir" ] && echo "$(date -u +%FT%H:%M) AUTH_DEAD auth status failed" >> "$status"
+    [ -d "$dir" ] && echo "$(date -u +%FT%H:%M) AUTH_DEAD auth status failed $tries times" >> "$status"
     die "host/container authentication unavailable; see $status"
   fi
   # Worker clones may predate the profiler; the host copy is the trusted collector.
