@@ -73,10 +73,13 @@ known to touch this change (checked 2026-11-07):
 - Changes notice (PrivacyPolicy line ~220): a material change needs the in-app notice and a new
   `LAST_UPDATED` in both files. Check how the in-app notice is shown today and use it; if no
   mechanism exists, stop and say so rather than building one silently.
-- The legal wording is the owner's call: draft the exact before/after text in this task file
-  under "Policy diff" and list it in the PR body as a staging check for the owner. Do not ship a
-  policy change that the code in this PR does not implement, or code that the policy does not
-  disclose.
+- Wording: owner ruling 2026-11-07, the worker chooses the words. Two rules: every statement is
+  honest (true of the shipped behaviour, nothing implied that the code does not do), and it
+  discloses no more than it needs to (what is kept, why, and that it never restores data; no
+  column names, hash algorithms, secrets, vendors or internal mechanics beyond what the law
+  requires). Record the before/after text in this task file under "Policy diff" for the record;
+  it is not an owner gate. Do not ship a policy change that the code in this PR does not
+  implement, or code that the policy does not disclose.
 
 ## Context
 
@@ -102,4 +105,4 @@ known to touch this change (checked 2026-11-07):
 - [ ] A new sign-up whose email hash matches a deletion is marked `returning_after_deletion` in analytics and nothing else changes.
 - [ ] Admin user list and detail show "deleted" from `account_deletions`; dimension tables show a deleted count.
 - [ ] Migration applies on dev, staging and prod via the admin endpoint; fresh DDL matches.
-- [ ] Privacy policy and terms reviewed: every statement about deletion, retention and analytics matches the shipped behaviour; the email hash and the kept attribution are disclosed; `LAST_UPDATED` bumped and the change notice shown; the before/after text is in the task file and the PR body names it as an owner check on staging.
+- [ ] Privacy policy and terms reviewed: every statement about deletion, retention and analytics matches the shipped behaviour; the email hash and the kept attribution are disclosed; `LAST_UPDATED` bumped and the change notice shown; the wording is honest and discloses no more than needed; the before/after text is in the task file.
