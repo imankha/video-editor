@@ -237,7 +237,15 @@ export function UserDetailPanel({ data, onClose }) {
         <div className="p-5 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-white font-medium text-lg">{data.email}</h3>
+              <h3 className="text-white font-medium text-lg flex items-center gap-2">
+                {data.email}
+                {data.is_deleted && (
+                  <span className="text-xs font-normal px-2 py-0.5 rounded bg-red-500/15 text-red-400"
+                        title={data.deleted_at ? `Deleted ${new Date(data.deleted_at).toLocaleString()}` : 'Deleted'}>
+                    Deleted
+                  </span>
+                )}
+              </h3>
               <div className="text-gray-400 text-xs mt-0.5">
                 <OriginLabel origin={data.origin} campaignName={data.campaign_name} />
                 {data.landing_path && <> · Landed on {data.landing_path}</>}

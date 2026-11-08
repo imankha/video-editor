@@ -298,6 +298,10 @@ CREATE TABLE IF NOT EXISTS user_segments (
     -- A page class, not identity -- kept on account deletion (not in
     -- _DEIDENTIFY_SEGMENT_COLUMNS). NULL = direct app arrival, or signed up before capture.
     landing_path TEXT,
+    -- T15290 (v045): true when this sign-up's email hash matched a past
+    -- account_deletions row. Analytics only -- never restores data, never
+    -- blocks the sign-up. Set once at signup by create_user_segment.
+    returning_after_deletion BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);
@@ -504,10 +508,16 @@ CREATE TABLE IF NOT EXISTS account_deletions (
     path         TEXT        NOT NULL,
     had_payments BOOLEAN     NOT NULL,
     net_cents    INTEGER     NOT NULL DEFAULT 0,  -- SUM(payments.amount_cents) at deletion
-    note         TEXT
+    note         TEXT,
+    -- T15290 (v045): keyed (HMAC-SHA256) hash of the deleted account's normalised
+    -- email. NULL for the NUF reset paths (same user_id/email recreated
+    -- immediately -- see account_deletions.record_account_deletion docstring).
+    email_hash   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_account_deletions_user_id
     ON account_deletions (user_id, deleted_at);
+CREATE INDEX IF NOT EXISTS idx_account_deletions_email_hash
+    ON account_deletions (email_hash);
 
 CREATE OR REPLACE FUNCTION payments_append_only() RETURNS trigger AS $$
 BEGIN

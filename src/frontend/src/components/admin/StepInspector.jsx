@@ -287,9 +287,9 @@ function People({ people, outcome, onOutcome, onOpenUser }) {
               <button type="button" data-testid={`step-person-${p.user_id}`}
                       onClick={() => onOpenUser && onOpenUser(p.user_id)}
                       className="w-full text-left py-0.5 text-gray-300 hover:text-white flex gap-3">
-                <span className="truncate">{p.email || p.user_id}</span>
+                <span className="truncate">{p.is_deleted ? 'Deleted account' : (p.email || p.user_id)}</span>
                 <span className="text-gray-500">{p.platform}</span>
-                <span className="text-gray-500 ml-auto">{p.last_active_at ? p.last_active_at.slice(0, 10) : 'deleted'}</span>
+                <span className="text-gray-500 ml-auto">{p.last_active_at ? p.last_active_at.slice(0, 10) : '—'}</span>
               </button>
             </li>
           ))}

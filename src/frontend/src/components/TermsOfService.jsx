@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 
-const LAST_UPDATED = 'May 8, 2026';
+const LAST_UPDATED = 'November 8, 2026';
 
 export function TermsOfService() {
   return (
@@ -217,7 +217,7 @@ export function TermsOfService() {
           <ul className="list-disc pl-5 space-y-1">
             <li>You may terminate your account at any time via Account Settings</li>
             <li>We may terminate accounts for Terms violations</li>
-            <li>Upon termination, your content is permanently deleted</li>
+            <li>Upon termination, your content and account data are permanently deleted; see the Privacy Policy&apos;s Data Retention section for the limited records (transaction records, the deletion record itself, a one-way hash of your email, and de-identified usage statistics) that survive</li>
             <li>Sections 5, 6, 8, 9, 10, and 12 survive termination</li>
           </ul>
         </Section>

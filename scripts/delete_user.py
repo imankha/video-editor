@@ -316,7 +316,7 @@ def delete_one_postgres(pg_conn, user_id: str, email: str, dry_run: bool,
     note = "forced past payment guard" if (force_paid and summary["count"] > 0) else None
     record_account_deletion(
         cur, user_id=user_id, actor=DeletionActor.SCRIPT,
-        path=DeletionPath.DELETE_USER_SCRIPT, note=note,
+        path=DeletionPath.DELETE_USER_SCRIPT, note=note, email=email,
     )
     # T8630 round 3: keep bug-report TEXT, clear PII columns; the returned R2
     # keys are purged after this transaction commits (in the storage phase).

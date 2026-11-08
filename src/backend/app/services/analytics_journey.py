@@ -535,12 +535,17 @@ def step_breakdown(users: list[dict], s_rank: int, by: str) -> list[dict]:
     for u in users:
         key = str(u[field]) if u[field] is not None else "unknown"
         r = rows.setdefault(key, {"key": key, "reached": 0, "continued": 0,
-                                  "in_window": 0, "stuck": 0, "gone": 0})
+                                  "in_window": 0, "stuck": 0, "gone": 0, "deleted": 0})
         r["reached"] += 1
         if u["furthest"] > s_rank:
             r["continued"] += 1
         else:
             r[u["outcome"]] += 1
+        # T15290: deleted is a cross-cutting status (from account_deletions, via
+        # is_deleted), not a fourth outcome -- a deleted user still counts in
+        # exactly one of continued/in_window/stuck/gone above, same as before.
+        if u["is_deleted"]:
+            r["deleted"] += 1
     out = []
     for r in rows.values():
         judged = r["continued"] + r["stuck"] + r["gone"]
@@ -623,7 +628,7 @@ def people_by_outcome(users: list[dict], s_rank: int, emails: dict[str, str]) ->
         bucket = out[u["outcome"]]
         if len(bucket) < PEOPLE_CAP:
             bucket.append({"user_id": u["user_id"], "email": emails.get(u["user_id"]),
-                           "platform": u["platform"],
+                           "platform": u["platform"], "is_deleted": u["is_deleted"],
                            "last_active_at": u["last_active_at"] and u["last_active_at"].isoformat()})
     return out
 
@@ -699,6 +704,13 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
     for r in cur.fetchall():
         row = dict(r)
         row["platform"] = row["platform"] or "unknown"
+        # T15290: `u.email` is NULL exactly when the `users` row is gone -- every
+        # real deletion path removes it in the SAME transaction as its
+        # account_deletions audit row (services/account_deletions.py), so this is
+        # the account_deletions truth, not a last_active_at guess. Replaces the
+        # old "last_active_at is null -> show 'deleted'" heuristic in
+        # StepInspector.jsx.
+        row["is_deleted"] = row["email"] is None
         if with_sport:
             row["arrival_sport"] = _bucket_arrival_sport(row.pop("utm_content"))
         if with_landing_path:

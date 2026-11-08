@@ -512,6 +512,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             click_source=body.click_source,
             country=body.country,
             landing_path=body.landing_path,
+            email=email,
         )
         await _send_welcome_email(user_id, email)
 
@@ -829,6 +830,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             click_source=body.click_source,
             country=body.country,
             landing_path=body.landing_path,
+            email=email,
         )
         await _send_welcome_email(user_id, email)
 

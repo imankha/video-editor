@@ -17,7 +17,7 @@ Browserslist: browsers data (caniuse-lite) is 11 months old. Please run:
 07:13:24 [vite] ✓ built in 18.34s
 07:13:24 [build] ✓ Completed in 18.76s.
 
- building client (vite) 
+ building client (vite)
 07:13:25 [vite] transforming...
 07:13:25 [vite] ✓ 28 modules transformed.
 07:13:25 [vite] rendering chunks...
@@ -27,60 +27,60 @@ Browserslist: browsers data (caniuse-lite) is 11 months old. Please run:
 07:13:26 [vite] dist/_astro/client.BJHgAj4G.js             136.51 kB │ gzip: 44.01 kB
 07:13:26 [vite] ✓ built in 1.19s
 
- generating static routes 
+ generating static routes
 07:13:27 ▶ src/pages/404.astro
-07:13:27   └─ /404.html (+28ms) 
+07:13:27   └─ /404.html (+28ms)
 07:13:27 ▶ src/pages/about.astro
-07:13:27   └─ /about.html (+20ms) 
+07:13:27   └─ /about.html (+20ms)
 07:13:28 ▶ src/pages/for-clubs.astro
-07:13:28   └─ /for-clubs.html (+14ms) 
+07:13:28   └─ /for-clubs.html (+14ms)
 07:13:28 ▶ src/pages/for-coaches.astro
-07:13:28   └─ /for-coaches.html (+22ms) 
+07:13:28   └─ /for-coaches.html (+22ms)
 07:13:28 ▶ src/pages/for-parents.astro
-07:13:28   └─ /for-parents.html (+23ms) 
+07:13:28   └─ /for-parents.html (+23ms)
 07:13:28 ▶ src/pages/guides/index.astro
-07:13:28   └─ /guides.html (+29ms) 
+07:13:28   └─ /guides.html (+29ms)
 07:13:28 ▶ src/pages/how-it-works.astro
-07:13:28   └─ /how-it-works.html (+26ms) 
+07:13:28   └─ /how-it-works.html (+26ms)
 07:13:28 λ src/pages/llms.txt.ts
-07:13:28   └─ /llms.txt (+24ms) 
+07:13:28   └─ /llms.txt (+24ms)
 07:13:28 ▶ src/pages/recruiting-videos.astro
-07:13:28   └─ /recruiting-videos.html (+23ms) 
+07:13:28   └─ /recruiting-videos.html (+23ms)
 07:13:28 λ src/pages/robots.txt.ts
-07:13:28   └─ /robots.txt (+20ms) 
+07:13:28   └─ /robots.txt (+20ms)
 07:13:28 ▶ src/pages/sports.astro
-07:13:28   └─ /sports.html (+28ms) 
+07:13:28   └─ /sports.html (+28ms)
 07:13:29 ▶ src/pages/vs/[comparison].astro
-07:13:29   ├─ /vs/editing-by-hand.html (+28ms) 
-07:13:29   └─ /vs/capcut.html (+43ms) 
+07:13:29   ├─ /vs/editing-by-hand.html (+28ms)
+07:13:29   └─ /vs/capcut.html (+43ms)
 07:13:29 ▶ src/pages/vs/index.astro
-07:13:29   └─ /vs.html (+22ms) 
+07:13:29   └─ /vs.html (+22ms)
 07:13:29 ▶ src/pages/works-with/[camera].astro
-07:13:29   ├─ /works-with/trace.html (+18ms) 
-07:13:29   ├─ /works-with/veo.html (+29ms) 
-07:13:29   ├─ /works-with/iphone.html (+36ms) 
-07:13:29   ├─ /works-with/gopro.html (+35ms) 
-07:13:29   ├─ /works-with/xbotgo.html (+37ms) 
-07:13:29   ├─ /works-with/dji-osmo-action.html (+40ms) 
-07:13:29   └─ /works-with/action-camera.html (+27ms) 
+07:13:29   ├─ /works-with/trace.html (+18ms)
+07:13:29   ├─ /works-with/veo.html (+29ms)
+07:13:29   ├─ /works-with/iphone.html (+36ms)
+07:13:29   ├─ /works-with/gopro.html (+35ms)
+07:13:29   ├─ /works-with/xbotgo.html (+37ms)
+07:13:29   ├─ /works-with/dji-osmo-action.html (+40ms)
+07:13:29   └─ /works-with/action-camera.html (+27ms)
 07:13:29 ▶ src/pages/works-with/index.astro
-07:13:29   └─ /works-with.html (+22ms) 
+07:13:29   └─ /works-with.html (+22ms)
 07:13:29 ▶ src/pages/[sport].astro
-07:13:29   ├─ /soccer.html (+20ms) 
-07:13:29   ├─ /basketball.html (+18ms) 
-07:13:29   ├─ /football.html (+16ms) 
-07:13:29   ├─ /flag-football.html (+17ms) 
-07:13:29   ├─ /baseball.html (+18ms) 
-07:13:29   ├─ /softball.html (+22ms) 
-07:13:29   ├─ /volleyball.html (+22ms) 
-07:13:29   ├─ /lacrosse.html (+191ms) 
-07:13:30   ├─ /hockey.html (+96ms) 
-07:13:30   ├─ /rugby.html (+17ms) 
-07:13:30   └─ /tennis.html (+28ms) 
+07:13:29   ├─ /soccer.html (+20ms)
+07:13:29   ├─ /basketball.html (+18ms)
+07:13:29   ├─ /football.html (+16ms)
+07:13:29   ├─ /flag-football.html (+17ms)
+07:13:29   ├─ /baseball.html (+18ms)
+07:13:29   ├─ /softball.html (+22ms)
+07:13:29   ├─ /volleyball.html (+22ms)
+07:13:29   ├─ /lacrosse.html (+191ms)
+07:13:30   ├─ /hockey.html (+96ms)
+07:13:30   ├─ /rugby.html (+17ms)
+07:13:30   └─ /tennis.html (+28ms)
 07:13:30 ▶ src/pages/index.astro
-07:13:30   └─ /index.html (+21ms) 
+07:13:30   └─ /index.html (+21ms)
 07:13:30 ▶ src/pages/guides/[slug].astro
-07:13:30   └─ /guides/filming-youth-sports-from-the-sideline.html (+169ms) 
+07:13:30   └─ /guides/filming-youth-sports-from-the-sideline.html (+169ms)
 07:13:30 ✓ Completed in 4.63s.
 
 07:13:31 [@astrojs/sitemap] `sitemap-index.xml` created at `dist`

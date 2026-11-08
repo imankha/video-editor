@@ -2451,9 +2451,16 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
             -- T8650: revenue from the payments ledger (pre-aggregated per user). T8630
             -- r5: a deleted payer KEEPS its segment row and the users join is LEFT, so
             -- it stays in its real group instead of dropping to the unattributed remainder.
-            COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
+            COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents,
+            -- T15290: deleted_u is its OWN unconditional LEFT JOIN (excl_join above only
+            -- joins `users` when exclude_test is on) -- a deleted account's email is
+            -- always NULL (account_deletions.record_account_deletion commits the
+            -- DELETE FROM users and the audit row together), so this count is exactly
+            -- "how many of this group's kept segment rows belong to a deleted account".
+            COUNT(*) FILTER (WHERE deleted_u.user_id IS NULL) AS deleted
         FROM user_segments s
         LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
+        LEFT JOIN users deleted_u ON deleted_u.user_id = s.user_id
         {excl_join}
         {where_clause}
         GROUP BY grp
@@ -2463,6 +2470,7 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
         r["grp"]: {
             "signups": r["signups"],
             "revenue_cents": r["revenue_cents"] or 0,
+            "deleted": r["deleted"],
             "first_highlight_14d": {
                 "aged": r["aged"],
                 "hit": r["hit"],
@@ -2732,8 +2740,13 @@ def analytics_journey(user_id: str):
         cur = conn.cursor()
         cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
         user_row = cur.fetchone()
-        if not user_row:
-            raise HTTPException(status_code=404, detail="User not found")
+        # T15290: a deleted account's `users` row is gone BUT its de-identified
+        # user_segments row is kept (T8630 r4) -- 404ing here made every deleted
+        # account invisible in the admin detail panel, the opposite of "deletion
+        # visible in the admin". Fall through with email=None instead; deleted_at
+        # below (from account_deletions, the audit trail, not a last_active_at
+        # guess) is what the panel shows as the deletion status.
+        email = user_row["email"] if user_row else None
 
         name_select, name_join = _campaign_name_join(cur)
         # T15010: landing_path probed like signup_build/country -- this page loads
@@ -2759,6 +2772,8 @@ def analytics_journey(user_id: str):
             ORDER BY MIN(first_at) NULLS LAST
         """, (user_id,))
         action_rows = cur.fetchall()
+
+    deleted_at = _deletions_for([user_id]).get(user_id)
 
     completed = []
 
@@ -2856,7 +2871,9 @@ def analytics_journey(user_id: str):
 
     return {
         "user_id": user_id,
-        "email": user_row["email"],
+        "email": "Deleted account" if email is None else email,
+        "is_deleted": email is None,
+        "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "origin": seg["origin"],
         "campaign_name": seg["campaign_name"],
         "landing_path": seg["landing_path"],
