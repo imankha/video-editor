@@ -1,6 +1,6 @@
 # T14940: Sport in the milestone context of profile-scoped events (no DB change)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (backend only)
