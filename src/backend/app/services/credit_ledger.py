@@ -540,7 +540,7 @@ def confirm_reservation(user_id: str, job_id: str) -> bool:
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT amount, video_seconds FROM credit_reservations WHERE job_id = %s AND user_id = %s",
+            "SELECT amount, video_seconds, profile_id FROM credit_reservations WHERE job_id = %s AND user_id = %s",
             (job_id, user_id),
         )
         row = cur.fetchone()
@@ -555,8 +555,10 @@ def confirm_reservation(user_id: str, job_id: str) -> bool:
             """,
             (user_id, -row["amount"], credit_key("framing_usage", job_id), job_id, row["video_seconds"]),
         )
-    from app.analytics import record_milestone
-    record_milestone(user_id, "credits_consumed", {"job_id": job_id})
+    from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
+    record_milestone(user_id, "credits_consumed", {
+        "job_id": job_id, SPORT_PROFILE_ID_CONTEXT_KEY: row["profile_id"],
+    })
     return True
 
 

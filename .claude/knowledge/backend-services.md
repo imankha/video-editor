@@ -1,5 +1,21 @@
 ---
 domain: backend-services
+updated: 2026-11-08 (T14940, sport dimension piece 2/3: profile-scoped `record_milestone`
+events now carry `"sport"` in their `user_action_log.context`, resolved WITHOUT a second DB
+open. Mechanism: a call site that already has the firing profile in scope passes its id under
+the internal-only context key `analytics.SPORT_PROFILE_ID_CONTEXT_KEY` (`"_sport_profile_id"`);
+`record_milestone` pops it and, on the SAME `get_user_db_connection(user_id)` it already opens
+for the `user_action_log` INSERT, does `SELECT sport FROM profiles WHERE id = ?`. A missing row
+(stale/bad id -- internal bug, not external data) logs WARNING and OMITS the `sport` key rather
+than guessing `no_sport` (those mean different things: unknown vs. genuinely sport-less).
+`record_funnel_event` injects the key AFTER `_sanitize_funnel_context` (which strips unknown
+keys), for any event present in the new `SPORT_TAG_INSTRUMENTED_AT` dict -- the readers'
+(T14950) per-event "tagging started here" dates, distinct from `EVENT_INSTRUMENTED_AT` (event
+existed) since an event can predate its sport tag. `credit_purchased` (payments.py, 4 sites
+incl. a true Stripe webhook with no profile_id ever in scope) is the one deliberate exception:
+resolves `get_default_profile_sport(user_id) or "no_sport"` directly, no `_sport_profile_id`
+indirection. `quests.py`'s `ACHIEVEMENT_TO_MILESTONE` bridge only injects the key for
+`framing_opened`/`crop_adjusted` (the two milestones in scope there), not every achievement.)
 updated: 2026-09-24 (T8630, Revenue Record Integrity epic 2/6: **account deletion now preserves
 and audits the revenue record.** New `account_deletions` table (Postgres, v031, `id BIGSERIAL`
 PK per a design-gate PK-bug catch, NOT `user_id` PK) records who/when/which-path/had-money for

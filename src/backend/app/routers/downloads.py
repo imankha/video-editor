@@ -975,10 +975,12 @@ async def _prepare_reel_download(download_id: int) -> _ReelDownload:
 
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
-        from app.analytics import record_milestone
+        from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
-        record_milestone(user_id, "video_downloaded", {"video_id": download_id})
+        record_milestone(user_id, "video_downloaded", {
+            "video_id": download_id, SPORT_PROFILE_ID_CONTEXT_KEY: profile_id,
+        })
 
         # Resolve the intro card ROW here (connection alive) -- its RESOLVED id
         # + content hash feed the cache key below, using the SAME

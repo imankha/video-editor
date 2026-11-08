@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
+from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY
 from app.services.upload_failures import (
     MILESTONE_REASON_BY_UPLOAD_REASON,
     UPLOAD_FAILURE_REASONS,
@@ -104,7 +105,13 @@ class TestNeverRaisesContract:
         with patch("app.analytics.record_milestone", mock_milestone):
             record_upload_failure(kind="game", stage="preparing", reason="refused", terminal=True,
                                    user_id="someone")
-        mock_milestone.assert_called_once_with("someone", "game_upload_failed", reason="refused")
+        # T14940: game_upload_failed is in sport-tag scope -- the profile loaded
+        # for the row insert rides along as context so record_milestone can
+        # resolve its sport without a second DB open.
+        mock_milestone.assert_called_once_with(
+            "someone", "game_upload_failed", reason="refused",
+            context={SPORT_PROFILE_ID_CONTEXT_KEY: "testdefault"},
+        )
 
     def test_payload_adapter_delegates_to_the_one_writer(self, monkeypatch):
         """run_in_context forwards positional args only -- the adapter must thread
@@ -137,7 +144,10 @@ class TestTerminalGating:
         with patch("app.analytics.record_milestone", mock_milestone):
             record_upload_failure(kind="game", stage="preparing", reason="insufficient_credits",
                                    terminal=True, user_id="u1")
-        mock_milestone.assert_called_once_with("u1", "game_upload_failed", reason="refused")
+        mock_milestone.assert_called_once_with(
+            "u1", "game_upload_failed", reason="refused",
+            context={SPORT_PROFILE_ID_CONTEXT_KEY: "testdefault"},
+        )
 
     def test_terminal_clip_kind_uses_clip_milestone_event(self, monkeypatch):
         monkeypatch.setattr("app.services.upload_failures.get_pg", _stub_get_pg())
