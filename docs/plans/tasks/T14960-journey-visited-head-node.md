@@ -1,6 +1,6 @@
 # T14960: "Visited" head node on the Journey map (aggregate, from the visit beacon)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M (backend read + frontend node; no schema change beyond T7410's own table)

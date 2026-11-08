@@ -1,6 +1,6 @@
 # T7410: First-party visit beacon (landing + app, aggregate-only)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-08-20
