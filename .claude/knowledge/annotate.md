@@ -1851,6 +1851,18 @@ profile is an old bookmark. `parseEditorPath` and `modeFromPath` (editorStore) o
   `settleBootstrapAfter` fires on every path so that wait cannot hang.
 - **T7670 (`/?game=&profile=`):** editorStore's canonicalization drops the query at module load, so
   those two are allow-listed on a bare path. It keeps its persistent `switchProfile`.
+- **T15240: `openEmailGameLink` gives up on a settle, never a fixed timer.** After `switchProfile`,
+  it calls `gamesDataStore.fetchGames({ force: true })` and decides from the list THAT call
+  resolves -- not from polling `games`/`isLoading`. `isLoading` can't distinguish "loading for the
+  new profile" from "stale": `fetchGames` sets `isLoading: get().games.length === 0`, so it reads
+  false both right after `reset()` and during a background refresh of an already-non-empty (stale)
+  list -- this is intentional elsewhere (no skeleton flash on a cached refresh) and must not change.
+  `force: true` aborts any in-flight fetch (the old profile's, or switchProfile's own un-awaited
+  Phase-3 one) so the resolved list always belongs to the now-current profile. No fixed timer means
+  a slow list still opens whenever it settles. It also snapshots
+  `` `${editorMode}|${window.location.pathname}` `` right when the wait starts and compares again
+  after the fetch resolves -- a Home tab change is URL-only and never touches `editorMode`, so the
+  pathname half is required to stand down on it.
 - **T15220 (`APP_READ_PARAMS`):** the same module-load canonicalization also used to drop every
   other query param (Stripe return `payment`/`session_id`, and every `campaignCapture.CAMPAIGN_PARAMS`
   entry) before App ever read them -- `editorStore.js`'s `APP_READ_PARAMS` list keeps them through
