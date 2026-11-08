@@ -49,6 +49,11 @@ export const useExportStore = create((set, get) => ({
   globalExportProgress: null,
   exportCompleteToastId: null,
 
+  // T15220: a one-shot intent consumed by ExportButtonContainer itself, once it is
+  // actually able to export (not disabled, clips/projectId loaded) -- not a ref the
+  // caller polls, which races the export button's own mount. { mode, projectId } | null.
+  pendingAutoExport: null,
+
   // ===========================================
   // MVC ACTIONS - Backend is source of truth
   // ===========================================
@@ -417,6 +422,11 @@ export const useExportStore = create((set, get) => ({
   clearGlobalExportProgress: () => set({ globalExportProgress: null }),
 
   setExportCompleteToastId: (toastId) => set({ exportCompleteToastId: toastId }),
+
+  // T15220: set by App after a Stripe-return payment verifies; cleared by whichever
+  // ExportButtonContainer instance consumes it (framing or overlay, whichever matches).
+  setPendingAutoExport: (intent) => set({ pendingAutoExport: intent }),
+  clearPendingAutoExport: () => set({ pendingAutoExport: null }),
 
   dismissExportCompleteToast: () => {
     const { exportCompleteToastId } = get();

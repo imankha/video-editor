@@ -1,0 +1,136 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/stores/editorStore.coldLoad.test.js [2m([22m[2m45 tests[22m[2m | [22m[31m21 failed[39m[2m)[22m[33m 2008[2mms[22m[39m
+     [33m[2m✓[22m[39m re-seeds the pending game from the resume slot [33m 1551[2mms[22m[39m
+     [32m✓[39m does not seed when the cold load is not /annotate[32m 8[2mms[22m[39m
+     [32m✓[39m opens the game in the path and keeps the URL[32m 9[2mms[22m[39m
+     [32m✓[39m carries ?t= into the seek breadcrumb and keeps it in the URL[32m 7[2mms[22m[39m
+     [32m✓[39m the URL wins over a breadcrumb for a different game, and that breadcrumb is cleared[32m 8[2mms[22m[39m
+     [32m✓[39m a breadcrumb for the same game keeps its seek and play across a chunk reload[32m 12[2mms[22m[39m
+     [32m✓[39m /focus/p/7 sets the pending project with its mode and keeps the URL[32m 7[2mms[22m[39m
+     [32m✓[39m /overlay/p/7 sets the pending project with its mode and keeps the URL[32m 8[2mms[22m[39m
+     [32m✓[39m the URL wins over a pending project for a different play[32m 9[2mms[22m[39m
+     [32m✓[39m bare /focus stays bare with nothing pending, and legacy /framing still lands on /focus[32m 9[2mms[22m[39m
+     [32m✓[39m /focus/p/abc lands on the Games tab and asks for the unknown-id notice[32m 6[2mms[22m[39m
+     [32m✓[39m /overlay/p/abc lands on the Games tab and asks for the unknown-id notice[32m 7[2mms[22m[39m
+     [32m✓[39m /annotate/g/abc lands on the Games tab and asks for the unknown-id notice[32m 18[2mms[22m[39m
+     [32m✓[39m /focus/p/99999999999999999999 lands on the Games tab and asks for the unknown-id notice[32m 11[2mms[22m[39m
+     [32m✓[39m keeps the profile and seek time in the URL[32m 7[2mms[22m[39m
+     [32m✓[39m /annotate/g/42?profile=NOT-AN-ID names no usable profile, so nothing opens[32m 5[2mms[22m[39m
+     [32m✓[39m /focus/p/7?profile= names no usable profile, so nothing opens[32m 5[2mms[22m[39m
+     [32m✓[39m the T7670 email link keeps ?game= and ?profile= until App reads them[32m 25[2mms[22m[39m
+[31m     [31m×[31m keeps ?ref until App reads it[39m[32m 13[2mms[22m[39m
+[31m     [31m×[31m keeps ?sport until App reads it[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m keeps ?utm_source until App reads it[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m keeps ?utm_medium until App reads it[39m[32m 18[2mms[22m[39m
+[31m     [31m×[31m keeps ?utm_campaign until App reads it[39m[32m 11[2mms[22m[39m
+[31m     [31m×[31m keeps ?utm_content until App reads it[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m keeps ?utm_term until App reads it[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m keeps ?lref until App reads it[39m[32m 10[2mms[22m[39m
+[31m     [31m×[31m keeps ?fbclid until App reads it[39m[32m 13[2mms[22m[39m
+[31m     [31m×[31m keeps ?gclid until App reads it[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m keeps ?gbraid until App reads it[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m keeps ?wbraid until App reads it[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m keeps ?ttclid until App reads it[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m keeps ?sclid until App reads it[39m[32m 19[2mms[22m[39m
+[31m     [31m×[31m keeps ?ScCid until App reads it[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m keeps ?epik until App reads it[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m keeps ?rdt_cid until App reads it[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m keeps ?payment until App reads it[39m[32m 23[2mms[22m[39m
+[31m     [31m×[31m keeps ?session_id until App reads it[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m strips an unrelated param that arrives with the ones App reads[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m keeps an arrival param on a canonical URL alongside its own query[39m[32m 19[2mms[22m[39m
+     [32m✓[39m /annotate/g/11?profile=XYZ lands on the Games tab, not in the editor[32m 29[2mms[22m[39m
+     [32m✓[39m /annotate/g/11?profile= lands on the Games tab, not in the editor[32m 10[2mms[22m[39m
+     [32m✓[39m /focus/p/7?profile=XYZ lands on the Games tab, not in the editor[32m 8[2mms[22m[39m
+     [32m✓[39m /overlay/p/7?profile= lands on the Games tab, not in the editor[32m 9[2mms[22m[39m
+     [32m✓[39m an unknown route that names no object stays noticeless[32m 10[2mms[22m[39m
+     [32m✓[39m public routes are left alone[32m 7[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 21 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?ref until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?sport until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?utm_source until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?utm_medium until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?utm_campaign until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?utm_content until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?utm_term until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?lref until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?fbclid until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?gclid until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?gbraid until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?wbraid until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?ttclid until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?sclid until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?ScCid until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?epik until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?rdt_cid until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?payment until App reads it
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps ?session_id until App reads it
+[31m[1mAssertionError[22m: expected null to be 'abc' // Object.is equality[39m
+
+[32m- Expected:[39m
+"abc"
+
+[31m+ Received:[39m
+null
+
+[36m [2m❯[22m src/stores/editorStore.coldLoad.test.js:[2m153:67[22m[39m
+    [90m151| [39m    [35mawait[39m [35mimport[39m([32m'./editorStore'[39m)[33m;[39m
+    [90m152| [39m    [34mexpect[39m(window[33m.[39mlocation[33m.[39mpathname)[33m.[39m[34mtoBe[39m([32m'/home'[39m)[33m;[39m
+    [90m153| [39m    expect(new URLSearchParams(window.location.search).get(name)).toBe…
+    [90m   | [39m                                                                  [31m^[39m
+    [90m154| [39m  })[33m;[39m
+    [90m155| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/21]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mstrips an unrelated param that arrives with the ones App reads
+[31m[1mAssertionError[22m: expected [] to deeply equal [ 'payment', 'session_id', …(1) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [[39m
+[32m-   "payment",[39m
+[32m-   "session_id",[39m
+[32m-   "utm_source",[39m
+[32m- ][39m
+[31m+ [][39m
+
+[36m [2m❯[22m src/stores/editorStore.coldLoad.test.js:[2m160:39[22m[39m
+    [90m158| [39m    [35mawait[39m [35mimport[39m([32m'./editorStore'[39m)[33m;[39m
+    [90m159| [39m    [35mconst[39m params [33m=[39m [35mnew[39m [33mURLSearchParams[39m(window[33m.[39mlocation[33m.[39msearch)[33m;[39m
+    [90m160| [39m    expect([...params.keys()].sort()).toEqual(['payment', 'session_id'…
+    [90m   | [39m                                      [31m^[39m
+    [90m161| [39m  })[33m;[39m
+    [90m162| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/21]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/stores/editorStore.coldLoad.test.js[2m > [22meditorStore cold load of a canonical URL[2m > [22mkeeps an arrival param on a canonical URL alongside its own query
+[31m[1mAssertionError[22m: expected null to be 'x' // Object.is equality[39m
+
+[32m- Expected:[39m
+"x"
+
+[31m+ Received:[39m
+null
+
+[36m [2m❯[22m src/stores/editorStore.coldLoad.test.js:[2m168:38[22m[39m
+    [90m166| [39m    [35mconst[39m params [33m=[39m [35mnew[39m [33mURLSearchParams[39m(window[33m.[39mlocation[33m.[39msearch)[33m;[39m
+    [90m167| [39m    [34mexpect[39m(params[33m.[39m[35mget[39m([32m't'[39m))[33m.[39m[34mtoBe[39m([32m'90'[39m)[33m;[39m
+    [90m168| [39m    [34mexpect[39m(params[33m.[39m[35mget[39m([32m'utm_source'[39m))[33m.[39m[34mtoBe[39m([32m'x'[39m)[33m;[39m
+    [90m   | [39m                                     [31m^[39m
+    [90m169| [39m  })[33m;[39m
+    [90m170| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/21]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m21 failed[39m[22m[2m | [22m[1m[32m24 passed[39m[22m[90m (45)[39m
+[2m   Start at [22m 03:36:29
+[2m   Duration [22m 2.78s[2m (transform 2.34s, setup 0ms, collect 331ms, tests 2.01s, environment 300ms, prepare 5ms)[22m

@@ -1,0 +1,27 @@
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 7 tests using 1 worker
+
+[1A[2K[1/7] [chromium] › e2e/T15220-arrival-params.spec.js:25:3 › T15220 arrival params › a signed-out campaign arrival stores its params and leaves a clean address
+[1A[2K[2/7] [chromium] › e2e/T15220-arrival-params.spec.js:40:3 › T15220 arrival params › an unrelated param does not reach the address or the attribution
+[1A[2K[3/7] [chromium] › e2e/T15220-arrival-params.spec.js:48:3 › T15220 arrival params › a campaign param on a share link stays on the public route
+[1A[2K[4/7] [chromium] › e2e/T15220-arrival-params.spec.js:55:3 › T15220 arrival params › a signed-in Stripe return verifies once, confirms, and clears the address
+[1A[2K[5/7] [chromium] › e2e/T15220-arrival-params.spec.js:69:3 › T15220 arrival params › a Stripe return goes back to the page the user paid from
+[1A[2K[6/7] [chromium] › e2e/T15220-arrival-params.spec.js:88:3 › T15220 arrival params › a Stripe return with paymentAutoExport fires the export once the editor is ready
+[1A[2K[7/7] [chromium] › e2e/T15220-arrival-params.spec.js:123:3 › T15220 arrival params › a cancelled Stripe return clears the address without verifying
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+[1A[2K  Slow test file: [chromium] › e2e/T15220-arrival-params.spec.js (5.6m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  7 passed (5.7m)
+
+exit: 0

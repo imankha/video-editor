@@ -1039,6 +1039,30 @@ export function ExportButtonContainer({
     ? FRAME_COPY.EDITS_NOT_THROUGH
     : undefined;
 
+  // T15220: finish the Export click the user already made, before Stripe sent them away
+  // and back. This is NOT reactive persistence of state that changed (the banned pattern) --
+  // the gesture is the ORIGINAL click; App sets `pendingAutoExport` once, right after the
+  // payment verifies, and this consumes it exactly once the first render this container is
+  // actually able to export (mirrors handleExport's own early-return guards, so it never
+  // fires into a NO_VIDEO/NO_POSITION dead end). A ref the caller polls raced this
+  // component's own mount (ExportButtonSection/FocusCockpit only mount once videoUrl is set),
+  // which is why the previous two attempts both silently never exported.
+  const pendingAutoExport = useExportStore((s) => s.pendingAutoExport);
+  useEffect(() => {
+    if (!pendingAutoExport) return;
+    if (pendingAutoExport.mode !== editorMode || pendingAutoExport.projectId !== projectId) return;
+    if (isButtonDisabled || inFlightRef.current) return;
+    const hasProjectClipsForAutoExport = clips && clips.length > 0 && clips.some((c) => c.id);
+    const isBackendAuthoritativeForAutoExport = (editorMode === EDITOR_MODES.OVERLAY && projectId) ||
+      (editorMode === EDITOR_MODES.FRAMING && hasProjectClipsForAutoExport);
+    if (!videoFile && !isBackendAuthoritativeForAutoExport) return;
+    // gesture: the Export click the user made before Stripe redirected them away; this
+    // finishes that one gesture, once, via the pendingAutoExport intent App set after the
+    // redirect verified -- not a reactive write derived from this render's own state.
+    useExportStore.getState().clearPendingAutoExport(); // eslint-disable-line local/no-persistence-in-effects -- gesture: finishing the pre-Stripe Export click (see comment above)
+    handleExport();
+  }, [pendingAutoExport, editorMode, projectId, clips, videoFile, isButtonDisabled]); // eslint-disable-line react-hooks/exhaustive-deps -- handleExport is redefined every render (not memoized); adding it would re-fire this effect every render for no reason.
+
   return {
     // State
     isExporting,
