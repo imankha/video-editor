@@ -305,11 +305,19 @@ CREATE INDEX IF NOT EXISTS idx_segments_acquired_origin ON user_segments(acquire
 -- the link and the value stored in user_segments.origin; `name` is display only.
 -- No delete path (it would orphan attributed origins). Mirrored in
 -- migrations/postgres/v038_campaigns.py.
+-- T15200 (v044): channel/spend_cents/landing_views/platform_conversions/spend_updated_at --
+-- user-entered paid-ads spend tracking, nullable (benchmark-only until an admin fills them
+-- in). Mirrored in migrations/postgres/v044_campaign_spend.py.
 CREATE TABLE IF NOT EXISTS campaigns (
-    id         TEXT PRIMARY KEY,
-    name       TEXT NOT NULL,
-    created_by TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                    TEXT PRIMARY KEY,
+    name                  TEXT NOT NULL,
+    created_by            TEXT NOT NULL,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    channel               TEXT CHECK (channel IN ('coach_credits', 'coach_gift', 'reddit', 'meta', 'club')),
+    spend_cents           INTEGER CHECK (spend_cents >= 0),
+    landing_views         INTEGER CHECK (landing_views >= 0),
+    platform_conversions  INTEGER CHECK (platform_conversions >= 0),
+    spend_updated_at      TIMESTAMPTZ
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_campaigns_name_lower ON campaigns (lower(name));
 

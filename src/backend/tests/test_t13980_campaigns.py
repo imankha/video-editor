@@ -239,6 +239,98 @@ class TestDisplay:
         assert journey["campaign_name"] == "Fall Tryouts 2026"
 
 
+class TestSpendFields:
+    """T15200: the campaign row's registry spend entry (channel, spend_cents, landing_views,
+    platform_conversions), a Save gesture separate from the name pencil."""
+
+    def test_save_gesture_persists_and_lists_back(self, client):
+        cid = _create(client, "Fall Tryouts 2026").json()["id"]
+        r = client.patch(f"/api/admin/campaigns/{cid}",
+                         json={"channel": "coach_credits", "spend_cents": 5000,
+                               "landing_views": 400, "platform_conversions": 50},
+                         headers=_ADMIN_HEADERS)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["channel"] == "coach_credits"
+        assert body["spend_cents"] == 5000
+        assert body["landing_views"] == 400
+        assert body["platform_conversions"] == 50
+        assert body["spend_updated_at"] is not None
+
+        listed = client.get("/api/admin/campaigns", headers=_ADMIN_HEADERS).json()["campaigns"]
+        row = next(c for c in listed if c["id"] == cid)
+        assert row["channel"] == "coach_credits"
+        assert row["spend_cents"] == 5000
+        assert row["landing_views"] == 400
+        assert row["platform_conversions"] == 50
+        assert row["spend_updated_at"] is not None
+
+    def test_nothing_saves_without_the_gesture(self, client):
+        """A campaign with no PATCH to its spend fields stays null -- the row never saves
+        reactively, only on the explicit Save click."""
+        cid = _create(client, "Untouched").json()["id"]
+        listed = client.get("/api/admin/campaigns", headers=_ADMIN_HEADERS).json()["campaigns"]
+        row = next(c for c in listed if c["id"] == cid)
+        assert row["channel"] is None
+        assert row["spend_cents"] is None
+        assert row["spend_updated_at"] is None
+
+    def test_rename_alone_does_not_touch_spend_fields(self, client):
+        cid = _create(client, "Fall Tryouts 2026").json()["id"]
+        client.patch(f"/api/admin/campaigns/{cid}", json={"spend_cents": 1000},
+                    headers=_ADMIN_HEADERS)
+        r = client.patch(f"/api/admin/campaigns/{cid}", json={"name": "Renamed"},
+                         headers=_ADMIN_HEADERS)
+        assert r.status_code == 200, r.text
+        listed = client.get("/api/admin/campaigns", headers=_ADMIN_HEADERS).json()["campaigns"]
+        row = next(c for c in listed if c["id"] == cid)
+        assert row["name"] == "Renamed"
+        assert row["spend_cents"] == 1000
+
+    def test_negative_spend_rejected(self, client):
+        cid = _create(client, "Fall Tryouts 2026").json()["id"]
+        r = client.patch(f"/api/admin/campaigns/{cid}", json={"spend_cents": -1},
+                         headers=_ADMIN_HEADERS)
+        assert r.status_code == 422, r.text
+
+    def test_invalid_channel_rejected(self, client):
+        cid = _create(client, "Fall Tryouts 2026").json()["id"]
+        r = client.patch(f"/api/admin/campaigns/{cid}", json={"channel": "tiktok"},
+                         headers=_ADMIN_HEADERS)
+        assert r.status_code == 422, r.text
+
+    def test_pre_migration_serves_grey_and_logs(self, client, caplog):
+        """AC4: endpoint serves before the migration runs; registry-dependent parts are
+        grey (null) and a loud log names the gap, never a silent fallback."""
+        from app.services.pg import get_pg
+
+        cid = _create(client, "Fall Tryouts 2026").json()["id"]
+        with get_pg() as conn:
+            conn.cursor().execute(
+                "ALTER TABLE campaigns DROP COLUMN channel, DROP COLUMN spend_cents, "
+                "DROP COLUMN landing_views, DROP COLUMN platform_conversions, DROP COLUMN spend_updated_at"
+            )
+        try:
+            with caplog.at_level(logging.ERROR, logger="app.routers.admin"):
+                listed = client.get("/api/admin/campaigns", headers=_ADMIN_HEADERS).json()["campaigns"]
+            row = next(c for c in listed if c["id"] == cid)
+            assert row["channel"] is None and row["spend_cents"] is None
+            assert any("v044" in rec.getMessage() for rec in caplog.records
+                      if rec.levelno >= logging.ERROR)
+
+            r = client.patch(f"/api/admin/campaigns/{cid}", json={"spend_cents": 100},
+                             headers=_ADMIN_HEADERS)
+            assert r.status_code == 503, r.text
+        finally:
+            with get_pg() as conn:
+                cur = conn.cursor()
+                cur.execute("ALTER TABLE campaigns ADD COLUMN channel TEXT")
+                cur.execute("ALTER TABLE campaigns ADD COLUMN spend_cents INTEGER")
+                cur.execute("ALTER TABLE campaigns ADD COLUMN landing_views INTEGER")
+                cur.execute("ALTER TABLE campaigns ADD COLUMN platform_conversions INTEGER")
+                cur.execute("ALTER TABLE campaigns ADD COLUMN spend_updated_at TIMESTAMPTZ")
+
+
 class TestAdminGate:
     def test_non_admin_403_everywhere(self, client):
         assert client.get("/api/admin/campaigns", headers=_REGULAR_HEADERS).status_code == 403

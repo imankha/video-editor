@@ -633,6 +633,27 @@ export const useAdminStore = create((set, get) => ({
     }));
   },
 
+  // T15200: the campaign row's Save-spend gesture (channel/spend_cents/landing_views/
+  // platform_conversions) -- separate from renameCampaign, since each gesture sends only
+  // the field group its own button touched. Patches the campaigns list in place; the Live
+  // campaigns block re-reads spend readiness itself (fetchSpendReadiness), not from here.
+  updateCampaignSpend: async (id, fields) => {
+    const res = await apiFetch(`${API_BASE}/api/admin/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const updated = await res.json();
+    set(state => ({
+      campaigns: (state.campaigns || []).map(c => (c.id === id ? { ...c, ...updated } : c)),
+    }));
+    return updated;
+  },
+
   fetchCohorts: async (granularity = 'week', origin = 'all') => {
     const requestId = ++cohortsRequestId;
     set({ cohortsLoading: true });

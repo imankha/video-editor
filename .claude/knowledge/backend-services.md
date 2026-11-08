@@ -1107,6 +1107,28 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
 - **Campaigns (v038):** `campaigns(id, name)`; `id` is the short `?ref=` code stored in `user_segments.origin`,
   `name` is display only (`campaign_name` on channels/users/journey rows). Missing-table guard: `_campaign_name_join`
   (admin.py, `to_regclass` probe -> NULL column + logged error).
+- **Campaign spend registry (T15200, v044):** adds nullable `channel` (`coach_credits|coach_gift|reddit|meta|club`),
+  `spend_cents`, `landing_views`, `platform_conversions`, `spend_updated_at` to `campaigns`. One PATCH gesture
+  (`CampaignUpdateRequest`, admin.py) handles rename and/or the spend group independently (`_SPEND_FIELDS`); the
+  spend group stamps `spend_updated_at = now()` and 503s before v044 runs (`_campaign_spend_columns_present`
+  guard, mirrored in `analytics_spend_readiness._campaign_spend_columns_present` since that module has no route
+  to guard it for tests). `list_campaigns`/`_campaign_row` serve spend fields as NULL + a logged error pre-migration,
+  never a silent 0. `spend_readiness_constants.CAMPAIGN_CHANNEL_PLATFORM` maps a campaign's `channel` to the
+  ladder's `platform` (`coach_credits`/`coach_gift` both -> `"coach"`; `club` deliberately absent -- its ladder
+  cost is a fixed fee, already measured without ad spend). `channel_rows(measured=...)` collapses every benchmark
+  row of a platform into one `label_kind: "M"` row (naming the contributing campaigns via `measured_campaigns`)
+  once `_measured_platform_costs` sees >= `C.MEASURED_MIN_SIGNUPS` (43) DIRECT attributed sign-ups with spend.
+  `build_spend_readiness` adds `live_campaigns` (one row per campaign with spend entered: cost per sign-up,
+  coverage against `platform_conversions`, GO/TEST/NO state against the shared break-even) -- empty list, and the
+  frontend block hidden, until a campaign has spend.
+  **Paid-ads vs referral-programme separation:** a referred sign-up inherits its referrer's origin
+  (`_determine_origin`), so without exclusion a referral chain through a paid-campaign joiner would double-count
+  as another paid attribution. `_direct_attributed_signups`/live_campaigns and the ladder's `_measured_platform_costs`
+  exclude any sign-up with a `referrals.referred_id` row; the origin DIMENSION read-out (`_origin_group_expr`)
+  redirects that same case to a synthetic `referral_programme` origin value instead of the campaign id, and
+  `analytics_channels` attaches `group: "paid"|"referral"|None` (origin dimension only, via `_channel_group`) so
+  the frontend (OriginLabel/ChannelsTable) can badge the two apart. Only a referred-AND-campaign-origin sign-up is
+  redirected -- an organic referred sign-up keeps a null group and its own origin value.
 - **Builds (v039):** `user_segments.signup_build`/`signup_commit` stamped SERVER-side in `create_user_segment` from
   `app.version` `APP_BUILD`/`APP_VERSION` (local dev: 0/"dev"); history stays NULL (never backfilled). Not in
   `_DEIDENTIFY_SEGMENT_COLUMNS`. Migration-window guard: `analytics.segment_has_signup_build(cur)` --
