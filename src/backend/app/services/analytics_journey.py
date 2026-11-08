@@ -19,6 +19,7 @@ Outcome rules (W = conversion window, I = inactivity threshold):
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
 
@@ -201,14 +202,24 @@ def loss_ranking(nodes: list[dict]) -> list[dict]:
 
 
 def annotate_coverage(nodes: list[dict], ladder: list[dict], d_from: date, d_to: date,
-                      instrumented_at: dict[str, str]) -> None:
+                      instrumented_at: dict[str, str], *,
+                      cohort_fold: Callable[[date], list[dict]] | None = None) -> None:
     """Honesty flags (design 5.6), in place.
 
     `partial_from`: the stage's earliest-instrumented action is younger than the signup
     window start, so older signups cannot have reached it. `no_data`: every action of the
     stage was instrumented after the window ended, so a count of 0 would be invented.
     Synthetic stages (no actions) are always instrumented.
+
+    T15230: a partial stage can still be judged over the sign-ups since its own
+    instrumentation date. `cohort_fold(cutoff)` re-folds ALL nodes with the window
+    narrowed to start at `cutoff` (same ladder order); its result is attached to EVERY
+    node (not just the partial one) as `node["cohort_at"][cutoff.isoformat()]`, since the
+    OTHER end of a transition needs its reached-at-cutoff too, even when that end is not
+    itself flagged partial. Called at most once per distinct cutoff. A `no_data` stage
+    never gets a cohort -- it has nothing in the window to fold.
     """
+    cohorts: dict[str, list[dict]] = {}
     for node, stage in zip(nodes, ladder):
         dates = [date.fromisoformat(instrumented_at[a]) for a in stage["actions"]
                  if a in instrumented_at]
@@ -224,6 +235,11 @@ def annotate_coverage(nodes: list[dict], ladder: list[dict], d_from: date, d_to:
             node["no_data"] = True
         elif first > d_from:
             node["partial_from"] = first.isoformat()
+            if cohort_fold is not None and node["partial_from"] not in cohorts:
+                cohorts[node["partial_from"]] = cohort_fold(first)
+    for cutoff, cohort_nodes in cohorts.items():
+        for node, cn in zip(nodes, cohort_nodes):
+            node.setdefault("cohort_at", {})[cutoff] = cn
 
 
 def percent_or_fraction(k: int, judged: int) -> dict[str, Any]:
@@ -289,7 +305,21 @@ def build_journey(cur, *, d_from: date | None, d_to: date, origin: str, build: i
     money = fold_journey(
         [{"mask": r["money_mask"], "outcome": r["money_outcome"], "n": r["n"]} for r in rows],
         JOURNEY_MONEY_LADDER)
-    annotate_coverage(folded["nodes"], ladder, d_from, d_to, EVENT_INSTRUMENTED_AT)
+    def _cohort_fold(cutoff: date) -> list[dict]:
+        # T15230: re-run the same query/fold with the window narrowed to start at `cutoff`,
+        # so a partial stage can be judged over the sign-ups it can actually measure.
+        cohort_rows = fetch_patterns(cur, ladder, JOURNEY_MONEY_LADDER, d_from=cutoff, d_to=d_to,
+                                     origin=origin, build=build, platform=platform, excl=excl,
+                                     window_days=window_days, inactive_days=inactive_days,
+                                     country=country)
+        cohort_folded = fold_journey(
+            [{"mask": r["mask"], "outcome": r["outcome"], "n": r["n"]} for r in cohort_rows], ladder)
+        return [{"reached": n["reached"], "continued": n["continued"], "in_window": n["in_window"],
+                "stuck": n["stuck"], "gone": n["gone"],
+                "judged": n["continued"] + n["stuck"] + n["gone"]} for n in cohort_folded["nodes"]]
+
+    annotate_coverage(folded["nodes"], ladder, d_from, d_to, EVENT_INSTRUMENTED_AT,
+                      cohort_fold=_cohort_fold)
     annotate_coverage(money["nodes"], JOURNEY_MONEY_LADDER, d_from, d_to, EVENT_INSTRUMENTED_AT)
     for n in folded["nodes"] + money["nodes"]:
         judged = n["continued"] + n["stuck"] + n["gone"]

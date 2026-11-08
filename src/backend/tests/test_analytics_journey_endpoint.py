@@ -163,6 +163,67 @@ class TestEndpoint:
         assert data["meta"]["from"] == (date.today() - timedelta(days=400)).isoformat()
         assert _by_key(data)["watched"]["partial_from"] == "2026-09-15"
 
+    def test_cohort_rate_judges_a_partial_step_over_its_own_measurable_signups(self, journey_client):
+        # T15230: "watched" (result_viewed, instrumented 2026-09-15) is partial because the
+        # window starts at an old earliest signup -- but it can still be judged over the
+        # sign-ups since 2026-09-15. The cohort must exclude a user who reached "watched"
+        # BEFORE that cutoff, even though the main (full-window) count includes them.
+        cutoff = date(2026, 9, 15)
+        d_from_target = date(2026, 9, 1)  # before the cutoff; clears every earlier instrumentation date
+        old_signup = date(2026, 9, 9)     # before the cutoff
+        new_signup = date(2026, 9, 20)    # after the cutoff
+
+        def _days_ago(d):
+            return (date.today() - d).days
+
+        from tests.conftest import register_test_user_ids
+        register_test_user_ids("ancient-signup", "old-watcher", "new-gone", "new-stuck", "new-finished-only")
+
+        _user("ancient-signup")
+        _age("ancient-signup", acquired_days=_days_ago(d_from_target), active_days=1000)
+
+        _user("old-watcher")
+        for a in ("overlay_exported", "result_viewed"):
+            record_milestone("old-watcher", a)
+        _age("old-watcher", action_days=30, active_days=20, acquired_days=_days_ago(old_signup))
+
+        _user("new-gone")
+        for a in ("overlay_exported", "result_viewed"):
+            record_milestone("new-gone", a)
+        _age("new-gone", action_days=30, active_days=20, acquired_days=_days_ago(new_signup))
+
+        _user("new-stuck")
+        for a in ("overlay_exported", "result_viewed"):
+            record_milestone("new-stuck", a)
+        _age("new-stuck", action_days=30, active_days=5, acquired_days=_days_ago(new_signup))
+
+        _user("new-finished-only")
+        record_milestone("new-finished-only", "overlay_exported")
+        _age("new-finished-only", action_days=30, active_days=20, acquired_days=_days_ago(new_signup))
+
+        resp = journey_client.get("/api/admin/analytics/journey",
+                                  params={"build": TEST_BUILD}, headers=_auth())
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["meta"]["from"] == d_from_target.isoformat()
+        nodes = _by_key(data)
+
+        watched = nodes["watched"]
+        assert watched["partial_from"] == cutoff.isoformat()
+        assert (watched["reached"], watched["stuck"], watched["gone"]) == (3, 1, 2)
+        watched_cohort = watched["cohort_at"][cutoff.isoformat()]
+        assert (watched_cohort["reached"], watched_cohort["continued"],
+                watched_cohort["stuck"], watched_cohort["gone"]) == (2, 0, 1, 1)
+
+        # "finished" isn't itself partial (overlay_exported predates the window), but it still
+        # carries a cohort at the SAME cutoff, since the other end of a step needs it too.
+        finished = nodes["finished"]
+        assert finished["partial_from"] is None
+        assert (finished["reached"], finished["continued"], finished["gone"]) == (4, 3, 1)
+        finished_cohort = finished["cohort_at"][cutoff.isoformat()]
+        assert (finished_cohort["reached"], finished_cohort["continued"],
+                finished_cohort["gone"]) == (3, 2, 1)
+
     def test_platform_filter_is_device_family_over_the_stored_keys(self, journey_client):
         # Stored keys are pwa-/webapp- x mobile/desktop (user_context._VALID_PLATFORMS); the
         # app records no iOS vs Android split. The filter is the device family.

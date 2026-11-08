@@ -63,9 +63,23 @@ export function stageTransition(stage) {
   return hit[0];
 }
 
+// A node's cohort at `cutoff` (T15230): reached/continued/in_window judged only over the
+// sign-ups on or after that date, attached by the backend to EVERY node once any node in
+// the payload is partial at that cutoff (so the other end of a step can read it too, even
+// when that end is not itself partial).
+function cohortAt(node, cutoff) {
+  return (node.cohort_at && node.cohort_at[cutoff]) || null;
+}
+
 // Generalises the backend continue rate to a span: the users who got to `to`, over the users
 // who entered `from` minus everyone still in window on the way (pending, not judged). Only
 // the two ends decide partial: with implied reach (T14720) inner stages don't move the rate.
+//
+// T15230: when an end is partial (not empty, just instrumented too late for the whole
+// window), the step is judged instead over the sign-ups since the LATER of the two ends'
+// instrumentation dates -- its own measurable cohort -- rather than giving up. It stays
+// partial only when that cohort is itself under the floor, or when an end is truly empty
+// (`no_data`: the stage's actions all postdate the window, so there is no cohort to fold).
 function measure(key, nodes) {
   const t = targetOf(key);
   const i = nodes.findIndex(n => n.key === t.from);
@@ -73,13 +87,37 @@ function measure(key, nodes) {
   const from = nodes[i];
   const to = nodes[j];
   const pending = nodes.slice(i, j).reduce((sum, n) => sum + n.in_window, 0);
-  const n = from.reached - pending;
-  const k = to.reached;
-  const pct = n >= SMALL_N_FLOOR ? Math.round((10000 * k) / n) / 100 : null;
+  let n = from.reached - pending;
+  let k = to.reached;
+  let pct = n >= SMALL_N_FLOOR ? Math.round((10000 * k) / n) / 100 : null;
+  let since = null;
   const unmeasured = [from, to].filter(s => s.partial_from || s.no_data);
-  const rag = unmeasured.length ? 'partial' : ragFor(key, pct, n);
+  let rag;
+  if (!unmeasured.length) {
+    rag = ragFor(key, pct, n);
+  } else if (unmeasured.some(s => s.no_data)) {
+    rag = 'partial';
+  } else {
+    const cutoff = unmeasured.map(s => s.partial_from).sort().pop();
+    const fromC = cohortAt(from, cutoff);
+    const toC = cohortAt(to, cutoff);
+    const pendingC = fromC && toC
+      ? nodes.slice(i, j).reduce((sum, nd) => sum + (cohortAt(nd, cutoff)?.in_window || 0), 0)
+      : 0;
+    const nC = fromC && toC ? fromC.reached - pendingC : 0;
+    if (fromC && toC && nC >= SMALL_N_FLOOR) {
+      n = nC;
+      k = toC.reached;
+      pct = Math.round((10000 * k) / n) / 100;
+      since = cutoff;
+      rag = ragFor(key, pct, n);
+    } else {
+      rag = 'partial';
+    }
+  }
+  const partialFrom = unmeasured.map(s => s.partial_from).find(Boolean) || null;
   return { key, from: t.from, to: t.to, label: `${from.label} to ${to.label}`, baseline: t.baseline,
-    target: t.target, k, n, pct, rag, partialFrom: unmeasured.map(s => s.partial_from).find(Boolean) || null };
+    target: t.target, k, n, pct, rag, partialFrom, since, entering: from.reached };
 }
 
 // Every step whose two ends are in the payload, in ladder order.
@@ -121,10 +159,12 @@ export function transitionMark(t) {
   return t.rag === 'grey' ? `n < ${SMALL_N_FLOOR}` : fmtPct(t.pct);
 }
 
-// The chip sentence: "62.00% of 143, target 78.00%".
+// The chip sentence: "62.00% of 143, target 78.00%" (or, judged over a cohort since T15230:
+// "71.00% of 212 since 2026-08-26, target 65.00%").
 export function transitionChipText(t) {
   const goal = `target ${fmtPct(t.target)}`;
   if (t.rag === 'partial') return `partial data${t.partialFrom ? ` from ${t.partialFrom}` : ''}, ${goal}`;
   if (t.rag === 'grey') return `n < ${SMALL_N_FLOOR} (${t.k} of ${t.n}), ${goal}`;
-  return `${fmtPct(t.pct)} of ${t.n}, ${goal}`;
+  const since = t.since ? ` since ${t.since}` : '';
+  return `${fmtPct(t.pct)} of ${t.n}${since}, ${goal}`;
 }

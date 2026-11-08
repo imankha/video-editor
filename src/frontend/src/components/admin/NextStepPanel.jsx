@@ -32,7 +32,10 @@ const KIND_CHIP = {
   other: 'bg-gray-500/15 text-gray-400',
 };
 
-export const usersLost = t => t.n - t.k;
+// T15230: a cohort-measured step (`since` set) reports a PROJECTED loss -- its cohort loss
+// rate times the users actually entering the step in the selected window (node counts, not
+// the narrower cohort `n`), since the cohort itself is not the full population at risk.
+export const usersLost = t => (t.since ? Math.round(((t.n - t.k) / t.n) * t.entering) : t.n - t.k);
 
 // The red or yellow step that lost the most judged users; ties keep the earlier step, which
 // is how PLAN.md orders its sections. Null when no step is red or yellow.
@@ -150,7 +153,11 @@ function LeakRow({ journey, transitions, leak }) {
     <div data-testid="next-step-leak" data-key={leak.key} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
       <span className="text-white font-medium">{leak.label}</span>
       <RagChip testId="next-step-leak-chip" rag={leak.rag} text={transitionChipText(leak)} title={RAG_STYLES[leak.rag].word} />
-      <span className="text-white font-semibold">{usersLost(leak)} lost</span>
+      <span className="text-white font-semibold">
+        {leak.since
+          ? `about ${usersLost(leak)} lost (projected from ${leak.k} of ${leak.n} since ${leak.since})`
+          : `${usersLost(leak)} lost`}
+      </span>
       {unjudged.length > 0 && <span className="text-gray-500">Not judged: {unjudged.join(', ')}. Any of these could be larger.</span>}
     </div>
   );
