@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.analytics import create_user_segment
 from app.services.auth_db import create_user
+from tests.conftest import register_test_user_ids
 
 DAY = "2020-03-02"
 DIMENSIONS = ("origin", "utm_source", "utm_campaign", "utm_content", "click_source",
@@ -122,6 +123,49 @@ class TestDimension:
     def test_revenue_remainder_still_reconciles_per_dimension(self, client):
         origin = _rows(client)["unattributed_revenue_cents"]
         assert _rows(client, "utm_source")["unattributed_revenue_cents"] == origin
+
+
+class TestPaidAdsVsReferralProgramme:
+    """T15200 AC3: a referred sign-up whose INHERITED origin is a registered campaign id
+    must never count as a Paid-ads attribution for that campaign -- it buckets as the
+    synthetic 'referral_programme' origin instead. Only the origin dimension separates;
+    other dimensions carry no such distinction (admin._channel_group)."""
+
+    def test_referred_signup_through_a_campaign_buckets_as_referral_programme(self, client):
+        create_user("user-paid", email="user-paid@test.com")
+        create_user("user-referred", email="user-referred@test.com")
+        register_test_user_ids("user-paid", "user-referred")
+        create_user_segment("user-paid", "camp-sep", None, "otp")
+        # _determine_origin gives a referred sign-up its referrer's origin -- simulated here
+        # directly, as the existing campaign/referral fixtures in this file do.
+        create_user_segment("user-referred", "camp-sep", None, "otp")
+        _acquired("user-paid", DAY)
+        _acquired("user-referred", DAY)
+        with _pg() as conn:
+            conn.cursor().execute(
+                "INSERT INTO campaigns (id, name, created_by) "
+                "VALUES ('camp-sep', 'Separation Test', 'admin-user')")
+            conn.cursor().execute(
+                "INSERT INTO referrals (referrer_id, referred_id, channel) "
+                "VALUES ('user-paid', 'user-referred', 'endcard')")
+        try:
+            rows = _by_value(client, "origin")
+            assert rows["camp-sep"]["signups"] == 1
+            assert rows["camp-sep"]["campaign_name"] == "Separation Test"
+            assert rows["camp-sep"]["group"] == "paid"
+            assert rows["referral_programme"]["signups"] == 1
+            assert rows["referral_programme"]["group"] == "referral"
+            assert rows["referral_programme"]["campaign_name"] is None
+        finally:
+            with _pg() as conn:
+                conn.cursor().execute("DELETE FROM referrals WHERE referred_id = 'user-referred'")
+                conn.cursor().execute("DELETE FROM campaigns WHERE id = 'camp-sep'")
+
+    def test_non_campaign_origin_group_is_null_even_when_referred(self, client):
+        """Only a campaign-id origin triggers the separation -- an organic referred
+        sign-up (this fixture's user-a/user-c pair) keeps a null group."""
+        rows = _by_value(client, "origin")
+        assert rows["organic"]["group"] is None
 
 
 class TestCountColumns:
