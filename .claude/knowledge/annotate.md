@@ -1851,6 +1851,14 @@ profile is an old bookmark. `parseEditorPath` and `modeFromPath` (editorStore) o
   `settleBootstrapAfter` fires on every path so that wait cannot hang.
 - **T7670 (`/?game=&profile=`):** editorStore's canonicalization drops the query at module load, so
   those two are allow-listed on a bare path. It keeps its persistent `switchProfile`.
+- **T15220 (`APP_READ_PARAMS`):** the same module-load canonicalization also used to drop every
+  other query param (Stripe return `payment`/`session_id`, and every `campaignCapture.CAMPAIGN_PARAMS`
+  entry) before App ever read them -- `editorStore.js`'s `APP_READ_PARAMS` list keeps them through
+  canonicalization; App/`stripCampaignParams()` strip them once read. A payment-return auto-export
+  must NOT be driven by polling an export-button ref: `ExportButtonSection`/`FocusCockpit` only mount
+  that ref once `videoUrl` resolves, so the poll can race the mount indefinitely (two prior fixes
+  silently never exported). Use `exportStore.pendingAutoExport` (a one-shot intent `ExportButtonContainer`
+  itself consumes via an effect, once it is actually able to export) instead.
 - **Landmines:** ids are per-profile, so an old bookmark opens the current profile's object when the
   same id exists there. ProjectManager is mounted under a cold `/focus/p/{id}`, and its default-tab
   settle replaces the URL unless `landingTabFromPath` names a tab. `projectsStore.loading` starts true,

@@ -56,7 +56,8 @@ import { useCreditStore } from './stores/creditStore';
 import { useConfigStore } from './stores/configStore';
 import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
-import { captureCampaignParams } from './utils/campaignCapture';
+import { captureCampaignParams, stripCampaignParams } from './utils/campaignCapture';
+import { isPublicRoute } from './stores/editorStore';
 import { setPendingGame, hasPendingProject } from './utils/pendingNavigation';
 import { openEmailGameLink } from './utils/emailGameLink';
 import { markBootstrapSettled, settleBootstrapAfter } from './utils/deepLinkRecovery';
@@ -157,6 +158,8 @@ function App() {
   // T3455: Capture campaign params from URL (first-touch attribution)
   useEffect(() => {
     captureCampaignParams(window.location.search, document.referrer, window.location.hostname);
+    // T15220: public routes are never canonicalized, so their address stays as it arrived.
+    if (!isPublicRoute()) stripCampaignParams();
   }, []);
 
   // T7670: Upload-complete email deep link (?game=<id>&profile=<profileId>).
@@ -320,7 +323,12 @@ function App() {
           useProjectsStore.getState().selectProject(Number(returnProjectId));
         }
         if (returnMode) {
-          useEditorStore.getState().setEditorMode(returnMode);
+          // T15220: pass projectId so the URL reads /focus|overlay/p/<id>, not a bare
+          // mode path (the id would otherwise fall back to whatever the cold-load
+          // canonicalizer already put in the path, which a Stripe return never carries).
+          useEditorStore.getState().setEditorMode(returnMode, {
+            projectId: returnProjectId ? Number(returnProjectId) : undefined,
+          });
         }
 
         if (payment === 'success' && paymentSessionId) {
@@ -336,11 +344,17 @@ function App() {
                 const credits = data.credits || 0;
                 toast.success(CREDITS.added(credits));
                 // Auto-trigger export if user was mid-export when redirected.
-                // T9740: pick the ref for the mode we restored to, so we trigger
-                // the button that actually mounts in that mode.
-                if (autoExport) {
-                  const returnRef = returnMode === EDITOR_MODES.OVERLAY ? overlayExportButtonRef : focusExportButtonRef;
-                  setTimeout(() => returnRef.current?.triggerExport(), 500);
+                // T15220: a ref-based trigger (immediate, then a poll on a `ready`
+                // flag) raced the export button's own mount -- ExportButtonSection
+                // only mounts once videoUrl resolves, so `returnRef.current` could
+                // still be null well after this fires. Set a one-shot intent instead;
+                // ExportButtonContainer (for the mode we restored to) consumes it the
+                // first render where it is actually able to export.
+                if (autoExport && returnProjectId) {
+                  useExportStore.getState().setPendingAutoExport({
+                    mode: returnMode,
+                    projectId: Number(returnProjectId),
+                  });
                 }
               } else {
                 toast.info('Payment is still processing. Your credits will appear shortly.');
