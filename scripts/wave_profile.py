@@ -439,16 +439,22 @@ def merged_task_commits(task):
     """origin/master commit subjects for `task` (CLAUDE.md: every tracked commit starts with
     the task id), or None if the check itself could not run (e.g. no origin remote offline)."""
     try:
-        result = subprocess.run(["git", "log", "origin/master", "--grep", f"^{task}[: ]", "--format=%h %s", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
+        result = subprocess.run(["git", "log", "origin/master", "--grep", f"^{task}[: ]", "--format=%H %s", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
                                 check=False)
+        reverts = subprocess.run(["git", "log", "origin/master", "--grep", "This reverts commit", "--format=%B"],
+                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+                                 check=False)
     except (OSError, subprocess.SubprocessError):
         return None
-    if result.returncode:
+    if result.returncode or reverts.returncode:
         return None
+    # A commit undone by a `git revert` on master is not work done (T15220, reverted out of PR #717).
+    reverted = set(re.findall(r"This reverts commit ([0-9a-f]{40})", reverts.stdout))
     # --grep also matches body lines, and a wrapped list of task ids can open one (5c669996f).
     subject = re.compile(rf"\S+ {task}[: ]")
-    return [line for line in result.stdout.splitlines() if subject.match(line)]
+    return [f"{line[:9]}{line[40:]}" for line in result.stdout.splitlines()
+            if subject.match(line) and line[:40] not in reverted]
 
 
 def design_snapshot():
