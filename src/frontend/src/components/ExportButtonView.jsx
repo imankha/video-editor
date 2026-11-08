@@ -2,10 +2,11 @@ import { forwardRef, useImperativeHandle, lazy, Suspense } from 'react';
 import { Download, Loader, AlertCircle, Eye } from 'lucide-react';
 import ActionBand from './ActionBand';
 import PrimaryCta from './PrimaryCta';
+import { ConfirmationDialog } from './shared/ConfirmationDialog';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
-import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_HINTS, ERROR_COPY, FRAME_COPY } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_BOX_CONFIRM, ERROR_COPY, FRAME_COPY } from '../config/displayNames';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { exportFailureCopy } from '../utils/userError';
@@ -43,9 +44,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   retrying,
   isFramingMode,
 
-  // Clip status
-  hasUnframedClips,
-
   // T10650: Focus "Back to Preview" — when the current framing is already
   // rendered, the primary CTA reopens that render instead of paying to
   // re-render (framingCtaMode === 'preview'); once framing changes the same
@@ -62,6 +60,11 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // Button state
   isButtonDisabled,
   buttonTitle,
+
+  // T14830: "Is your athlete in the box?" pre-spend warning.
+  showBoxConfirm = false,
+  onBoxConfirmCheck,
+  onBoxConfirmContinue,
 
   // Handlers
   onExport,
@@ -149,17 +152,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {isPreviewCta && renderedAt && (
         <div data-testid="rendered-at-note" className="text-xs text-gray-400">
           {`${FOCUS_PREVIEW.RENDERED_PREFIX} ${formatRenderedAt(renderedAt)}`}
-        </div>
-      )}
-
-      {/* Unframed clips warning + disabled reason (T8510) */}
-      {isFramingMode && hasUnframedClips && !isCurrentlyExporting && (
-        <div
-          data-testid="export-unframed-caption"
-          className="flex items-center gap-1.5 text-xs text-amber-400"
-        >
-          <AlertCircle size={12} className="shrink-0" />
-          <span>{FOCUS_HINTS.GENERATE_LOCKED}</span>
         </div>
       )}
 
@@ -296,15 +288,9 @@ const ExportButtonView = forwardRef(function ExportButtonView({
     </>
   );
 
-  // T11720: while Focus is locked (clip unframed, not mid-export) the band
-  // collapses to one compact row below sm. Derived from the same hasUnframedClips
-  // signal the disabled gate uses (ultimately clipIsFramed) — no stored flag.
-  const compactLocked = isFramingMode && hasUnframedClips && !isCurrentlyExporting;
-
   return (
     <>
       <ActionBand
-        compactLocked={compactLocked}
         above={actionsAbove}
         status={statusCell}
         cta={
@@ -357,6 +343,22 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           />
         </Suspense>
       )}
+
+      {/* T14830 (owner ruling 2026-11-07, "Confirm once"): the one-time
+          pre-spend warning when the parent has neither moved the box nor
+          checked it. "Check the box" closes without spending; "Sharpen my
+          highlight" proceeds with the export. */}
+      <ConfirmationDialog
+        isOpen={showBoxConfirm}
+        title={FOCUS_BOX_CONFIRM.TITLE}
+        message={FOCUS_BOX_CONFIRM.BODY}
+        panelTestId="focus-box-confirm"
+        onClose={onBoxConfirmCheck}
+        buttons={[
+          { label: FOCUS_BOX_CONFIRM.CHECK_BUTTON, onClick: onBoxConfirmCheck, variant: 'secondary' },
+          { label: FOCUS_BOX_CONFIRM.CONTINUE_BUTTON, onClick: onBoxConfirmContinue, variant: 'primary' },
+        ]}
+      />
     </>
   );
 });

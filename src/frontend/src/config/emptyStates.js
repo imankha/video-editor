@@ -36,9 +36,9 @@ export const EMPTY_TAB_GUIDE = {
   games: {
     headline: 'Review your game',
     addGameCaption: null,
-    // Footer kept ONLY on Games: it carries the "a game is not a hard
-    // prerequisite either" message -- have a play already, skip ahead to Plays.
-    footerPrefix: 'Have a play already? ',
+    // T14810: now a real secondary button beside Upload game (GamesActions in
+    // EmptyTabGuide.jsx), not a grey footer caption -- "a game is not a hard
+    // prerequisite either" message.
     footerLink: 'Skip ahead to Plays.',
   },
   clips: {

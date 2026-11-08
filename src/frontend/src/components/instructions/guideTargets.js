@@ -8,7 +8,13 @@
 export const GUIDE_PULSE = {
   MARK_PLAY: 'annotate-mark-play-button',
   ANNOTATE_PLAY: 'annotate-play-button',
-  PORTRAIT_SLOT: 'annotate-highlight-slot-portrait',
+  // T14770: the one Make highlight entry button (replaces PORTRAIT_SLOT/HIGHLIGHT_SLOT).
+  MAKE_HIGHLIGHT: 'annotate-make-highlight',
+  // T14770: a highlight's own row in "Highlights from this play" — only the row
+  // matching the tracked portrait instance (catalog.annotateFacts) ever pulses.
+  HIGHLIGHT_ROW: 'annotate-highlight-row',
+  // T14770: Frame's "Where will you share it?" shape choice (step 1 of 6).
+  FRAME_SHAPE_CHOICE: 'focus-shape-choice',
   UPLOAD_GAME: 'home-upload-game',
   FIRST_GAME: 'home-first-game',
   TAB_PUBLISHED: 'home-tab-published',
@@ -22,7 +28,6 @@ export const GUIDE_PULSE = {
   CHOICE_NOW: 'highlight-choice-now',
   PLAY_EDITOR_DONE: 'play-editor-done',
   SHARE_PLAYS: 'annotate-share-plays',
-  HIGHLIGHT_SLOT: 'annotate-highlight-slots',
   FIRST_PLAY: 'annotate-first-play',
   UPLOAD_SUBMIT: 'upload-submit',
   UPLOAD_RETRY: 'upload-retry',

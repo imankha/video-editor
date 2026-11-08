@@ -1306,7 +1306,7 @@ export function ProjectManager({
         // User navigated away mid-upload: never force navigation — offer Open.
         toast.success(addedMsg, {
           action: {
-            label: ANNOTATE.MAKE_A_HIGHLIGHT,
+            label: ANNOTATE.MAKE_HIGHLIGHT_NOW,
             onClick: () => onSelectProjectWithMode(firstId, { mode: 'framing' }),
           },
         });
@@ -1381,6 +1381,15 @@ export function ProjectManager({
     setGamePrefillFiles(null);
     setVeoZip(zip);
   }, []);
+
+  // T14810: "Upload a play instead" from the Upload game modal's no-video-on-
+  // this-device disclosure — close the game modal and open the SAME direct
+  // clip-upload flow the Clips tab's Add Video button uses.
+  const handleSwitchToClipUpload = useCallback(() => {
+    setShowGameDetailsModal(false);
+    setGamePrefillFiles(null);
+    handleAddVideoClick();
+  }, [handleAddVideoClick]);
 
   // T10250: "Add Game instead" from the size-limit dialog — carry the over-cap
   // file(s) into the Add Game picker (no size cap there), then dismiss the dialog.
@@ -2565,6 +2574,7 @@ export function ProjectManager({
         onCreateGame={handleCreateGame}
         initialFiles={gamePrefillFiles}
         onVeoZip={handleVeoFromGameModal}
+        onSwitchToClipUpload={handleSwitchToClipUpload}
       />
 
       {/* T10250: over-cap pre-flight dialog. Shown INSTEAD of hashing/uploading a

@@ -4,7 +4,7 @@
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-11-03
-**Updated:** 2026-11-03
+**Updated:** 2026-11-07
 
 ## Problem
 
@@ -29,20 +29,26 @@ under a card at the bottom of a scrolling screen. The 5-step coach does lead thr
 Preview, but only while Guidance is on and only if the parent reads it; T14760 shows the
 coach itself can stall on this screen.
 
-## Solution (decision for the owner, then implement the ruled option)
+## Ruling
 
-Options, recommendation first:
+**"Confirm once"** (owner, 2026-11-07). Replaces F1. Generate, Trim/Slow-mo and Preview are
+never disabled by drag or Play, in portrait and in the landscape cockpit -- only a missing
+video blocks them. When Generate is pressed and the parent has neither moved the box nor
+checked it, show one warning before any credits are spent; playing the clip with a
+pre-placed box counts as checked. A multi-clip highlight with several untouched clips still
+shows only one warning. Continuing proceeds with the export normally; the other button
+closes the warning and spends nothing. Warning copy (`FOCUS_BOX_CONFIRM` in
+`displayNames.js`): title "Is your athlete in the box?", body "You haven't moved the box, so
+it's still in the middle. Sharpening uses credits.", buttons "Check the box" / "Sharpen my
+highlight". Guidance stays advice: coach steps still suggest the box, Play and Preview but
+block nothing. T8510's credit protection now comes from this warning instead of a lock.
 
-- **A (recommended):** Generate unlocks on the first box drag (keeps ruling F1). Play and
-  Preview stay in the coach as steps 2-4 and the Preview card keeps its "check the framing"
-  caption, but neither locks Generate. The lock caption becomes "Drag the box onto your
-  athlete to unlock".
-- **B:** Keep both gates but make the locked card explain itself in place: tapping the
-  disabled card pulses the Play button and shows the coach step ("Tap Play to check the
-  framing, then Generate"). No analytics change.
-- **C:** Keep as is; revisit after T14710 shows the true loss.
+## Solution
 
-Copy follows the glossary (box, athlete, Sharpen my highlight once T14620 lands).
+Implemented per the owner's "Confirm once" ruling above: remove every lock gate (drag/Play)
+from Generate, Trim/Slow-mo and Preview in both portrait and the landscape cockpit, and add a
+one-time pre-spend confirmation dialog on Generate when the box is unchecked. Copy follows
+the glossary (box, athlete, Sharpen my highlight).
 
 ## Context
 
@@ -64,18 +70,39 @@ Copy follows the glossary (box, athlete, Sharpen my highlight once T14620 lands)
 ## Implementation
 
 ### Steps
-1. [ ] Decision page for the owner with the three options and a phone mock of A and B (ui-designer), citing ruling F1 and the 2026-10-06 commit.
-2. [ ] Implement the ruled option; update the lock caption and the coach steps.
-3. [ ] Vitest: with option A, Generate is enabled after a drag with no Play; coach step 2 still resolves. E2e: phone 390x844 drag then Generate.
-4. [ ] After T14710 is on prod: record Moved framing window -> Exported before/after in this file.
+1. [x] Owner ruled "Confirm once" (2026-11-07) -- see Ruling above.
+2. [x] Remove every remaining lock (`disabled`/`guideLocked` in `FocusModeView.jsx`, `locked` in `FramingActionRow.jsx`, `hasUnframedClips` gate in `ExportButtonContainer.jsx`) and all lock captions/copy requiring drag or Play.
+3. [x] Add the "Is your athlete in the box?" `ConfirmationDialog` on Generate, gated on `boxChecked` (moved or played-while-pre-placed); wired through `ExportButtonContainer` -> `ExportButtonView`, and through `FocusModeView`/`FocusCockpit`'s `boxChecked` prop.
+4. [x] Vitest: never-locked gates (portrait + landscape cockpit), confirm-dialog show/continue/close behavior. Playwright: a parent who never touches the box can export, including an unframed clip with no pre-placed box.
+5. [ ] After T14710 is on prod: record Moved framing window -> Exported before/after in this file.
 
 ### Progress Log
 
 **2026-11-03**: Filed from the funnel walk (desktop and phone) + prod journey screenshot. Not started. Decision pending.
 
+**2026-11-07**: Implemented option A (drag-only gate, Play became advice). Superseded same day.
+
+**2026-11-07 (owner ruling "Confirm once")**: Removed the drag gate entirely. `hasUnframedClips`
+in `ExportButtonContainer.jsx` no longer disables the button; it now only drives a new
+`needsBoxConfirm` (Framing + unframed + `!boxChecked`) that opens a `ConfirmationDialog`
+("Is your athlete in the box?") on Generate press instead of blocking it. `boxChecked` is the
+container's name for the existing `dragDone` signal (drag OR play-while-pre-placed),
+threaded in from `FocusModeView.jsx` (`boxChecked={dragDone}`) and `FocusCockpit.jsx`
+(`boxChecked={boxPrePlaced && hasPlayed}` -- the cockpit tracks its own `hasPlayed` since it
+has no separate drag-gesture ref; an actual crop move is already reflected in
+`hasUnframedClips`' real crop-data check). `FramingActionRow`'s `locked` prop and
+`ActionBand`'s `compactLocked` phone-only band (T11720) are both removed -- nothing left to
+show a locked state for. All `FOCUS_HINTS.GENERATE_LOCKED*`/`FRAMING_GUIDE.LOCKED_TITLE` copy
+and the `export-unframed-caption` dead. New `FOCUS_BOX_CONFIRM` copy block added to
+`displayNames.js`. Confirmed via Playwright (`e2e/T14830-never-touch-box-export.spec.js`,
+dev preset `full`, project 64 which has `has_crop_keyframes: false`) that Generate is enabled
+untouched, the warning shows on press, and "Sharpen my highlight" in the dialog proceeds with
+the export.
+
 ## Acceptance Criteria
 
-- [ ] Owner has ruled A, B or C on a decision page; the ruling is recorded here.
-- [ ] Under A: a parent who dragged the box can generate without pressing Play; Guidance still suggests Play and Preview.
-- [ ] Lock caption and coach copy follow the glossary.
-- [ ] Tests pass.
+- [x] Generate, Trim/Slow-mo and Preview are never disabled by drag or Play, in portrait and in the landscape cockpit. Only a missing video blocks them.
+- [x] A new small dialog shows when Generate is pressed and the parent has neither moved the box nor checked it, before any credits are spent. Playing the clip with a pre-placed box counts as checked. A multi-clip highlight with several such clips still shows only one warning. Continuing proceeds with the export normally; the other button closes the dialog and spends nothing.
+- [x] Warning copy lives in `displayNames.js`: title "Is your athlete in the box?", body "You haven't moved the box, so it's still in the middle. Sharpening uses credits.", buttons "Check the box" and "Sharpen my highlight".
+- [x] Guidance stays advice: coach steps still suggest the box, Play and Preview but block nothing.
+- [x] Confirmed in the real app (Playwright) that a parent who never touches the box can export, including a clip with no pre-placed box.

@@ -42,15 +42,15 @@ const formatCredits = (credits: number) => credits.toLocaleString('en-US')
 const faqs: FaqItem[] = [
   {
     q: 'What is ReelBallers?',
-    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game video into shareable highlights. You upload your game, mark the plays worth keeping and frame your athlete, and it makes the highlight.',
+    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game video into shareable highlights. You upload your game, mark the plays worth keeping and zoom in on your athlete, and it makes the highlight.',
   },
   {
     q: 'How do I make a highlight reel from a game video?',
-    a: `Five steps. Upload your game, mark the plays worth keeping (tagging each with a play type), frame your athlete with a few drags, add a spotlight, then share. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can send with a link. ${HIGHLIGHT_REEL_LINE}`,
+    a: `Five steps. Upload your game, mark the plays worth keeping (tagging each with a play type), zoom in on your athlete with a few drags, add a spotlight, then share. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can send with a link. ${HIGHLIGHT_REEL_LINE}`,
   },
   {
-    q: 'How does it keep my athlete in frame?',
-    a: 'You film wide from the sideline with any camera. You mark the best plays and frame your athlete, ReelBallers smooths the motion, then AI upscaling keeps the close-up sharp, so the highlight looks like it was filmed close-up on your athlete alone. There is no hardware to buy.',
+    q: 'How does it keep my athlete in the shot?',
+    a: 'You film wide from the sideline with any camera. You mark the best plays and zoom in on your athlete, ReelBallers smooths the motion, then AI upscaling keeps the close-up sharp, so the highlight looks like it was filmed close-up on your athlete alone. There is no hardware to buy.',
   },
   {
     q: 'What video does ReelBallers work with?',
@@ -180,7 +180,7 @@ const steps = [
           label={HERO_MEDIA.alt}
           frameClassName="md:w-[300px] md:h-[533px]"
           beforeLabel="Your game video"
-          afterLabel="Framed"
+          afterLabel="Zoomed in"
         />
       </div>
     </div>

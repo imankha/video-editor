@@ -2,17 +2,17 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T11430 review-fix regression + T11910 single render path.
+ * T11430 review-fix regression + T14770 single entry + list.
  *
  * T11430 (kept): clicking an instance whose stage is preview/published must fetch
  * the FULL project (useProjectsStore.fetchProject) before onOpenClipPreview;
  * the instance is archived so it is not in projectsList and a bare {id} would
  * trip openClipPreview's final_video_id guard.
  *
- * T11910: the legacy single-stage CTA, the instance list and "Make Another
- * Highlight" are one surface now: two permanent Portrait/Landscape slots that
- * render identically in every state (zero / one / both instances), so a play
- * looks the same right after creating a highlight and after a reload.
+ * T14770: the T11910 two-slot surface is replaced by ONE Make highlight entry
+ * (always creates a new portrait highlight, forceNew) plus "Highlights from
+ * this play" listing every highlight already made (either shape, any count),
+ * each opening where it left off.
  */
 
 const fetchProjectMock = vi.fn();
@@ -132,15 +132,13 @@ const landscapePublished = {
 
 const noHighlight = { id: 'c2', startTime: 2, endTime: 8, autoProjectId: null, highlightInstances: [] };
 
-const slot = (orientation) => screen.getByTestId(`annotate-highlight-slot-${orientation}`);
-
 describe('T11430 highlight instances (review-fix regression)', () => {
   it('a published instance row fetches the full project and opens preview with it (BLOCKING fix)', async () => {
     fetchProjectMock.mockResolvedValue(PUBLISHED_PROJECT_DETAIL);
     const onOpenClipPreview = vi.fn();
     renderView({ clipRegions: [publishedRegion], onOpenClipPreview });
 
-    fireEvent.click(screen.getByRole('button', { name: /portrait highlight, finished/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^portrait, finished/i }));
 
     await waitFor(() => expect(fetchProjectMock).toHaveBeenCalledWith(42));
     await waitFor(() =>
@@ -155,13 +153,13 @@ describe('T11430 highlight instances (review-fix regression)', () => {
     const onOpenClipPreview = vi.fn();
     renderView({ clipRegions: [publishedRegion], onOpenClipPreview });
 
-    fireEvent.click(screen.getByRole('button', { name: /portrait highlight, finished/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^portrait, finished/i }));
 
     await waitFor(() => expect(fetchProjectMock).toHaveBeenCalledWith(42));
     expect(onOpenClipPreview).not.toHaveBeenCalled();
   });
 
-  it('per-instance focus and overlay rows open their own distinct projects', async () => {
+  it('per-instance rows open their own distinct projects', async () => {
     const onOpenClipInFocus = vi.fn();
     const onOpenClipInOverlay = vi.fn();
     const twoInProgress = {
@@ -173,7 +171,7 @@ describe('T11430 highlight instances (review-fix regression)', () => {
           hasWorkingVideo: true, hasFinalVideo: false, isPublished: false, archivedAt: null,
           reelSourceStartTime: 2, reelSourceEndTime: 8,
         },
-        // Fresh draft -> 'focus' action.
+        // Second highlight from the same play, still at the Frame stage -> 'focus' action.
         {
           projectId: 202, aspectRatio: '9:16', highlightOrdinal: 2,
           hasWorkingVideo: false, hasFinalVideo: false, isPublished: false, archivedAt: null,
@@ -186,13 +184,10 @@ describe('T11430 highlight instances (review-fix regression)', () => {
       onOpenClipInFocus, onOpenClipInOverlay,
     });
 
-    fireEvent.click(screen.getByText('Add spotlight'));
+    fireEvent.click(screen.getByTestId('highlight-row-201'));
     await waitFor(() => expect(onOpenClipInOverlay).toHaveBeenCalledWith(201));
 
-    // The fresh-draft (ordinal 2) instance opens Focus on project 202.
-    // c6e6708fa: a not-started instance row now reads "Start {orientation}
-    // highlight {ordinal}" instead of "{ordinal}. Not started".
-    fireEvent.click(screen.getByText('Start portrait highlight 2'));
+    fireEvent.click(screen.getByTestId('highlight-row-202'));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(202));
 
     expect(onOpenClipInOverlay).not.toHaveBeenCalledWith(202);
@@ -200,55 +195,35 @@ describe('T11430 highlight instances (review-fix regression)', () => {
   });
 });
 
-describe('T11910 orientation slots: one render path for every state', () => {
+describe('T14770 single Make highlight entry + Highlights from this play list', () => {
   it.each([
     ['no highlight', noHighlight, 'c2'],
     ['one published', publishedRegion, 'c1'],
     ['landscape published', landscapePublished, 'c3'],
-  ])('%s: renders both slots and never the legacy CTAs', (_label, region, id) => {
+  ])('%s: Edit play first, one Make highlight entry, never the legacy slots', (_label, region, id) => {
     renderView({ clipRegions: [region], annotateSelectedRegionId: id });
-    expect(screen.getByTestId('annotate-highlight-slots')).toBeTruthy();
-    expect(slot('portrait')).toBeTruthy();
-    expect(slot('landscape')).toBeTruthy();
-    expect(screen.getByTestId('instance-orientation-icon-portrait')).toBeTruthy();
-    expect(screen.getByTestId('instance-orientation-icon-landscape')).toBeTruthy();
+    expect(screen.getByTestId('annotate-make-highlight')).toBeTruthy();
+    expect(screen.queryByTestId('annotate-highlight-slots')).toBeNull();
+    expect(screen.queryByTestId(/annotate-highlight-slot-/)).toBeFalsy();
     expect(screen.queryByTestId('annotate-stage-cta')).toBeNull();
     expect(screen.queryByTestId('annotate-make-another-highlight-cta')).toBeNull();
-    // Edit play is always there. 31b50fab5: it is a card whose accessible name
-    // is the title followed by a description line, so anchor on the title.
+    // Edit play is always there, first. 31b50fab5: it is a card whose accessible
+    // name is the title followed by a description line, so anchor on the title.
     expect(screen.getByRole('button', { name: /^edit play/i })).toBeTruthy();
   });
 
-  it('no highlight: both slots offer their own Make button, neither preselected', () => {
+  it('no highlight: one Make highlight button, no list', () => {
     renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2' });
-    expect(screen.getByTestId('annotate-make-highlight-portrait')).toBeTruthy();
-    expect(screen.getByTestId('annotate-make-highlight-landscape')).toBeTruthy();
-    // c6e94b278: the visible label is a plain "Make highlight" (the slot heading
-    // already names the orientation); each button keeps an orientation-specific
-    // accessible name.
-    expect(screen.getByRole('button', { name: /^make portrait highlight$/i }))
-      .toBe(screen.getByTestId('annotate-make-highlight-portrait'));
-    expect(screen.getByRole('button', { name: /^make landscape highlight$/i }))
-      .toBe(screen.getByTestId('annotate-make-highlight-landscape'));
-    expect(slot('portrait').textContent).toContain('Make highlight');
-    expect(slot('landscape').textContent).toContain('Make highlight');
+    expect(screen.getByTestId('annotate-make-highlight').textContent).toContain('Make highlight');
+    expect(screen.queryByTestId('annotate-highlight-list')).toBeNull();
   });
 
-  it('neither slot is favored: both Make buttons have identical styling', () => {
-    renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2' });
-    const portrait = screen.getByTestId('annotate-make-highlight-portrait');
-    const landscape = screen.getByTestId('annotate-make-highlight-landscape');
-    expect(portrait.className).toBe(landscape.className);
-    expect(document.activeElement).not.toBe(portrait);
-    expect(document.activeElement).not.toBe(landscape);
-  });
-
-  it('Make Portrait creates a NEW 9:16 highlight and opens Framing', async () => {
+  it('Make highlight creates a NEW portrait (9:16) highlight and opens Frame (shape picked there)', async () => {
     const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 77 });
     const onOpenClipInFocus = vi.fn();
     renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2', onFullscreenUpdateClip, onOpenClipInFocus });
 
-    fireEvent.click(screen.getByTestId('annotate-make-highlight-portrait'));
+    fireEvent.click(screen.getByTestId('annotate-make-highlight'));
 
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(77));
     expect(onFullscreenUpdateClip).toHaveBeenCalledWith('c2', {
@@ -256,49 +231,39 @@ describe('T11910 orientation slots: one render path for every state', () => {
     });
   });
 
-  it('Make Landscape creates a NEW 16:9 highlight', async () => {
-    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 78 });
-    renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2', onFullscreenUpdateClip });
-
-    fireEvent.click(screen.getByTestId('annotate-make-highlight-landscape'));
-
-    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
-    expect(onFullscreenUpdateClip.mock.calls[0][1]).toMatchObject({
-      createProject: true, forceNew: true, aspectRatio: '16:9',
-    });
-  });
-
-  it('portrait published: the portrait slot lists it, the landscape slot offers Make Landscape (16:9)', async () => {
+  it('a second highlight can be made from a play that already has one', async () => {
     const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1000 });
     renderView({ clipRegions: [publishedRegion], onFullscreenUpdateClip });
 
-    expect(screen.queryByTestId('annotate-make-highlight-portrait')).toBeNull();
-    expect(slot('portrait').textContent).toContain('Finished');
-
-    fireEvent.click(screen.getByTestId('annotate-make-highlight-landscape'));
+    // The entry button is still there (never disappears once a highlight exists).
+    fireEvent.click(screen.getByTestId('annotate-make-highlight'));
     await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
-    expect(onFullscreenUpdateClip.mock.calls[0][1]).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '16:9' });
+    expect(onFullscreenUpdateClip.mock.calls[0][1]).toMatchObject({
+      createProject: true, forceNew: true, aspectRatio: '9:16',
+    });
   });
 
-  it('landscape published: the landscape slot lists it, the portrait slot offers Make Portrait (9:16)', async () => {
-    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1001 });
-    renderView({ clipRegions: [landscapePublished], annotateSelectedRegionId: 'c3', onFullscreenUpdateClip });
-
-    expect(screen.queryByTestId('annotate-make-highlight-landscape')).toBeNull();
-    expect(slot('landscape').textContent).toContain('Finished');
-
-    fireEvent.click(screen.getByTestId('annotate-make-highlight-portrait'));
-    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
-    expect(onFullscreenUpdateClip.mock.calls[0][1]).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '9:16' });
+  it('list shows a count chip and the row opens where it left off', () => {
+    renderView({ clipRegions: [publishedRegion], annotateSelectedRegionId: 'c1' });
+    expect(screen.getByTestId('annotate-highlight-list')).toBeTruthy();
+    expect(screen.getByTestId('highlight-count-portrait').textContent).toBe('1 portrait');
+    expect(screen.queryByTestId('highlight-count-landscape')).toBeNull();
+    expect(screen.getByTestId('highlight-row-42').textContent).toContain('Finished');
   });
 
-  it('a double click on Make cannot create two highlights', async () => {
+  it('landscape published: the list shows a landscape count chip', () => {
+    renderView({ clipRegions: [landscapePublished], annotateSelectedRegionId: 'c3' });
+    expect(screen.getByTestId('highlight-count-landscape').textContent).toBe('1 landscape');
+    expect(screen.queryByTestId('highlight-count-portrait')).toBeNull();
+  });
+
+  it('a double click on Make highlight cannot create two highlights', async () => {
     let resolve;
     const onFullscreenUpdateClip = vi.fn(() => new Promise((r) => { resolve = r; }));
     renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2', onFullscreenUpdateClip });
 
-    fireEvent.click(screen.getByTestId('annotate-make-highlight-portrait'));
-    fireEvent.click(screen.getByTestId('annotate-make-highlight-landscape'));
+    fireEvent.click(screen.getByTestId('annotate-make-highlight'));
+    fireEvent.click(screen.getByTestId('annotate-make-highlight'));
 
     expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1);
     resolve({ saveOk: false, projectId: null });

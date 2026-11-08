@@ -34,8 +34,28 @@ function progressLine(exp) {
 // promised completion time has passed by this grace period, the number is a lie -
 // switch to stage wording instead of a frozen countdown.
 export const ETA_BUST_GRACE_MS = 15000;
-// T8510: "Less than a minute" is never shown while percent has been frozen this long.
+// T8510: a near-done estimate is never shown while percent has been frozen this long.
 export const ETA_STALL_MS = 30000;
+
+// T14860: measured 2026-11-03 sample (encode 2.5s + upload 4.1s + detect-players 19.7s =
+// 26.3s), rounded up -- the fixed tail added after the AI-upscale frame loop ends, since
+// those phases don't report their own frame counts. Static approximation until there are
+// enough completed jobs to track a real rolling median server-side.
+export const POST_UPSCALE_TAIL_SECONDS = 30;
+
+// T14860: the only phases that report a numeric "frame i/N" count are the AI-upscale
+// loop (both single-clip "AI upscaling frame X/Y" and multi-clip "Clip N: frame X/Y" --
+// see app/modal_functions/video_processing.py). Before this appears, progress is not
+// evenly paced (init/download/model-load vary wildly), so there is nothing honest to
+// extrapolate from yet.
+function parseFrameProgress(message) {
+  const match = /(\d+)\s*\/\s*(\d+)/.exec(message || '');
+  if (!match) return null;
+  const frame = parseInt(match[1], 10);
+  const totalFrames = parseInt(match[2], 10);
+  if (!totalFrames || frame <= 0) return null;
+  return { frame, totalFrames };
+}
 
 /**
  * Get display label for an export.
@@ -52,42 +72,41 @@ export function getExportLabel(exp) {
 }
 
 /**
- * Calculate ETA for an export based on elapsed time and progress.
- * Returns null if not enough data to estimate.
+ * Calculate ETA for an export from the measured per-frame rate of THIS job.
+ * Returns null until a frame count has appeared in the message AND a second
+ * frame sample has arrived (one sample alone gives no rate to measure).
+ *
+ * T14860: replaces the old "elapsed * (100-percent)/percent" extrapolation, which
+ * assumed every percentage point takes the same wall-clock time -- it does not: the
+ * early non-upscale phases (init/download/model-load) take a near-fixed few seconds
+ * regardless of clip length, so extrapolating from them at 5% overclaimed "Less than
+ * a minute remaining" on an 8s clip that actually took 131s.
  *
  * @param {Object} exp - Export object with startedAt and progress
+ * @param {{ frame: number, at: number } | undefined} frameTrack - the FIRST frame
+ *   sample seen for this export (fixed once set), so the rate is measured over the
+ *   whole observed window rather than just the last tick.
  * @returns {{ seconds: number, formatted: string } | null}
  */
-export function calculateETA(exp) {
-  if (!exp.startedAt || !exp.progress?.percent) return null;
+export function calculateETA(exp, frameTrack) {
+  if (!exp.startedAt) return null;
 
-  const percent = exp.progress.percent;
-  // Need at least 5% progress to have a meaningful estimate
-  if (percent < 5 || percent >= 100) return null;
+  const frameProgress = parseFrameProgress(exp.progress?.message);
+  if (!frameProgress || !frameTrack) return null;
 
-  const startedAt = new Date(exp.startedAt).getTime();
-  const now = Date.now();
-  const elapsedMs = now - startedAt;
+  const elapsedSinceFirstMs = Date.now() - frameTrack.at;
+  const framesSinceFirst = frameProgress.frame - frameTrack.frame;
+  if (framesSinceFirst <= 0 || elapsedSinceFirstMs <= 0) return null;
 
-  // Calculate remaining time: elapsed * (remaining / completed)
-  const remainingPercent = 100 - percent;
-  const remainingMs = (elapsedMs / percent) * remainingPercent;
-  const remainingSeconds = Math.round(remainingMs / 1000);
+  const msPerFrame = elapsedSinceFirstMs / framesSinceFirst;
+  const remainingFrames = frameProgress.totalFrames - frameProgress.frame;
+  if (remainingFrames < 0) return null;
 
-  // Format the time remaining
-  let formatted;
-  if (remainingSeconds < 60) {
-    formatted = 'Less than a minute';
-  } else if (remainingSeconds < 120) {
-    formatted = 'About 1 minute';
-  } else if (remainingSeconds < 3600) {
-    const minutes = Math.round(remainingSeconds / 60);
-    formatted = `About ${minutes} minutes`;
-  } else {
-    const hours = Math.floor(remainingSeconds / 3600);
-    const minutes = Math.round((remainingSeconds % 3600) / 60);
-    formatted = minutes > 0 ? `${hours}h ${minutes}m` : `${hours} hour${hours > 1 ? 's' : ''}`;
-  }
+  const remainingMs = remainingFrames * msPerFrame + POST_UPSCALE_TAIL_SECONDS * 1000;
+  // Round up to the next 30s -- an honest estimate rounds toward "longer", never shorter.
+  const remainingSeconds = Math.ceil(remainingMs / 1000 / 30) * 30;
+  const minutes = Math.max(1, Math.round(remainingSeconds / 60));
+  const formatted = `About ${minutes} minute${minutes === 1 ? '' : 's'}`;
 
   return { seconds: remainingSeconds, formatted };
 }
@@ -97,11 +116,12 @@ export function calculateETA(exp) {
  *
  * Pure derivation from timestamps (no persistence): `deadlines` maps exportId to
  * the epoch-ms completion time the FIRST estimate promised, `percentTracks` maps
- * exportId to { percent, changedAt } for stall detection. Both are component-local
- * bookkeeping (refs), updated in an effect as progress arrives.
+ * exportId to { percent, changedAt } for stall detection, `frameTracks` maps exportId
+ * to the FIRST { frame, at } sample seen (T14860, feeds calculateETA's rate). All
+ * three are component-local bookkeeping (refs), updated in an effect as progress arrives.
  *
- * Returns null (no trustworthy estimate — too little data), or { stale, formatted,
- * fallbackText }:
+ * Returns null (no trustworthy estimate — too little data, i.e. frames aren't flowing
+ * yet), or { stale, formatted, fallbackText }:
  * - stale=false: the live estimate holds (`formatted`)
  * - stale=true: the estimate broke its promise (deadline exceeded by ETA_BUST_GRACE_MS)
  *   or percent has been frozen past ETA_STALL_MS while the estimate reads under a minute.
@@ -111,8 +131,8 @@ export function calculateETA(exp) {
  * real stage line (`progressLine`) is rendered on its OWN line alongside it. `fallbackText`
  * (the stage copy) is retained on the return object for T8510's direct unit tests.
  */
-export function resolveEtaDisplay(exp, now, deadlines, percentTracks) {
-  const eta = calculateETA(exp);
+export function resolveEtaDisplay(exp, now, deadlines, percentTracks, frameTracks) {
+  const eta = calculateETA(exp, frameTracks?.get(exp.exportId));
   if (!eta) return null;
 
   const deadline = deadlines.get(exp.exportId);
@@ -175,10 +195,13 @@ export function GlobalExportIndicator() {
   // T8510: display-only ETA-honesty bookkeeping (never persisted).
   // etaDeadlinesRef: exportId -> epoch-ms deadline the first estimate promised.
   // percentChangeRef: exportId -> { percent, changedAt } for stall detection.
+  // frameTrackRef (T14860): exportId -> the FIRST { frame, at } frame sample seen,
+  // fixed once set so calculateETA measures this job's own rate from that point on.
   // nowTick re-renders once a second while exports run, so a stalled export
   // (no store updates) still gets its frozen estimate re-evaluated.
   const etaDeadlinesRef = useRef(new Map());
   const percentChangeRef = useRef(new Map());
+  const frameTrackRef = useRef(new Map());
   const [nowTick, setNowTick] = useState(() => Date.now());
   const hasProcessingExports = processingExports.length > 0;
 
@@ -191,6 +214,7 @@ export function GlobalExportIndicator() {
   useEffect(() => {
     const deadlines = etaDeadlinesRef.current;
     const tracks = percentChangeRef.current;
+    const frameTracks = frameTrackRef.current;
     const now = Date.now();
     for (const exp of Object.values(activeExports)) {
       if (exp.status !== ExportStatus.PENDING && exp.status !== ExportStatus.PROCESSING) continue;
@@ -199,13 +223,20 @@ export function GlobalExportIndicator() {
       if (!track || track.percent !== percent) {
         tracks.set(exp.exportId, { percent, changedAt: now });
       }
+      if (!frameTracks.has(exp.exportId)) {
+        const frameProgress = parseFrameProgress(exp.progress?.message);
+        if (frameProgress) frameTracks.set(exp.exportId, { frame: frameProgress.frame, at: now });
+      }
       if (!deadlines.has(exp.exportId)) {
-        const eta = calculateETA(exp);
+        const eta = calculateETA(exp, frameTracks.get(exp.exportId));
         if (eta) deadlines.set(exp.exportId, now + eta.seconds * 1000);
       }
     }
     for (const id of [...deadlines.keys()]) {
       if (!activeExports[id]) deadlines.delete(id);
+    }
+    for (const id of [...frameTracks.keys()]) {
+      if (!activeExports[id]) frameTracks.delete(id);
     }
     for (const id of [...tracks.keys()]) {
       if (!activeExports[id]) tracks.delete(id);
@@ -299,7 +330,7 @@ export function GlobalExportIndicator() {
   // on the 1s tick, so a stalled estimate flips to stage wording without new data)
   const primaryETA = useMemo(() => {
     if (!primaryExport) return null;
-    return resolveEtaDisplay(primaryExport, nowTick, etaDeadlinesRef.current, percentChangeRef.current);
+    return resolveEtaDisplay(primaryExport, nowTick, etaDeadlinesRef.current, percentChangeRef.current, frameTrackRef.current);
   }, [primaryExport, nowTick]);
 
   // T11330: the most recent over-budget-rejected export still awaiting its explanatory
@@ -478,7 +509,7 @@ export function GlobalExportIndicator() {
                     <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                       <Clock className="w-3 h-3 shrink-0" />
                       <span className="min-w-0 break-words">
-                        {etaSlotText(resolveEtaDisplay(exp, nowTick, etaDeadlinesRef.current, percentChangeRef.current))}
+                        {etaSlotText(resolveEtaDisplay(exp, nowTick, etaDeadlinesRef.current, percentChangeRef.current, frameTrackRef.current))}
                       </span>
                     </div>
                   </div>

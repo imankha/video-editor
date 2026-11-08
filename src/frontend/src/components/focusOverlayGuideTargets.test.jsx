@@ -52,14 +52,11 @@ describe('T12750 Focus/Overlay controls consume GuideScope targets', () => {
     expect(pulses(screen.getByTestId('play-button'))).toBe(false);
   });
 
-  it('FramingActionRow preview pulses for PREVIEW, not while previewing or locked', () => {
+  it('FramingActionRow preview pulses for PREVIEW, not while previewing', () => {
     const { unmount } = render(scope(GUIDE_PULSE.PREVIEW, <FramingActionRow onTogglePreview={() => {}} />));
     expect(pulses(screen.getByTestId('framing-preview-toggle'))).toBe(true);
     unmount();
-    const r2 = render(scope(GUIDE_PULSE.PREVIEW, <FramingActionRow onTogglePreview={() => {}} previewing />));
-    expect(pulses(screen.getByTestId('framing-preview-toggle'))).toBe(false);
-    r2.unmount();
-    render(scope(GUIDE_PULSE.PREVIEW, <FramingActionRow onTogglePreview={() => {}} locked />));
+    render(scope(GUIDE_PULSE.PREVIEW, <FramingActionRow onTogglePreview={() => {}} previewing />));
     expect(pulses(screen.getByTestId('framing-preview-toggle'))).toBe(false);
   });
 

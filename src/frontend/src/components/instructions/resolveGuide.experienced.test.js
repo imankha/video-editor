@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { resolveGuide } from './resolveGuide';
 import { GUIDE } from '../../config/displayNames';
 
-const fresh = { dragDone: false, hasPlayed: false, trimStage: 'off', hasPlayedThrough: false, previewing: false, hasPreviewPlayedThrough: false, ctaBusy: false };
+const fresh = { shapeChosen: true, dragDone: false, hasPlayed: false, trimStage: 'off', hasPlayedThrough: false, previewing: false, hasPreviewPlayedThrough: false, ctaBusy: false };
 const focusFacts = (finishedCount, local = {}) => ({
   screen: 'focus', job: { status: 'none' }, progress: { finishedCount }, local: { ...fresh, ...local },
 });

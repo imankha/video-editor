@@ -16,6 +16,7 @@ import ActionRail from './ActionRail';
 import CockpitTimelineStrip from './CockpitTimelineStrip';
 import CockpitSheet from './CockpitSheet';
 import CockpitIntroCard, { useCockpitIntroSeen } from './CockpitIntroCard';
+import FrameShapeChoice from '../FrameShapeChoice';
 
 const BuyCreditsModal = lazy(() =>
   import('../../../components/BuyCreditsModal').then((m) => ({ default: m.BuyCreditsModal })));
@@ -70,18 +71,29 @@ export default function FocusCockpit({
   // the cue up for the WHOLE first drag in landscape). isCropDragging is memory-only view state, exactly as the
   // portrait path (FocusModeView) holds it.
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
+  const boxPrePlaced = focusPointCount > 0;
+  // T14830 (owner ruling 2026-11-07, "Confirm once"): playing the clip with a
+  // pre-placed box counts as "checked" for the pre-spend warning. Derived-in-
+  // render like FocusModeView's `hasPlayed`, never a useEffect.
+  const [hasPlayed, setHasPlayed] = useState(false);
+  if (isPlaying && !hasPlayed) setHasPlayed(true);
   const [isCropDragging, setIsCropDragging] = useState(false);
   const [activeSheet, setActiveSheet] = useState(null); // 'setup' | 'trim' | null
   const [previewing, setPreviewing] = useState(false);
   // T12790: memory-only; the first Preview tap moves the guide on to Generate.
   const [hasPreviewed, setHasPreviewed] = useState(false);
+  // T14770: step 1 of 6 -- "Where will you share it?", same completion rule as
+  // the portrait layout (FocusModeView): a tap this session, or positions
+  // already exist (the shape was settled in an earlier session).
+  const [shapeTapped, setShapeTapped] = useState(false);
+  const handleShapeChosen = useCallback(() => setShapeTapped(true), []);
   // T12770: the crop-box cue follows Guidance like every pulse. T12790: the cockpit walks the portrait steps
   // with its own controls, and the sentence shows in a compact strip (CompactGuide) instead of a floating card.
   const guide = resolveGuide({
     screen: 'focus',
     job: { status: jobStatus },
     local: {
-      cockpit: true, dragDone: focusPointCount > 0, previewing, hasPreviewed,
+      cockpit: true, shapeChosen: shapeTapped || boxPrePlaced, dragDone: boxPrePlaced, previewing, hasPreviewed,
       rendered: framingCtaMode === 'preview',
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
       videoError: !!error, canRetryVideo: !!error && !!onRetryVideo && isUrlExpiredError?.(),
@@ -124,6 +136,12 @@ export default function FocusCockpit({
     isHighlightEnabled: false,
     segmentData: getSegmentExportData?.(),
     disabled: !videoUrl,
+    // T14830: "checked" here means playing with a pre-placed box -- the
+    // cockpit has no separate drag-gesture tracking of its own (unlike
+    // FocusModeView's `hasDragged`); an actual move is already reflected in
+    // the clip's real crop data, which the container's own hasUnframedClips
+    // check covers.
+    boxChecked: boxPrePlaced && hasPlayed,
     includeAudio,
     onIncludeAudioChange,
     onProceedToOverlay,
@@ -279,6 +297,20 @@ export default function FocusCockpit({
             </div>
           )}
 
+          {/* T14770: "Where will you share it?" (step 1 of 6), same component as
+              the portrait layout. Top-center, below the passive chips. */}
+          {introSeen && (
+            <div className="absolute inset-x-2 top-10 z-20 flex justify-center">
+              <FrameShapeChoice
+                aspectRatio={globalAspectRatio}
+                hasPositions={focusPointCount > 0}
+                onChange={onAspectRatioChange}
+                onChosen={handleShapeChosen}
+                compact
+              />
+            </div>
+          )}
+
           {/* T10850 (D14): first-entry card, over the stage. Gated on `!introSeen`
               (cockpit && !seen); "Got it" and the stage pointerdown above both call
               the same named-gesture write. */}
@@ -288,7 +320,7 @@ export default function FocusCockpit({
               athlete under the box stays visible. Foot of the stage: the top corners hold the chips. */}
           {introSeen && !isCropDragging && (
             <div className="pointer-events-none absolute inset-x-2 bottom-2 z-20 flex justify-center">
-              <CompactGuide guide={guide} testId="cockpit-guide" className="w-full max-w-[30rem]" />
+              <CompactGuide guide={guide} boxPrePlaced={boxPrePlaced} testId="cockpit-guide" className="w-full max-w-[30rem]" />
             </div>
           )}
         </div>

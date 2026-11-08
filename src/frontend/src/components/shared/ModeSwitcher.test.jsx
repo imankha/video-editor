@@ -50,7 +50,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     renderSwitcher({ hasProject: true, hasWorkingVideo: true });
 
     expect(screen.getByText('Mark Plays')).toBeTruthy();
-    expect(screen.getByText('Frame')).toBeTruthy();
+    expect(screen.getByText('Zoom in')).toBeTruthy();
     expect(screen.getByText('Spotlight')).toBeTruthy();
   });
 
@@ -122,7 +122,7 @@ describe('T11740: inline variant responsive layout', () => {
   it('shrinks the label to text-[11px] below md and restores text-sm at md+', () => {
     renderSwitcher({ hasProject: true, hasWorkingVideo: true, inline: true });
 
-    const label = screen.getByText('Frame');
+    const label = screen.getByText('Zoom in');
     expect(label.className).toContain('text-[11px]');
     expect(label.className).toContain('md:text-sm');
   });
@@ -194,7 +194,6 @@ describe('ModeSwitcher while the game is loading (T11830)', () => {
 describe('T12130: one Make highlight entry string', () => {
   it('every entry point shares the same copy', () => {
     expect(ANNOTATE.FRAME_THIS_CLIP).toBe('Make highlight');
-    expect(ANNOTATE.MAKE_A_HIGHLIGHT).toBe('Make highlight');
     expect(ANNOTATE.MAKE_HIGHLIGHT_NOW).toBe('Make highlight');
   });
 });

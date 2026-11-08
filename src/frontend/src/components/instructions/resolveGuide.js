@@ -23,9 +23,10 @@ import { GUIDE_PULSE } from './guideTargets';
 const tid = (id) => `[data-testid="${id}"]`;
 const MARK_PLAY = tid('annotate-mark-play-button');
 const PLAYS_LIST = tid('annotate-plays-list');
-const PORTRAIT_SLOT = tid('annotate-highlight-slot-portrait');
 const ANNOTATE_STAGE = tid('annotate-coach-stage');
 const FOCUS_STAGE = tid('focus-video-stage');
+// T14770: Frame's "Where will you share it?" shape choice (step 1 of 6).
+const FRAME_SHAPE_CHOICE = tid('focus-shape-choice');
 const TRIM_SCOPE = tid('trim-guide-scope');
 const PLAY_BUTTON = tid('play-button');
 // The watch step keeps only the picture and its transport bright; the timeline and other cards shade.
@@ -54,10 +55,13 @@ const HAS_PLAYS_KEEP_CLEAR = [MARK_PLAY, ...OTHER_MAIN_ACTIONS, ...PLAYS_ROW, ..
 const UPLOAD_FAILED_BANNER = tid('upload-preview-notice');
 // T12760: every rule has exactly one of `pulse` (a GUIDE_PULSE value) or `noPulse` (why the sentence names no pressable control); guideRules.pulse.test.js enforces it.
 // T14440: `reveal` scrolls the step's pulsing control (else its anchor) fully on-screen once when the step opens (FloatingCoach).
-const annotate = (name, anchor, { pulse = GUIDE_PULSE.PORTRAIT_SLOT, noPulse, avoid = [], keepClear = [], shadeClear = [], compact = false, reveal = false, message = GUIDE.annotate[name] } = {}) =>
+// T14770: default pulse is the highlight's own list row (brilliant overrides it to
+// MAKE_HIGHLIGHT_BTN explicitly below -- no highlight exists yet at that point).
+const annotate = (name, anchor, { pulse = GUIDE_PULSE.HIGHLIGHT_ROW, noPulse, avoid = [], keepClear = [], shadeClear = [], compact = false, reveal = false, message = GUIDE.annotate[name] } = {}) =>
   ({ message, anchor: { target: anchor, fallback: ANNOTATE_STAGE }, phase: name, pulse: noPulse ? null : pulse, noPulse, avoid, keepClear, shadeClear, compact, reveal });
 const local = (f) => f.local ?? {};
 const many = (n) => ({ ...GUIDE.annotate.hasPlaysMany, title: GUIDE.annotate.hasPlaysMany.title.replace('{n}', n) });
+const hasHighlightsMany = (n) => ({ ...GUIDE.annotate.hasHighlightsMany, title: GUIDE.annotate.hasHighlightsMany.title.replace('{n}', n) });
 // `phase` defaults to the step number; the two trim rules (step null) name theirs, because data-phase and the coach re-measure key read it.
 const focus = (text, target, step, pulse = null, keepClear = [], phase = step, noPulse) => ({
   message: { title: text, body: '' }, anchor: { target, fallback: FOCUS_STAGE }, step, pulse, noPulse, phase, keepClear,
@@ -84,6 +88,9 @@ const FINISHED_SHARE = tid('finished-share-action');
 // CTA bright, and the card goes beside the primary card (`side: 'beside'`). The picture is `shadeClear` (a preference):
 // on a phone there is no free slot, and the card covering part of the picture beats covering a CTA.
 const PLAYER_VIDEO = tid('collection-player-video');
+// T14840: Download sits in the player's header toolbar, not inside the share action bar
+// (FINISHED_SHARE) -- it needs its own cutout, the share bar's never covered it.
+const PLAYER_DOWNLOAD = tid('player-download');
 const FOCUS_READY_PRIMARY = tid('focus-choice-primary');
 const FOCUS_READY_CTAS = [FOCUS_READY_PRIMARY, tid('focus-choice-publish'), tid('focus-choice-edit-framing'), tid('focus-save-draft')];
 const OVERLAY_READY_PRIMARY = tid('overlay-choice-primary');
@@ -108,8 +115,17 @@ const GAMES_KEEP_CLEAR = [UPLOAD_GAME];
 const CLIPS_DRAFTS_KEEP_CLEAR = [TAB_GAMES, UPLOAD_CLIP];
 const PLAY_RATING = tid('rating-input');
 const ADD_DETAILS = tid('add-details-button');
-const HIGHLIGHT_SLOTS = tid('annotate-highlight-slots');
+// T14770: the one Make highlight entry button (replaces the T11910 two-slot surface).
+const MAKE_HIGHLIGHT_BTN = tid('annotate-make-highlight');
 const EDIT_PLAY = tid('annotate-primary-cta');
+// T14770: a specific highlight's row in "Highlights from this play" -- only computable
+// once the portrait instance id is known, so resolveGuide() overrides the anchor for
+// the rules that track it (see the post-match override below).
+const highlightRowAnchor = (projectId) => tid(`highlight-row-${projectId}`);
+const PORTRAIT_ROW_RULES = new Set([
+  'annotate.selected.generating', 'annotate.progress.spotlight', 'annotate.progress.preview',
+  'annotate.progress.published', 'annotate.progress.portrait',
+]);
 const hp = (f) => f.progress ?? {};
 const NAMES_FAR_DESTINATION = 'Names a destination two steps away (Games tab, then a game); T12620 decided these do not pulse.';
 // T12790: dialog rules. Each dialog renders <Guide inline> at the top of its body, so the anchor is unused.
@@ -180,16 +196,24 @@ export const GUIDE_RULES = [
   { id: 'annotate.upload-failed', screen: 'annotate', when: (f) => local(f).uploadFailed, ...annotate('uploadFailed', UPLOAD_FAILED_BANNER, { pulse: GUIDE_PULSE.UPLOAD_RETRY, keepClear: [UPLOAD_FAILED_BANNER] }) },
   { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: GUIDE_PULSE.SHARE_PLAYS, shadeClear: [REVIEW_VIDEO] }) },
   // The game is still uploading: its source isn't stored, so no highlight can be made yet. These outrank every rule that steers toward one.
-  { id: 'annotate.uploading.selected', screen: 'annotate', when: (f) => local(f).uploading && f.progress?.selectedPlay, ...annotate('uploadingSelected', HIGHLIGHT_SLOTS, { noPulse: 'The highlight slots are locked until the upload finishes; nothing to press.' }) },
+  { id: 'annotate.uploading.selected', screen: 'annotate', when: (f) => local(f).uploading && f.progress?.selectedPlay, ...annotate('uploadingSelected', MAKE_HIGHLIGHT_BTN, { noPulse: 'The entry button is locked until the upload finishes; nothing to press.' }) },
   { id: 'annotate.uploading.has-plays', screen: 'annotate', when: (f) => local(f).uploading && local(f).playCount > 0, ...annotate('uploadingPlays', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },
-  { id: 'annotate.selected.generating', screen: 'annotate', when: (f) => isBrilliant(f) && local(f).generating, ...annotate('generating', PORTRAIT_SLOT, { noPulse: 'Progress: nothing to press.' }) },
-  { id: 'annotate.progress.brilliant', screen: 'annotate', when: (f) => isBrilliant(f) && !f.progress.portrait, ...annotate('brilliant', PORTRAIT_SLOT, { reveal: true }) },
-  { id: 'annotate.progress.spotlight', screen: 'annotate', when: (f) => portraitIs(f, 'spotlight'), ...annotate('spotlight', PORTRAIT_SLOT, { reveal: true }) },
-  { id: 'annotate.progress.preview', screen: 'annotate', when: (f) => portraitIs(f, 'preview'), ...annotate('preview', PORTRAIT_SLOT, { reveal: true }) },
-  { id: 'annotate.progress.published', screen: 'annotate', when: (f) => portraitIs(f, 'published'), ...annotate('published', PORTRAIT_SLOT, { reveal: true }) },
-  { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT, { reveal: true }) },
-  // A play below 5 stars is not a highlight candidate: say what it can do, not how to mark.
-  { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', HIGHLIGHT_SLOTS, { pulse: GUIDE_PULSE.HIGHLIGHT_SLOT, keepClear: [EDIT_PLAY], reveal: true }) },
+  { id: 'annotate.selected.generating', screen: 'annotate', when: (f) => isBrilliant(f) && local(f).generating, ...annotate('generating', ANNOTATE_STAGE, { noPulse: 'Progress: nothing to press.' }) },
+  // T14770: no highlight exists yet, so this anchors the entry button, not a row.
+  { id: 'annotate.progress.brilliant', screen: 'annotate', when: (f) => isBrilliant(f) && !f.progress.portrait, ...annotate('brilliant', MAKE_HIGHLIGHT_BTN, { pulse: GUIDE_PULSE.MAKE_HIGHLIGHT, reveal: true }) },
+  // T14770: these describe an EXISTING portrait highlight -- anchor + pulse its
+  // own list row (resolveGuide() overrides the anchor below once the id matches
+  // and facts.progress.portrait.projectId is known; ANNOTATE_STAGE is only the
+  // pre-override fallback, never actually shown).
+  { id: 'annotate.progress.spotlight', screen: 'annotate', when: (f) => portraitIs(f, 'spotlight'), ...annotate('spotlight', ANNOTATE_STAGE, { reveal: true }) },
+  { id: 'annotate.progress.preview', screen: 'annotate', when: (f) => portraitIs(f, 'preview'), ...annotate('preview', ANNOTATE_STAGE, { reveal: true }) },
+  { id: 'annotate.progress.published', screen: 'annotate', when: (f) => portraitIs(f, 'published'), ...annotate('published', ANNOTATE_STAGE, { reveal: true }) },
+  { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', ANNOTATE_STAGE, { reveal: true }) },
+  // T14770: a selected play that already has highlights says so, naming Make highlight as the alternate action.
+  { id: 'annotate.has-highlights.many', screen: 'annotate', when: (f) => f.progress?.selectedPlay && (f.progress.highlightCount ?? 0) > 1, ...annotate('hasHighlightsMany', MAKE_HIGHLIGHT_BTN, { pulse: GUIDE_PULSE.MAKE_HIGHLIGHT, keepClear: [EDIT_PLAY], reveal: true }) },
+  { id: 'annotate.has-highlights.one', screen: 'annotate', when: (f) => f.progress?.selectedPlay && (f.progress.highlightCount ?? 0) === 1, ...annotate('hasHighlightsOne', MAKE_HIGHLIGHT_BTN, { pulse: GUIDE_PULSE.MAKE_HIGHLIGHT, keepClear: [EDIT_PLAY], reveal: true }) },
+  // A play below 5 stars with no highlights yet: say what it can do, not how to mark.
+  { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', MAKE_HIGHLIGHT_BTN, { pulse: GUIDE_PULSE.MAKE_HIGHLIGHT, keepClear: [EDIT_PLAY], reveal: true }) },
   { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: HAS_PLAYS_KEEP_CLEAR }) },
   { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: HAS_PLAYS_KEEP_CLEAR }) },
   { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: ANNOTATE_PLAYER }) },
@@ -232,35 +256,44 @@ export const GUIDE_RULES = [
   // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
   // T12770: the landscape cockpit has no guide sentence, only the crop-box cue; it is gated by Guidance like every pulse.
   { id: 'focus.cockpit.experienced', screen: 'focus', when: (f) => f.local.cockpit && experienced(f), ...focus(GUIDE.focus.experienced, FOCUS_STAGE, null, null, [], 'experienced', EXPERIENCED_NO_PULSE) },
-  { id: 'focus.cockpit.drag', screen: 'focus', when: (f) => f.local.cockpit && !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
+  // T14770: step 1 of 6 -- the shape choice shows before the box-drag step.
+  { id: 'focus.cockpit.shareWhere', screen: 'focus', when: (f) => f.local.cockpit && !f.local.shapeChosen, ...focus(GUIDE.focus.shareWhere, FRAME_SHAPE_CHOICE, 1, GUIDE_PULSE.FRAME_SHAPE_CHOICE) },
+  { id: 'focus.cockpit.drag', screen: 'focus', when: (f) => f.local.cockpit && !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 2, GUIDE_PULSE.CROP_BOX) },
   // T12790: the cockpit walks the same steps with its own controls (Preview rail button, compact CTA).
   { id: 'focus.cockpit.rendered', screen: 'focus', when: (f) => f.local.cockpit && f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
-  { id: 'focus.cockpit.watch-preview', screen: 'focus', when: (f) => f.local.cockpit && f.local.previewing, ...focus(GUIDE.focus.cockpitWatchPreview, FOCUS_STAGE, 4, null, [], 4, 'Watching; Preview again is optional.') },
+  { id: 'focus.cockpit.watch-preview', screen: 'focus', when: (f) => f.local.cockpit && f.local.previewing, ...focus(GUIDE.focus.cockpitWatchPreview, FOCUS_STAGE, 5, null, [], 5, 'Watching; Preview again is optional.') },
   { id: 'focus.cockpit.busy', screen: 'focus', when: (f) => f.local.cockpit && f.local.ctaBusy, silent: true, noPulse: 'The CTA is itself busy (documented null, like portrait).' },
-  { id: 'focus.cockpit.preview', screen: 'focus', when: (f) => f.local.cockpit && !f.local.hasPreviewed, ...focus(GUIDE.focus.cockpitPreview, FOCUS_STAGE, 4, GUIDE_PULSE.COCKPIT_PREVIEW) },
-  { id: 'focus.cockpit.generate', screen: 'focus', when: (f) => f.local.cockpit, ...focus(GUIDE.focus.generate, FOCUS_STAGE, 5, GUIDE_PULSE.EXPORT) },
+  { id: 'focus.cockpit.preview', screen: 'focus', when: (f) => f.local.cockpit && !f.local.hasPreviewed, ...focus(GUIDE.focus.cockpitPreview, FOCUS_STAGE, 5, GUIDE_PULSE.COCKPIT_PREVIEW) },
+  { id: 'focus.cockpit.generate', screen: 'focus', when: (f) => f.local.cockpit, ...focus(GUIDE.focus.generate, FOCUS_STAGE, 6, GUIDE_PULSE.EXPORT) },
   { id: 'focus.rendered', screen: 'focus', when: (f) => f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
   { id: 'focus.progress.experienced', screen: 'focus', when: (f) => !f.local.fullscreen && experienced(f), ...focus(GUIDE.focus.experienced, FOCUS_STAGE, null, null, [], 'experienced', EXPERIENCED_NO_PULSE) },
-  { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
-  { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2, GUIDE_PULSE.PLAY, [FOCUS_STAGE, PLAY_BUTTON]), avoid: [PLAY_BUTTON] },
+  // T14770: step 1 of 6 -- "Where will you share it?" (design decision 1, Option
+  // C), done once the parent taps a shape OR drags the box (dragging implicitly
+  // confirms the pre-selected portrait shape). The box-drag step below is now 2.
+  { id: 'focus.progress.shareWhere', screen: 'focus', when: (f) => !f.local.shapeChosen, ...focus(GUIDE.focus.shareWhere, FRAME_SHAPE_CHOICE, 1, GUIDE_PULSE.FRAME_SHAPE_CHOICE) },
+  { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 2, GUIDE_PULSE.CROP_BOX) },
+  { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 3, GUIDE_PULSE.PLAY, [FOCUS_STAGE, PLAY_BUTTON]), avoid: [PLAY_BUTTON] },
   { id: 'focus.progress.trimSplit', screen: 'focus', when: (f) => f.local.trimStage === 'split', ...focus(GUIDE.focus.trimSplit, TRIM_SCOPE, null, GUIDE_PULSE.TRIM_TRACK, [], 'split') },
   { id: 'focus.progress.trimAdjust', screen: 'focus', when: (f) => f.local.trimStage === 'adjust', ...focus(GUIDE.focus.trimAdjust, TRIM_SCOPE, null, GUIDE_PULSE.TRIM_ADJUST, [], 'adjust') },
-  { id: 'focus.progress.keep', screen: 'focus', when: (f) => !f.local.hasPlayedThrough && !f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.keep, FOCUS_STAGE, 3, GUIDE_PULSE.CROP_BOX) },
+  { id: 'focus.progress.keep', screen: 'focus', when: (f) => !f.local.hasPlayedThrough && !f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.keep, FOCUS_STAGE, 4, GUIDE_PULSE.CROP_BOX) },
   // T12790: fullscreen has no Preview toggle or action band; send the user back out once the stage steps are done.
   { id: 'focus.fullscreen.leave', screen: 'focus', when: (f) => f.local.fullscreen, ...focus(GUIDE.focus.leaveFullscreen, FOCUS_STAGE, null, GUIDE_PULSE.EXIT_FULLSCREEN, [], 'leave-fullscreen') },
   // T13570: compact, so on a phone the card fits the strip above the preview instead of covering it.
-  { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 4, null, [FOCUS_STAGE], 4, 'Watching; Back to full video is optional.'), compact: true },
-  { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 4, GUIDE_PULSE.PREVIEW) },
+  { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 5, null, [FOCUS_STAGE], 5, 'Watching; Back to full video is optional.'), compact: true },
+  { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 5, GUIDE_PULSE.PREVIEW) },
   // While the Preview/Generate button is itself busy the guide is silent (documented null).
-  { id: 'focus.progress.generate.advanced', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none' && (hp(f).finishedCount ?? 0) > 1, ...focus(GUIDE.focus.generateAdvanced, ACTION_BAND, 5, GUIDE_PULSE.EXPORT) },
-  { id: 'focus.progress.generate', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none', ...focus(GUIDE.focus.generate, ACTION_BAND, 5, GUIDE_PULSE.EXPORT) },
+  { id: 'focus.progress.generate.advanced', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none' && (hp(f).finishedCount ?? 0) > 1, ...focus(GUIDE.focus.generateAdvanced, ACTION_BAND, 6, GUIDE_PULSE.EXPORT) },
+  { id: 'focus.progress.generate', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none', ...focus(GUIDE.focus.generate, ACTION_BAND, 6, GUIDE_PULSE.EXPORT) },
   jobRule('overlay.failed', 'overlay', 'failed', { title: GUIDE.overlay.failed, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'error', GUIDE_PULSE.EXPORT),
   jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress', null, NO_PROGRESS),
   readyPanel(jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PRIMARY, OVERLAY_READY_PANEL, 'coach', GUIDE_PULSE.OVERLAY_FINISH), OVERLAY_READY_CTAS),
   // T12290: finished viewer (silent once a link exists: the link card is the instruction) and share modal.
-  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [FINISHED_SHARE], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
-  // End of the first-highlight walk: the link exists, so offer to turn the guide off.
-  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [FINISHED_SHARE], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-done' },
+  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
+  // End of the first-highlight walk: the link exists, so offer to turn the guide off. T14840: this
+  // card's only action is "turn off guidance" -- it has nothing to protect by shading the screen, so
+  // it renders unshaded like a progress/error card (NO_SHADE_TONES) rather than needing a cutout for
+  // every real player action (Download, Close, Back to game, ...).
+  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'progress', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-done' },
   { id: 'share.modal', screen: 'share', when: () => true, message: { title: GUIDE.share.modal, body: '' }, anchor: { target: SHARE_MODAL_BODY, fallback: SHARE_MODAL_BODY }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_SUBMIT, avoid: [], step: null, phase: 'share-modal' },
   // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong', GUIDE_PULSE.EXPORT),
@@ -318,14 +351,38 @@ export function resolveGuide(facts) {
   const { id, anchor, cta = null, step = null, pulse = null, phase, avoid = [], keepClear = [], shadeClear = [], compact = false, reveal = false, tone = 'coach', end = false, side } = rule;
   const gotIt = rule.gotIt ?? !end;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
+  if (id === 'annotate.has-highlights.many') message = hasHighlightsMany(facts.progress.highlightCount);
   if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
+  // T14760: a box already on the athlete (AI-proposed, or copied from an earlier highlight)
+  // gets the "check it" wording instead of "drag it onto" -- step 1 still shows, it is not skipped.
+  if (id === 'focus.progress.drag' && facts.local.boxPrePlaced) message = { title: GUIDE.focus.dragPrePlaced, body: '' };
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
-  return { id, message, cta, anchor, avoid, keepClear, shadeClear, compact, reveal, pulse, tone, step, phase, end, gotIt, side };
+  // T14770: these rules describe an existing portrait highlight; anchor on ITS
+  // list row (not knowable at rule-definition time, unlike every static anchor
+  // above).
+  let resolvedAnchor = anchor;
+  if (PORTRAIT_ROW_RULES.has(id) && facts.progress?.portrait?.projectId != null) {
+    resolvedAnchor = { target: highlightRowAnchor(facts.progress.portrait.projectId), fallback: anchor.fallback };
+  }
+  return { id, message, cta, anchor: resolvedAnchor, avoid, keepClear, shadeClear, compact, reveal, pulse, tone, step, phase, end, gotIt, side };
 }
 
-const play = (rating, portrait = null) => ({ selectedPlay: rating == null ? null : { rating }, portrait });
+/**
+ * T14760 (owner ruling 2026-11-07): number only the steps a parent actually sees.
+ * The shape-choice rule (step 1 of 6) can never fire once `boxPrePlaced` is true --
+ * `shapeChosen` is forced true from the first render (FocusModeView/FocusCockpit), so
+ * that step never shows this session. Renumber every later step down by one and drop
+ * the total to 5, so the first step this parent can see always reads "Step 1", never
+ * a skipped step's number -- at any later step either.
+ */
+export function focusGuideStepDisplay(step, boxPrePlaced) {
+  if (step == null) return { step: null, total: null };
+  return boxPrePlaced ? { step: step - 1, total: 5 } : { step, total: 6 };
+}
+
+const play = (rating, portrait = null, highlightCount = 0) => ({ selectedPlay: rating == null ? null : { rating }, portrait, highlightCount });
 const fl = (over) => ({
-  dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true,
+  shapeChosen: true, dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true,
   previewing: false, hasPreviewPlayedThrough: true, ctaBusy: false, ...over,
 });
 
@@ -336,6 +393,8 @@ export const GUIDE_STATES = [
   { name: 'annotate: one play marked', expectId: 'annotate.has-plays.one', facts: { screen: 'annotate', progress: play(null), local: { playCount: 1 } } },
   { name: 'annotate: several plays marked', expectId: 'annotate.has-plays.many', facts: { screen: 'annotate', progress: play(null), local: { playCount: 4 } } },
   { name: 'annotate: 3-star play selected', expectId: 'annotate.selected.none', facts: { screen: 'annotate', progress: play(3), local: { playCount: 1 } } },
+  { name: 'annotate: 3-star play with one highlight', expectId: 'annotate.has-highlights.one', facts: { screen: 'annotate', progress: play(3, null, 1), local: { playCount: 1 } } },
+  { name: 'annotate: 3-star play with two highlights', expectId: 'annotate.has-highlights.many', facts: { screen: 'annotate', progress: play(3, null, 2), local: { playCount: 1 } } },
   { name: 'annotate: play editor open', expectId: 'annotate.editor', facts: { screen: 'annotate', progress: play(3), local: { editorOpen: true } } },
   { name: 'annotate: Done choice card', expectId: 'annotate.choice', facts: { screen: 'annotate', progress: play(5), local: { editorOpen: true, choiceOpen: true } } },
   { name: 'annotate: review plays', expectId: 'annotate.review', facts: { screen: 'annotate', progress: play(null), local: { reviewing: true, playCount: 2 } } },
@@ -349,21 +408,23 @@ export const GUIDE_STATES = [
   { name: 'annotate: 5-star, portrait at spotlight', expectId: 'annotate.progress.spotlight', facts: { screen: 'annotate', progress: play(5, { action: 'overlay' }), local: {} } },
   { name: 'annotate: 5-star, portrait at preview', expectId: 'annotate.progress.preview', facts: { screen: 'annotate', progress: play(5, { action: 'preview' }), local: {} } },
   { name: 'annotate: 5-star, portrait published', expectId: 'annotate.progress.published', facts: { screen: 'annotate', progress: play(5, { action: 'published' }), local: {} } },
-  { name: 'focus cockpit: experienced (3+ finished)', expectId: 'focus.cockpit.experienced', facts: { screen: 'focus', progress: { finishedCount: 3 }, local: { cockpit: true, dragDone: false } } },
-  { name: 'focus cockpit: no focus point yet', expectId: 'focus.cockpit.drag', facts: { screen: 'focus', local: { cockpit: true, dragDone: false } } },
-  { name: 'focus cockpit: framed, not previewed', expectId: 'focus.cockpit.preview', facts: { screen: 'focus', local: { cockpit: true, dragDone: true } } },
-  { name: 'focus cockpit: previewing', expectId: 'focus.cockpit.watch-preview', facts: { screen: 'focus', local: { cockpit: true, dragDone: true, previewing: true } } },
-  { name: 'focus cockpit: previewed', expectId: 'focus.cockpit.generate', facts: { screen: 'focus', local: { cockpit: true, dragDone: true, hasPreviewed: true } } },
-  { name: 'focus cockpit: rendered (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true, rendered: true } } },
-  { name: 'focus cockpit: CTA busy (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true, hasPreviewed: true, ctaBusy: true } } },
-  { name: 'focus cockpit: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: { cockpit: true, dragDone: true } } },
-  { name: 'focus: experienced (3+ finished), basics replaced', expectId: 'focus.progress.experienced', facts: { screen: 'focus', progress: { finishedCount: 3 }, local: { dragDone: false, hasPlayed: false, trimStage: 'off', hasPlayedThrough: false, previewing: false, hasPreviewPlayedThrough: false, ctaBusy: false } } },
+  { name: 'focus cockpit: shape not chosen yet', expectId: 'focus.cockpit.shareWhere', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: false, dragDone: false } } },
+  { name: 'focus cockpit: experienced (3+ finished)', expectId: 'focus.cockpit.experienced', facts: { screen: 'focus', progress: { finishedCount: 3 }, local: { cockpit: true, shapeChosen: true, dragDone: false } } },
+  { name: 'focus cockpit: no focus point yet', expectId: 'focus.cockpit.drag', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: false } } },
+  { name: 'focus cockpit: framed, not previewed', expectId: 'focus.cockpit.preview', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true } } },
+  { name: 'focus cockpit: previewing', expectId: 'focus.cockpit.watch-preview', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true, previewing: true } } },
+  { name: 'focus cockpit: previewed', expectId: 'focus.cockpit.generate', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true, hasPreviewed: true } } },
+  { name: 'focus cockpit: rendered (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true, rendered: true } } },
+  { name: 'focus cockpit: CTA busy (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true, hasPreviewed: true, ctaBusy: true } } },
+  { name: 'focus cockpit: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: { cockpit: true, shapeChosen: true, dragDone: true } } },
+  { name: 'focus: shape not chosen yet', expectId: 'focus.progress.shareWhere', facts: { screen: 'focus', local: { shapeChosen: false, dragDone: false } } },
+  { name: 'focus: experienced (3+ finished), basics replaced', expectId: 'focus.progress.experienced', facts: { screen: 'focus', progress: { finishedCount: 3 }, local: { shapeChosen: true, dragDone: false, hasPlayed: false, trimStage: 'off', hasPlayedThrough: false, previewing: false, hasPreviewPlayedThrough: false, ctaBusy: false } } },
   { name: 'focus: video failed to load, retry offered', expectId: 'focus.video-error.retry', facts: { screen: 'focus', job: { status: 'processing' }, local: fl({ videoError: true, canRetryVideo: true }) } },
   { name: 'focus: video failed to load', expectId: 'focus.video-error', facts: { screen: 'focus', local: fl({ videoError: true }) } },
   { name: 'focus: fullscreen, stage steps done', expectId: 'focus.fullscreen.leave', facts: { screen: 'focus', local: fl({ fullscreen: true, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: fullscreen, export failed', expectId: 'focus.fullscreen.leave-job', facts: { screen: 'focus', job: { status: 'failed' }, local: fl({ fullscreen: true }) } },
   { name: 'focus: fullscreen, export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: fl({ fullscreen: true }) } },
-  { name: 'focus cockpit: opening the render (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true, ctaBusy: true } } },
+  { name: 'focus cockpit: opening the render (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true, ctaBusy: true } } },
   { name: 'focus cockpit: video failed to load', expectId: 'focus.video-error.retry', facts: { screen: 'focus', local: { cockpit: true, videoError: true, canRetryVideo: true } } },
   { name: 'focus: fullscreen, still dragging', expectId: 'focus.progress.drag', facts: { screen: 'focus', local: fl({ fullscreen: true, dragDone: false }) } },
   { name: 'focus: no drag yet', expectId: 'focus.progress.drag', facts: { screen: 'focus', local: fl({ dragDone: false, hasPlayed: false, hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },

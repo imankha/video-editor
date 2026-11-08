@@ -1,153 +1,177 @@
-import { ChevronRight, RectangleVertical, RectangleHorizontal, Sparkles, Crop } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, Clapperboard, RectangleVertical, RectangleHorizontal, Sparkles } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
-import { ORIENTATION, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
+import { CLIP_STAGE, SLOT_ACTION, HIGHLIGHT_STATUS, ORIENTATION } from '../clipStage';
 import { useGuidePulse } from '../../../components/instructions/GuideScope';
 import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
-// T11910: the ONE highlight surface for a selected play, rendered identically in
-// every state (none / one / both / in progress / published) so a play looks the
-// same right after creating a highlight and after a reload. Two permanent
-// orientation slots; a slot with no highlight offers its own Make button, a slot
-// with highlights lists them (open the stage each one is at). Neither slot is
-// preselected or visually favored: the user chooses deliberately (UX consult,
-// 2026-10-06).
-//
-// Presentational only: instances come from clipStage.getClipStages (server-synced
-// region.highlightInstances); the container owns create/open.
+// T14770: replaces the T11910 two-slot surface with ONE Make highlight entry
+// (HighlightEntry) -- the shape is picked in Frame, not here -- plus a list of
+// every highlight already made from this play (HighlightList). A play can get
+// several highlights of each shape; the list shows each one and opens it where
+// it left off (handleOpenInstance).
 
-const SLOTS = [
-  {
-    orientation: ORIENTATION.PORTRAIT,
-    aspectRatio: '9:16',
-    title: ANNOTATE.PORTRAIT,
-    hint: ANNOTATE.PORTRAIT_HINT,
-    makeLabel: ANNOTATE.MAKE_PORTRAIT,
-    spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_PORTRAIT,
-    framingLabel: ANNOTATE.CONTINUE_FRAMING_PORTRAIT,
-    continueSpotlightLabel: ANNOTATE.CONTINUE_SPOTLIGHT_PORTRAIT,
-    OrientationIcon: RectangleVertical,
-    StageIcon: Sparkles,
-  },
-  {
-    orientation: ORIENTATION.LANDSCAPE,
-    aspectRatio: '16:9',
-    title: ANNOTATE.LANDSCAPE,
-    hint: ANNOTATE.LANDSCAPE_HINT,
-    makeLabel: ANNOTATE.MAKE_LANDSCAPE,
-    spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_LANDSCAPE,
-    framingLabel: ANNOTATE.CONTINUE_FRAMING_LANDSCAPE,
-    continueSpotlightLabel: ANNOTATE.CONTINUE_SPOTLIGHT_LANDSCAPE,
-    OrientationIcon: RectangleHorizontal,
-    StageIcon: Crop,
-  },
-];
+const ORIENTATION_ICON = { [ORIENTATION.PORTRAIT]: RectangleVertical, [ORIENTATION.LANDSCAPE]: RectangleHorizontal };
+const ORIENTATION_LABEL = { [ORIENTATION.PORTRAIT]: ANNOTATE.PORTRAIT, [ORIENTATION.LANDSCAPE]: ANNOTATE.LANDSCAPE };
 
-function Slot({ slot, instances, pending, locked, onMake, onOpen }) {
-  // `locked`: the game is still uploading, so nothing here can make or open a highlight yet.
+/**
+ * HighlightEntry — the single primary "Make highlight" card. Always creates a
+ * NEW portrait (9:16) highlight (forceNew) and opens Frame, where the shape is
+ * picked (design decision 1, Option C). Locked while the game is still
+ * uploading; inert ("Opening Frame...") while a create is in flight.
+ */
+export function HighlightEntry({ pending, locked = false, onMake }) {
   const inert = pending || locked;
-  const pulseClass = useGuidePulse(slot.orientation === ORIENTATION.PORTRAIT ? [GUIDE_PULSE.PORTRAIT_SLOT, GUIDE_PULSE.HIGHLIGHT_SLOT] : GUIDE_PULSE.HIGHLIGHT_SLOT, { suppress: inert });
-  const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, OrientationIcon, StageIcon } = slot;
-  // A single in-progress highlight (not yet a final video) is the slot's one
-  // primary button, worded by the next action. A slot with nothing started shows
-  // the same button as Make, so the two slots never look like different states.
-  const inProgress = instances.length === 1
-    && (instances[0].stage === CLIP_STAGE.FOCUS || instances[0].stage === CLIP_STAGE.SPOTLIGHT)
-    ? instances[0] : null;
-  const hasInstances = instances.length > 0 && !inProgress;
-  const primaryLabel = {
-    [SLOT_ACTION.MAKE]: makeLabel,
-    [SLOT_ACTION.CONTINUE_FRAMING]: framingLabel,
-    [SLOT_ACTION.ADD_SPOTLIGHT]: spotlightLabel,
-    [SLOT_ACTION.CONTINUE_SPOTLIGHT]: continueSpotlightLabel,
-  }[inProgress?.slotAction] ?? makeLabel;
-  const actionLabel = {
-    [SLOT_ACTION.CONTINUE_FRAMING]: ANNOTATE.CONTINUE_HIGHLIGHT,
-    [SLOT_ACTION.ADD_SPOTLIGHT]: ANNOTATE.ADD_SPOTLIGHT,
-    [SLOT_ACTION.CONTINUE_SPOTLIGHT]: ANNOTATE.CONTINUE_SPOTLIGHT,
-  }[inProgress?.slotAction] ?? ANNOTATE.MAKE_A_HIGHLIGHT;
-  const summary = hasInstances ? instances[0].bareStatus : ANNOTATE.HIGHLIGHT_NOT_STARTED;
+  const pulseClass = useGuidePulse(GUIDE_PULSE.MAKE_HIGHLIGHT, { suppress: inert });
   return (
-    <div
-      role="group"
-      aria-label={`${title} highlight, ${summary.toLowerCase()}`}
-      data-testid={`annotate-highlight-slot-${orientation}`}
-      aria-disabled={locked || undefined}
-      tabIndex={inert ? -1 : 0}
-      onClick={() => { if (!inert) (hasInstances ? onOpen(instances[0]) : onMake(aspectRatio)); }}
-      onKeyDown={(event) => { if (!inert && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); hasInstances ? onOpen(instances[0]) : onMake(aspectRatio); } }}
-      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors ${locked ? 'opacity-60' : 'hover:border-cyan-300/30'} focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulseClass}`}
+    <button
+      type="button"
+      onClick={() => { if (!inert) onMake('9:16'); }}
+      disabled={inert}
+      data-testid="annotate-make-highlight"
+      aria-label={ANNOTATE.MAKE_HIGHLIGHT}
+      className={`w-full min-h-[112px] px-4 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 text-slate-950 text-sm font-extrabold flex flex-col items-center justify-center gap-2 shadow-lg shadow-cyan-950/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulseClass}`}
     >
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">
-          <OrientationIcon size={18} strokeWidth={2} aria-hidden="true" data-testid={`instance-orientation-icon-${orientation}`} />
+      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/15">
+        <Clapperboard size={20} className="shrink-0" aria-hidden="true" />
+      </span>
+      <span className="text-center leading-tight">
+        {locked ? ANNOTATE.HIGHLIGHT_AFTER_UPLOAD : pending ? ANNOTATE.OPENING_FRAME : ANNOTATE.MAKE_HIGHLIGHT}
+      </span>
+      {!locked && !pending && (
+        <span className="text-center text-xs font-medium leading-tight text-slate-950/70">
+          {ANNOTATE.MAKE_HIGHLIGHT_CARD}
         </span>
-        <span className="leading-tight min-w-0">
-          <span className="block text-base font-extrabold text-white">{title}</span>
-          <span className="block text-xs leading-relaxed text-white/60">{hint}</span>
-        </span>
-      </div>
-
-      {hasInstances ? (
-        instances.map((instance) => {
-          const actionLabel = instance.action === 'focus' ? ANNOTATE.CONTINUE_HIGHLIGHT : instance.label;
-          return (
-          <button
-            key={instance.projectId}
-            onClick={(event) => { event.stopPropagation(); onOpen(instance); }}
-            disabled={locked}
-            data-testid="annotate-highlight-instance-cta"
-            aria-label={`${title} highlight, ${instance.bareStatus}: ${actionLabel}`}
-            className="group w-full min-h-[96px] px-4 py-3 rounded-xl border border-white/10 bg-slate-900/80 hover:bg-slate-800 hover:border-cyan-300/30 active:bg-slate-700 text-white text-sm font-semibold flex flex-col items-center justify-center gap-2 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-cyan-200">
-              <Sparkles size={17} aria-hidden="true" />
-            </span>
-            <span className="text-center leading-tight">
-              {instance.bareStatus === ANNOTATE.HIGHLIGHT_NOT_STARTED
-                ? ANNOTATE.startHighlight(title, instance.ordinal ?? 1)
-                : <>{instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}{instance.bareStatus}</>}
-            </span>
-            <span className="shrink-0 flex items-center gap-1 whitespace-nowrap text-cyan-300 group-hover:text-cyan-200">
-              {actionLabel}
-              <ChevronRight size={16} aria-hidden="true" />
-            </span>
-          </button>
-          );
-        })
-      ) : (
-        <button
-          onClick={(event) => { event.stopPropagation(); inProgress ? onOpen(inProgress) : onMake(aspectRatio); }}
-          disabled={inert}
-          data-testid={`annotate-make-highlight-${orientation}`}
-          aria-label={inProgress ? primaryLabel : `Make ${orientation} highlight`}
-          className="w-full min-h-[112px] px-4 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 text-slate-950 text-sm font-extrabold flex flex-col items-center justify-center gap-2 shadow-lg shadow-cyan-950/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-        >
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/15">
-            <StageIcon size={20} className="shrink-0" aria-hidden="true" />
-          </span>
-          <span className="text-center leading-tight">{locked ? ANNOTATE.HIGHLIGHT_AFTER_UPLOAD : actionLabel}</span>
-        </button>
       )}
-    </div>
+    </button>
   );
 }
 
-export function HighlightOrientationSlots({ instances, pending, locked = false, onMake, onOpen, inline = false }) {
+// T14770 design table: the pill + row action are driven by STAGE alone (every
+// list row already has a project, so there is no "Not started" row here --
+// that status is reserved for a bare play with no highlight at all, which
+// never reaches this list).
+function rowPresentation(instance) {
+  if (instance.stage === CLIP_STAGE.PUBLISHED) {
+    return { pill: HIGHLIGHT_STATUS.FINISHED, action: ANNOTATE.WATCH_HIGHLIGHT };
+  }
+  if (instance.stage === CLIP_STAGE.FINAL) {
+    return { pill: HIGHLIGHT_STATUS.IN_PROGRESS, action: ANNOTATE.WATCH_HIGHLIGHT };
+  }
+  if (instance.stage === CLIP_STAGE.SPOTLIGHT) {
+    return {
+      pill: HIGHLIGHT_STATUS.IN_PROGRESS,
+      action: instance.slotAction === SLOT_ACTION.CONTINUE_SPOTLIGHT ? ANNOTATE.CONTINUE_SPOTLIGHT : ANNOTATE.ADD_SPOTLIGHT,
+    };
+  }
+  // FOCUS (box placed or not — design decision: "Frame (box placed or not)").
+  return { pill: HIGHLIGHT_STATUS.IN_PROGRESS, action: ANNOTATE.CONTINUE_HIGHLIGHT };
+}
+
+// In progress first (newest on top, by project id), then finished (portrait
+// before landscape, then by number).
+function compareRows(a, b) {
+  const aFinished = a.stage === CLIP_STAGE.PUBLISHED ? 1 : 0;
+  const bFinished = b.stage === CLIP_STAGE.PUBLISHED ? 1 : 0;
+  if (aFinished !== bFinished) return aFinished - bFinished;
+  if (aFinished) {
+    if (a.orientation !== b.orientation) return a.orientation === ORIENTATION.PORTRAIT ? -1 : 1;
+    return (a.ordinal ?? 1) - (b.ordinal ?? 1);
+  }
+  return (b.projectId ?? 0) - (a.projectId ?? 0);
+}
+
+const SHOWN_COLLAPSED = 3;
+
+function HighlightRow({ instance, onOpen, pulsing }) {
+  const { pill, action } = rowPresentation(instance);
+  const orientationLabel = ORIENTATION_LABEL[instance.orientation] ?? instance.orientation;
+  const OrientationIcon = ORIENTATION_ICON[instance.orientation] ?? Sparkles;
+  const rowName = ANNOTATE.highlightRowName(orientationLabel, instance.ordinal ?? 1);
+  const pulseClass = useGuidePulse(GUIDE_PULSE.HIGHLIGHT_ROW, { suppress: !pulsing });
   return (
-    <div className={inline ? 'contents' : 'space-y-2'} data-testid="annotate-highlight-slots" role="group" aria-label={ANNOTATE.MAKE_A_HIGHLIGHT}>
-      <div className={inline ? 'contents' : 'grid gap-2 sm:grid-cols-2'}>
-        {SLOTS.map((slot) => (
-          <Slot
-            key={slot.orientation}
-            slot={slot}
-            instances={instances.filter((i) => i.orientation === slot.orientation)}
-            pending={pending}
-            locked={locked}
-            onMake={onMake}
+    <li>
+      <button
+        type="button"
+        onClick={() => onOpen(instance)}
+        data-testid={`highlight-row-${instance.projectId}`}
+        aria-label={`${rowName}, ${pill}: ${action}`}
+        className={`w-full flex items-center gap-3 rounded-xl border border-white/10 bg-slate-900/80 hover:bg-slate-800 hover:border-cyan-300/30 active:bg-slate-700 px-3 py-2.5 text-left transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${pulseClass}`}
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-800 text-cyan-200">
+          <OrientationIcon size={16} aria-hidden="true" />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-white">{rowName}</span>
+          <span className="block text-xs text-white/60">
+            <span data-testid="highlight-row-pill" className="mr-1.5 inline-block rounded bg-slate-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/70">
+              {pill}
+            </span>
+            {action}
+          </span>
+          {instance.stale && (
+            <span data-testid="highlight-row-stale" className="block text-xs text-amber-300">{ANNOTATE.STALE_HIGHLIGHT_SUBLINE}</span>
+          )}
+        </span>
+        <ChevronRight size={16} className="shrink-0 text-cyan-300" aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
+/**
+ * HighlightList — "Highlights from this play": count chips, then one row per
+ * highlight (newest in-progress first, then finished), each opening at its
+ * stage via onOpen. Hidden (returns null) when the play has none.
+ * `highlightedProjectId` pulses exactly one row (the single instance the
+ * guide's progress rules track, catalog.annotateFacts) -- never more than one.
+ */
+export function HighlightList({ instances, onOpen, highlightedProjectId = null }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!instances || instances.length === 0) return null;
+
+  const counts = { [ORIENTATION.PORTRAIT]: 0, [ORIENTATION.LANDSCAPE]: 0 };
+  for (const i of instances) if (i.orientation) counts[i.orientation] += 1;
+
+  const sorted = [...instances].sort(compareRows);
+  const visible = expanded ? sorted : sorted.slice(0, SHOWN_COLLAPSED);
+
+  return (
+    <div data-testid="annotate-highlight-list" className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-bold text-white">{ANNOTATE.HIGHLIGHTS_FROM_PLAY}</h3>
+        {counts[ORIENTATION.PORTRAIT] > 0 && (
+          <span data-testid="highlight-count-portrait" className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-white/70">
+            {ANNOTATE.highlightCountChip(ANNOTATE.PORTRAIT, counts[ORIENTATION.PORTRAIT])}
+          </span>
+        )}
+        {counts[ORIENTATION.LANDSCAPE] > 0 && (
+          <span data-testid="highlight-count-landscape" className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-white/70">
+            {ANNOTATE.highlightCountChip(ANNOTATE.LANDSCAPE, counts[ORIENTATION.LANDSCAPE])}
+          </span>
+        )}
+      </div>
+      {/* Desktop (1280px, design decision): two columns of rows from lg. */}
+      <ul className="grid gap-2 lg:grid-cols-2">
+        {visible.map((instance) => (
+          <HighlightRow
+            key={instance.projectId}
+            instance={instance}
             onOpen={onOpen}
+            pulsing={instance.projectId === highlightedProjectId}
           />
         ))}
-      </div>
+      </ul>
+      {sorted.length > SHOWN_COLLAPSED && (
+        <button
+          type="button"
+          data-testid="highlight-list-toggle"
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs font-semibold text-cyan-300 hover:text-cyan-200"
+        >
+          {expanded ? ANNOTATE.SHOW_FEWER_HIGHLIGHTS : ANNOTATE.showAllHighlights(sorted.length)}
+        </button>
+      )}
     </div>
   );
 }

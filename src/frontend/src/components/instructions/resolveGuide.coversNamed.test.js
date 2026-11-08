@@ -46,7 +46,7 @@ describe('T13570', () => {
   });
 
   it('T13570:C6 (C) the Frame preview card is compact, so it fits the strip above the stage on a phone', () => {
-    const g = resolveGuide({ screen: 'focus', local: { dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true, previewing: true, hasPreviewPlayedThrough: false } });
+    const g = resolveGuide({ screen: 'focus', local: { shapeChosen: true, dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true, previewing: true, hasPreviewPlayedThrough: false } });
     expect(g.id).toBe('focus.progress.watchPreview');
     expect(g.compact).toBe(true);
   });

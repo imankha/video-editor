@@ -65,7 +65,7 @@ describe('target table (T14900)', () => {
   });
 
   it('covers every stage of the backend ladder and names no stage outside it', () => {
-    expect(LADDER.length).toBe(14);
+    expect(LADDER.length).toBe(16);
     expect(TERMINAL_STAGE).toBe(LADDER[LADDER.length - 1]);
     for (const stage of LADDER.slice(0, -1)) expect(stageTransition(stage)).toBeTruthy();
     for (const t of Object.values(JOURNEY_TARGETS)) {

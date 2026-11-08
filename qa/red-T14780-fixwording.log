@@ -1,0 +1,226 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/instructions/guideRules.namedControls.test.js [2m([22m[2m110 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 21[2mms[22m[39m
+     [32m✓[39m annotate.expired[32m 2[2mms[22m[39m
+     [32m✓[39m annotate.choice[32m 1[2mms[22m[39m
+     [32m✓[39m annotate.editor[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.upload-failed[32m 1[2mms[22m[39m
+     [32m✓[39m annotate.review[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.uploading.selected[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.uploading.has-plays[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.selected.generating[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.progress.brilliant[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.progress.spotlight[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.progress.preview[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.progress.published[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.progress.portrait[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.has-highlights.many[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.has-highlights.one[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.selected.none[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.has-plays.many[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.has-plays.one[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.watch.playing[32m 0[2mms[22m[39m
+     [32m✓[39m annotate.progress.watch[32m 0[2mms[22m[39m
+     [32m✓[39m upload.choose[32m 0[2mms[22m[39m
+     [32m✓[39m upload.submit[32m 0[2mms[22m[39m
+     [32m✓[39m home.games.error[32m 0[2mms[22m[39m
+     [32m✓[39m upload.failed[32m 0[2mms[22m[39m
+     [32m✓[39m home.games.empty[32m 0[2mms[22m[39m
+     [32m✓[39m home.games.uploading[32m 0[2mms[22m[39m
+     [32m✓[39m home.games.keep-reviewing[32m 0[2mms[22m[39m
+     [32m✓[39m home.games.all-done[32m 0[2mms[22m[39m
+     [32m✓[39m home.games.finished[32m 0[2mms[22m[39m
+     [32m✓[39m home.games.no-plays[32m 0[2mms[22m[39m
+     [32m✓[39m home.games.plays[32m 0[2mms[22m[39m
+     [32m✓[39m home.clips.unfinished[32m 0[2mms[22m[39m
+     [32m✓[39m home.clips.all-done[32m 0[2mms[22m[39m
+     [32m✓[39m home.clips.empty[32m 0[2mms[22m[39m
+     [32m✓[39m home.finished.many[32m 0[2mms[22m[39m
+     [32m✓[39m home.finished.first[32m 0[2mms[22m[39m
+     [32m✓[39m home.finished.empty[32m 0[2mms[22m[39m
+     [32m✓[39m focus.video-error.retry[32m 0[2mms[22m[39m
+     [32m✓[39m focus.video-error[32m 0[2mms[22m[39m
+     [32m✓[39m focus.fullscreen.leave-job[32m 0[2mms[22m[39m
+     [32m✓[39m focus.credits[32m 0[2mms[22m[39m
+     [32m✓[39m focus.failed[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.export[32m 0[2mms[22m[39m
+     [32m✓[39m focus.finishing[32m 0[2mms[22m[39m
+     [32m✓[39m focus.ready[32m 0[2mms[22m[39m
+     [32m✓[39m focus.cockpit.experienced[32m 0[2mms[22m[39m
+     [32m✓[39m focus.cockpit.shareWhere[32m 0[2mms[22m[39m
+     [32m✓[39m focus.cockpit.drag[32m 0[2mms[22m[39m
+[31m     [31m×[31m focus.cockpit.watch-preview[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m focus.cockpit.preview[39m[32m 1[2mms[22m[39m
+     [32m✓[39m focus.cockpit.generate[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.experienced[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.shareWhere[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.drag[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.play[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.trimSplit[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.trimAdjust[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.keep[32m 0[2mms[22m[39m
+     [32m✓[39m focus.fullscreen.leave[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.watchPreview[32m 0[2mms[22m[39m
+[31m     [31m×[31m focus.progress.preview[39m[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.generate.advanced[32m 0[2mms[22m[39m
+     [32m✓[39m focus.progress.generate[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.failed[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.progress[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.ready[32m 0[2mms[22m[39m
+     [32m✓[39m finished.viewer[32m 0[2mms[22m[39m
+     [32m✓[39m finished.done[32m 0[2mms[22m[39m
+     [32m✓[39m share.modal[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.pick.done[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.pick.away[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.pick.none[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.pick.not-outlined[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.pick.next[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.pick.first[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.pick.at-marker[32m 0[2mms[22m[39m
+     [32m✓[39m modal.attach-video.submit[32m 0[2mms[22m[39m
+     [32m✓[39m modal.attach-video.choose[32m 0[2mms[22m[39m
+     [32m✓[39m modal.clip-upload-notice[32m 0[2mms[22m[39m
+     [32m✓[39m modal.clip-upload-too-large[32m 0[2mms[22m[39m
+     [32m✓[39m modal.clip-size-limit[32m 0[2mms[22m[39m
+     [32m✓[39m modal.edit-game[32m 0[2mms[22m[39m
+     [32m✓[39m modal.link-clip.empty[32m 0[2mms[22m[39m
+     [32m✓[39m modal.link-clip[32m 0[2mms[22m[39m
+     [32m✓[39m modal.share-game[32m 0[2mms[22m[39m
+     [32m✓[39m modal.collection-share.done[32m 0[2mms[22m[39m
+     [32m✓[39m modal.collection-share[32m 0[2mms[22m[39m
+     [32m✓[39m modal.teammates.done[32m 0[2mms[22m[39m
+     [32m✓[39m modal.teammates[32m 0[2mms[22m[39m
+     [32m✓[39m modal.share-playback.error[32m 0[2mms[22m[39m
+     [32m✓[39m modal.share-playback[32m 0[2mms[22m[39m
+     [32m✓[39m modal.shared-video.sign-in[32m 0[2mms[22m[39m
+     [32m✓[39m modal.shared-video.error[32m 0[2mms[22m[39m
+     [32m✓[39m modal.shared-video[32m 0[2mms[22m[39m
+     [32m✓[39m modal.buy-credits.pay[32m 0[2mms[22m[39m
+     [32m✓[39m modal.buy-credits.pick[32m 0[2mms[22m[39m
+     [32m✓[39m modal.insufficient-credits[32m 0[2mms[22m[39m
+     [32m✓[39m modal.credit-history[32m 0[2mms[22m[39m
+     [32m✓[39m modal.payment-result.success[32m 0[2mms[22m[39m
+     [32m✓[39m modal.payment-result.failed[32m 0[2mms[22m[39m
+     [32m✓[39m modal.storage-extension[32m 0[2mms[22m[39m
+     [32m✓[39m modal.export-too-large[32m 0[2mms[22m[39m
+     [32m✓[39m modal.tutorial-video[32m 0[2mms[22m[39m
+     [32m✓[39m modal.profiles.add[32m 0[2mms[22m[39m
+     [32m✓[39m modal.profiles.edit[32m 0[2mms[22m[39m
+     [32m✓[39m modal.profiles.list[32m 0[2mms[22m[39m
+     [32m✓[39m modal.move-profile.confirm[32m 0[2mms[22m[39m
+     [32m✓[39m modal.move-profile.pick[32m 0[2mms[22m[39m
+     [32m✓[39m overlay.text[32m 0[2mms[22m[39m
+     [32m✓[39m every NAMES_OFFSCREEN entry still matches a live rule and phrase (no stale reasons)[32m 2[2mms[22m[39m
+ [31m❯[39m src/config/frameVocabulary.test.jsx [2m([22m[2m8 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 273[2mms[22m[39m
+     [32m✓[39m T14620:C1 the button that opens Frame says Make highlight, in progress Continue highlight[32m 30[2mms[22m[39m
+     [32m✓[39m T14620:C2 the paid step is Sharpen my highlight on the button, in progress and when done[32m 56[2mms[22m[39m
+     [32m✓[39m T14620:C3 errors and cost lines use the same verb; a spotlight failure never says sharpen[32m 12[2mms[22m[39m
+     [32m✓[39m T14620:C4 the spotlight job never shows paid-step progress[32m 31[2mms[22m[39m
+[31m     [31m×[31m T14620:C5 box, positions, sections and Check framing replace the tool words[39m[32m 5[2mms[22m[39m
+     [32m✓[39m T14620:C6 no retired word survives in Frame or paid-step constants[32m 2[2mms[22m[39m
+     [32m✓[39m T14620:C7 no inline retired copy is left in the Frame components[32m 126[2mms[22m[39m
+     [32m✓[39m T14620:C8 orientation slot labels are stored in sentence case, never rewritten at runtime[32m 10[2mms[22m[39m
+ [31m❯[39m src/modes/FocusModeView.guidedSteps.test.jsx [2m([22m[2m21 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 970[2mms[22m[39m
+     [32m✓[39m step 1: shows only the shape-choice instruction, box and play unpulsed[32m 145[2mms[22m[39m
+     [32m✓[39m T14770: step 2 shows the drag instruction and pulses the box once a shape is chosen[32m 50[2mms[22m[39m
+[31m     [31m×[31m step 3 pulses the box; playing through once advances to step 4 and pulses Preview highlight[39m[32m 65[2mms[22m[39m
+     [32m✓[39m waits for preview playback before showing step 5 and pulsing Generate[32m 85[2mms[22m[39m
+     [32m✓[39m removes the old instructions panel and Set/Add focus point buttons[32m 21[2mms[22m[39m
+     [32m✓[39m completes preview at the trimmed end even when trim controls are open[32m 44[2mms[22m[39m
+     [32m✓[39m does not complete preview when playback finishes after leaving preview[32m 54[2mms[22m[39m
+     [32m✓[39m locks Trim and SlowMo, Preview highlight and Generate until the box is dragged[32m 77[2mms[22m[39m
+     [32m✓[39m T14830: dragging the box alone unlocks Trim/SlowMo, Preview and Generate; play is still advice[32m 65[2mms[22m[39m
+     [32m✓[39m pressing play (without unlocking anything new) advances the coach to step 3[32m 65[2mms[22m[39m
+     [32m✓[39m T14760: a clip that already has a focus point skips the shape choice (already settled) and starts at the drag step, with the check-the-box copy[32m 15[2mms[22m[39m
+     [32m✓[39m T14760: a clip that already has a focus point advances past step 1 when the parent plays, without a separate tap-play step[32m 14[2mms[22m[39m
+     [32m✓[39m ignores trim-origin keyframes when deciding the drag step is done[32m 24[2mms[22m[39m
+     [32m✓[39m Trim and SlowMo swaps the guide to the split instruction and pulses the track[32m 54[2mms[22m[39m
+     [32m✓[39m once a split exists the trim guide points at the speed and trash buttons[32m 61[2mms[22m[39m
+     [32m✓[39m pressing Trim and SlowMo again returns to the keep-the-box instruction[32m 61[2mms[22m[39m
+     [32m✓[39m does not render the guide in fullscreen[32m 3[2mms[22m[39m
+   [32m✓[39m disabling guidance stops targets and re-enabling preserves progress[32m 34[2mms[22m[39m
+   [32m✓[39m saved trim edits never opt the user into trim guidance[32m 13[2mms[22m[39m
+     [32m✓[39m shows no step-by-step guide when the framing is already rendered[32m 7[2mms[22m[39m
+     [32m✓[39m still shows the step guide when a stale draft needs Generate[32m 14[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/config/frameVocabulary.test.jsx[2m > [22mT14620 Frame and paid-step copy[2m > [22mT14620:C5 box, positions, sections and Check framing replace the tool words
+[31m[1mAssertionError[22m: expected 'Check zoom' to be 'Preview' // Object.is equality[39m
+
+Expected: [32m"Preview"[39m
+Received: [31m"Check zoom"[39m
+
+[36m [2m❯[22m src/config/frameVocabulary.test.jsx:[2m86:45[22m[39m
+    [90m 84| [39m    [34mexpect[39m([33mFOCUS_COCKPIT[39m[33m.[39m[33mADD_FOCUS_POINT[39m)[33m.[39m[34mtoBe[39m([32m'Add position'[39m)[33m;[39m
+    [90m 85| [39m    [34mexpect[39m([33mEDITOR_PANELS[39m[33m.[39m[33mFOCUS_POINT[39m)[33m.[39m[34mtoBe[39m([32m'Position'[39m)[33m;[39m
+    [90m 86| [39m    [34mexpect[39m([33mEDITOR_PANELS[39m[33m.[39m[33mPREVIEW_HIGHLIGHT[39m)[33m.[39m[34mtoBe[39m([32m'Preview'[39m)[33m;[39m
+    [90m   | [39m                                            [31m^[39m
+    [90m 87| [39m    expect(FOCUS_PREVIEW.BACK_TO_PREVIEW_LABEL).toBe('Watch highlight'…
+    [90m 88| [39m    [34mexpect[39m([33mFRAME_COPY[39m[33m?.[39m[33mMOVE_VIDEO[39m)[33m.[39m[34mtoBe[39m([32m'Move the video'[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/FocusModeView.guidedSteps.test.jsx[2m > [22mFocusModeView guided framing steps[2m > [22mstep 3 pulses the box; playing through once advances to step 4 and pulses Preview highlight
+[31m[1mAssertionError[22m: expected 'Tap Check zoom to see exactly what yo…' to match /Preview/[39m
+
+[32m- Expected:[39m
+/Preview/
+
+[31m+ Received:[39m
+"Tap Check zoom to see exactly what you’ll share."
+
+[36m [2m❯[22m src/modes/FocusModeView.guidedSteps.test.jsx:[2m165:66[22m[39m
+    [90m163| [39m    rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true,…
+    [90m164| [39m    expect(screen.getByTestId('framing-guide-step').textContent).toBe(…
+    [90m165| [39m    expect(screen.getByTestId('framing-guide-text').textContent).toMat…
+    [90m   | [39m                                                                 [31m^[39m
+    [90m166| [39m    expect(screen.getByTestId('framing-preview-toggle').className).toM…
+    [90m167| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/guideRules.namedControls.test.js[2m > [22ma guide sentence names only controls its rule pulses or keeps clear[2m > [22mfocus.cockpit.watch-preview
+[31m[1mAssertionError[22m: rule focus.cockpit.watch-preview tells the user to act ("Watch it through. Tap Check zoom again to change anything.") but matches no CONTROL_PHRASES row: expected 0 to be greater than 0[39m
+[36m [2m❯[22m src/components/instructions/guideRules.namedControls.test.js:[2m96:140[22m[39m
+    [90m 94| [39m    [35mconst[39m title [33m=[39m [34mtitleOf[39m(rule)[33m;[39m
+    [90m 95| [39m    [35mconst[39m matched [33m=[39m [33mCONTROL_PHRASES[39m[33m.[39m[34mfilter[39m(c [33m=>[39m c[33m.[39mre[33m.[39m[34mtest[39m(title))[33m;[39m
+    [90m 96| [39m    if (VERBS.test(title)) expect(matched.length, `rule ${rule.id} tel…
+    [90m   | [39m                                                                                                                                           [31m^[39m
+    [90m 97| [39m    [35mconst[39m pulses [33m=[39m [rule[33m.[39mpulse [33m??[39m []][33m.[39m[34mflat[39m()[33m;[39m
+    [90m 98| [39m    [35mconst[39m clear [33m=[39m [34mtestidsOf[39m(rule[33m.[39mkeepClear)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/guideRules.namedControls.test.js[2m > [22ma guide sentence names only controls its rule pulses or keeps clear[2m > [22mfocus.cockpit.preview
+[31m[1mAssertionError[22m: rule focus.cockpit.preview tells the user to act ("Tap Check zoom to see exactly what you’ll share.") but matches no CONTROL_PHRASES row: expected 0 to be greater than 0[39m
+[36m [2m❯[22m src/components/instructions/guideRules.namedControls.test.js:[2m96:140[22m[39m
+    [90m 94| [39m    [35mconst[39m title [33m=[39m [34mtitleOf[39m(rule)[33m;[39m
+    [90m 95| [39m    [35mconst[39m matched [33m=[39m [33mCONTROL_PHRASES[39m[33m.[39m[34mfilter[39m(c [33m=>[39m c[33m.[39mre[33m.[39m[34mtest[39m(title))[33m;[39m
+    [90m 96| [39m    if (VERBS.test(title)) expect(matched.length, `rule ${rule.id} tel…
+    [90m   | [39m                                                                                                                                           [31m^[39m
+    [90m 97| [39m    [35mconst[39m pulses [33m=[39m [rule[33m.[39mpulse [33m??[39m []][33m.[39m[34mflat[39m()[33m;[39m
+    [90m 98| [39m    [35mconst[39m clear [33m=[39m [34mtestidsOf[39m(rule[33m.[39mkeepClear)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/guideRules.namedControls.test.js[2m > [22ma guide sentence names only controls its rule pulses or keeps clear[2m > [22mfocus.progress.preview
+[31m[1mAssertionError[22m: rule focus.progress.preview tells the user to act ("Tap Check zoom to see exactly what you’ll share.") but matches no CONTROL_PHRASES row: expected 0 to be greater than 0[39m
+[36m [2m❯[22m src/components/instructions/guideRules.namedControls.test.js:[2m96:140[22m[39m
+    [90m 94| [39m    [35mconst[39m title [33m=[39m [34mtitleOf[39m(rule)[33m;[39m
+    [90m 95| [39m    [35mconst[39m matched [33m=[39m [33mCONTROL_PHRASES[39m[33m.[39m[34mfilter[39m(c [33m=>[39m c[33m.[39mre[33m.[39m[34mtest[39m(title))[33m;[39m
+    [90m 96| [39m    if (VERBS.test(title)) expect(matched.length, `rule ${rule.id} tel…
+    [90m   | [39m                                                                                                                                           [31m^[39m
+    [90m 97| [39m    [35mconst[39m pulses [33m=[39m [rule[33m.[39mpulse [33m??[39m []][33m.[39m[34mflat[39m()[33m;[39m
+    [90m 98| [39m    [35mconst[39m clear [33m=[39m [34mtestidsOf[39m(rule[33m.[39mkeepClear)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m134 passed[39m[22m[90m (139)[39m
+[2m   Start at [22m 06:18:30
+[2m   Duration [22m 10.44s[2m (transform 11.39s, setup 0ms, collect 12.33s, tests 1.26s, environment 958ms, prepare 21ms)[22m
+
+exit: 1

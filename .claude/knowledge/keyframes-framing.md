@@ -61,6 +61,21 @@ seeded games. T11720 AC1's actual promise (timeline/Trim stay reachable above th
 just "band itself ≤56px") is asserted via a real DOM hit-test (`document.elementFromPoint` at a
 point inside each target, checked against the compact band) PLUS a trial click — proven to fail when
 the band is mutated to visually overlap the content above it (T11720's own STATUS record).)
+updated: 2026-11-07 (T14830, owner ruling "Confirm once" — the entire T11700/T11710/T11720 lock
+mechanism above is RETIRED: Generate/Trim-SlowMo/Preview are no longer disabled by drag or Play in
+either layout, and the T11720 compact-locked phone band (`ActionBand`'s `compactLocked` prop,
+`generate-locked-pill`, `FOCUS_HINTS.GENERATE_LOCKED*`, `FRAMING_GUIDE.LOCKED_TITLE`,
+`FramingActionRow`'s `locked` prop) is deleted outright, not just unwired. `ExportButtonContainer`'s
+`hasUnframedClips` (T8510) now only feeds a NEW `needsBoxConfirm` (Framing + unframed + not
+`boxChecked`), never `isButtonDisabled` for this reason — it opens a `ConfirmationDialog`
+("Is your athlete in the box?", `FOCUS_BOX_CONFIRM` in displayNames.js, `focus-box-confirm`
+testid) on Generate press instead of blocking it; "Check the box" closes and spends nothing,
+"Sharpen my highlight" (the dialog's primary) continues the same `handleExport()` call. `boxChecked`
+is `dragDone` (drag OR play-while-pre-placed) threaded in from `FocusModeView.jsx` and, for the
+landscape cockpit, `FocusCockpit.jsx`'s own local `hasPlayed` (it has no separate drag-gesture ref
+of its own; an actual crop move is already reflected in the real crop data `hasUnframedClips`
+checks). The 0-focus-point coaching chip/ring from T11710 and the Set-focus-point button from
+T11700 are UNCHANGED — guidance still advises, it just never blocks.)
 updated: 2026-10-03 (T11420 — Spotlight (Overlay) now opens with its timeline at the LEFT EDGE
 (scroll 0) after a Framing export. INVARIANT + landmine: `OverlayScreen` is mounted only under
 `{editorMode === EDITOR_MODES.OVERLAY && ...}` (App.jsx), so it REMOUNTS on every

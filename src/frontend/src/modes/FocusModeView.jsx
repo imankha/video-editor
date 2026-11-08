@@ -1,7 +1,7 @@
 import Guide from '../components/instructions/Guide';
 import CompactGuide from '../components/instructions/CompactGuide';
 import { GUIDE_PULSE } from '../components/instructions/guideTargets';
-import { resolveGuide } from '../components/instructions/resolveGuide';
+import { resolveGuide, focusGuideStepDisplay } from '../components/instructions/resolveGuide';
 import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -19,6 +19,7 @@ import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/Ex
 import { Button } from '../components/shared';
 import SettingsRail from '../components/settings/SettingsRail';
 import FocusSettingsPanel from '../components/settings/FocusSettingsPanel';
+import FrameShapeChoice from './focus/FrameShapeChoice';
 import { CropOverlay } from './focus';
 import { FocusTimelineBlock } from './focus/FocusTimelineBlock';
 import RotateNudge from './focus/RotateNudge';
@@ -27,8 +28,18 @@ import FramingGuide from './focus/FramingGuide';
 import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
-import { FRAMING_GUIDE } from '../components/instructions/catalog';
 import { useExportJobStatus } from '../components/instructions/exportJob';
+
+// T14850: below ~850px of viewport height at desktop widths, the 22rem header/timeline
+// reservation in the box-state height formula (and the matching 70vh*aspect-ratio term
+// in the preview-state width formula) leaves less than 320px for the player -- too small
+// to judge framing or drag the crop box. These media-gated `!`-important overrides floor
+// both states at 320px, same "size to the viewport" approach as AnnotateModeView's
+// SHORT_DESKTOP_STAGE_CLASS. Gated on `min-width:1024px` so phone/tablet layouts (which
+// never apply the `lg:` formula these override) are untouched.
+const SHORT_DESKTOP_MEDIA = '(min-width:1024px)_and_(max-height:850px)';
+const SHORT_DESKTOP_BOX_HEIGHT_CLASS = `[@media${SHORT_DESKTOP_MEDIA}]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]`;
+const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = `[@media${SHORT_DESKTOP_MEDIA}]:!w-[min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]`;
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -69,8 +80,9 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   cropKeyframes,
   segmentData,
   disabled,
-  // Guided framing steps not finished: explain the lock in the button tooltip.
-  guideLocked = false,
+  // T14830: whether the parent has "checked" the box this session (moved it,
+  // or played the clip with a box that was already pre-placed).
+  boxChecked = false,
   includeAudio,
   onIncludeAudioChange,
   onProceedToOverlay,
@@ -96,6 +108,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
     isHighlightEnabled: false,
     segmentData,
     disabled,
+    boxChecked,
     includeAudio,
     onIncludeAudioChange,
     onProceedToOverlay,
@@ -123,7 +136,9 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         retrying={container.retrying}
         isFramingMode={container.isFramingMode}
         isDarkOverlay={container.isDarkOverlay}
-        hasUnframedClips={container.hasUnframedClips}
+        showBoxConfirm={container.showBoxConfirm}
+        onBoxConfirmCheck={container.onBoxConfirmCheck}
+        onBoxConfirmContinue={container.onBoxConfirmContinue}
         framingCtaMode={framingCtaMode}
         showBackToPreview={showBackToPreview}
         onBackToPreview={onBackToPreview}
@@ -131,7 +146,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         backToPreviewLoading={backToPreviewLoading}
         actionsAbove={actionsAbove}
         isButtonDisabled={container.isButtonDisabled}
-        buttonTitle={container.buttonTitle ?? (guideLocked ? FRAMING_GUIDE.LOCKED_TITLE : undefined)}
+        buttonTitle={container.buttonTitle}
         isHighlightEnabled={false}
         highlightEffectType={null}
         onExport={container.handleExport}
@@ -345,8 +360,7 @@ export function FocusModeView({
   // Guided framing steps (one instruction at a time). Focus points a parent places
   // are 'user'-origin keyframes; 'trim'-origin ones are trim-boundary residue.
   // EPHEMERAL view state, never persisted, never a useEffect: step 1 completes on
-  // a box drag release (or a clip that already has a focus point), step 2 on the
-  // first time playback is observed.
+  // a box drag release, step 2 on the first time playback is observed.
   const { coachEnabled } = useGuidanceSettings();
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [hasDragged, setHasDragged] = useState(false);
@@ -354,8 +368,28 @@ export function FocusModeView({
   // Derived-state-in-render (React-sanctioned): any play path (button, spacebar,
   // tapping the video) flips isPlaying, so observe that rather than one handler.
   if (isPlaying && !hasPlayed) setHasPlayed(true);
-  const dragDone = hasDragged || focusPointCount > 0;
+  // T14760: a clip can open with a box already placed (AI-proposed, or copied from an
+  // earlier highlight) -- `focusPointCount > 0` before the parent has touched anything
+  // this session. That used to skip step 1 straight to step 2, so the parent never saw
+  // "Step 1 of 5" and the first two steps looked collapsed into one. Step 1 now still
+  // shows (resolveGuide swaps in the "check the box" copy for this case, see
+  // `boxPrePlaced`), and completes on a drag OR on playing -- tapping Play is itself
+  // confirmation the already-placed box looked right.
+  const boxPrePlaced = focusPointCount > 0;
+  // T14830 (owner ruling 2026-11-07, "Confirm once"): `dragDone` is the box's
+  // "checked" state -- moved, or played while pre-placed -- passed to
+  // ExportButtonSection as `boxChecked`. It gates the one-time pre-spend
+  // warning on an unchecked box, never a disabled button. `stepsComplete`
+  // stays drag-AND-played -- it only gates the LATER coach steps (keep-the-box
+  // onward), where having actually watched the clip play matters.
+  const dragDone = hasDragged || (boxPrePlaced && hasPlayed);
   const stepsComplete = dragDone && hasPlayed;
+  // T14770: step 1 of 6 -- "Where will you share it?" (design decision 1, Option
+  // C). Done once the parent taps a shape this session, OR the box already has
+  // positions (the shape was already settled in an earlier session).
+  const [shapeTapped, setShapeTapped] = useState(false);
+  const shapeChosen = shapeTapped || hasDragged || boxPrePlaced;
+  const handleShapeChosen = useCallback(() => setShapeTapped(true), []);
   // Step 3 -> 4: once the first play has started, reaching the clip end while
   // playing counts as one full play-through (playback loops, so the time wraps
   // right after). Derived-in-render like hasPlayed; never a useEffect, never
@@ -429,7 +463,7 @@ export function FocusModeView({
     progress: { finishedCount },
     job: { status: jobStatus === 'none' && needCredits ? 'credits' : jobStatus },
     local: {
-      dragDone, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
+      shapeChosen, dragDone, boxPrePlaced, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
       rendered: framingCtaMode === 'preview',
       // T12790: a failed load and fullscreen each get their own sentence instead of silence.
@@ -737,7 +771,7 @@ export function FocusModeView({
         {/* Guided framing: one floating instruction near the current action. */}
         {(videoUrl || error) && !isFullscreen && !mobileFs && guide && (
           <Guide guide={guide}>
-            <FramingGuide step={guide.step} text={guide.message.title} compact={guide.compact} />
+            <FramingGuide {...focusGuideStepDisplay(guide.step, boxPrePlaced)} text={guide.message.title} compact={guide.compact} />
           </Guide>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
@@ -750,7 +784,21 @@ export function FocusModeView({
               slim strip between the corner buttons and lets touches through to the stage. */}
           {(isFullscreen || mobileFs) && (
             <div className="pointer-events-none absolute inset-x-14 top-2 z-30 flex justify-center sm:inset-x-16 sm:top-4">
-              <CompactGuide guide={guide} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
+              <CompactGuide guide={guide} boxPrePlaced={boxPrePlaced} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
+            </div>
+          )}
+          {/* T14770: "Where will you share it?" (design decision 1, Option C) —
+              prominent above the video while the highlight has no box positions
+              yet, then a small chip once the first position is placed. Not shown
+              fullscreen (no room, same as CompactGuide above). */}
+          {!isFullscreen && !mobileFs && (
+            <div className="mb-2">
+              <FrameShapeChoice
+                aspectRatio={globalAspectRatio}
+                hasPositions={boxPrePlaced}
+                onChange={onAspectRatioChange}
+                onChosen={handleShapeChosen}
+              />
             </div>
           )}
           {/* Video Player with CropOverlay. 2026-09-18 (user request): the
@@ -770,8 +818,8 @@ export function FocusModeView({
               (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
-                  ? 'rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))]'
-                  : 'rounded-lg h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]'
+                  ? `rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`
+                  : `rounded-lg h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
             }`}
             style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}
             onClick={mobileFs ? togglePlay : undefined}
@@ -1111,8 +1159,12 @@ export function FocusModeView({
             videoFile={videoFile}
             cropKeyframes={getFilteredKeyframesForExport}
             segmentData={getSegmentExportData()}
-            disabled={!videoUrl || !stepsComplete}
-            guideLocked={!!videoUrl && !stepsComplete}
+            // T14830 (owner ruling 2026-11-07, "Confirm once"): only a missing
+            // video blocks Generate/Trim/Preview -- drag and Play are never a
+            // lock. `boxChecked` (dragDone) instead gates the one-time
+            // pre-spend warning the container shows on an unchecked box.
+            disabled={!videoUrl}
+            boxChecked={dragDone}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
@@ -1126,8 +1178,8 @@ export function FocusModeView({
             renderedAt={renderedAt}
             backToPreviewLoading={backToPreviewLoading}
             // [Trim and SlowMo] + [Preview highlight] sit in the band directly above
-            // Generate (same row-above-CTA shape as Annotate). Locked together with
-            // Generate until the guided steps are done. Trim and SlowMo toggles the
+            // Generate (same row-above-CTA shape as Annotate). Never locked
+            // (T14830, owner ruling 2026-11-07). Trim and SlowMo toggles the
             // timeline's segment/speed/trim track (advancedOpen).
             actionsAbove={
               <FramingActionRow
@@ -1136,7 +1188,6 @@ export function FocusModeView({
                 onTogglePreview={handleTogglePreview}
                 onToggleTrim={handleToggleTrim}
                 trimOpen={advancedOpen}
-                locked={!stepsComplete}
               />
             }
           />

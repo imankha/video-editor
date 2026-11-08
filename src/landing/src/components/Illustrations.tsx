@@ -236,7 +236,7 @@ export function ElevateIllustration({ className = '' }: IllustrationProps) {
 
           {/* Transform labels */}
           <rect x="330" y="116" width="42" height="16" rx="4" fill="#831843" fillOpacity="0.8" />
-          <text x="351" y="128" textAnchor="middle" fill="#f9a8d4" fontSize="8" fontFamily="system-ui" fontWeight="600">FRAME</text>
+          <text x="351" y="128" textAnchor="middle" fill="#f9a8d4" fontSize="8" fontFamily="system-ui" fontWeight="600">ZOOM</text>
           <rect x="330" y="140" width="42" height="16" rx="4" fill="#4c1d95" fillOpacity="0.8" />
           <text x="351" y="152" textAnchor="middle" fill="#c4b5fd" fontSize="8" fontFamily="system-ui" fontWeight="600">AI 4K</text>
         </g>

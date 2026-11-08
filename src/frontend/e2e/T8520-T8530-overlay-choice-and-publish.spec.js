@@ -89,7 +89,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     // Acceptance: all four choices visible, with ONE dominant primary (Add spotlight).
     await expect(bar.getByRole('button', { name: 'Add spotlight', exact: true })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Finish without spotlight', exact: true })).toBeVisible();
-    await expect(bar.getByRole('button', { name: 'Edit framing', exact: true })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Edit zoom', exact: true })).toBeVisible();
     await expect(page.getByTestId('focus-save-draft')).toBeVisible();
     // Add spotlight is the dominant PRIMARY. T10670: the tile IS the button, so the
     // "Add spotlight" button carries the primary tile's data-testid directly.
@@ -105,7 +105,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
       for (const locatorFn of [
         () => bar.getByRole('button', { name: 'Add spotlight', exact: true }),
         () => bar.getByRole('button', { name: 'Finish without spotlight', exact: true }),
-        () => bar.getByRole('button', { name: 'Edit framing', exact: true }),
+        () => bar.getByRole('button', { name: 'Edit zoom', exact: true }),
         () => page.getByTestId('focus-save-draft'),
       ]) {
         const el = locatorFn();

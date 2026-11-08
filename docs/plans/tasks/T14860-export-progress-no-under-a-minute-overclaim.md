@@ -52,6 +52,13 @@ Copy follows the glossary and T14540 (no "Export/Generation" wording).
 
 **2026-11-03**: Filed from the funnel walk timing log. Not started.
 
+**2026-11-07**: Implemented in commit d474096a0 (`calculateETA`/`resolveEtaDisplay` in
+`GlobalExportIndicator.jsx`; no estimate before frames flow, measured per-job frame rate +
+fixed post-upscale tail, rounded up to the next 30s).
+
+**2026-11-07 (owner ruling)**: C2 ("Estimates on two real exports land within 1.5x of the
+actual total") verified on staging after merge with two real Modal exports.
+
 ## Acceptance Criteria
 
 - [ ] No time estimate is shown until frames are flowing.

@@ -26,7 +26,7 @@ import logging
 import sqlite3
 import threading
 import uuid
-from bisect import bisect_right
+from bisect import bisect_left
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
@@ -126,6 +126,10 @@ def aggregate_user(rows, ladder: list[dict], cohort_month: str) -> dict[str, Any
     attempts: dict[str, list[str]] = {}
     for row in sorted(rows, key=lambda r: _parse(r["created_at"])):
         action = row["action"]
+        # T14800: game_created is both a ladder stage (upload_started) and a retry-burst
+        # action, so attempts are collected before the ladder branch, never in its elif.
+        if action in RETRY_BURST_ACTIONS:
+            attempts.setdefault(action, []).append(row["created_at"])
         if action in ranks:
             rank = ranks[action]
             if rank != prev:
@@ -145,14 +149,14 @@ def aggregate_user(rows, ladder: list[dict], cohort_month: str) -> dict[str, Any
             for screen, secs in (ctx.get("dwell") or {}).items():
                 if screen in BREADCRUMB_SCREENS and isinstance(secs, (int, float)):
                     dwell[(stage, screen)] = dwell.get((stage, screen), 0.0) + secs
-        elif action in RETRY_BURST_ACTIONS:
-            attempts.setdefault(action, []).append(row["created_at"])
 
     at_times = [at for at, _ in checkpoints]
     retry_burst = set()
     for action, stamps in attempts.items():
         for burst in detect_retry_bursts(stamps):
-            i = bisect_right(at_times, datetime.fromisoformat(burst["window_start"]))
+            # bisect_left: the stage the user was in before the burst's first attempt, even
+            # when that attempt is itself a ladder advance (game_created -> upload_started).
+            i = bisect_left(at_times, datetime.fromisoformat(burst["window_start"]))
             retry_burst.add((keys[checkpoints[i - 1][1]] if i else keys[0], action))
     return {
         "exit_screen": set(last_exit.items()),

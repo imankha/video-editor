@@ -590,6 +590,7 @@ export function CollectionPlayer({
               icon={downloadLoading ? Loader : Download}
               disabled={downloadLoading}
               onClick={() => onDownload(activeReel)}
+              data-testid="player-download"
               className={downloadLoading ? '[&_svg]:animate-spin' : ''}
             >
               {downloadLoading ? 'Downloading...' : 'Download'}

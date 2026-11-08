@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useGuidanceSettings, useSettingsStore } from '../../stores/settingsStore';
 import { FRAMING_GUIDE } from './catalog';
+import { focusGuideStepDisplay } from './resolveGuide';
 import { ERROR_COPY } from '../../config/displayNames';
 
 /**
@@ -12,11 +13,12 @@ import { ERROR_COPY } from '../../config/displayNames';
  * Turn off guidance button. The pulse on the named control still comes from the
  * screen's GuideScope.
  */
-export default function CompactGuide({ guide, testId = 'compact-guide', className = '' }) {
+export default function CompactGuide({ guide, boxPrePlaced = false, testId = 'compact-guide', className = '' }) {
   const { coachEnabled } = useGuidanceSettings();
   const setCoachEnabled = useSettingsStore(s => s.setCoachEnabled);
   const [closeError, setCloseError] = useState('');
   if (!guide || !coachEnabled) return null;
+  const { step: displayStep, total: displayTotal } = focusGuideStepDisplay(guide.step, boxPrePlaced);
   const handleClose = async (e) => {
     e.stopPropagation();
     setCloseError('');
@@ -32,9 +34,9 @@ export default function CompactGuide({ guide, testId = 'compact-guide', classNam
       data-tone={guide.tone}
       className={`pointer-events-none flex items-start gap-2 rounded-xl border border-white/20 border-l-2 border-l-violet-400/80 bg-gray-900/90 py-1.5 pl-3 pr-1 text-white shadow-[0_6px_20px_rgb(0_0_0_/35%)] backdrop-blur ${className}`}
     >
-      {guide.step != null && (
+      {displayStep != null && (
         <span className="mt-1 shrink-0 rounded-full bg-amber-400/20 px-2 py-0.5 text-[11px] font-semibold text-amber-200">
-          {FRAMING_GUIDE.STEP_LABEL(guide.step, 5)}
+          {FRAMING_GUIDE.STEP_LABEL(displayStep, displayTotal)}
         </span>
       )}
       <div className="min-w-0 flex-1 py-1">

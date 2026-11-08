@@ -147,7 +147,7 @@ describe('FocusModeView guide on video error and in fullscreen (T12790)', () => 
 
   it('fullscreen shows the step in the compact strip', () => {
     render(<Harness isFullscreen />);
-    expect(screen.getByTestId('focus-fullscreen-guide-text').textContent).toBe(GUIDE.focus.drag);
+    expect(screen.getByTestId('focus-fullscreen-guide-text').textContent).toBe(GUIDE.focus.shareWhere);
   });
 
   it('fullscreen past the stage steps says to exit fullscreen and pulses the exit button', () => {

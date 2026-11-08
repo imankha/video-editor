@@ -5,9 +5,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * Guided framing steps: ONE instruction at a time (drag the box -> play -> keep the
- * box on your player). Preview highlight, Trim and SlowMo, and Generate are all
- * locked until the first two steps are done. Pressing Trim and SlowMo swaps the
- * guide to trim instructions.
+ * box on your player). T14830 (owner ruling 2026-11-07, "Confirm once"): Preview
+ * highlight, Trim and SlowMo, and Generate are never locked by drag or Play --
+ * only a missing video blocks them; an unchecked box instead shows a one-time
+ * pre-spend warning on Generate. Pressing Trim and SlowMo swaps the guide to trim
+ * instructions.
  */
 
 const exportContainerSpy = vi.fn(() => ({}));
@@ -138,12 +140,20 @@ function unlocked() {
 describe('FocusModeView guided framing steps', () => {
   beforeEach(() => exportContainerSpy.mockClear());
 
-  it('step 1: shows only the drag instruction and pulses the box, not play', () => {
+  it('step 1: shows only the shape-choice instruction, box and play unpulsed', () => {
     render(<Harness />);
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.shareWhere);
+    expect(screen.getByTestId('crop-box').dataset.pulse).toBe('false');
+    expect(screen.getByTestId('play').dataset.pulse).toBe('false');
+    expect(screen.queryByText(/Play the video/)).toBeNull();
+  });
+
+  it('T14770: step 2 shows the drag instruction and pulses the box once a shape is chosen', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByTestId('focus-shape-option-portrait'));
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.drag);
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
     expect(screen.getByTestId('play').dataset.pulse).toBe('false');
-    expect(screen.queryByText(/Play the video/)).toBeNull();
   });
 
   it('step 3 pulses the box; playing through once advances to step 4 and pulses Preview highlight', () => {
@@ -153,8 +163,10 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-preview-toggle').className).not.toMatch(/coach-target-pulse/);
     // Playback reaches the clip end (clipDuration 6s).
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
+    // T14760 (owner ruling 2026-11-07): box already placed means no shape choice was
+    // ever shown this session, so the total drops to 5 and every later step renumbers down.
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 4 of 5');
-    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Check framing/);
+    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Preview/);
     expect(screen.getByTestId('framing-preview-toggle').className).toMatch(/coach-target-pulse/);
   });
 
@@ -204,24 +216,25 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 4 of 5');
   });
 
-  it('locks Trim and SlowMo, Preview highlight and Generate until steps 1 and 2 are done', () => {
+  it('T14830 (owner ruling 2026-11-07, "Confirm once"): never locks Trim and SlowMo, Preview highlight or Generate before the box is touched', () => {
     render(<Harness />);
-    expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(true);
-    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(true);
-    expect(lastDisabled()).toBe(true);
+    expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(false);
+    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(false);
+    expect(lastDisabled()).toBe(false);
   });
 
-  it('dragging the box advances to step 2: play pulses, box stops', () => {
+  it('T14830: dragging the box leaves Trim/SlowMo, Preview and Generate unlocked (unchanged); play is still advice', () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId('crop-box'));
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.play);
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('false');
     expect(screen.getByTestId('play').dataset.pulse).toBe('true');
-    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(true);
-    expect(lastDisabled()).toBe(true);
+    expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(false);
+    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(false);
+    expect(lastDisabled()).toBe(false);
   });
 
-  it('pressing play advances to step 3 and unlocks all three buttons together', () => {
+  it('pressing play (without unlocking anything new) advances the coach to step 3', () => {
     const { rerender } = render(<Harness />);
     fireEvent.click(screen.getByTestId('crop-box'));
     // The screen flips isPlaying once the play gesture lands.
@@ -233,13 +246,25 @@ describe('FocusModeView guided framing steps', () => {
     expect(lastDisabled()).toBe(false);
   });
 
-  it('a clip that already has a focus point starts at step 2', () => {
+  it('T14760: a clip that already has a focus point skips the shape choice (already settled) and starts at the drag step, with the check-the-box copy', () => {
     render(<Harness initial={{ keyframes: [kf(10)] }} />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.play);
+    // T14760 (owner ruling 2026-11-07): the shape choice never showed this session, so
+    // the drag step (otherwise "2 of 6") renumbers to "1 of 5" -- the first step this
+    // parent actually sees.
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 1 of 5');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.dragPrePlaced);
+    expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
+    expect(screen.getByTestId('play').dataset.pulse).toBe('false');
   });
 
-  it('ignores trim-origin keyframes when deciding step 1 is done', () => {
+  it('T14760: a clip that already has a focus point advances past step 1 when the parent plays, without a separate tap-play step', () => {
+    render(<Harness initial={{ keyframes: [kf(10)], isPlaying: true }} />);
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.keep);
+  });
+
+  it('ignores trim-origin keyframes when deciding the drag step is done', () => {
     render(<Harness initial={{ keyframes: [kf(300, 'trim')] }} />);
+    fireEvent.click(screen.getByTestId('focus-shape-option-portrait'));
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.drag);
   });
 
@@ -279,19 +304,21 @@ describe('FocusModeView guided framing steps', () => {
 it('disabling guidance stops targets and re-enabling preserves progress', () => {
   useSettingsStore.getState().reset();
   useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } });
-  const view = render(<Harness initial={{ keyframes: [kf(10)] }} />);
+  const view = render(<Harness />);
+  fireEvent.click(screen.getByTestId('crop-box'));
   expect(screen.getByTestId('play').getAttribute('data-pulse')).toBe('true');
   act(() => useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: false } }));
   expect(screen.queryByTestId('framing-guide')).toBeNull();
   expect(screen.getByTestId('play').getAttribute('data-pulse')).toBe('false');
   expect(screen.getByTestId('crop-box').getAttribute('data-pulse')).toBe('false');
   act(() => useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }));
-  expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 2 of 5');
+  expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 6');
   view.unmount();
 });
 it('saved trim edits never opt the user into trim guidance', () => {
   render(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, segmentBoundaries: [0, 2, 4, 10], trimRange: { start: 2, end: 8 } }} />);
   expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
+  // T14760: box pre-placed (kf(10)) -- total 5, keep renumbers from 4 to 3.
   expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 5');
 });
 
@@ -307,6 +334,6 @@ describe('FocusModeView rendered draft (T12470)', () => {
 
   it('still shows the step guide when a stale draft needs Generate', () => {
     render(<Harness initial={{ framingCtaMode: 'generate', showBackToPreview: true }} />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.drag);
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.shareWhere);
   });
 });

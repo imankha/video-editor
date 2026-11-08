@@ -115,3 +115,27 @@ describe('FocusModeView non-preview stage clears the action band (T12630)', () =
     expect(stage.className).toContain('lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]');
   });
 });
+
+describe('FocusModeView short-desktop viewport floor (T14850)', () => {
+  // Below ~850px of viewport height the 22rem reservation leaves under 320px for the
+  // player (measured 215px at 1280x800) -- too small to judge framing or drag the box.
+  // A media-gated `!`-important override floors both the box state (explicit height)
+  // and the preview state (width, which derives height via aspect-ratio) at 320px,
+  // without touching the existing lg: formula tall viewports still rely on.
+  it('T14850:C1 floors the box-state height at 320px below 850px viewport height', () => {
+    renderView();
+    const stage = screen.getByTestId('focus-video-stage');
+    expect(stage.className).toContain(
+      '[@media(min-width:1024px)_and_(max-height:850px)]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
+    );
+  });
+
+  it('T14850:C1 floors the preview-state derived width at 320px-equivalent below 850px viewport height', () => {
+    renderView({ globalAspectRatio: '9:16' });
+    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
+    const stage = screen.getByTestId('focus-video-stage');
+    expect(stage.className).toContain(
+      '[@media(min-width:1024px)_and_(max-height:850px)]:!w-[min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]',
+    );
+  });
+});

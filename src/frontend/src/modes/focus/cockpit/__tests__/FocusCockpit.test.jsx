@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { COCKPIT_INTRO_SEEN_KEY } from '../CockpitIntroCard';
 import { createRef } from 'react';
 import FocusCockpit from '../FocusCockpit';
 import { useSettingsStore } from '../../../../stores/settingsStore';
@@ -193,7 +194,10 @@ describe('FocusCockpit crop-box cue follows Guidance (T12770)', () => {
 
   it('pulses with Guidance on at zero focus points', () => {
     setGuidance(true);
+    localStorage.setItem(COCKPIT_INTRO_SEEN_KEY, '1');  // the shape choice shows once the intro is done
     renderCockpit({ keyframes: [] });
+    fireEvent.click(screen.getByTestId('focus-shape-option-portrait'));  // T14770: shape is step 1
+    localStorage.removeItem(COCKPIT_INTRO_SEEN_KEY);
     expect(screen.getByTestId('mock-cropoverlay').className).toContain('coach-target-pulse');
   });
 

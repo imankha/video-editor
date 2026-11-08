@@ -107,7 +107,7 @@ describe('T14630 Spotlight copy', () => {
     expect(MODE_SWITCHER_LOCKED.OUT_OF_SYNC).not.toMatch(BANNED);
     renderView();
     expect(screen.getByText('Make your highlight first, then add a spotlight.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Go to Frame' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Go to Zoom in' })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(BANNED);
   });
 

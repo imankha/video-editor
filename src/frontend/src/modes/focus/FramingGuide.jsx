@@ -11,11 +11,11 @@ import { InstructionCoach } from '../../components/instructions';
  *
  * @param {string} text - the one instruction to show
  * @param {number|null} step - 1..total for the numbered steps, null for trim help
- * @param {number} total - number of numbered steps (drag, play, keep, preview, generate)
+ * @param {number} total - number of numbered steps (T14770: share-where, drag, play, keep, preview, generate)
  * @param {boolean} compact - the rule's `compact` (T13570): step chip inline with smaller text, so the
  *   card is short enough for the strip above the stage on a phone
  */
-export default function FramingGuide({ text, step = null, total = 5, compact = false }) {
+export default function FramingGuide({ text, step = null, total = 6, compact = false }) {
   const chip = step != null && (
     <span
       data-testid="framing-guide-step"

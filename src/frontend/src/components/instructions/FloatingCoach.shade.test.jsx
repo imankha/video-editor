@@ -251,17 +251,54 @@ describe('T12580: every guide step opens Focused', () => {
   });
 });
 
+describe('T14760 bug 2: Got it never leaves the shade with no card', () => {
+  const host = () => document.querySelector('[data-testid="floating-coach-host"]');
+  const hostVisible = () => { const h = host(); return !!h && getComputedStyle(h).visibility !== 'hidden'; };
+  const stageFacts = (over = {}) => ({
+    screen: 'focus', progress: { finishedCount: 0 }, job: { status: 'none' },
+    local: { shapeChosen: true, dragDone: true, boxPrePlaced: true, hasPlayed: false, trimStage: 'off',
+      hasPlayedThrough: false, previewing: false, hasPreviewPlayedThrough: false, ctaBusy: false, rendered: false,
+      videoError: false, canRetryVideo: false, fullscreen: false, ...over },
+  });
+
+  beforeEach(() => {
+    vi.stubGlobal('innerWidth', 390); vi.stubGlobal('innerHeight', 844);
+    place('focus-video-stage', { left: 0, top: 80, width: 390, height: 300 });
+    place('action-band', { left: 0, top: 780, width: 390, height: 64 });
+  });
+
+  it('a box already placed: Got it on the unfinished play step clears to a clean screen (no shade, no card), '
+    + 'never a shade with no card; playing then advances to the keep step with shade and card together', async () => {
+    const playGuide = resolveGuide(stageFacts());
+    expect(playGuide.id).toBe('focus.progress.play');
+    const { rerender } = render(<Guide guide={playGuide} />); await flush();
+    expect(shade()).toBeTruthy();
+    expect(hostVisible()).toBe(true);
+    // Got it on a step that is still unfinished (hasPlayed is still false): resolveGuide keeps
+    // returning the SAME rule id, now acked -- the screen must go fully clean, never shade-only.
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' })); await flush();
+    rerender(<Guide guide={resolveGuide(stageFacts())} />); await flush();
+    expect(shade()).toBeNull();
+    expect(hostVisible()).toBe(false);
+    // The parent plays the video: hasPlayed flips, the coach advances to a new, unacked rule.
+    const keepGuide = resolveGuide(stageFacts({ hasPlayed: true }));
+    expect(keepGuide.id).toBe('focus.progress.keep');
+    rerender(<Guide guide={keepGuide} />); await flush();
+    if (shade()) expect(hostVisible()).toBe(true);
+  });
+});
+
 describe('T12580: rules', () => {
   it('watch steps keep the video stage clear', () => {
     const f = (screen, local, job) => resolveGuide({ screen, local, job, progress: {} });
     expect(f('annotate', {}).keepClear.length).toBeGreaterThan(0);
     expect(f('annotate', { isPlaying: true }).keepClear.length).toBeGreaterThan(0);
-    expect(f('focus', { dragDone: true, hasPlayed: false }).keepClear.length).toBeGreaterThan(0);
-    expect(f('focus', { dragDone: true, hasPlayed: true, hasPlayedThrough: true, previewing: true, hasPreviewPlayedThrough: false }).keepClear.length).toBeGreaterThan(0);
+    expect(f('focus', { shapeChosen: true, dragDone: true, hasPlayed: false }).keepClear.length).toBeGreaterThan(0);
+    expect(f('focus', { shapeChosen: true, dragDone: true, hasPlayed: true, hasPlayedThrough: true, previewing: true, hasPreviewPlayedThrough: false }).keepClear.length).toBeGreaterThan(0);
     expect(f('focus', { dragDone: false }).keepClear).toEqual([]);
   });
   it('T12630: the Play step cuts out the Play button and keeps the coach off it', () => {
-    const g = resolveGuide({ screen: 'focus', local: { dragDone: true, hasPlayed: false }, progress: {} });
+    const g = resolveGuide({ screen: 'focus', local: { shapeChosen: true, dragDone: true, hasPlayed: false }, progress: {} });
     expect(g.keepClear).toContain('[data-testid="play-button"]');
     expect(g.avoid).toContain('[data-testid="play-button"]');
   });

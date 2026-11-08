@@ -6,7 +6,7 @@ const baseProps = {
   isCurrentlyExporting: false, isExporting: false, isExternallyExporting: false,
   displayProgress: 0, displayMessage: '', error: null, failedExport: null,
   disconnected: false, reconnectionFailed: false, retrying: false, isFramingMode: true,
-  hasUnframedClips: false, isButtonDisabled: false, buttonTitle: undefined,
+  isButtonDisabled: false, buttonTitle: undefined,
   includeAudio: true, onIncludeAudioChange: vi.fn(), onExport: vi.fn(),
 };
 

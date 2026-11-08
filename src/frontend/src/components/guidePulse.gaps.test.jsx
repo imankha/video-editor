@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { HighlightChoiceCard } from '../modes/annotate/components/HighlightChoiceCard';
 import { PlayEditorFooter } from '../modes/annotate/components/PlayEditorFooter';
-import { HighlightOrientationSlots } from '../modes/annotate/components/HighlightOrientationSlots';
+import { HighlightEntry } from '../modes/annotate/components/HighlightOrientationSlots';
 import { ClipListItem } from '../modes/annotate/components/ClipListItem';
 import { PublishLinkFlow } from './PublishLinkFlow';
 import { LinkReadyCard } from './LinkReadyCard';
@@ -34,10 +34,9 @@ describe('T12760 gap controls pulse via GuideScope', () => {
     expect(pulses(screen.getByTestId('play-editor-done'))).toBe(true);
   });
 
-  it('BOTH orientation slots pulse for HIGHLIGHT_SLOT', () => {
-    render(scope(GUIDE_PULSE.HIGHLIGHT_SLOT, <HighlightOrientationSlots instances={[]} onMake={vi.fn()} onOpen={vi.fn()} inline />));
-    expect(pulses(screen.getByTestId('annotate-highlight-slot-portrait'))).toBe(true);
-    expect(pulses(screen.getByTestId('annotate-highlight-slot-landscape'))).toBe(true);
+  it('the Make highlight entry pulses for MAKE_HIGHLIGHT', () => {
+    render(scope(GUIDE_PULSE.MAKE_HIGHLIGHT, <HighlightEntry onMake={vi.fn()} />));
+    expect(pulses(screen.getByTestId('annotate-make-highlight'))).toBe(true);
   });
 
   it('a play row pulses only when handed the FIRST_PLAY target', () => {

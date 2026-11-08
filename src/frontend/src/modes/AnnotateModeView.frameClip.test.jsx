@@ -9,9 +9,10 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
  * AnnotateContainer tests, not this main-screen view). What survives on this
  * play-selected row:
  *  - [Edit Play] always (highlight or not);
- *  - T11910: the Portrait/Landscape slots below it. A slot with no highlight
- *    offers Make; a slot with one opens it at its current stage (never
- *    re-creates). The legacy single stage button is gone.
+ *  - T14770: ONE "Make highlight" entry (always forceNew portrait 9:16, shape
+ *    picked later in Frame) replacing the T11910 per-orientation slots, plus
+ *    a "Highlights from this play" list -- each existing highlight is a row
+ *    that opens its current stage (never re-creates); a play can get several.
  */
 
 vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div data-testid="video-player" /> }));
@@ -113,7 +114,7 @@ const draftInstance = {
 const withInstance = (instance) => ({ ...selectedRegion, autoProjectId: instance.projectId, highlightInstances: [instance] });
 
 describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)', () => {
-  it('a not-started selected play shows [Edit Play] and a Make button for BOTH orientations', () => {
+  it('a not-started selected play shows [Edit Play] and one Make highlight entry, no legacy create row', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -123,16 +124,19 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
     // 31b50fab5: Edit play became a card whose accessible name is the title
     // followed by its description line, so anchor on the title only.
     expect(screen.getByRole('button', { name: /^edit play/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^make portrait highlight$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^make landscape highlight$/i })).toBeTruthy();
+    expect(screen.getByTestId('annotate-make-highlight')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^make portrait highlight$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^make landscape highlight$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^frame later$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^create clip$/i })).toBeNull();
     expect(screen.queryByTestId('annotate-frame-now-cta')).toBeNull();
     expect(screen.queryByTestId('annotate-frame-later-cta')).toBeNull();
+    // No highlights yet -> no "Highlights from this play" list.
+    expect(screen.queryByTestId('annotate-highlight-list')).toBeNull();
   });
 
-  it('Make Portrait creates a highlight project for a not-started play and opens Framing', async () => {
+  it('Make highlight creates a portrait (9:16) highlight project for a not-started play and opens Frame', async () => {
     const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 42 });
     const onOpenClipInFocus = vi.fn();
     renderView({
@@ -144,14 +148,14 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       onOpenClipInFocus,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^make portrait highlight$/i }));
+    fireEvent.click(screen.getByTestId('annotate-make-highlight'));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(42));
     expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', {
       createProject: true, forceNew: true, silent: true, aspectRatio: '9:16',
     });
   });
 
-  it('an unframed portrait highlight looks like an empty slot: [Edit Play] and a Make button for both orientations', () => {
+  it('an existing draft highlight shows in the list as "Continue highlight"; Make highlight stays available to make another', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -159,16 +163,16 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^make portrait highlight$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^make landscape highlight$/i })).toBeTruthy();
+    expect(screen.getByTestId('annotate-make-highlight')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /continue highlight/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
   });
 
   it.each([
-    ['framing points set', { hasFramingPoints: true }, /^continue portrait highlight$/i],
-    ['framing generated', { hasWorkingVideo: true, reelSourceStartTime: 10, reelSourceEndTime: 20 }, /^add spotlight to portrait highlight$/i],
-    ['spotlight work saved', { hasWorkingVideo: true, hasOverlayEdits: true, reelSourceStartTime: 10, reelSourceEndTime: 20 }, /^continue adding spotlight to portrait$/i],
-  ])('portrait slot button follows progress: %s', (_label, patch, name) => {
+    ['framing points set', { hasFramingPoints: true }, /continue highlight/i],
+    ['framing generated', { hasWorkingVideo: true, reelSourceStartTime: 10, reelSourceEndTime: 20 }, /add spotlight/i],
+    ['spotlight work saved', { hasWorkingVideo: true, hasOverlayEdits: true, reelSourceStartTime: 10, reelSourceEndTime: 20 }, /continue adding spotlight/i],
+  ])('highlight row action follows progress: %s', (_label, patch, name) => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -176,7 +180,6 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name })).toBeTruthy();
-    expect(screen.queryByText('Make portrait highlight')).toBeNull();
   });
 
   it('hides Review plays and Share game once a play is selected, even with clips present', () => {
@@ -217,8 +220,9 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       onOpenClipInFocus,
     });
 
-    // A fresh draft (no snapshot, no produced video) is a live link into Focus.
-    fireEvent.click(screen.getByRole('button', { name: /^make portrait highlight$/i }));
+    // A fresh draft (no snapshot, no produced video) is a live link into Focus --
+    // opening its list row navigates straight there, no create call.
+    fireEvent.click(screen.getByRole('button', { name: /continue highlight/i }));
 
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(42));
     expect(onFullscreenUpdateClip).not.toHaveBeenCalled();

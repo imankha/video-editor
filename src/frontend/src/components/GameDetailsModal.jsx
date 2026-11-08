@@ -24,7 +24,7 @@ import { GUIDE_PULSE } from './instructions/guideTargets';
 import apiFetch from '../utils/apiFetch';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 
-export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null, onVeoZip = null }) {
+export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null, onVeoZip = null, onSwitchToClipUpload = null }) {
   const [opponentName, setOpponentName] = useState('');
   // T9930: the date starts EMPTY, not today. Defaulting to today silently
   // recorded the upload day as the match date, so the tile title claimed a
@@ -331,6 +331,36 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
             initialFiles={initialFiles}
             onVeoZip={onVeoZip}
           />
+
+          {/* T14810: the biggest Add footage loss is a parent whose game video
+              is not on this device (Veo/Trace/Hudl, a laptop, the camera itself).
+              Collapsed by default so the upload stays two gestures (pick, submit)
+              when the video IS on this device; this never gates that path. */}
+          <details data-testid="no-video-help" className="group rounded-lg border border-gray-700 bg-gray-900/40">
+            <summary className="flex items-center justify-between cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-gray-300 hover:text-white marker:content-['']">
+              <span>{UPLOAD.NO_VIDEO_TOGGLE}</span>
+              <ChevronDown size={16} className="text-gray-400 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="px-3 pb-3 pt-1 space-y-3">
+              <p className="text-xs text-gray-400">
+                {UPLOAD.NO_VIDEO_STEPS}{' '}
+                <a
+                  href="https://www.reelballers.com/works-with"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-cyan-400 hover:underline"
+                >
+                  {UPLOAD.NO_VIDEO_STEPS_LINK}
+                </a>
+              </p>
+              {onSwitchToClipUpload && (
+                <Button type="button" variant="secondary" size="md" onClick={onSwitchToClipUpload}>
+                  {UPLOAD.NO_VIDEO_SWITCH}
+                </Button>
+              )}
+              <p className="text-xs text-gray-400">{UPLOAD.NO_VIDEO_OTHER_DEVICE}</p>
+            </div>
+          </details>
           </div>
 
           {/* T9930: Opponent / Date / Game Type / Tournament are collapsed back

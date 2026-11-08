@@ -11,20 +11,17 @@ import { EDITOR_PANELS, FRAMING_GUIDE } from '../../config/displayNames';
  * 48px tiles side by side, the CTA beneath (same row-above-CTA shape as
  * Annotate's Edit play / Make Highlight buttons).
  *
- * Both buttons are locked together with Generate Highlight until the guided
- * steps (drag the box, press play) are done; `locked` carries that. Trim and
- * SlowMo toggles the timeline's segment/speed/trim track (`trimOpen`).
+ * T14830 (owner ruling 2026-11-07, "Confirm once"): never locked by drag or
+ * Play. Trim and SlowMo toggles the timeline's segment/speed/trim track
+ * (`trimOpen`).
  */
 export default function FramingActionRow({
   previewing = false,
   onTogglePreview,
   onToggleTrim,
   trimOpen = false,
-  locked = false,
   inline = false,
 }) {
-  const lockedTitle = locked ? FRAMING_GUIDE.LOCKED_TITLE : undefined;
-
   return (
     <div className={inline ? 'contents' : 'mx-auto w-full max-w-2xl grid grid-cols-2 gap-2'}>
       {onToggleTrim && (
@@ -32,12 +29,11 @@ export default function FramingActionRow({
           type="button"
           data-testid="trim-slowmo-button"
           onClick={onToggleTrim}
-          disabled={locked}
           aria-pressed={trimOpen}
           aria-label={FRAMING_GUIDE.TRIM_BUTTON}
           icon={Scissors}
           title={FRAMING_GUIDE.TRIM_BUTTON}
-          tooltip={lockedTitle ?? EDITOR_PANELS.TRIM_AND_SLOWMO_HINT}
+          tooltip={EDITOR_PANELS.TRIM_AND_SLOWMO_HINT}
           description="Adjust timing and playback speed."
         />
       )}
@@ -47,13 +43,12 @@ export default function FramingActionRow({
           type="button"
           data-testid="framing-preview-toggle"
           onClick={onTogglePreview}
-          disabled={locked}
           aria-pressed={previewing}
           aria-label={previewing ? EDITOR_PANELS.PREVIEW_BACK_TO_FRAMING : EDITOR_PANELS.PREVIEW_HIGHLIGHT}
           icon={previewing ? EyeOff : Eye}
           title={previewing ? EDITOR_PANELS.PREVIEW_BACK_TO_FRAMING : EDITOR_PANELS.PREVIEW_HIGHLIGHT}
-          tooltip={lockedTitle ?? EDITOR_PANELS.PREVIEW_DISCLOSURE}
-          description={lockedTitle ?? (previewing ? EDITOR_PANELS.PREVIEW_CAPTION_RETURN : EDITOR_PANELS.PREVIEW_CAPTION_FRAMING)}
+          tooltip={EDITOR_PANELS.PREVIEW_DISCLOSURE}
+          description={previewing ? EDITOR_PANELS.PREVIEW_CAPTION_RETURN : EDITOR_PANELS.PREVIEW_CAPTION_FRAMING}
           guideTarget={GUIDE_PULSE.PREVIEW}
           guideSuppress={previewing}
         />

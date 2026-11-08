@@ -146,7 +146,7 @@ class TestEndpoint:
             "paywall_shown", "buy_modal_opened", "credit_purchased"]
         assert data["money"]["nodes"][0]["reached"] == 1
         # The full mode is gone: a stale steps=full is ignored, never a 22-node map.
-        assert len(_get(journey_client, steps="full")["nodes"]) == 14
+        assert len(_get(journey_client, steps="full")["nodes"]) == 16
 
     def test_no_signup_range_means_all_signups_like_the_users_list(self, journey_client):
         # The Journey section reads AdminScreen's global filters; with no date range set

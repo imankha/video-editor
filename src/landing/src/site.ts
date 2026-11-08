@@ -33,7 +33,7 @@ export const TAGLINE = 'Transform game film into high-quality highlights using A
 export const HERO_HEADLINE_LEAD = 'Game film in.'
 export const HERO_HEADLINE_ACCENT = 'Sharp'
 export const HERO_HEADLINE_TAIL = 'highlight out.'
-export const HERO_SUBLINE = 'Any video source. You frame your athlete and place the spotlight. AI smooths the motion and upscales.'
+export const HERO_SUBLINE = 'Any video source. You zoom in on your athlete and place the spotlight. AI smooths the motion and upscales.'
 export const HERO_TRUST_LINE = 'Free to start. No subscription. Pay only for the AI you use.'
 
 /**
@@ -47,7 +47,7 @@ export const HERO_TRUST_LINE = 'Free to start. No subscription. Pay only for the
  * product does, change it ONLY here.
  */
 export const DEFINITION =
-  'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game video into shareable highlights: you mark the best plays and frame your athlete, and ReelBallers smooths the motion, sharpens the picture, and makes the highlight.'
+  'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game video into shareable highlights: you mark the best plays and zoom in on your athlete, and ReelBallers smooths the motion, sharpens the picture, and makes the highlight.'
 
 /**
  * The one step sequence, in the app's own labels (T14650). Every page that walks through the
@@ -56,7 +56,7 @@ export const DEFINITION =
 export const STEP_NAMES = {
   upload: 'Upload game',
   mark: 'Mark plays',
-  frame: 'Frame',
+  frame: 'Zoom in',
   spotlight: 'Spotlight',
   share: 'Share',
 } as const

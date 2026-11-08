@@ -76,7 +76,7 @@ export function EmptyTabGuide({
       )}
 
       <div className="w-full mt-5 mb-4">
-        {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
+        {tab === 'games' && <GamesActions onAddGame={onAddGame} onNavigate={onNavigate} />}
         {tab === 'clips' && finishedCount > 0 && <FinishedPointer onNavigate={onNavigate} />}
         {tab === 'clips' && finishedCount === 0 && (
           <ClipsActions
@@ -87,8 +87,6 @@ export function EmptyTabGuide({
           />
         )}
       </div>
-
-      <Footer tab={tab} onNavigate={onNavigate} />
     </div>
   );
 }
@@ -123,13 +121,24 @@ const STEP_ACCENT_BORDER = {
   published: 'border-t-amber-600',
 };
 
-function GamesActions({ onAddGame }) {
+// T14810: "Skip ahead to Plays." moved from a grey footer caption to a REAL
+// secondary button beside Upload game (same row, same height) -- the
+// walk-through found the old text link easy to miss, outside the modal and
+// below the fold. Same onNavigate('projects') behavior as before.
+function GamesActions({ onAddGame, onNavigate }) {
   const c = EMPTY_TAB_GUIDE.games;
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button guideTarget={GUIDE_PULSE.UPLOAD_GAME} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
-        {LIBRARY_ACTIONS.UPLOAD_GAME}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button guideTarget={GUIDE_PULSE.UPLOAD_GAME} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
+          {LIBRARY_ACTIONS.UPLOAD_GAME}
+        </Button>
+        {onNavigate && (
+          <Button variant="secondary" size="lg" onClick={() => onNavigate('projects')}>
+            {c.footerLink}
+          </Button>
+        )}
+      </div>
       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}
     </div>
   );
@@ -212,27 +221,6 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo, addVideoLoading = fa
         </Button>
       </div>
     </div>
-  );
-}
-
-// T9390 (Decision 2): footer kept ONLY on Games (the "a game is not a hard
-// prerequisite either" hint); Clips/Published dropped theirs.
-function Footer({ tab, onNavigate }) {
-  const { coachEnabled } = useGuidanceSettings();
-  if (!coachEnabled) return null;
-  if (tab !== 'games') return null;
-  const copy = EMPTY_TAB_GUIDE.games;
-  return (
-    <p className="text-xs text-gray-500">
-      {copy.footerPrefix}
-      <button
-        type="button"
-        onClick={() => onNavigate('projects')}
-        className="text-cyan-400 hover:underline font-medium"
-      >
-        {copy.footerLink}
-      </button>
-    </p>
   );
 }
 

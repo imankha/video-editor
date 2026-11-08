@@ -38,8 +38,8 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
     expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).toBe('Moves it to Highlights. Only you can see it until you share a link.');
     expect(OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL).toBe('Redo spotlight');
     expect(OVERLAY_PUBLISH.REAPPLY_OVERLAY_CAPTION).toBe('Go back and change the spotlight.');
-    expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_LABEL).toBe('Edit framing');
-    expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION).toBe('Change the framing and sharpen it again. Uses credits.');
+    expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_LABEL).toBe('Edit zoom');
+    expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION).toBe('Change your zoom and sharpen it again. Uses credits.');
   });
 
   // The exit reads "Done for now" (no "Save" verb) and has no caption.

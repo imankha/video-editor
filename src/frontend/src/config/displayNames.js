@@ -195,32 +195,40 @@ export const ANNOTATE = {
   // T11430: the primary CTA once at least one highlight instance exists for
   // the play (any instance, published or in-progress — design §4.5 decision B).
   MAKE_ANOTHER_HIGHLIGHT: 'Make another highlight',
-  // T11910: orientation slots (UX consult 2026-10-06). Equal weight, no default;
-  // hints say what each is for. User frames, AI upscales: never imply auto-framing.
-  MAKE_A_HIGHLIGHT: 'Make highlight',
+  // T11910: orientation vocabulary, still used by the T14770 list rows below.
   PORTRAIT: 'Portrait',
   LANDSCAPE: 'Landscape',
-  PORTRAIT_HINT: 'Best for Instagram Reels, TikTok, and Stories',
-  LANDSCAPE_HINT: 'Best for YouTube, TV, and sending to coaches',
-  CONTINUE_FRAMING_PORTRAIT: 'Continue portrait highlight',
-  CONTINUE_FRAMING_LANDSCAPE: 'Continue landscape highlight',
-  ADD_SPOTLIGHT_PORTRAIT: 'Add spotlight to portrait highlight',
-  ADD_SPOTLIGHT_LANDSCAPE: 'Add spotlight to landscape highlight',
-  CONTINUE_SPOTLIGHT_PORTRAIT: 'Continue adding spotlight to portrait',
-  CONTINUE_SPOTLIGHT_LANDSCAPE: 'Continue adding spotlight to landscape',
-  MAKE_PORTRAIT: 'Make portrait highlight',
-  MAKE_LANDSCAPE: 'Make landscape highlight',
   HIGHLIGHT_NOT_STARTED: 'Not started',
   // A slot while its game is still uploading: the source isn't stored yet.
   HIGHLIGHT_AFTER_UPLOAD: 'Available when your upload finishes',
   // Row action for an EXISTING highlight still at the framing stage; "Make
   // Highlight" there reads like creating another one.
   CONTINUE_HIGHLIGHT: 'Continue highlight',
-  // T14620: the short visible slot labels; the orientation keys above are the aria names.
   ADD_SPOTLIGHT: 'Add spotlight',
   CONTINUE_SPOTLIGHT: 'Continue adding spotlight',
   WATCH_HIGHLIGHT: 'Watch highlight',
   startHighlight: (orientation, ordinal) => `Start ${orientation.toLowerCase()} highlight ${ordinal}`,
+  // T14770 (decision C, 2026-11-03): ONE Make highlight entry button (the shape
+  // is picked in Frame, not here) + the "Highlights from this play" list below
+  // it. Replaces the T11910 two-slot surface.
+  MAKE_HIGHLIGHT: 'Make highlight',
+  MAKE_HIGHLIGHT_CARD: 'Turn this play into a video you can share.',
+  EDIT_PLAY_CARD: 'Fix the timing, rating or tags.',
+  OPENING_FRAME: 'Opening Frame...',
+  HIGHLIGHTS_FROM_PLAY: 'Highlights from this play',
+  highlightCountChip: (orientation, n) => `${n} ${orientation.toLowerCase()}`,
+  SHOW_FEWER_HIGHLIGHTS: 'Show fewer',
+  showAllHighlights: (n) => `Show all ${n} highlights`,
+  STALE_HIGHLIGHT_SUBLINE: 'Play timing changed',
+  highlightRowName: (orientation, ordinal) => `${orientation}${ordinal >= 2 ? ` ${ordinal}` : ''}`,
+  // Frame's "Where will you share it?" shape choice (T14770 decision 1, Option C).
+  SHARE_WHERE_TITLE: 'Where will you share it?',
+  SHARE_WHERE_PORTRAIT_HINT: 'Instagram Reels, TikTok, Stories',
+  SHARE_WHERE_LANDSCAPE_HINT: 'YouTube, TV, sending to coaches',
+  switchShapeTitle: (toLabel) => `Switch to ${toLabel.toLowerCase()}?`,
+  SWITCH_SHAPE_BODY: 'Your box positions will be refit to the new shape.',
+  SWITCH_SHAPE_CONFIRM: 'Switch',
+  keepShapeLabel: (fromLabel) => `Keep ${fromLabel.toLowerCase()}`,
   // 2026-09-18 (user request): rollover on the Frame this clip button, using
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing
@@ -373,9 +381,11 @@ export const DETECTION = {
   markerFound: (n) => `${n} ${n === 1 ? 'athlete' : 'athletes'} found. Tap to pick yours.`,
 };
 
+// T14780 (user pick 2026-11-07): "Frame" renamed to "Zoom in" -- a first-time
+// parent doesn't know what framing is, but "zoom in" says what the step does.
 export const MODE_NAMES = {
   ANNOTATE: 'Mark Plays',
-  FRAMING: 'Frame',
+  FRAMING: 'Zoom in',
   SPOTLIGHT: 'Spotlight',
 };
 
@@ -383,7 +393,7 @@ export const MODE_NAMES = {
 // vocabulary remains the noun used by status text, progress strips, and tiles.
 export const MODE_SWITCHER_NAMES = {
   ANNOTATE: MODE_NAMES.ANNOTATE,
-  FRAMING: 'Frame',
+  FRAMING: 'Zoom in',
   SPOTLIGHT: 'Spotlight',
 };
 
@@ -398,7 +408,7 @@ export const MODE_SWITCHER_LOCKED = {
   SPOTLIGHT_NEEDS_HIGHLIGHT: 'Make your highlight first, then add a spotlight.',
   LOADING_PLAYS: 'Loading your plays...',
   LOADING_WORKING_VIDEO: 'Loading video...',
-  OUT_OF_SYNC: 'Your highlight no longer matches your framing. Sharpen it again, then add a spotlight.',
+  OUT_OF_SYNC: 'You changed your zoom, so sharpen your highlight again, then add a spotlight.',
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
@@ -795,14 +805,14 @@ export function formatApproxMinutes(gpuSeconds) {
 // stays the toast/job-row string. No em dashes anywhere.
 // T11810: one caption pair shared by the Focus and Overlay ready screens.
 const FINISH_CAPTION = 'Moves it to Highlights. Only you can see it until you share a link.';
-const EDIT_FRAMING_CAPTION_TEXT = 'Change the framing and sharpen it again. Uses credits.';
+const EDIT_FRAMING_CAPTION_TEXT = 'Change your zoom and sharpen it again. Uses credits.';
 export const FOCUS_PUBLISH = {
   HEADLINE: 'Your highlight is ready',
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
   SPOTLIGHT_CAPTION: 'Show everyone watching which athlete is yours.',
   PUBLISH_LABEL: 'Finish without spotlight',
   PUBLISH_CAPTION: FINISH_CAPTION,
-  EDIT_FRAMING_LABEL: 'Edit framing',
+  EDIT_FRAMING_LABEL: 'Edit zoom',
   EDIT_FRAMING_CAPTION: EDIT_FRAMING_CAPTION_TEXT,
   SAVE_DRAFT_LABEL: 'Done for now',
 };
@@ -872,7 +882,7 @@ export const FOCUS_COCKPIT = {
   // Zone A / D rail button labels (10px, under a Lucide icon).
   BACK: 'Back',
   SETUP: 'Settings',
-  PREVIEW: 'Check framing',
+  PREVIEW: 'Preview',
   // Compact CTA, two 10px lines (D9 / D13).
   GENERATE_LINE_1: 'Sharpen my',
   GENERATE_LINE_2: 'highlight',
@@ -902,9 +912,12 @@ export const GUIDE = {
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },
     choice: { title: 'Play added. Tap Make highlight to turn it into a video you can share, or keep marking plays.', body: '' },
-    selectedNone: { title: 'Tap Make highlight to turn this play into a video, or Edit play to adjust it.', body: '' },
-    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Frame the video on your athlete, ready to share.' },
-    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add a spotlight if you want.' },
+    // T14770: Edit play now comes first on screen, so the sentence names it first too.
+    selectedNone: { title: 'You can edit this play or make a highlight from it.', body: 'Tap Edit play to fix its timing, rating or tags, or Make highlight to turn it into a video you can share.' },
+    hasHighlightsOne: { title: 'This play has 1 highlight.', body: 'Tap it to pick up where you left off, or Make highlight for another.' },
+    hasHighlightsMany: { title: 'This play has {n} highlights.', body: 'Tap one to pick up where you left off, or Make highlight for another.' },
+    brilliant: { title: 'Brilliant play. Make a highlight to share it.', body: 'Tap Make highlight and keep your athlete in the picture. Edit play is there if the timing is off.' },
+    portrait: { title: 'Continue your portrait highlight.', body: 'Zoom in on your athlete, then add a spotlight if you want.' },
     generating: { title: 'Your highlight is being sharpened. It will be ready soon.', body: '' },
     spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
     preview: { title: 'Your portrait highlight is ready.', body: 'Watch it to check the finished result.' },
@@ -940,13 +953,16 @@ export const GUIDE = {
     failed: { title: 'That upload didn’t finish. Tap Retry to try again.', body: '' },
   },
   focus: {
+    // T14770: step 1 of 6 — the shape choice shows before the box drag step.
+    shareWhere: 'Where will you share it? Portrait for Instagram and TikTok, landscape for YouTube and coaches.',
     drag: 'Drag the box onto your athlete. Your highlight shows what’s inside it.',
+    dragPrePlaced: 'The box is already on your athlete. Drag it if it isn’t, then tap Play.',
     play: 'Tap Play and watch your athlete.',
     keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the positions you set.',
-    preview: 'Tap Check framing to see exactly what you’ll share.',
+    preview: 'Tap Preview to see exactly what you’ll share.',
     watchPreview: 'Watch it through. Tap Back to full video to change anything.',
     generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
-    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Check framing when it looks right.`,
+    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Preview when it looks right.`,
     generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
     credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then sharpen it.`,
     progressExport: 'Sharpening your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
@@ -958,10 +974,10 @@ export const GUIDE = {
     // T12790: video load failure, fullscreen hand-off, and the landscape cockpit's own controls.
     videoErrorRetry: 'This video didn’t load. Tap Retry Loading Video.',
     videoError: 'This video didn’t load. Go back and open this play again.',
-    leaveFullscreen: 'Exit fullscreen to check your framing and sharpen your highlight.',
+    leaveFullscreen: 'Exit fullscreen to check your athlete stays in view, then sharpen your highlight.',
     leaveFullscreenJob: 'Exit fullscreen to see your highlight’s status and what to do next.',
-    cockpitPreview: 'Tap Check framing to see exactly what you’ll share.',
-    cockpitWatchPreview: 'Watch it through. Tap Check framing again to change anything.',
+    cockpitPreview: 'Tap Preview to see exactly what you’ll share.',
+    cockpitWatchPreview: 'Watch it through. Tap Preview again to change anything.',
   },
   finished: {
     viewer: `Done! Tap ${RESULT_PUBLISH.PUBLISH_GET_LINK} to send it, or Download to save it.`,
@@ -1042,7 +1058,6 @@ export const FRAMING_GUIDE = {
   TRIM_ADJUST: GUIDE.focus.trimAdjust,
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
   TRIM_BUTTON: 'Trim and slow motion',
-  LOCKED_TITLE: 'Finish the steps above to unlock',
 };
 
 // T10850 (design D14): the two discovery hints that bracket the landscape flip.
@@ -1058,24 +1073,34 @@ export const FOCUS_HINTS = {
   // "nothing scrolls" is honest and the subtitle switches here.
   ROTATE_SUBTITLE: 'Everything here also works upright',
   ROTATE_DISMISS: 'Dismiss',
-  // T11710: coaching copy for the 0-focus-point state. GENERATE_LOCKED is the
-  // visible disabled-Generate caption; COACH_DRAG is the chip pinned over the
-  // video; TIMELINE_EMPTY is the empty crop-timeline hint. All name the drag
-  // gesture and "your player"; the only motion claim allowed is "moves smoothly
-  // between the focus points you set" (lives in FRAMING_INSTRUCTIONS).
-  GENERATE_LOCKED: 'Drag the box onto your athlete, then tap Play, to unlock',
+  // T11710: coaching copy for the 0-focus-point state. COACH_DRAG is the chip
+  // pinned over the video; TIMELINE_EMPTY is the empty crop-timeline hint. Both
+  // name the drag gesture and "your player"; the only motion claim allowed is
+  // "moves smoothly between the focus points you set" (lives in
+  // FRAMING_INSTRUCTIONS). T14830 (owner ruling 2026-11-07, "Confirm once"):
+  // Generate/Trim/Preview are never locked by drag or Play, so there is no
+  // lock caption here anymore -- see FOCUS_BOX_CONFIRM for the one-time
+  // pre-spend warning instead.
   COACH_DRAG: 'Drag the box onto your athlete',
   TIMELINE_EMPTY: 'No positions yet. Drag the box on the video to add one.',
-  // T11720: the phone-only compact locked band (one ~52px row while Generate is
-  // still locked). GENERATE_LOCKED_SHORT is the amber left-side copy; the right
-  // pill echoes the Generate verb in its disabled state.
-  GENERATE_LOCKED_SHORT: 'Drag the box, then tap Play, to unlock',
-  GENERATE_LOCKED_CTA: 'Sharpen',
   // Landscape first-entry card — shown once, over the stage, on the first
   // cockpit entry. Dismissed by "Got it" or the first touch on the stage.
   COCKPIT_INTRO_TITLE: 'More room in landscape',
   COCKPIT_INTRO_BODY: 'Playback is on the left now, Sharpen my highlight on the right.',
   COCKPIT_INTRO_CONFIRM: 'Got it',
+};
+
+// T14830 (owner ruling 2026-11-07, "Confirm once"): Generate is never locked by
+// drag or Play, but pressing it while the parent has neither moved the box nor
+// checked it (playing the clip with a pre-placed box counts as checking it)
+// shows this one warning before any credits are spent. Reuses the shared
+// ConfirmationDialog; "Check the box" closes it and spends nothing, "Sharpen my
+// highlight" continues the export normally.
+export const FOCUS_BOX_CONFIRM = {
+  TITLE: 'Is your athlete in the box?',
+  BODY: "You haven't moved the box, so it's still in the middle. Sharpening uses credits.",
+  CHECK_BUTTON: 'Check the box',
+  CONTINUE_BUTTON: 'Sharpen my highlight',
 };
 
 // T8390: "Add Spotlight Later" toast copy. Was routed by is_auto_created (T8360
@@ -1133,7 +1158,7 @@ export const OVERLAY_PUBLISH = {
   PUBLISH_CAPTION: FINISH_CAPTION,
   REAPPLY_OVERLAY_LABEL: 'Redo spotlight',
   REAPPLY_OVERLAY_CAPTION: 'Go back and change the spotlight.',
-  REAPPLY_FOCUS_LABEL: 'Edit framing',
+  REAPPLY_FOCUS_LABEL: 'Edit zoom',
   REAPPLY_FOCUS_CAPTION: EDIT_FRAMING_CAPTION_TEXT,
   SAVE_DRAFT_LABEL: 'Done for now',
 };
@@ -1245,13 +1270,13 @@ export const EDITOR_PANELS = {
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for
   // crop/timing/format/audio; approximate for image quality. Never a
   // sharpness claim in either direction.
-  PREVIEW_HIGHLIGHT: 'Check framing',
+  PREVIEW_HIGHLIGHT: 'Preview',
   PREVIEW_BACK_TO_FRAMING: 'Back to full video',
   // T12020 -- the Preview tile's caption follows its label: framing check before
   // previewing, return-to-box while previewing.
   PREVIEW_CAPTION_FRAMING: 'See what your highlight will show before you sharpen it.',
   PREVIEW_CAPTION_RETURN: 'Return to dragging the box.',
-  PREVIEW_DISCLOSURE: 'This shows your framing, timing and format. Final picture quality comes when you sharpen your highlight.',
+  PREVIEW_DISCLOSURE: 'This shows what stays in view, your timing and format. Final picture quality comes when you sharpen your highlight.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same disclosure shape as the Trim and slow motion track (user request 2026-09-21).
   TEXT_LANE: 'Text',
@@ -1386,6 +1411,13 @@ export const UPLOAD = {
   TAP_TO_CHOOSE_VIDEO: 'Tap to choose a video',
   ADDING_VIDEO: 'Adding video...',
   EXTENSION_NOTE: (days) => `Adds ${days} days of storage.`,
+  // T14810: the Upload game modal's disclosure for a parent with no game video
+  // on this device (the biggest Add footage loss, prod Journey 2026-11-03).
+  NO_VIDEO_TOGGLE: "Don't have the game video on this phone?",
+  NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here. A highlights zip works too.",
+  NO_VIDEO_STEPS_LINK: 'See the steps for your camera',
+  NO_VIDEO_SWITCH: 'Upload a play instead',
+  NO_VIDEO_OTHER_DEVICE: 'On another device? Open reelballers.com there. Your account is the same.',
 };
 
 // Retention, stated as the three distinct outcomes confirmed in the T9680
