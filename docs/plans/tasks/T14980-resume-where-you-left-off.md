@@ -5,7 +5,7 @@
 **Complexity:** 5
 **Tier:** L (new Postgres table + endpoint + frontend restore; Migration agent; design gate)
 **Created:** 2026-11-03
-**Updated:** 2026-11-03
+**Updated:** 2026-11-08
 
 User request 2026-11-03: "when a user left a page, and they come back, they come back at the
 same page." Piece 2 of 3 (after T14970 gives pages an address; T14990 uses the same record for
@@ -72,7 +72,8 @@ paid-ads work (T15200 on the g-t14900-3 branch) also want the next number.
 |---|---|
 | Open a game, open a play, switch mode, change home tab (every handler that already pushes history in T14970) | `POST /api/me/resume-point` with the full point (it is one datum; "surgical" here means the one row, never a second copy) |
 | Leave the page (`pagehide` / `visibilitychange` to hidden, the same exit gesture `record_session_exit` uses) | `navigator.sendBeacon` to the same endpoint with `t`, `step`, `dialog` filled in; best effort |
-| Sign out, delete account | row deleted (cascade on delete; explicit DELETE on sign-out) |
+| Sign out | **nothing**: the sign-out gesture writes no point and suppresses the exit beacon, so the row keeps the page the user was on right before signing out (owner ruling 2026-11-08) |
+| Delete account | row deleted (cascade on delete) |
 
 POST, not PUT: `navigator.sendBeacon` can only POST, so one method serves both rows.
 
@@ -101,8 +102,11 @@ moves the user's own resume point. Covered by a test.
 - The target is validated by the hydration itself: a 404 lands on Home with "That game is no
   longer here"; the stale point is then deleted by that gesture's handler (one DELETE), so it
   cannot loop.
-- A dismissible chip on arrival, "Picking up where you left off", with a "Go to Home" action.
-  No "Saved" copy anywhere (owner rule). Reduced-motion safe, phone first.
+- No chip or "Picking up where you left off" note on arrival (owner ruling 2026-11-08): the
+  restore is silent. No "Saved" copy anywhere (owner rule). The 404 notice above stays.
+- The step is recorded (for the admin, T14990) but not restored: the user's restore opens the
+  object at the playhead; `?t=` is extended to Focus and Overlay where a player is on screen
+  (owner ruling 2026-11-08).
 - A user who explicitly taps Home has made a gesture; the point updates to Home and the next
   visit lands on Home. There is no setting; the behaviour is the product.
 
@@ -123,8 +127,8 @@ panel; no aggregate is built on it.
 - `src/backend/tests/test_resume_points.py` (new) - upsert, impersonation discard, vocabulary rejection, me payload, cascade on delete
 - `src/frontend/src/utils/resumePoint.js` (new) - build the point from current stores at gesture time; `sendBeacon` on exit
 - `src/frontend/src/stores/editorStore.js`, `components/ProjectManager.jsx`, `screens/AnnotateScreen.jsx`, `modes/FocusModeView.jsx`, `modes/OverlayModeView.jsx` - call the writer from the navigation handlers T14970 touched
-- `src/frontend/src/App.jsx` - cold-load restore branch, chip
-- `src/frontend/src/components/ResumeChip.jsx` (new) + test
+- `src/frontend/src/App.jsx` - cold-load restore branch (no chip)
+- `src/frontend/src/stores/authStore.js` - sign-out suppresses the point write and the exit beacon
 
 ### Related Tasks
 - Blocked by: T14970 (URL grammar and hydration).
@@ -156,8 +160,8 @@ panel; no aggregate is built on it.
 3. [ ] Failing backend tests (upsert, impersonation discard, vocabulary, me payload, cascade).
 4. [ ] Failing frontend tests (writer called from each navigation handler with the right point;
        exit beacon fills `t`/`step`/`dialog`; restore navigates; deep-link arrival skips restore;
-       404 clears the point and shows the notice; chip renders and dismisses).
-5. [ ] Implement; curated test set; phone and desktop screenshots of the chip.
+       404 clears the point and shows the notice; sign-out writes no point and sends no beacon).
+5. [ ] Implement; curated test set; phone and desktop screenshots of a restored play.
 6. [ ] Knowledge: `.claude/knowledge/persistence-sync.md` gains a line that the resume point
        is a Postgres row by design (not user.sqlite) and why.
 
@@ -168,10 +172,22 @@ was weighed: the resume point stores the object and position of the work, never 
 panel state, validates its target before use, and is visible and dismissible, which addresses
 the "stale state reads as a broken app" failure that rule was written for.
 
+## Ruling
+
+**(owner, 2026-11-08)**, decided on the decision page https://claude.ai/artifact/WRiswtLxEB9ovE4L7WdVGd:
+- Restore opens the page automatically on a plain `/` arrival (Q1 A), **without** the "Picking up
+  where you left off" chip or any note. The 404 notice for a deleted target stays.
+- Fidelity (Q2 A): restore the object and the playhead; record the step for the admin only.
+  Criterion 1 amended accordingly.
+- Sign-out (Q3): do not record the sign-out. The point stays at the page right before it, and the
+  row is kept; no DELETE on sign-out. Account deletion still cascades.
+
 ## Acceptance Criteria
 
 - [ ] Close the tab on a play, reopen the app (same or another device): the same play opens at
-      the same step and playhead, with the chip.
+      the same playhead, with no chip or note. The step is recorded, not restored.
+- [ ] Sign out on a play, sign back in: the same play opens. Signing out writes no point and
+      sends no beacon; the row is kept (deleted only with the account).
 - [ ] Arriving by share, claim, payment-return or deep link never triggers the restore.
 - [ ] A deleted target lands on Home with the notice and clears the point; no loop.
 - [ ] Impersonated sessions never change the user's resume point (test).

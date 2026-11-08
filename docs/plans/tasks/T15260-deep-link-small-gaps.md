@@ -5,7 +5,7 @@
 **Complexity:** 2
 **Tier:** S to M (frontend only, no schema change)
 **Created:** 2026-11-06
-**Updated:** 2026-11-06
+**Updated:** 2026-11-08
 
 Low-severity items from independent verification of T14970, none blocking.
 
@@ -38,9 +38,15 @@ Fix each where it lives. Item 1 needs a decision on where such a play should lan
 
 - T14970.
 
+## Ruling
+
+**(owner, 2026-11-08)**, item 1 (Q6 A): `/overlay/p/{id}` for a play with no working video replaces
+the URL with `/focus/p/{id}` (history replace, not push) and shows a one-line notice to frame the
+play first. Decided on https://claude.ai/artifact/WRiswtLxEB9ovE4L7WdVGd.
+
 ## Acceptance Criteria
 
-- [ ] A play with no working video opens on a usable step.
+- [ ] `/overlay/p/{id}` for a play with no working video lands on `/focus/p/{id}` (URL replaced) with the notice.
 - [ ] A failed play load leaves a URL that matches the screen.
 - [ ] A malformed URL leaves no pending game behind.
 - [ ] The FocusScreen retry fallback points at a real route, or is removed.

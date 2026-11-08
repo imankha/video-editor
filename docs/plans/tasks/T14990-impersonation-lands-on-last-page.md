@@ -1,11 +1,11 @@
 # T14990: Impersonation opens the user's last page, and the admin sees where they left off
 
-**Status:** TODO (blocked by T14980)
+**Status:** TODO (runs after T14980 in the same group)
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (admin read + one flag on the impersonate flow; no schema change)
 **Created:** 2026-11-03
-**Updated:** 2026-11-03
+**Updated:** 2026-11-08
 
 User request 2026-11-03: "when I impersonate them I see the last page (as exact as possible)
 to the one they left, so I could more easily debug drop offs." Piece 3 of 3.
@@ -117,12 +117,24 @@ the view-state rule.
 **2026-11-05**: The T14970 worker found ids collide across profiles, so landing in the point's
 profile is now a requirement, not an assumption about T14970.
 
+## Ruling
+
+**(owner, 2026-11-08)**, decided on the decision page https://claude.ai/artifact/WRiswtLxEB9ovE4L7WdVGd:
+- **No new button** (Q4). Clicking the user's email in `UserTable.jsx` already starts impersonation;
+  that click now lands on the resume point when one exists, and on `/` as today when none does.
+  No "Impersonate at their last page" action and no "Start at Home" link. The detail panel's
+  existing impersonate entry, if any, behaves the same way. Section 2's second action is replaced
+  by this.
+- Reopen the recorded dialog for the impersonating admin only, via the one-shot `?dialog=` (Q5 A).
+  Impression logging already skips impersonated sessions (T7510 guard), so nothing is counted.
+
 ## Acceptance Criteria
 
 - [ ] Admin sees screen, step, object titles, playhead, dialog, platform, build and age before
       impersonating; null state is explicit.
-- [ ] "Impersonate at their last page" lands on the same page as the user's own restore would,
-      with the dialog reopened when one was recorded.
+- [ ] Clicking the user's email to impersonate lands on the same page as the user's own restore
+      would, with the dialog reopened when one was recorded; with no point it lands on `/`. No new
+      button is added.
 - [ ] When the same id exists in two of the user's profiles, the admin lands on the object in the
       point's profile, and the user's active profile is unchanged afterwards (e2e).
 - [ ] Impersonation never changes the user's resume point (e2e).
