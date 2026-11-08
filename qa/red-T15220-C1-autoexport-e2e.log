@@ -1,0 +1,59 @@
+exit: 1
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 1 test using 1 worker
+
+[1A[2K[1/1] [chromium] › e2e/T15220-arrival-params.spec.js:88:3 › T15220 arrival params › a Stripe return with paymentAutoExport fires the export once the editor is ready
+[1A[2K  1) [chromium] › e2e/T15220-arrival-params.spec.js:88:3 › T15220 arrival params › a Stripe return with paymentAutoExport fires the export once the editor is ready 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeGreaterThan[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: > [32m0[39m
+    Received:   [31m0[39m
+
+    Call Log:
+    - Test timeout of 240000ms exceeded
+
+      118 |     // take tens of seconds on a loaded dev stack -- give this comfortably more room than
+      119 |     // a human would wait.
+    > 120 |     await expect.poll(() => exportCalls.length, { timeout: 180000 }).toBeGreaterThan(0);
+          |     ^
+      121 |   });
+      122 |
+      123 |   test('a cancelled Stripe return clears the address without verifying', async ({ page }) => {
+        at /workspace/src/frontend/e2e/T15220-arrival-params.spec.js:120:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/T15220-arrival-params-T152-c794c-rt-once-the-editor-is-ready-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/T15220-arrival-params-T152-c794c-rt-once-the-editor-is-ready-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/T15220-arrival-params-T152-c794c-rt-once-the-editor-is-ready-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/T15220-arrival-params-T152-c794c-rt-once-the-editor-is-ready-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/T15220-arrival-params-T152-c794c-rt-once-the-editor-is-ready-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+[1A[2K  1 failed
+    [chromium] › e2e/T15220-arrival-params.spec.js:88:3 › T15220 arrival params › a Stripe return with paymentAutoExport fires the export once the editor is ready 
+
+[exited with code 0]

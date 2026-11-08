@@ -95,8 +95,7 @@ prefer one small named list over a second copy of the rule.
        campaign param survive cold-load canonicalization and an unrelated param is still
        stripped; e2e (`e2e/T15220-arrival-params.spec.js`) covers the signed-out campaign
        arrival, the signed-in verify-once + auto-export flows, and the cancelled-payment path
-       (not run in this container -- no backend dev stack here; needs a run against a real
-       stack before C1 counts as proven, see qa/proof.json human_checks).
+       (run against the real local dev stack, all 7 tests pass -- see qa/proof.json).
 3. [x] Keep the named params through canonicalization (editorStore.js `APP_READ_PARAMS`).
 4. [ ] Confirm a sign-up after a campaign arrival stores the attribution in `user_segments`
        (backend behavior is unchanged by this task; needs a live sign-up to confirm end-to-end).
@@ -116,10 +115,22 @@ mount indefinitely. Replaced ref-polling with a one-shot `pendingAutoExport` int
 actually able to export (mirrors `handleExport`'s own early-return guards). See
 `.dotask-notes.md` for the full chain.
 
+**2026-11-08 (fix round 2)**: Independent verification against a real dev stack found the editor
+itself never finished loading after a payment-return (stuck on a spinning "Loading..." placeholder
+indefinitely), which is why auto-export could never fire -- ExportButtonContainer's ready-guard
+(`hasClips`/`isButtonDisabled`) never cleared. Root cause: App.jsx's payment-return branch called
+`selectProject()` (which only fetches the project record) but never `loadProject()` (which fetches
+clips/working video into `projectDataStore` -- the data FocusScreen/OverlayScreen actually render
+from). Every other project-open path (`ProjectsScreen.handleSelectProjectWithMode`, the
+`pendingProject` resume breadcrumb for cold-load deep links) calls both; the payment-return branch
+was the one path that skipped `loadProject()`. Fixed by calling it (fire-and-forget, so it doesn't
+delay the independent `/api/payments/verify` call). Verified against the real local dev stack: all
+7 tests in `e2e/T15220-arrival-params.spec.js` pass, including the auto-export test.
+
 ## Acceptance Criteria
 
-- [ ] A paying user who returns from Stripe gets the confirmation, the credit refresh, the return
-      to their page and the auto-export. (fix implemented; needs a live-stack e2e run to verify)
+- [x] A paying user who returns from Stripe gets the confirmation, the credit refresh, the return
+      to their page and the auto-export.
 - [x] `/payments/verify` runs once per return, and `payment` and `session_id` leave the URL after.
 - [x] A fresh visit with any campaign param stores it, and sign-up carries it into `user_segments`.
 - [x] An unrelated query param is still stripped, and T14970's URLs and `dev_account` keep working.

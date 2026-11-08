@@ -23,6 +23,7 @@ import { usePublishProject } from './hooks/usePublishProject';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
+import { useProjectLoader } from './hooks/useProjectLoader';
 import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { ConfirmationDialog, toast, UnifiedHeader } from './components/shared';
 import { NavigationGateOverlay } from './components/NavigationGateOverlay';
@@ -102,6 +103,12 @@ function App() {
 
   // Framing store - for detecting uncommitted changes in mode switch
   const framingChangedSinceExport = useFocusStore(state => state.framingChangedSinceExport);
+
+  // T15220: the payment-return restore path needs the SAME loader ProjectsScreen uses
+  // when a user opens a project — selectProject() alone only fetches the project record;
+  // it never populates projectDataStore's clips/working video, which is what FocusScreen
+  // actually renders from (see useProjectLoader.js and ProjectsScreen.handleSelectProjectWithMode).
+  const { loadProject } = useProjectLoader();
 
   // Working video from project data store (canonical owner)
   const workingVideo = useProjectDataStore(state => state.workingVideo);
@@ -320,15 +327,32 @@ function App() {
           // T10740: same sessionStorage string->number coercion as the auth-return
           // path above (this one matters most — the payment return auto-fires an
           // export, and a mistyped id must not reach that path).
-          useProjectsStore.getState().selectProject(Number(returnProjectId));
-        }
-        if (returnMode) {
-          // T15220: pass projectId so the URL reads /focus|overlay/p/<id>, not a bare
-          // mode path (the id would otherwise fall back to whatever the cold-load
-          // canonicalizer already put in the path, which a Stripe return never carries).
-          useEditorStore.getState().setEditorMode(returnMode, {
-            projectId: returnProjectId ? Number(returnProjectId) : undefined,
-          });
+          const returnProjectIdNum = Number(returnProjectId);
+          if (returnMode) {
+            // T15220: pass projectId so the URL reads /focus|overlay/p/<id>, not a
+            // bare mode path (the id would otherwise fall back to whatever the
+            // cold-load canonicalizer already put in the path, which a Stripe
+            // return never carries). Set this immediately (same timing as before
+            // this fix) so the verify call below isn't delayed by the project load.
+            useEditorStore.getState().setEditorMode(returnMode, { projectId: returnProjectIdNum });
+          }
+          // T15220: selectProject() alone only fetches the project record -- it
+          // never populates projectDataStore's clips/working video, which is what
+          // FocusScreen/OverlayScreen actually render from. Without this the editor
+          // was stuck on "Loading..." forever and auto-export's ready-guard
+          // (ExportButtonContainer) could never clear. loadProject is the same call
+          // ProjectsScreen makes when a user opens a project by hand. Fire-and-forget
+          // (not awaited): this load and the payment verify below are independent
+          // and must not block each other.
+          useProjectsStore.getState().selectProject(returnProjectIdNum).then(async (returnedProject) => {
+            if (!returnedProject) return;
+            const result = await loadProject(returnedProject, { mode: returnMode || undefined });
+            if (!result.stale && result.mode !== returnMode) {
+              useEditorStore.getState().setEditorMode(result.mode, { projectId: returnProjectIdNum });
+            }
+          }).catch((err) => console.error('[App] Payment-return project load failed:', err));
+        } else if (returnMode) {
+          useEditorStore.getState().setEditorMode(returnMode);
         }
 
         if (payment === 'success' && paymentSessionId) {
@@ -389,7 +413,7 @@ function App() {
       }
     });
     return () => unsubAuth();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only session-init effect; loadProject is stable (useProjectLoader's useCallback)
 
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const isCheckingSession = useAuthStore(state => state.isCheckingSession);
