@@ -544,7 +544,9 @@ def step_breakdown(users: list[dict], s_rank: int, by: str) -> list[dict]:
         # T15290: deleted is a cross-cutting status (from account_deletions, via
         # is_deleted), not a fourth outcome -- a deleted user still counts in
         # exactly one of continued/in_window/stuck/gone above, same as before.
-        if u["is_deleted"]:
+        # Not every caller tracks deletion (only fetch_step_users' SQL path sets
+        # is_deleted); absence means "not known to be deleted", not a bug.
+        if u.get("is_deleted", False):
             r["deleted"] += 1
     out = []
     for r in rows.values():
