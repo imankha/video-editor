@@ -107,6 +107,17 @@ _SCHEMA_STEPS: dict[int, list[str]] = {
             PRIMARY KEY (run_id, from_stage, to_stage, cohort_month)
         )""",
     ],
+    # T7410: first-party visit beacon. Counter-like (each visit lands on exactly one
+    # writer), so readers SUM across shards -- never "newest run" like step 2.
+    3: [
+        """CREATE TABLE IF NOT EXISTS visit_daily (
+            day        TEXT NOT NULL,
+            source     TEXT NOT NULL,
+            page_class TEXT NOT NULL,
+            count      INTEGER NOT NULL,
+            PRIMARY KEY (day, source, page_class)
+        )""",
+    ],
 }
 
 # Column order after run_id, as written and as newest_journey_rollup returns rows.
@@ -166,6 +177,9 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     # A newer shard (rollback) keeps its user_version; this code uses the tables it knows.
 
 
+VisitKey = tuple[str, str, str]  # (day, source, page_class)
+
+
 class AnalyticsStore:
     def __init__(self, local_path: Path, key: str, writer_id: str, env: str):
         self.local_path = local_path
@@ -179,6 +193,24 @@ class AnalyticsStore:
         self._dirty_gen = 0
         self._uploaded_gen = 0
         self._final_flush_done = False
+        self._visit_lock = threading.Lock()  # guards _visit_buffer only (never held with _lock)
+        self._visit_buffer: dict[VisitKey, int] = {}
+
+    # -- visit beacon (T7410) -----------------------------------------------
+
+    def record_visit(self, source: str, page_class: str) -> None:
+        """Buffer one visit in memory; flush_local drains it into visit_daily on the
+        next tick (same cadence as the r2_ops usage buffer). Safe before a confirmed
+        baseline -- the count just waits longer in memory."""
+        day = datetime.now(UTC).date().isoformat()
+        key = (day, source, page_class)
+        with self._visit_lock:
+            self._visit_buffer[key] = self._visit_buffer.get(key, 0) + 1
+
+    def _drain_visits(self) -> dict[VisitKey, int]:
+        with self._visit_lock:
+            drained, self._visit_buffer = self._visit_buffer, {}
+        return drained
 
     # -- baseline ------------------------------------------------------------
 
@@ -235,22 +267,35 @@ class AnalyticsStore:
         drained = buffer.drain(timeout_s=lock_timeout_s)
         if drained is None:
             return False
-        if not drained:
+        visits = self._drain_visits()
+        if not drained and not visits:
             return True
         if not self._lock.acquire(timeout=-1 if lock_timeout_s is None else lock_timeout_s):
             buffer.restore(drained)
+            self._restore_visits(visits)
             return False
         try:
-            self._write_counts(drained)
-            if any(key[2] != R2Source.ANALYTICS_STORE.value for key in drained):
+            if drained:
+                self._write_counts(drained)
+            if visits:
+                self._write_visits(visits)
+            if visits or any(key[2] != R2Source.ANALYTICS_STORE.value for key in drained):
                 self._dirty_gen += 1
             return True
         except Exception:
             buffer.restore(drained)
+            self._restore_visits(visits)
             logger.exception("[ANALYTICS_STORE] local flush failed; counts kept in memory for the next flush")
             return False
         finally:
             self._lock.release()
+
+    def _restore_visits(self, visits: dict[VisitKey, int]) -> None:
+        if not visits:
+            return
+        with self._visit_lock:
+            for key, n in visits.items():
+                self._visit_buffer[key] = self._visit_buffer.get(key, 0) + n
 
     def _write_counts(self, drained: dict[UsageKey, int]) -> None:
         cutoff = (datetime.now(UTC).date() - timedelta(days=RETENTION_DAYS)).isoformat()
@@ -261,6 +306,16 @@ class AnalyticsStore:
                 [(*key, n) for key, n in drained.items()],
             )
             self._conn.execute("DELETE FROM r2_ops_daily WHERE day < ?", (cutoff,))
+
+    def _write_visits(self, drained: dict[VisitKey, int]) -> None:
+        cutoff = (datetime.now(UTC).date() - timedelta(days=RETENTION_DAYS)).isoformat()
+        with self._conn:
+            self._conn.executemany(
+                "INSERT INTO visit_daily (day, source, page_class, count) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (day, source, page_class) DO UPDATE SET count = count + excluded.count",
+                [(*key, n) for key, n in drained.items()],
+            )
+            self._conn.execute("DELETE FROM visit_daily WHERE day < ?", (cutoff,))
 
     # -- CAS upload ------------------------------------------------------------
 
@@ -377,6 +432,15 @@ class AnalyticsStore:
                 "SELECT day, env, source, op_class, op, count FROM r2_ops_daily"
             ).fetchall()
         return {tuple(row[:5]): row[5] for row in rows}
+
+    def local_visit_counts(self) -> dict[VisitKey, int]:
+        """This shard's visit_daily rows (counter-like: callers SUM across shards,
+        never "newest run" -- see the T7410 schema-step comment)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT day, source, page_class, count FROM visit_daily"
+            ).fetchall()
+        return {tuple(row[:3]): row[3] for row in rows}
 
 
 def newest_journey_rollup(shards: list[sqlite3.Connection]) -> dict | None:

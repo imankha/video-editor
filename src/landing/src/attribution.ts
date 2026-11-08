@@ -130,3 +130,47 @@ export function applyFirstTouch(href: string, record: FirstTouchRecord | null): 
     return href
   }
 }
+
+/**
+ * T7410: first-party visit beacon.
+ *
+ * Priority order for which click-id param to report, matching the app's
+ * campaignCapture.js (facebook > google > tiktok > snapchat > pinterest > reddit).
+ * The raw param KEY is sent (e.g. "fbclid"), never a resolved network name --
+ * that mapping lives in exactly one place, server-side (analytics.CLICK_ID_NETWORK).
+ */
+const CLICK_ID_KEYS = ['fbclid', 'gclid', 'gbraid', 'wbraid', 'ttclid', 'sclid', 'ScCid', 'epik', 'rdt_cid']
+
+function firstClickIdKey(params: Record<string, string>): string | null {
+  return CLICK_ID_KEYS.find((key) => key in params) || null
+}
+
+/**
+ * Fire-and-forget, cookie-free visit counter. No cookies, no localStorage beyond
+ * the first-touch record above (itself not a cookie and not sent here verbatim --
+ * only the whitelisted attribution hints + the sport, if any, are sent). Never
+ * blocks rendering: sendBeacon when available, a keepalive fetch otherwise.
+ */
+export function sendVisitBeacon(record: FirstTouchRecord | null, pageClass: string, apiUrl: string): void {
+  const params = record?.params ?? {}
+  const body = JSON.stringify({
+    page_class: pageClass,
+    ref: params.ref ?? null,
+    utm_campaign: params.utm_campaign ?? null,
+    click_id: firstClickIdKey(params),
+    referrer_host: record?.lref || null,
+  })
+
+  const url = `${apiUrl}/api/t`
+  try {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))
+      return
+    }
+  } catch {
+    /* fall through to fetch */
+  }
+  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {
+    /* fire-and-forget: a dropped beacon is not an error */
+  })
+}

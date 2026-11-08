@@ -58,6 +58,7 @@ import { useConfigStore } from './stores/configStore';
 import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
 import { captureCampaignParams, stripCampaignParams } from './utils/campaignCapture';
+import { sendVisitBeacon } from './utils/analytics';
 import { isPublicRoute } from './stores/editorStore';
 import { setPendingGame, hasPendingProject } from './utils/pendingNavigation';
 import { openEmailGameLink } from './utils/emailGameLink';
@@ -164,6 +165,12 @@ function App() {
 
   // T3455: Capture campaign params from URL (first-touch attribution)
   useEffect(() => {
+    // T7410: anonymous visit beacon, read from the URL BEFORE stripCampaignParams
+    // below removes the hints. Boot-time gesture, fires once per page load. A
+    // /shared/* viewer is the "share" page_class -- a distinct top-of-funnel surface
+    // from the editor itself (not every isPublicRoute() path, e.g. /privacy/terms).
+    const pageClass = window.location.pathname.startsWith('/shared/') ? 'share' : 'app';
+    sendVisitBeacon(pageClass, window.location.search, document.referrer);
     captureCampaignParams(window.location.search, document.referrer, window.location.hostname);
     // T15220: public routes are never canonicalized, so their address stays as it arrived.
     if (!isPublicRoute()) stripCampaignParams();

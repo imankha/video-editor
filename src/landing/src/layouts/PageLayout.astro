@@ -24,15 +24,21 @@ export interface Props {
   trail?: { name: string; path: string }[]
   /** Nav item to mark as current. */
   current?: string
+  /**
+   * T7410/T14960: the tagRegistry sport id for a per-sport landing page
+   * ([sport].astro's `sport.slug`), so the visit beacon can report
+   * `page_class="landing:<sportKey>"`. Omit on every non-sport page.
+   */
+  sportKey?: string
 }
 
-const { trail, current, ...base } = Astro.props
+const { trail, current, sportKey, ...base } = Astro.props
 ---
 
 <BaseLayout {...base}>
   <Header current={current} />
   {trail && trail.length > 0 && <Breadcrumbs trail={trail} />}
-  <main id="main">
+  <main id="main" data-sport={sportKey}>
     <slot />
   </main>
   <Footer />
@@ -46,10 +52,12 @@ const { trail, current, ...base } = Astro.props
     just loses the params.
   -->
   <script>
-    import { readFirstTouch, applyFirstTouch } from '../attribution'
+    import { readFirstTouch, applyFirstTouch, sendVisitBeacon } from '../attribution'
+    import { API_URL } from '../site'
 
+    let record = null
     try {
-      const record = readFirstTouch(
+      record = readFirstTouch(
         window.location.search,
         document.referrer,
         window.location.hostname,
@@ -66,5 +74,11 @@ const { trail, current, ...base } = Astro.props
     } catch {
       /* storage unavailable — links keep their default href */
     }
+
+    // T7410: anonymous visit beacon, fired once per page load regardless of
+    // whether the first-touch record above was readable (sendVisitBeacon
+    // tolerates a null record -- it just has no attribution hints to send).
+    const sportKey = document.getElementById('main')?.dataset.sport
+    sendVisitBeacon(record, sportKey ? `landing:${sportKey}` : 'landing', API_URL)
   </script>
 </BaseLayout>
