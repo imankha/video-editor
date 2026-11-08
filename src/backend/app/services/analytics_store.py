@@ -443,6 +443,83 @@ class AnalyticsStore:
         return {tuple(row[:3]): row[3] for row in rows}
 
 
+# -- visit totals (T14960) ---------------------------------------------------------
+
+VISIT_TOTALS_CACHE_TTL_SECONDS = 300
+_visit_totals_lock = threading.Lock()
+_visit_totals_cache: tuple[float, dict[VisitKey, int], bool] | None = None
+
+
+def _read_shard_visit_rows(body: bytes) -> list[tuple[str, str, str, int]]:
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.deserialize(body)
+        has_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'visit_daily'"
+        ).fetchone()
+        if not has_table:
+            return []
+        return conn.execute(
+            "SELECT day, source, page_class, SUM(count) FROM visit_daily GROUP BY day, source, page_class"
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+def clear_visit_totals_cache() -> None:
+    global _visit_totals_cache
+    with _visit_totals_lock:
+        _visit_totals_cache = None
+
+
+def load_visit_totals() -> tuple[dict[VisitKey, int], bool]:
+    """Every writer's visit_daily summed by (day, source, page_class), THIS process's env
+    only (counter-like, T7410 -- never "newest run" like the journey rollup). This
+    process's own shard is read from the live store (fresher than its last upload, same
+    as newest_journey_rollup); every other shard is listed + GET from R2. Cached in-process
+    for VISIT_TOTALS_CACHE_TTL_SECONDS; a partial read (a shard LIST/GET failed) is never
+    cached, so the next read retries it. Returns (totals, partial)."""
+    global _visit_totals_cache
+    from ..storage import APP_ENV, R2_BUCKET, get_r2_sync_client
+
+    with _visit_totals_lock:
+        if _visit_totals_cache is not None and time.monotonic() - _visit_totals_cache[0] < VISIT_TOTALS_CACHE_TTL_SECONDS:
+            return _visit_totals_cache[1], _visit_totals_cache[2]
+        totals: dict[VisitKey, int] = {}
+        store = current_store()
+        own_key = store.key if store is not None else None
+        if store is not None:
+            for key, n in store.local_visit_counts().items():
+                totals[key] = totals.get(key, 0) + n
+        partial = False
+        client = get_r2_sync_client()
+        if client is not None:
+            prefix = f"{APP_ENV}/analytics/shards/"
+            try:
+                listed = [
+                    obj["Key"]
+                    for page in client.get_paginator("list_objects_v2").paginate(Bucket=R2_BUCKET, Prefix=prefix)
+                    for obj in page.get("Contents", [])
+                    if obj["Key"].endswith("/analytics.sqlite") and obj["Key"] != own_key
+                ]
+            except Exception as e:
+                logger.error(f"[ANALYTICS_STORE] visit totals LIST {prefix} failed: {e}")
+                listed, partial = [], True
+            for key in listed:
+                try:
+                    body = client.get_object(Bucket=R2_BUCKET, Key=key)["Body"].read()
+                except Exception as e:
+                    logger.error(f"[ANALYTICS_STORE] visit totals shard {key} unreadable: {e}")
+                    partial = True
+                    continue
+                for day, source, page_class, count in _read_shard_visit_rows(body):
+                    k = (day, source, page_class)
+                    totals[k] = totals.get(k, 0) + count
+        if not partial:
+            _visit_totals_cache = (time.monotonic(), totals, partial)
+        return totals, partial
+
+
 def newest_journey_rollup(shards: list[sqlite3.Connection]) -> dict | None:
     """The run with the newest computed_at across shards, read from the shard holding
     it and only for that run_id: {"meta": {...}, table: [row, ...]}. None if no shard

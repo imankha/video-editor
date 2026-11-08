@@ -555,6 +555,12 @@ EVENT_INSTRUMENTED_AT = {
     "game_created": "2026-05-20",
 }
 
+# T14960: the anonymous visit beacon (T7410) never writes a user_actions row, so it has
+# no entry in EVENT_INSTRUMENTED_AT above -- this is its own instrumented-at date, the day
+# visit_daily started filling.
+VISIT_BEACON_INSTRUMENTED_AT = "2026-11-08"
+
+
 def _get_user_origin(user_id: str) -> str:
     with get_pg() as conn:
         cur = conn.cursor()

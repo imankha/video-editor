@@ -1970,6 +1970,10 @@ def analytics_journey_map(
     window_days: int = Query(14, ge=1, le=365),
     inactive_days: int = Query(14, ge=1, le=365),
     country: CountryFilter = None,
+    # T14960: narrows the "Visited" head node to one sport's landing page_class
+    # (T14930's arrival-sport pill feeds this; the per-user ladder ignores it, since
+    # user_segments carries no sport dimension).
+    sport: str | None = Query(None, pattern="^[a-z0-9_-]{1,40}$"),
 ):
     _require_admin()
     from ..services.analytics_journey import build_journey
@@ -1983,6 +1987,7 @@ def analytics_journey_map(
             cur, d_from=d_from, d_to=d_to, origin=origin, build=build, country=country,
             platform=platform, excl=_test_exclusion(exclude_test),
             window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
+            sport=sport,
         )
 
 
@@ -2001,12 +2006,26 @@ def analytics_journey_step(
     window_days: int = Query(14, ge=1, le=365),
     inactive_days: int = Query(14, ge=1, le=365),
     country: CountryFilter = None,
+    sport: str | None = Query(None, pattern="^[a-z0-9_-]{1,40}$"),
 ):
     _require_admin()
-    from ..services.analytics_journey import build_step
-
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
+    if stage == "visited":
+        # T14960: not a per-user ladder stage -- no Postgres read, no people tab.
+        from ..analytics import VISIT_BEACON_INSTRUMENTED_AT
+        from ..services.analytics_journey import build_head_step
+        from ..services.analytics_store import load_visit_totals
+
+        totals, partial = load_visit_totals()
+        result = build_head_step(
+            totals, d_from=d_from or date.fromisoformat(VISIT_BEACON_INSTRUMENTED_AT),
+            d_to=d_to, sport=sport,
+        )
+        result["partial"] = partial
+        return result
+    from ..services.analytics_journey import build_step
+
     with get_pg() as conn:
         cur = conn.cursor()
         try:

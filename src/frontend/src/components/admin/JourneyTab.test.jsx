@@ -253,6 +253,39 @@ describe('JourneyView / loss ranking and expansion (T14010)', () => {
   });
 });
 
+describe('JourneyView head node (T14960)', () => {
+  const head = {
+    key: 'visited', label: 'Visited', aggregate: true, badge: 'aggregate, anonymous: visits are counts, not people',
+    visits: 3450, signups: 174, ratio: { pct: 5.04, k: 174, n: 3450 }, not_instrumented: false, partial_from: null,
+  };
+
+  it('shows visits and the visit -> sign-up ratio with both counts, badged aggregate', () => {
+    render(<JourneyView data={{ ...DATA, head }} />);
+    const card = screen.getByTestId('journey-head-visited');
+    expect(card.textContent).toContain('3450 visits');
+    expect(card.textContent).toContain('174 signed up');
+    expect(card.textContent).toContain('5.04%');
+    expect(card.textContent).toContain('aggregate, anonymous');
+  });
+
+  it('reads "not instrumented", never a 0%, before the beacon\'s first day', () => {
+    render(<JourneyView data={{ ...DATA, head: { ...head, not_instrumented: true, visits: null, ratio: null } }} />);
+    const card = screen.getByTestId('journey-head-visited');
+    expect(card.textContent).toContain('not instrumented');
+    expect(card.textContent).not.toMatch(/0 ?%/);
+  });
+
+  it('shows the partial-from badge when the window straddles the beacon\'s first day', () => {
+    render(<JourneyView data={{ ...DATA, head: { ...head, partial_from: '2026-11-08' } }} />);
+    expect(screen.getByTestId('journey-head-visited').textContent).toContain('data from 2026-11-08');
+  });
+
+  it('renders nothing when the map has no head node (older payload shape)', () => {
+    render(<JourneyView data={DATA} />);
+    expect(screen.queryByTestId('journey-head-visited')).toBeNull();
+  });
+});
+
 describe('JourneyTab controls (T14010)', () => {
   let fetchJourney;
   let fetchSpendReadiness;

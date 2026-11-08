@@ -98,6 +98,39 @@ function RagLegend() {
   );
 }
 
+// T14960: the aggregate 'Visited' head node, left of "Signed up" -- a text card, not an
+// SVG bar: visits never join to users, so it has no place in the per-user ladder's scale
+// and is kept out of JourneyFlowChart's geometry entirely (see analytics_journey.py's
+// `head` key, which fold_journey/check_conservation never see).
+function HeadNodeCard({ head }) {
+  if (!head) return null;
+  return (
+    <div data-testid="journey-head-visited" className="bg-white/5 rounded-lg p-3 border border-white/10">
+      <div className="flex flex-wrap items-baseline gap-x-2 text-sm text-gray-300">
+        <span className="font-semibold text-white">{head.label}</span>
+        {head.not_instrumented ? (
+          <span className="text-gray-500">not instrumented</span>
+        ) : (
+          <>
+            <span>{head.visits} visits</span>
+            <span className="text-gray-600">&rarr;</span>
+            <span>
+              {head.signups} signed up ({formatRate(head.ratio)})
+            </span>
+            {head.partial_from && (
+              <span className="text-amber-400 text-[10px]">data from {head.partial_from}</span>
+            )}
+          </>
+        )}
+      </div>
+      <p className="text-[10px] text-gray-500 mt-1">
+        {head.badge}
+        {head.partial && ' -- visit counts partial, a shard was unreadable'}
+      </p>
+    </div>
+  );
+}
+
 export function JourneyView({ data, filters, fit = false, onListUsers, inspectRequest = null }) {
   const [selected, setSelected] = useState(null);
   const selectedRef = useRef(null);
@@ -163,6 +196,8 @@ export function JourneyView({ data, filters, fit = false, onListUsers, inspectRe
           <RagChip testId="journey-end-to-end" rag={endToEnd.rag} text={transitionChipText(endToEnd)} />
         </div>
       )}
+
+      <HeadNodeCard head={data.head} />
 
       <div className="bg-white/5 rounded-lg p-3 border border-white/10">
         <h3 className="text-xs uppercase text-gray-400 mb-2">Loss ranking</h3>

@@ -288,8 +288,9 @@ def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from:
 
 def build_journey(cur, *, d_from: date | None, d_to: date, origin: str, build: int | None,
                   platform: str | None, excl: str, window_days: int, inactive_days: int,
-                  now: datetime, country: str | None = None) -> dict[str, Any]:
+                  now: datetime, country: str | None = None, sport: str | None = None) -> dict[str, Any]:
     from ..analytics import EVENT_INSTRUMENTED_AT, JOURNEY_LADDER, JOURNEY_MONEY_LADDER
+    from .analytics_store import load_visit_totals
 
     ladder = JOURNEY_LADDER
     rows = fetch_patterns(cur, ladder, JOURNEY_MONEY_LADDER, d_from=d_from, d_to=d_to,
@@ -325,10 +326,17 @@ def build_journey(cur, *, d_from: date | None, d_to: date, origin: str, build: i
         judged = n["continued"] + n["stuck"] + n["gone"]
         n["judged"] = judged
         n["continue_rate"] = percent_or_fraction(n["continued"], judged)
+    # T14960: aggregate, anonymous head node beside (never inside) the per-user ladder --
+    # kept out of fold_journey/check_conservation above on purpose.
+    visit_totals, visits_partial = load_visit_totals()
+    head = build_head_node(visit_totals, d_from=d_from, d_to=d_to,
+                           signups=folded["nodes"][0]["reached"], sport=sport)
+    head["partial"] = visits_partial
     return {
         "nodes": folded["nodes"],
         "edges": folded["edges"],
         "loss": folded["loss"],
+        "head": head,
         "money": {"nodes": money["nodes"][1:], "edges": money["edges"]},
         "bands": _bands(ladder),
         "meta": {
@@ -338,6 +346,82 @@ def build_journey(cur, *, d_from: date | None, d_to: date, origin: str, build: i
             "to": d_to.isoformat(),
             "computed_at": now.isoformat(),
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# T14960: "Visited" head node (aggregate, anonymous, from the T7410 visit beacon)
+# ---------------------------------------------------------------------------
+# Visits never join to users: this is a count beside the per-user ladder, never a
+# `fold_journey` node and never part of `check_conservation`. The caller renders it as
+# a separate `head` object in the payload (build_journey), so the ladder's tests and
+# conservation check stay untouched.
+HEAD_NODE_KEY = "visited"
+HEAD_NODE_BADGE = "aggregate, anonymous: visits are counts, not people"
+
+
+def _visit_matches(page_class: str, sport: str | None) -> bool:
+    """Which visit_daily rows count toward the head node. `sport` narrows to the one
+    sport-specific landing page_class (T14930's arrival-sport pill, once it exists); with
+    no sport filter, every landing variant (plain or `landing:<sport>`) plus pre-auth
+    `app` visits count. `share` visits are post-signup traffic, never counted here."""
+    if sport:
+        return page_class == f"landing:{sport}"
+    return page_class == "landing" or page_class == "app" or page_class.startswith("landing:")
+
+
+def build_head_node(visit_totals: dict[tuple[str, str, str], int], *, d_from: date, d_to: date,
+                    signups: int, sport: str | None = None,
+                    instrumented_at: str | None = None) -> dict[str, Any]:
+    """The 'Visited' node: visits in [d_from, d_to] (closed set of page_class values, see
+    `_visit_matches`) and the visit -> sign-up ratio, both counts kept visible. Before the
+    beacon's own instrumented date the whole window predates it, so the node reads
+    "not instrumented" rather than a misleading 0%."""
+    from ..analytics import VISIT_BEACON_INSTRUMENTED_AT
+
+    instrumented = date.fromisoformat(instrumented_at or VISIT_BEACON_INSTRUMENTED_AT)
+    if instrumented > d_to:
+        return {
+            "key": HEAD_NODE_KEY, "label": "Visited", "aggregate": True, "badge": HEAD_NODE_BADGE,
+            "visits": None, "signups": signups, "ratio": None, "not_instrumented": True,
+            "partial_from": None,
+        }
+    visits = sum(
+        n for (day, _source, page_class), n in visit_totals.items()
+        if d_from.isoformat() <= day <= d_to.isoformat() and _visit_matches(page_class, sport)
+    )
+    return {
+        "key": HEAD_NODE_KEY, "label": "Visited", "aggregate": True, "badge": HEAD_NODE_BADGE,
+        "visits": visits, "signups": signups, "ratio": percent_or_fraction(signups, visits),
+        "not_instrumented": False,
+        "partial_from": instrumented.isoformat() if instrumented > d_from else None,
+    }
+
+
+def build_head_step(visit_totals: dict[tuple[str, str, str], int], *, d_from: date, d_to: date,
+                    sport: str | None = None, instrumented_at: str | None = None) -> dict[str, Any]:
+    """Step inspector for the head node: visits by source bucket and by page_class over the
+    window. No people tab -- the beacon is anonymous, so there is no per-user row to list."""
+    from ..analytics import VISIT_BEACON_INSTRUMENTED_AT
+
+    instrumented = date.fromisoformat(instrumented_at or VISIT_BEACON_INSTRUMENTED_AT)
+    if instrumented > d_to:
+        return {"stage": HEAD_NODE_KEY, "label": "Visited", "not_instrumented": True,
+                "total": None, "by_source": [], "by_page_class": []}
+    by_source: dict[str, int] = {}
+    by_page_class: dict[str, int] = {}
+    for (day, source, page_class), n in visit_totals.items():
+        if not (d_from.isoformat() <= day <= d_to.isoformat() and _visit_matches(page_class, sport)):
+            continue
+        by_source[source] = by_source.get(source, 0) + n
+        by_page_class[page_class] = by_page_class.get(page_class, 0) + n
+    return {
+        "stage": HEAD_NODE_KEY, "label": "Visited", "not_instrumented": False,
+        "total": sum(by_source.values()),
+        "by_source": sorted(({"key": k, "visits": v} for k, v in by_source.items()),
+                            key=lambda r: (-r["visits"], r["key"])),
+        "by_page_class": sorted(({"key": k, "visits": v} for k, v in by_page_class.items()),
+                                key=lambda r: (-r["visits"], r["key"])),
     }
 
 
