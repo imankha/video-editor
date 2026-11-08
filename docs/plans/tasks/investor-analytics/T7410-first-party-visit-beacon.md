@@ -52,6 +52,23 @@ See [EPIC.md](EPIC.md) for the no-external-tools / aggregates-only / no-new-PG d
 4. [ ] Remove/retire the zaraz/CF sink in `analytics.js` (after confirming T3000 status)
 5. [ ] Tests: bucketing priority (invite beats utm beats referrer), upsert-increment, unauthenticated 204, CORS
 
+## Beacon payload (as shipped, for the privacy page)
+
+`POST /api/t`, JSON, sent with `navigator.sendBeacon` (fetch keepalive fallback), no cookies,
+no localStorage, no user or session id. Fields, all optional except `page_class`:
+
+| Field | Value |
+|---|---|
+| `page_class` | `landing`, `landing:<sport key>`, `app` or `share` (anything else is dropped) |
+| `ref` | the invite/referral code in the URL, if any |
+| `utm_campaign` | the campaign tag in the URL, if any |
+| `click_id` | the NAME of an ad click-id parameter seen in the URL (e.g. `fbclid`), never its value |
+| `referrer_host` | the referring site's hostname only, never a full URL |
+
+The server reduces this to one source bucket and stores only
+`visit_daily(day, source, page_class) -> count` in analytics.sqlite. The IP keys an in-memory
+rate limiter and is never logged or stored. Obvious bot user agents are dropped.
+
 ## Acceptance Criteria
 
 - [ ] A landing visit with `?utm_source=instagram&fbclid=...` increments `(today, social-facebook...)` — bucket priority matches `_determine_origin` order
