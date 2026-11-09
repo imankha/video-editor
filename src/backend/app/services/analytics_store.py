@@ -149,6 +149,18 @@ _SCHEMA_STEPS: dict[int, list[str]] = {
             p75          REAL NOT NULL,
             PRIMARY KEY (run_id, month, action)
         )""",
+        # T14950: per-sport monthly totals, same full-rebuild-per-run shape as the other
+        # action_rollup_meta-keyed tables above (step 4, not a separate step -- the sport
+        # key was unblocked before this schema ever shipped).
+        """CREATE TABLE IF NOT EXISTS rollup_action_by_sport (
+            run_id         TEXT NOT NULL,
+            month          TEXT NOT NULL,
+            sport          TEXT NOT NULL,
+            action         TEXT NOT NULL,
+            events         INTEGER NOT NULL,
+            distinct_users INTEGER NOT NULL,
+            PRIMARY KEY (run_id, month, sport, action)
+        )""",
     ],
 }
 
@@ -165,6 +177,7 @@ _ROLLUP_META_COLUMNS = ("run_id", "computed_at", "users_walked", "users_failed",
 ACTION_ROLLUP_TABLES: dict[str, tuple[str, ...]] = {
     "rollup_action_weekly": ("cohort_week", "sport", "action", "week_index", "distinct_users"),
     "rollup_engagement_monthly": ("month", "action", "active_users", "median_count", "p25", "p75"),
+    "rollup_action_by_sport": ("month", "sport", "action", "events", "distinct_users"),
 }
 _ACTION_ROLLUP_META_COLUMNS = ("run_id", "computed_at", "users_swept", "users_failed", "log_rows_reduced")
 

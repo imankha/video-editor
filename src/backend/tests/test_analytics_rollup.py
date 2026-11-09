@@ -84,6 +84,41 @@ def test_fold_counts_distinct_users_and_summarizes_monthly_distribution():
     ]
 
 
+# -- T14950: per-sport monthly totals -------------------------------------------------
+
+def test_aggregate_user_buckets_by_sport_per_month():
+    agg = _agg([
+        _row("clip_created", "2026-09-29T10:00:00Z", sport="basketball"),
+        _row("clip_created", "2026-09-30T10:00:00Z", sport="basketball"),
+        _row("export_completed", "2026-09-29T10:00:00Z"),
+        _row("export_completed", "2026-09-29T10:00:00Z", sport="no_sport"),
+    ])
+    assert agg["by_sport"] == {
+        ("2026-09", "basketball", "clip_created"): 2,
+        ("2026-09", "unrecorded", "export_completed"): 1,
+        ("2026-09", "no_sport", "export_completed"): 1,
+    }
+
+
+def test_fold_by_sport_counts_events_and_distinct_users_with_overlap():
+    from app.services.analytics_rollup import fold_rollups
+    # u1 acted in both basketball and no_sport this month -- counts under BOTH, and
+    # distinct_users for each sport is per-sport, not deduped across sports.
+    u1 = _agg([
+        _row("clip_created", "2026-09-29T10:00:00Z", sport="basketball"),
+        _row("clip_created", "2026-09-30T10:00:00Z", sport="no_sport"),
+    ])
+    u2 = _agg([_row("clip_created", "2026-09-29T10:00:00Z", sport="basketball")])
+    u3 = _agg([_row("clip_created", "2026-09-29T10:00:00Z")])  # untagged -> unrecorded
+
+    rows = fold_rollups([u1, u2, u3])
+    assert rows["rollup_action_by_sport"] == [
+        ("2026-09", "basketball", "clip_created", 2, 2),
+        ("2026-09", "no_sport", "clip_created", 1, 1),
+        ("2026-09", "unrecorded", "clip_created", 1, 1),
+    ]
+
+
 # -- store: schema step 4 + newest-run reader -----------------------------------------
 
 def test_schema_step_4_tables_exist(tmp_path):
@@ -93,7 +128,8 @@ def test_schema_step_4_tables_exist(tmp_path):
     with store._lock:
         tables = {r[0] for r in store._conn.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert {"action_rollup_meta", "rollup_action_weekly", "rollup_engagement_monthly"} <= tables
+    assert {"action_rollup_meta", "rollup_action_weekly", "rollup_engagement_monthly",
+            "rollup_action_by_sport"} <= tables
 
 
 def test_rebuild_replaces_the_shards_previous_run(tmp_path):
@@ -108,15 +144,18 @@ def test_rebuild_replaces_the_shards_previous_run(tmp_path):
     store.write_action_rollup(_meta("run-1"), {
         "rollup_action_weekly": [("2026-09-28", "basketball", "clip_created", 0, 5)],
         "rollup_engagement_monthly": [],
+        "rollup_action_by_sport": [("2026-09", "basketball", "clip_created", 5, 5)],
     })
     store.write_action_rollup(_meta("run-2"), {
         "rollup_action_weekly": [("2026-09-28", "basketball", "clip_created", 0, 3)],
         "rollup_engagement_monthly": [],
+        "rollup_action_by_sport": [("2026-09", "basketball", "clip_created", 3, 3)],
     })
     with store._lock:
         got = newest_action_rollup([store._conn])
     assert got["meta"]["run_id"] == "run-2"
     assert got["rollup_action_weekly"] == [("2026-09-28", "basketball", "clip_created", 0, 3)]
+    assert got["rollup_action_by_sport"] == [("2026-09", "basketball", "clip_created", 3, 3)]
 
 
 # -- sweep through the JIT seam --------------------------------------------------------
@@ -255,3 +294,36 @@ def test_admin_trigger_reports_summary_and_status_reflects_it(rollup_client):
     status = rollup_client.get("/api/admin/analytics/rollup", headers={"X-User-ID": "admin-user"}).json()
     assert status["run_id"] == body["run_id"]
     assert status["computed_at"] == body["computed_at"]
+
+
+def test_by_sport_endpoint_reads_the_rollup_with_no_per_user_access(rollup_client):
+    from app.analytics import create_user_segment
+    from app.services.auth_db import create_user
+
+    create_user("user-1", email="user-1@test.com")
+    create_user_segment("user-1", "organic", None, "otp")
+    _log("user-1", [
+        _row("clip_created", "2026-09-29T10:00:00Z", sport="basketball"),
+        _row("export_completed", "2026-09-29T10:00:00Z"),  # untagged -> unrecorded
+    ])
+
+    with patch("app.services.analytics_rollup.rollup_population",
+               return_value=_users(("user-1", date(2026, 9, 28)))):
+        rollup_client.post("/api/admin/analytics/rollup", headers={"X-User-ID": "admin-user"})
+
+    resp = rollup_client.get("/api/admin/analytics/by-sport", headers={"X-User-ID": "admin-user"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["partial"] is False
+    assert body["rows"] == [
+        {"month": "2026-09", "sport": "basketball", "action": "clip_created",
+         "events": 1, "distinct_users": 1},
+        {"month": "2026-09", "sport": "unrecorded", "action": "export_completed",
+         "events": 1, "distinct_users": 1},
+    ]
+
+
+def test_by_sport_endpoint_before_any_rollup_run_returns_empty_rows(rollup_client):
+    resp = rollup_client.get("/api/admin/analytics/by-sport", headers={"X-User-ID": "admin-user"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["rows"] == []

@@ -17,6 +17,7 @@ import { RevenueReconciliation } from '../components/admin/RevenueReconciliation
 import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
 import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
+import { BySportTable } from '../components/admin/BySportTable';
 import { CampaignsModal } from '../components/admin/CampaignsModal';
 
 // Pass `open` + `onToggle` when the screen must open the section itself (T14740: Users).
@@ -114,6 +115,10 @@ export function AdminScreen({ onBack }) {
   const packMixLoading = useAdminStore(s => s.packMixLoading);
   const packMixError = useAdminStore(s => s.packMixError);
   const fetchPackMix = useAdminStore(s => s.fetchPackMix);
+  const bySportData = useAdminStore(s => s.bySportData);
+  const bySportLoading = useAdminStore(s => s.bySportLoading);
+  const bySportError = useAdminStore(s => s.bySportError);
+  const fetchBySport = useAdminStore(s => s.fetchBySport);
   const fetchCampaigns = useAdminStore(s => s.fetchCampaigns);
   const [showCampaigns, setShowCampaigns] = useState(false);
   const [usersOpen, setUsersOpen] = useState(true);
@@ -379,6 +384,17 @@ export function AdminScreen({ onBack }) {
             loading={packMixLoading}
             error={packMixError}
             onRefresh={() => fetchPackMix()}
+          />
+        </CollapsibleSection>
+
+        {/* T14950: total exports by sport, from T7400's analytics.sqlite rollup.
+            Collapsed, on-demand fetch -- reads the existing rollup, never triggers one. */}
+        <CollapsibleSection title="By Sport">
+          <BySportTable
+            data={bySportData}
+            loading={bySportLoading}
+            error={bySportError}
+            onRefresh={() => fetchBySport()}
           />
         </CollapsibleSection>
 

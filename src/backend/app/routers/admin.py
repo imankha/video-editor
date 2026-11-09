@@ -2112,6 +2112,23 @@ def analytics_action_rollup_status():
     return {"computed_at": None, "partial": partial} if rollup is None else {**rollup["meta"], "partial": partial}
 
 
+@router.get("/analytics/by-sport")
+# T14950: "By sport" admin table source -- one read of the existing rollup's
+# rollup_action_by_sport table (no per-user DB access at read, no new sweep trigger).
+def analytics_by_sport():
+    _require_admin()
+    from ..services.analytics_rollup import load_newest_action_rollup
+
+    rollup, partial = load_newest_action_rollup()
+    if rollup is None:
+        return {"computed_at": None, "partial": partial, "rows": []}
+    rows = [
+        {"month": month, "sport": sport, "action": action, "events": events, "distinct_users": distinct_users}
+        for month, sport, action, events, distinct_users in rollup["rollup_action_by_sport"]
+    ]
+    return {**rollup["meta"], "partial": partial, "rows": rows}
+
+
 @router.get("/analytics/spend-readiness")
 # T14910: plain def -> threadpool (T8000 pattern). Read-only; the rules and the per-gate
 # readers live in services/analytics_spend_readiness.py, thresholds in

@@ -113,6 +113,8 @@ export const useAdminStore = create((set, get) => ({
   // exactly one mount request for that endpoint).
   uploadFailuresData: null, uploadFailuresLoading: false, uploadFailuresError: null,
   packMixData: null, packMixLoading: false, packMixError: null,
+  // T14950: "By sport" table, reads T7400's rollup (on-demand -- never on mount).
+  bySportData: null, bySportLoading: false, bySportError: null,
   // T13931: R2 usage by source (on-demand -- never on mount; the backend caches 10 min).
   r2UsageData: null, r2UsageLoading: false, r2UsageError: null,
 
@@ -782,6 +784,21 @@ export const useAdminStore = create((set, get) => ({
       set({ packMixData: await res.json(), packMixLoading: false });
     } catch (err) {
       set({ packMixLoading: false, packMixError: err.message });
+    }
+  },
+
+  // T14950: "By sport" table -- one read of the admin-triggered rollup, no per-user access.
+  fetchBySport: async () => {
+    set({ bySportLoading: true, bySportError: null });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/by-sport`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ bySportData: await res.json(), bySportLoading: false });
+    } catch (err) {
+      set({ bySportLoading: false, bySportError: err.message });
     }
   },
 

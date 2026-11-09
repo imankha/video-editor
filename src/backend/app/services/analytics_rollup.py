@@ -1,6 +1,8 @@
 """T7400: action-weekly cohort rollup -- distinct users active per
 (cohort_week, sport, action, week_index), plus per-action monthly engagement
-distributions, into analytics.sqlite (schema step 4).
+distributions, into analytics.sqlite (schema step 4). T14950 adds
+rollup_action_by_sport(month, sport, action, events, distinct_users): the
+admin "By sport" table's one-query source (no per-user DB access at read).
 
 Admin-triggered (POST /api/admin/analytics/rollup), in-process, full rebuild per run:
 walks every non-test user's user.sqlite through the JIT seam (same shape as
@@ -104,6 +106,7 @@ def aggregate_user(rows, cohort_week: str) -> dict[str, Any]:
     monday = date.fromisoformat(cohort_week)
     weekly: set[tuple[str, str, str, int]] = set()  # (cohort_week, sport, action, week_index)
     monthly: dict[tuple[str, str], int] = {}  # (month, action) -> count
+    by_sport: dict[tuple[str, str, str], int] = {}  # (month, sport, action) -> count
     for row in rows:
         action = row["action"]
         if action not in FLOW_EVENTS:
@@ -119,7 +122,9 @@ def aggregate_user(rows, cohort_week: str) -> dict[str, Any]:
             weekly.add((cohort_week, sport, action, week_index))
         month = created.strftime("%Y-%m")
         monthly[(month, action)] = monthly.get((month, action), 0) + 1
-    return {"weekly": weekly, "monthly": monthly}
+        by_sport_key = (month, sport, action)
+        by_sport[by_sport_key] = by_sport.get(by_sport_key, 0) + 1
+    return {"weekly": weekly, "monthly": monthly, "by_sport": by_sport}
 
 
 def _percentile(sorted_values: list[int], pct: int) -> float:
@@ -135,11 +140,16 @@ def fold_rollups(per_user: list[dict[str, Any]]) -> dict[str, list[tuple]]:
     counts reduced to a distribution summary over active users, never stored per-user)."""
     weekly_users: dict[tuple, int] = {}
     monthly_counts: dict[tuple[str, str], list[int]] = {}
+    by_sport_events: dict[tuple[str, str, str], int] = {}
+    by_sport_users: dict[tuple[str, str, str], int] = {}
     for agg in per_user:
         for key in agg["weekly"]:
             weekly_users[key] = weekly_users.get(key, 0) + 1
         for key, n in agg["monthly"].items():
             monthly_counts.setdefault(key, []).append(n)
+        for key, n in agg["by_sport"].items():
+            by_sport_events[key] = by_sport_events.get(key, 0) + n
+            by_sport_users[key] = by_sport_users.get(key, 0) + 1
     weekly_rows = sorted((*k, n) for k, n in weekly_users.items())
     monthly_rows = []
     for (month, action), counts in sorted(monthly_counts.items()):
@@ -150,7 +160,14 @@ def fold_rollups(per_user: list[dict[str, Any]]) -> dict[str, list[tuple]]:
             _percentile(counts_sorted, 25),
             _percentile(counts_sorted, 75),
         ))
-    return {"rollup_action_weekly": weekly_rows, "rollup_engagement_monthly": monthly_rows}
+    by_sport_rows = sorted(
+        (*key, events, by_sport_users[key]) for key, events in by_sport_events.items()
+    )
+    return {
+        "rollup_action_weekly": weekly_rows,
+        "rollup_engagement_monthly": monthly_rows,
+        "rollup_action_by_sport": by_sport_rows,
+    }
 
 
 def sweep(users: list[dict], store: AnalyticsStore | None) -> dict[str, Any]:
