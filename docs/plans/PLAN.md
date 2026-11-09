@@ -59,7 +59,7 @@ A parent on an iPhone cannot see the play while trimming or fast-forwarding in f
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T15380 | [Mobile fullscreen Annotate stops covering the video](tasks/T15380-mobile-fullscreen-editor-off-video.md) | 8 | 4 | 2.0 | STAGING | [ ] | M-tier, frontend only. Portrait fullscreen puts the video at the top with the editor and controls below it (reusing T10620's `portrait-strip`). While a trim handle is dragged the sheet collapses to the trim row. Controls auto-hide when paused too. |
-| T15370 | [Annotate landscape fullscreen side-strip layout](tasks/T15370-annotate-landscape-cockpit.md) | 7 | 7 | 1.0 | TODO | [ ] | L-tier, design gate. The T10840 Focus side-strip pattern for Annotate: video at full height, controls in strips beside it, Edit play as a side sheet. Blocked by T15380. |
+| T15370 | [Annotate landscape fullscreen side-strip layout](tasks/T15370-annotate-landscape-cockpit.md) | 7 | 7 | 1.0 | WIP | [ ] | L-tier, design gate. The T10840 Focus side-strip pattern for Annotate: video at full height, controls in strips beside it, Edit play as a side sheet. Blocked by T15380. |
 
 ### Acquisition test prep (owner-approved 2026-11-04, runs after the bugs above)
 
