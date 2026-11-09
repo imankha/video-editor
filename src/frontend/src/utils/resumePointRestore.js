@@ -8,9 +8,18 @@ import { setPendingGame } from './pendingNavigation';
 
 const RESUME_MAX_AGE_DAYS = 30;
 
-/** A row older than this, or missing `left_at`/`path`, is treated as absent (owner spec). */
+/**
+ * A row with no `path` is treated as absent. `left_at` is set only by the exit
+ * beacon (best effort) -- a navigation-gesture write, or the last write before a
+ * suppressed sign-out beacon (T15360), always carries `left_at: null`. The
+ * server already dropped anything older than RESUME_MAX_AGE_DAYS before handing
+ * the point back (its own `updated_at` column -- resume_points.get_resume_point),
+ * so a missing `left_at` must NOT be treated as stale; only re-check the age
+ * client-side when `left_at` is actually present.
+ */
 export function isFreshResumePoint(resumePoint) {
-  if (!resumePoint?.path || !resumePoint?.left_at) return false;
+  if (!resumePoint?.path) return false;
+  if (!resumePoint.left_at) return true;
   const ageMs = Date.now() - new Date(resumePoint.left_at).getTime();
   return Number.isFinite(ageMs) && ageMs >= 0 && ageMs < RESUME_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 }
@@ -31,8 +40,12 @@ function landMissing(kind) {
 export function restoreFromResumePoint(resumePoint) {
   if (!isFreshResumePoint(resumePoint)) return;
 
-  const mode = modeFromPath(resumePoint.path);
-  const { gameId, projectId, seekTime } = parseEditorPath(resumePoint.path);
+  // T15360: both writers store `path` as pathname + search (e.g.
+  // '/annotate/g/42?profile=9fa7378c'); modeFromPath/parseEditorPath expect them
+  // split, so a raw pass-through never matches and restore silently no-ops.
+  const u = new URL(resumePoint.path, window.location.origin);
+  const mode = modeFromPath(u.pathname);
+  const { gameId, projectId, seekTime } = parseEditorPath(u.pathname, u.search);
 
   if (mode === EDITOR_MODES.ANNOTATE && gameId != null) {
     const game = useGamesDataStore.getState().games.find((g) => g.id === gameId);
@@ -54,7 +67,10 @@ export function restoreFromResumePoint(resumePoint) {
       return;
     }
     useProjectsStore.getState().selectProject(projectId);
-    useEditorStore.getState().setEditorMode(mode, { projectId });
+    // T15340: same rule as Annotate above -- the point's own `t` (exit beacon) is
+    // the playhead; the path's `?t=` wins only when parseEditorPath already
+    // resolved one. The mode view consumes it once it has a working video to seek.
+    useEditorStore.getState().setEditorMode(mode, { projectId, seekTime: seekTime ?? resumePoint.t ?? null });
     return;
   }
 

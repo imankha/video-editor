@@ -63,6 +63,28 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Detection seek timing: tracks when seek was initiated for latency measurement
   const seekTimingRef = useRef(null);
 
+  // T15340 fix round 1 (amended round 2): a seek can be requested (e.g. a
+  // resume-point one-shot effect gated on the store's `duration`) before the
+  // native <video> element itself has loaded -- `duration`/`clipOffset` land
+  // in the store ahead of the element's own readyState. handleLoadedMetadata's
+  // clip-start seek must not clobber that already-requested target once the
+  // real `loadedmetadata` event finally arrives.
+  //
+  // Round 1 reset this flag to false on the native 'loadstart' event ("new
+  // load -- any earlier seek no longer applies"). That raced the very seek it
+  // was meant to protect: `loadVideoFromStreamingUrl` writes the new
+  // duration/clipOffset into the store SYNCHRONOUSLY, so a resume-seek effect
+  // gated on that store duration can call seek() for the load that is about
+  // to start in the SAME tick -- strictly BEFORE the browser's own async
+  // 'loadstart' for that same new src fires. 'loadstart' then reset the flag
+  // right after seek() had legitimately set it, re-arming the clip-start
+  // reset in handleLoadedMetadata. Tagging the ref with the load it was
+  // requested for (loadIdRef, bumped only when a genuinely new load starts in
+  // loadVideoFromStreamingUrl) avoids the race: no native event needs to
+  // reset anything, since a seek tagged with an old load id can never match
+  // the current one.
+  const seekRequestedForLoadRef = useRef(-1);
+
   // Seek watchdog: recovers from stuck seeks (browser gave up fetching)
   const seekWatchdogRef = useRef(null);
 
@@ -453,6 +475,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
       const target = clipToVideo(validTime);
       const fps = getFramerate(videoRef.current);
+      seekRequestedForLoadRef.current = loadIdRef.current;
       seekTimingRef.current = { t0: performance.now(), requestedTime: time, validTime, videoTarget: target, fps };
       console.log(`[DetectionSeek] SEEK requested=${time.toFixed(6)}s clamped=${validTime.toFixed(6)}s videoElement=${target.toFixed(6)}s requestedFrame=${Math.round(time * fps)} clampedFrame=${Math.round(validTime * fps)}`);
       setIsSeeking(true);
@@ -949,8 +972,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         setMetadata(extractedMetadata);
       }
 
-      // If clip offset is set, seek the video element to the clip start
-      if (clipOffset > 0) {
+      // If clip offset is set, seek the video element to the clip start --
+      // unless a seek has already been requested for THIS load (T15340 fix
+      // round 1/2: a resume-point one-shot seek can run before this native
+      // event fires; don't clobber it back to the clip start).
+      if (clipOffset > 0 && seekRequestedForLoadRef.current !== loadIdRef.current) {
         video.currentTime = clipOffset;
       }
     }

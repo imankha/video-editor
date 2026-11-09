@@ -5,7 +5,8 @@ import { resolveGuide, focusGuideStepDisplay } from '../components/instructions/
 import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
-import { forwardRef, useRef, useState, useMemo, useCallback } from 'react';
+import { parseEditorPath, dropSeekParam } from '../stores/editorStore';
+import { forwardRef, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
@@ -323,6 +324,17 @@ export function FocusModeView({
   const [dimOpacity, setDimOpacity] = useState(0.2);
   const [touchMode, setTouchMode] = useState('crop');
   const isMobile = useIsMobile();
+  // T15340: `/focus/p/{id}?t=37` resume seek -- one shot, once the player has a
+  // real duration to clamp against (useVideo.seek refuses an early seek with no
+  // duration, same T10750 guard Annotate relies on). Drops the URL's `t` right
+  // after so a later reload/navigation on this project never reseeks.
+  useEffect(() => {
+    if (!projectId || !(duration > 0)) return;
+    const { projectId: urlProjectId, seekTime } = parseEditorPath();
+    if (seekTime == null || urlProjectId !== projectId) return;
+    seek?.(seekTime);
+    dropSeekParam();
+  }, [projectId, duration, seek]);
   const fsControls = useFullscreenControls({ isPlaying });
   // Mobile fullscreen video is opt-in (tap the expand button). Defaulting to it
   // hid the below-timeline controls (export/proceed) with no way to reach them

@@ -59,7 +59,7 @@ import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
 import { captureCampaignParams, stripCampaignParams } from './utils/campaignCapture';
 import { sendVisitBeacon } from './utils/analytics';
-import { isPublicRoute } from './stores/editorStore';
+import { isPublicRoute, coldLoadPathname } from './stores/editorStore';
 import { setPendingGame, hasPendingProject } from './utils/pendingNavigation';
 import { openEmailGameLink } from './utils/emailGameLink';
 import { markBootstrapSettled, settleBootstrapAfter } from './utils/deepLinkRecovery';
@@ -402,7 +402,10 @@ function App() {
       // T14980: resume-where-you-left-off. Only a bare `/` cold load with none of the
       // arrivals above already claimed -- a deep link, share, claim or payment return names
       // its own destination and must never be overridden by an older resume point.
-      if (!authReturnMode && !deeplinkGameId && !payment && window.location.pathname === '/') {
+      // T15360: editorStore's module-load canonicalization already rewrote the bare `/` to
+      // '/home' (or further) by the time this runs -- coldLoadPathname is the pre-rewrite
+      // value, captured before that canonicalization ran.
+      if (!authReturnMode && !deeplinkGameId && !payment && coldLoadPathname === '/') {
         const { restoreFromResumePoint } = await import('./utils/resumePointRestore');
         restoreFromResumePoint(session.resumePoint);
       }

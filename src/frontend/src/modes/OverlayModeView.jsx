@@ -1,5 +1,6 @@
 import ActionCard from '../components/shared/ActionCard';
 import { forwardRef, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { parseEditorPath, dropSeekParam } from '../stores/editorStore';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { computeSpotlightReveal } from '../utils/spotlightReveal';
 import OverrideHint from './overlay/overlays/OverrideHint';
@@ -300,6 +301,21 @@ export function OverlayModeView({
   // while the new working video loads); the neutral loading state shows instead.
   const showExportRequired = !effectiveOverlayVideoUrl && !shouldWaitForWorkingVideo && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
   const isMobile = useIsMobile();
+  // T15340: `/overlay/p/{id}?t=37` resume seek -- one shot, once the player has a
+  // real duration to clamp against (same T10750 guard Annotate relies on). Drops
+  // the URL's `t` right after so a later reload/navigation on this project never
+  // reseeks. Gates on `duration` -- the same video-element-sourced duration
+  // `useVideo.seek()` itself checks -- not `effectiveOverlayMetadata.duration`,
+  // which is API-sourced and lands before the player can actually seek (fix
+  // round 1: that mismatch let this effect fire while seek() still refused,
+  // permanently dropping the one-shot `t`).
+  useEffect(() => {
+    if (!projectId || !(duration > 0)) return;
+    const { projectId: urlProjectId, seekTime } = parseEditorPath();
+    if (seekTime == null || urlProjectId !== projectId) return;
+    seek?.(seekTime);
+    dropSeekParam();
+  }, [projectId, duration, seek]);
   const fsControls = useFullscreenControls({ isPlaying });
   // Mobile fullscreen video is opt-in (tap the expand button). Defaulting to it
   // hid the overlay settings + Add Spotlight/export controls with no way to reach

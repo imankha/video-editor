@@ -60,7 +60,8 @@ blocked by this bug), T14990:C1 admin detail panel, T14990:C3 same id in two pro
 ## Acceptance Criteria
 
 - [ ] On staging, close the tab on a play, then cold-load `/` in a new browser context: the same
-      play opens (Annotate at the same playhead; Focus and Overlay at the start).
+      play opens at the same playhead on Annotate, Focus and Overlay (amended 2026-11-09: T15340, in the
+      same dotask group, extends the playhead restore to Focus and Overlay).
 - [ ] Sign out on a play, sign back in: the same play opens.
 - [ ] A point whose target was deleted lands on Home with the notice and clears the row.
 - [ ] An e2e test drives the real cold load of `/` (not a direct call to `restoreFromResumePoint`),
