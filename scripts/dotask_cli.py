@@ -145,10 +145,37 @@ RULING_RECORDED = re.compile(r"\b(?:user|owner)(?:'s)? (?:pick|picked|ruling|rul
 UNCHECKED_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[ \]")
 
 
+# L-tier (or an explicit "design gate") needs the owner to approve a Stage 2 design doc. Picking the
+# option is a different ruling: g-t15370-1 (2026-11-09) started on "The owner chose this" and the
+# worker blocked a minute later on the missing design.
+DESIGN_GATED_TIER = re.compile(r"^\*\*Tier:\*\*\s*(?:L\b|.*design gate)", re.I)
+
+
+def design_approval_missing(path):
+    """Why a design-gated task can't start yet, or None. Approval is a recorded ruling in the sibling
+    `T{id}-design.md`, or a line in the task file that names the design and records the ruling."""
+    path = Path(path)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not any(DESIGN_GATED_TIER.match(line) for line in lines):
+        return None
+    if any("design" in line.lower() and RULING_RECORDED.search(line) for line in lines):
+        return None
+    design = path.with_name(f"{path.name.split('-', 1)[0]}-design.md")
+    if not design.exists():
+        return f"design gate: no design doc {design.name}; the Architect writes it and the owner approves it"
+    if any(RULING_RECORDED.search(line) for line in design.read_text(encoding="utf-8").splitlines()):
+        return None
+    return f"design gate: {design.name} has no owner approval yet (e.g. `**Status:** Approved (owner, <date>)`)"
+
+
 def pending_decision(path):
     """The first line that makes this task wait on the user, or None: no such line, or a line that
     records the user's ruling (`(owner, 2026-11-07)`, `user picked C`, `USER PICK`, ...). An unchecked
-    criterion like `- [ ] Owner has ruled A, B or C` is the gate itself, never the ruling."""
+    criterion like `- [ ] Owner has ruled A, B or C` is the gate itself, never the ruling. A
+    design-gated tier also waits for an approved design doc."""
+    design_gate = design_approval_missing(path)
+    if design_gate:
+        return design_gate
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     if any(RULING_RECORDED.search(line) for line in lines if not UNCHECKED_ITEM.match(line)):
         return None
@@ -1761,7 +1788,7 @@ def nextup_candidates():
     groups = live_groups()
     candidates, held, skipped, decisions = [], {}, [], {}
     for task_id in plan_todo_tasks():
-        matches = sorted(tasks_dir.rglob(f"{task_id}-*.md"))
+        matches = task_file_matches(MAIN_REPO, task_id)  # a T{id}-design.md is not a second task file
         if len(matches) != 1:
             skipped.append(f"{task_id}: {len(matches)} task files match {task_id}-*.md")
             continue

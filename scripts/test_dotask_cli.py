@@ -447,6 +447,24 @@ class DotaskCliTest(unittest.TestCase):
         path.write_text("# T9: Plain fix\n\n## Problem\n\nSaving fails.\n")
         self.assertIsNone(dotask_cli.pending_decision(path))
 
+    def test_an_l_tier_task_waits_for_an_approved_design_even_after_an_owner_ruling(self):
+        # g-t15370-1 (2026-11-09): "The owner chose this" (picking option C) read as a ruling, the
+        # group started, and the worker blocked a minute later on the L-tier design gate.
+        path = self.root / "T9-cockpit.md"
+        path.write_text("# T9: Cockpit\n\n**Tier:** L (design gate required)\n\n"
+                        "The owner chose this on 2026-11-08 as the follow-up.\n")
+        self.assertIn("design", dotask_cli.pending_decision(path))
+        design = self.root / "T9-design.md"
+        design.write_text("# T9 design\n\n**Status:** draft\n")
+        self.assertIn("design", dotask_cli.pending_decision(path))  # a draft is not approval
+        design.write_text("# T9 design\n\n**Status:** Approved (owner, 2026-11-09)\n")
+        self.assertIsNone(dotask_cli.pending_decision(path))
+        design.unlink()  # an approval recorded in the task file itself also clears it
+        path.write_text(path.read_text() + "\n## Approved design (user, 2026-11-03)\n")
+        self.assertIsNone(dotask_cli.pending_decision(path))
+        path.write_text("# T9: Small fix\n\n**Tier:** M\n\nThe owner chose this.\n")
+        self.assertIsNone(dotask_cli.pending_decision(path))
+
     def test_nextup_sets_aside_tasks_that_wait_on_a_user_ruling(self):
         self._plan_rows([
             ("T20", "Name the steps", "TODO", ["src/a.py"], "a"),
