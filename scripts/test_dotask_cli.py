@@ -1201,12 +1201,27 @@ class RunChecksTest(unittest.TestCase):
         self.commands = []
 
     def _container(self, report):
-        def run(slug, command, timeout, env=None):
+        def run(slug, command, timeout, env=None, keep=2000):  # keep: the real container_run's output tail
             self.commands.append((command, env))
             if command.startswith("cat "):
-                return 0, json.dumps(report)
+                out = json.dumps(report)
+                return 0, out[-keep:] if keep else out
             return (1 if "grep -q" in command else 0), "out"
         return run
+
+    def test_a_report_bigger_than_the_output_tail_is_read_whole(self):
+        # g-t15370-1 (2026-11-09): 9 of 9 checks passed, but the 16 KB report was read through the
+        # 2000-char output tail, failed to parse, and every criterion was marked fail.
+        specs = [{"title": f"T1:C1 step {i} " + "x" * 200, "ok": True, "tests": []} for i in range(40)]
+        with patch.object(dotask_cli, "container_run", self._container({"suites": [{"specs": specs}]})):
+            results = dotask_cli.run_browser_checks("g", "T1", ["T1:C1"], 60)
+        self.assertEqual(results["T1:C1"], ("pass", "40 test(s) passed"))
+
+    def test_container_run_keeps_the_whole_output_when_asked(self):
+        done = subprocess.CompletedProcess([], 0, stdout="a" * 5000, stderr="")
+        with patch.object(dotask_cli.subprocess, "run", return_value=done):
+            self.assertEqual(len(dotask_cli.container_run("g", "cat f", 5)[1]), 2000)
+            self.assertEqual(len(dotask_cli.container_run("g", "cat f", 5, keep=None)[1]), 5000)
 
     def test_a_criteria_list_with_ids_reads_like_the_map(self):
         # g-t15370-1 (2026-11-09): the worker wrote `"criteria": [{"id": "T15370:C1", ...}]`; the

@@ -1391,8 +1391,9 @@ def check_manifest(checkout, task_id):
     return {str(k): v for k, v in criteria.items() if isinstance(v, dict)} if isinstance(criteria, dict) else {}
 
 
-def container_run(slug, command, timeout, env=None):
-    """(exit code or None on timeout, output tail) of a bash command in the group's container."""
+def container_run(slug, command, timeout, env=None, keep=2000):
+    """(exit code or None on timeout, output) of a bash command in the group's container: the last
+    `keep` chars, or all of it with keep=None (a file read back, e.g. a Playwright JSON report)."""
     argv = [tool("docker"), "exec"] + [f"-e{k}={v}" for k, v in (env or {}).items()] + [cname(slug), "bash", "-lc", command]
     try:
         result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
@@ -1400,7 +1401,8 @@ def container_run(slug, command, timeout, env=None):
         return None, f"timed out after {timeout:.0f}s"
     except OSError as exc:
         return 1, str(exc)
-    return result.returncode, (result.stdout + result.stderr)[-2000:]
+    output = result.stdout + result.stderr
+    return result.returncode, output[-keep:] if keep else output
 
 
 def playwright_outcomes(report):
@@ -1446,7 +1448,8 @@ def run_browser_checks(slug, task_id, ids, timeout, staging=None):
     code, output = container_run(slug, f"rm -f {report_path}; {command}", timeout, env)
     if code is None:
         return {i: ("skipped", f"browser checks {output}") for i in ids}
-    _code, raw = container_run(slug, f"cat {report_path}", 60)
+    # keep=None: g-t15370-1's 16 KB report was cut to its last 2000 chars, and 9 passing tests read as fail.
+    _code, raw = container_run(slug, f"cat {report_path}", 60, keep=None)
     try:
         outcomes = playwright_outcomes(json.loads(raw))
     except ValueError:
