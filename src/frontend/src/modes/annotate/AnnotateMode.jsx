@@ -33,6 +33,10 @@ export default function AnnotateMode({
   // T13220: Veo suggestion ticks [{ id, time, label }] + tap handler
   suggestionTicks = null,
   onSuggestionTickClick = null,
+  // T15370: landscape cockpit drops the mobile finger-scrollbar row (the side
+  // strips replace it as the way to move along the timeline). Additive,
+  // default false keeps every other caller byte-identical.
+  hideScrollbar = false,
 }) {
   if (!duration) return null;
 
@@ -55,6 +59,7 @@ export default function AnnotateMode({
         zoom={zoom}
         suggestionTicks={suggestionTicks}
         onSuggestionTickClick={onSuggestionTickClick}
+        hideScrollbar={hideScrollbar}
       />
     </div>
   );

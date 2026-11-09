@@ -63,6 +63,8 @@ export function AnnotateTimeline({
   // T13220: Veo suggestion ticks [{ id, time, label }], null/empty = zero pixels
   suggestionTicks = null,
   onSuggestionTickClick = null,
+  // T15370: forwarded to TimelineBase; see AnnotateMode.jsx.
+  hideScrollbar = false,
 }) {
   const isMobile = useIsMobile();
 
@@ -230,6 +232,7 @@ export function AnnotateTimeline({
       followAnchor="page-forward"
       selectedLayer={selectedLayer}
       onLayerSelect={onLayerSelect}
+      hideScrollbar={hideScrollbar}
     >
       {/* T13280: desktop Videos lane (directly below the scrubber). Only mounted for
           multi-video games on desktop. */}

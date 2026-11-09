@@ -16,7 +16,10 @@ import AddFootageButton from './annotate/AddFootageButton';
 import { SuggestedPlaysPanel, VeoAlignCard } from './annotate/components/SuggestedPlaysPanel';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { displayRating } from '../components/shared/clipConstants';
-import { ANNOTATE, SHARING } from '../config/displayNames';
+import { ANNOTATE, ANNOTATE_COCKPIT, SHARING } from '../config/displayNames';
+import AnnotateTransportStrip from './annotate/cockpit/AnnotateTransportStrip';
+import AnnotateActionStrip from './annotate/cockpit/AnnotateActionStrip';
+import AnnotateSideSheet from './annotate/cockpit/AnnotateSideSheet';
 import { PlaysOnlyPanel } from '../components/PlaysOnlyPanel';
 import { UploadPreviewNotice } from '../components/UploadPreviewNotice';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
@@ -379,6 +382,10 @@ export function AnnotateModeView({
   // the T15370 follow-up) with just the drag-peek/auto-hide fixes (option D).
   const mobileFsLandscape = mobileFs && isLandscape;
   const [isDraggingScrub, setIsDraggingScrub] = useState(false);
+  // T15370: the right strip's source chip toggles this sheet. Memory-only
+  // view state, not persisted; resets implicitly when fullscreen/landscape
+  // is left (the sheet simply stops rendering, no cleanup write needed).
+  const [videosSheetOpen, setVideosSheetOpen] = useState(false);
 
   // T10930: timeline zoom lives HERE, not in AnnotateTimeline, because the
   // timeline is mounted at three sites (windowed / fullscreen strip / mobile
@@ -406,16 +413,25 @@ export function AnnotateModeView({
   // T11860: fullscreen is a deliberate gesture that wants the full transport, so
   // the simplified chrome applies to the windowed layout only.
   const simplified = simplifiedControls && !annotateFullscreen;
+  // T15370: the landscape cockpit is IS fullscreen (mobileFsLandscape implies
+  // annotateFullscreen), so the windowed-only `simplified` above is always
+  // false there -- its own strips read the raw flag instead, per the
+  // approved design's test plan ("simplified hides frame-step and zoom").
+  const cockpitSimplified = simplifiedControls;
   const timelineZoomProps = useMemo(() => ({
     timelineZoom: timelineZoomState.timelineZoom,
     zoomByWheel: timelineZoomState.zoomByWheel,
     zoomIn: timelineZoomState.zoomIn,
     zoomOut: timelineZoomState.zoomOut,
     resetZoom: timelineZoomState.resetZoom,
+    setZoom: timelineZoomState.setZoom,
     defaultZoom: timelineZoomState.defaultZoom,
-    hideChip: simplified,
+    // T15370: the cockpit's own 1x/3x toggle (AnnotateActionStrip) replaces the
+    // chip there, so TimelineBase's internal chip is dropped the same way a
+    // fresh game drops it.
+    hideChip: simplified || mobileFsLandscape,
     centerPlayheadKey,
-  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom, timelineZoomState.defaultZoom, simplified, centerPlayheadKey]);
+  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom, timelineZoomState.setZoom, timelineZoomState.defaultZoom, simplified, mobileFsLandscape, centerPlayheadKey]);
 
   // T10800: ONE resolved aspect for every non-fullscreen Annotate stage box
   // (single-video, multi-video, and playback/recap), so all three read the same
@@ -792,29 +808,59 @@ export function AnnotateModeView({
       {(!annotateFullscreen || showAnnotateOverlay) && (
         <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />
       )}
-      <div data-testid="annotate-coach-stage" data-full-bleed-video={mobileFsLandscape ? 'true' : undefined} className={`${annotateFullscreen ? '' : `bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20 ${SHORT_DESKTOP_PANEL_CLASS}`}`}>
-        {/* Fullscreen container - uses fixed positioning for fullscreen */}
+      <div data-testid="annotate-coach-stage" className={`${annotateFullscreen ? '' : `bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20 ${SHORT_DESKTOP_PANEL_CLASS}`}`}>
+        {/* Fullscreen container - uses fixed positioning for fullscreen.
+            T15370: landscape is a CSS grid (56px left strip | picture | 72px
+            right strip, with an auto-height timeline row under the picture)
+            instead of a full-bleed surface with controls drawn on top. */}
         <div
           ref={annotateContainerRef}
-          className={`${annotateFullscreen ? `fixed inset-0 z-[100] bg-gray-900${mobileFsLandscape ? '' : ' flex flex-col'}` : ''}`}
-          onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
+          className={`${annotateFullscreen ? (
+            mobileFsLandscape
+              ? 'fixed inset-x-0 top-0 h-dvh z-[100] bg-black grid grid-cols-[56px_minmax(0,1fr)_72px] grid-rows-[minmax(0,1fr)_auto] overflow-hidden'
+              : 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
+          ) : ''}`}
+          style={mobileFsLandscape ? {
+            paddingLeft: 'env(safe-area-inset-left)',
+            paddingRight: 'env(safe-area-inset-right)',
+            paddingBottom: 'env(safe-area-inset-bottom)',
+          } : undefined}
+          onMouseMove={mobileFs && !mobileFsLandscape ? fsControls.handleInteraction : undefined}
         >
+          {/* T15370: the left transport strip. row-span-2 so it reaches the
+              full height past the timeline row too. */}
+          {mobileFsLandscape && (
+            <AnnotateTransportStrip
+              className="row-span-2"
+              isPlaying={isPlaying}
+              onTogglePlay={togglePlay}
+              onStepForward={stepForward}
+              onStepBackward={stepBackward}
+              onSeekForward={seekForward}
+              onSeekBackward={seekBackward}
+              onExit={onToggleFullscreen}
+              editorOpen={showAnnotateOverlay}
+              simplified={cockpitSimplified}
+            />
+          )}
           {/* Video Player with annotate overlays. T15380: portrait mobile
               fullscreen is pinned to the top (flex-1 min-h-0, same sizing as
               desktop fullscreen) with the editor/controls as in-flow siblings
-              below -- only landscape mobile fullscreen still fills the whole
-              container (its editor is a fixed sheet on top, option C's
-              side-strip layout is the T15370 follow-up). */}
+              below. T15370: landscape mobile fullscreen now sits in the
+              grid's center column/top row (never the whole container) -- the
+              strips beside it never cost it any picture height. */}
           <div
             className={`relative bg-gray-900 ${
               annotateFullscreen
-                ? mobileFsLandscape ? 'w-full h-full' : `flex-1 min-h-0 flex flex-col${mobileFs ? ' pt-[env(safe-area-inset-top)]' : ''}`
+                ? mobileFsLandscape
+                  ? 'col-start-2 row-start-1 min-h-0'
+                  : `flex-1 min-h-0 flex flex-col${mobileFs ? ' pt-[env(safe-area-inset-top)]' : ''}`
                 : 'rounded-lg'
             }`}
             onClick={mobileFs && !showAnnotateOverlay ? togglePlay : undefined}
-            onTouchStart={mobileFs && !showAnnotateOverlay ? fsControls.handleLongPressTouchStart : undefined}
-            onTouchMove={mobileFs && !showAnnotateOverlay ? fsControls.handleLongPressTouchMove : undefined}
-            onTouchEnd={mobileFs && !showAnnotateOverlay ? fsControls.handleLongPressTouchEnd : undefined}
+            onTouchStart={mobileFs && !showAnnotateOverlay && !mobileFsLandscape ? fsControls.handleLongPressTouchStart : undefined}
+            onTouchMove={mobileFs && !showAnnotateOverlay && !mobileFsLandscape ? fsControls.handleLongPressTouchMove : undefined}
+            onTouchEnd={mobileFs && !showAnnotateOverlay && !mobileFsLandscape ? fsControls.handleLongPressTouchEnd : undefined}
           >
             {/* In fullscreen: flex-1 fills remaining space after controls/timeline.
                 T15380: portrait mobile fullscreen now sizes like desktop
@@ -1141,119 +1187,106 @@ export function AnnotateModeView({
             </div>
           )}
 
-          {/* Mobile fullscreen LANDSCAPE: YouTube-style overlay controls +
-              timeline. T15380: portrait mobile fullscreen no longer renders
-              here -- it joined the in-flow `!mobileFsLandscape` controls
-              block above and the `desktopEditorOpen`-style editor panel
-              below, so nothing is ever drawn over its picture (AC1/AC2). */}
+          {/* T15370: landscape cockpit's timeline zone -- bottom row of the
+              grid, under the picture. Nothing auto-hides: there is nothing
+              drawn OVER the picture to hide (that was T15380's whole fix).
+              Hidden while the editor sheet is open (no room, and the sheet's
+              own ClipScrubRegion is the trim control then). */}
+          {mobileFsLandscape && !showAnnotateOverlay && (
+            <div data-testid="annotate-cockpit-timeline" className="col-start-2 row-start-2 bg-gray-900/95 px-2 py-0.5">
+              <AnnotateMode
+                currentTime={currentTime}
+                duration={duration || annotateVideoMetadata?.duration || 0}
+                isPlaying={isPlaying}
+                onSeek={onTimelineSeek || seek}
+                regions={annotateRegionsWithLayout}
+                selectedRegionId={annotateSelectedRegionId}
+                onSelectRegion={onSelectRegion}
+                onDeleteRegion={onDeleteRegion}
+                selectedLayer={annotateSelectedLayer}
+                onLayerSelect={onLayerSelect}
+                boundaryOffsets={boundaryOffsets}
+                angleData={angleData}
+                zoom={timelineZoomProps}
+                suggestionTicks={suggested?.ticks}
+                onSuggestionTickClick={suggested?.onTickClick}
+                hideScrollbar
+              />
+            </div>
+          )}
+
+          {/* T15370: the right action strip -- Mark/Edit play, speed, the
+              source chip (2+ videos) and the 1x/3x zoom toggle. */}
           {mobileFsLandscape && (
-            <>
-              {showAnnotateOverlay ? (
-                <div
-                  className="absolute inset-x-0 bottom-0 z-20 flex flex-col overflow-y-auto bg-gray-900/95"
-                  style={{ maxHeight: '76dvh' }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <AnnotateFullscreenOverlay
-                    isVisible={showAnnotateOverlay}
-                    currentTime={currentTime}
-                    videoDuration={duration || annotateVideoMetadata?.duration || 0}
-                    existingClip={existingClip}
-                    onUpdateClip={onFullscreenUpdateClip}
-                    onClose={onOverlayClose}
-                    onDeleteClip={onDeletePlayFromEditor}
-                    onAwaitWrites={onAwaitRegionWrites}
-                    writeStatus={writeStatus}
-                    onSeek={seek}
-                    videoController={videoController}
-                    isFullscreen={false}
-                    layout="landscape-inline"
-                    activeSourceName={activeSourceName}
-                    mediaBounds={activeSourceMediaBounds}
-                    teammateSuggestions={teammateSuggestions}
-                    framingInProgress={selectedRegionFraming}
-                    onScrubDragChange={setIsDraggingScrub}
-                    // T15380 (AC3): collapse to just the scrub row while a trim
-                    // handle or the bar itself is being dragged, so most of the
-                    // picture peeks through behind the sheet.
-                    dragPeek={isDraggingScrub}
-                    // T11130: Done -> Highlight choice card (in-place mode-swap)
-                    showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
-                    onHighlightChoiceNow={onHighlightChoiceNow}
-                    onHighlightChoiceLater={onHighlightChoiceLater}
-                    onHighlightChoiceDismiss={onHighlightChoiceDismiss}
-                  />
-                </div>
-              ) : (
-                <div
-                  className={`absolute inset-x-0 bottom-0 z-20 transition-opacity duration-300 ${
-                    isDraggingScrub ? 'opacity-0 pointer-events-none' :
-                    fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                  }`}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
-                    <AnnotateControls
-                      isPlaying={isPlaying}
-                      currentTime={currentTime}
-                      duration={duration || annotateVideoMetadata?.duration || 0}
-                      onTogglePlay={togglePlay}
-                      onStepForward={stepForward}
-                      onStepBackward={stepBackward}
-                      onSeekBackward={seekBackward}
-                      onSeekForward={seekForward}
-                      onRestart={restart}
-                      playbackSpeed={annotatePlaybackSpeed}
-                      onSpeedChange={onSpeedChange}
-                      isFullscreen={annotateFullscreen}
-                      onToggleFullscreen={onToggleFullscreen}
-                      onAddClip={handleAddClipWithSportPrompt}
-                      isEditMode={isEditMode}
-                      videoController={videoController}
-                      clipEditBounds={clipEditBounds}
-                    />
-                    {sourceBar && <SourceBar {...sourceBar} compact />}
-                    <div className="bg-gray-900/90 px-2 py-0.5">
-                      <AnnotateMode
-                        currentTime={currentTime}
-                        duration={duration || annotateVideoMetadata?.duration || 0}
-                        isPlaying={isPlaying}
-                        onSeek={onTimelineSeek || seek}
-                        regions={annotateRegionsWithLayout}
-                        selectedRegionId={annotateSelectedRegionId}
-                        onSelectRegion={onSelectRegion}
-                        onDeleteRegion={onDeleteRegion}
-                        selectedLayer={annotateSelectedLayer}
-                        onLayerSelect={onLayerSelect}
-                        boundaryOffsets={boundaryOffsets}
-                        angleData={angleData}
-                        zoom={timelineZoomProps}
-                        suggestionTicks={suggested?.ticks}
-                        onSuggestionTickClick={suggested?.onTickClick}
-                      />
-                    </div>
-                  </div>
-                </div>
+            <AnnotateActionStrip
+              className="row-span-2"
+              isEditMode={isEditMode}
+              onAddClip={handleAddClipWithSportPrompt}
+              disabled={isSourceExpired || isPlaysOnly || isLoadingGameData}
+              playbackSpeed={annotatePlaybackSpeed}
+              onSpeedChange={onSpeedChange}
+              sourceLabel={sourceBar ? `${sourceBar.index}/${sourceBar.count}` : null}
+              onOpenVideos={() => setVideosSheetOpen((v) => !v)}
+              zoomedIn={timelineZoomProps.timelineZoom > 100}
+              onZoomToggle={() => (
+                timelineZoomProps.timelineZoom > 100
+                  ? timelineZoomProps.setZoom(100)
+                  : timelineZoomProps.resetZoom()
               )}
-              <div
-                className={`absolute top-2 right-2 z-30 transition-opacity duration-300 ${
-                  showAnnotateOverlay ? 'opacity-100' :
-                  isDraggingScrub ? 'opacity-0 pointer-events-none' :
-                  fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
-                onClick={e => e.stopPropagation()}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={Minimize}
-                  iconOnly
-                  onClick={onToggleFullscreen}
-                  title="Exit fullscreen (Esc)"
-                  className="bg-black/50 hover:bg-black/70"
+              hideZoomToggle={cockpitSimplified}
+            />
+          )}
+
+          {/* T15370: Mark/Edit play opens the ONE editor sheet from the right
+              (over the right strip), replacing the old bottom sheet -- the
+              middle of the picture stays visible while trimming (AC2). */}
+          {mobileFsLandscape && showAnnotateOverlay && (
+            <AnnotateSideSheet peek={isDraggingScrub}>
+              <AnnotateFullscreenOverlay
+                isVisible={showAnnotateOverlay}
+                currentTime={currentTime}
+                videoDuration={duration || annotateVideoMetadata?.duration || 0}
+                existingClip={existingClip}
+                onUpdateClip={onFullscreenUpdateClip}
+                onClose={onOverlayClose}
+                onDeleteClip={onDeletePlayFromEditor}
+                onAwaitWrites={onAwaitRegionWrites}
+                writeStatus={writeStatus}
+                onSeek={seek}
+                videoController={videoController}
+                isFullscreen={false}
+                layout="landscape-inline"
+                activeSourceName={activeSourceName}
+                mediaBounds={activeSourceMediaBounds}
+                teammateSuggestions={teammateSuggestions}
+                framingInProgress={selectedRegionFraming}
+                onScrubDragChange={setIsDraggingScrub}
+                // T15380 (AC3): collapse to just the scrub row while a trim
+                // handle or the bar itself is being dragged, so most of the
+                // picture peeks through behind the sheet.
+                dragPeek={isDraggingScrub}
+                // T11130: Done -> Highlight choice card (in-place mode-swap)
+                showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
+                onHighlightChoiceNow={onHighlightChoiceNow}
+                onHighlightChoiceLater={onHighlightChoiceLater}
+                onHighlightChoiceDismiss={onHighlightChoiceDismiss}
+              />
+            </AnnotateSideSheet>
+          )}
+
+          {/* T15370: the source chip's "Videos" sheet -- holds the existing
+              SourceBar verbatim (it owns its own expand/pick state). Closes
+              on a pick so the chip doubles as its own toggle. */}
+          {mobileFsLandscape && videosSheetOpen && sourceBar && (
+            <AnnotateSideSheet>
+              <div className="p-2">
+                <h2 className="px-1 pb-2 text-sm font-semibold text-gray-100">{ANNOTATE_COCKPIT.SHEET_VIDEOS}</h2>
+                <SourceBar
+                  {...sourceBar}
+                  onPick={(seq) => { sourceBar.onPick?.(seq); setVideosSheetOpen(false); }}
                 />
               </div>
-            </>
+            </AnnotateSideSheet>
           )}
 
           {/* T15380 (AC1/AC2): portrait mobile fullscreen's Add/Edit play editor --

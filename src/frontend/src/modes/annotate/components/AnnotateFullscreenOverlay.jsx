@@ -732,7 +732,10 @@ export function AnnotateFullscreenOverlay({
       <div
         data-add-clip-form
         data-testid={dragPeek ? 'annotate-landscape-drag-peek' : undefined}
-        className={`border-t border-gray-700 px-3 py-2 flex flex-col ${dragPeek ? '' : 'max-h-[76dvh] overflow-y-auto'}`}
+        // T15370: the side sheet (AnnotateSideSheet) now owns the height and
+        // scroll -- this moved from a bottom sheet (border-t, max-h-[76dvh])
+        // to a right-anchored one (border-l, h-full).
+        className={`border-l border-gray-700 px-3 py-2 flex flex-col h-full ${dragPeek ? '' : 'overflow-y-auto'}`}
       >
         {/* T8892: which camera this play is cut from (angle-active only). Same
             chip as the other editor surfaces so landscape phone isn't the one
