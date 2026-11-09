@@ -713,6 +713,10 @@ BUGS_STEP = ("Re-run the steps of each of these bugs and list any still present 
 VERIFY_STATUSES = ("pass", "fail", "human")
 BUG_SCOPES = ("group", "unrelated")
 ACCEPTANCE_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]")
+# A top-level list item with no checkbox. About 30 TODO/WIP task files write their criteria this way;
+# they parsed as zero items, so autoland invented one textless C1 and crashed indexing its text
+# (g-t15380-1, 2026-11-09). Plain items count only when the section has no checkbox items at all.
+ACCEPTANCE_PLAIN_ITEM = re.compile(r"^(?:[-*]|\d+\.)\s+")
 BUG_SECTION = "### Bugs found by /dotask verify"
 PLAN_TAIL_HEADING = "## Environment Configuration"
 VERIFY_INSTRUCTION = """You are the independent verifier for this group, verify round {round}, batch {batch}. You did not write this code.
@@ -766,15 +770,28 @@ def task_file_in(checkout, task_id):
     return branch_copy if branch_copy.is_file() else main
 
 
-def acceptance_items(task_file):
-    """The checkbox items of a task file's Acceptance Criteria, in order, as their text."""
-    items, inside = [], False
+def acceptance_lines(task_file):
+    """The lines of a task file's `## Acceptance...` section(s)."""
+    lines, inside = [], False
     for line in Path(task_file).read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
             inside = line.lower().startswith("## acceptance")
-        elif inside and ACCEPTANCE_ITEM.match(line):
-            items.append(ACCEPTANCE_ITEM.sub("", line).strip())
-    return items
+        elif inside:
+            lines.append(line)
+    return lines
+
+
+def acceptance_item_pattern(task_file):
+    """Checkbox items when the Acceptance section has any, else its top-level plain list items."""
+    if any(ACCEPTANCE_ITEM.match(line) for line in acceptance_lines(task_file)):
+        return ACCEPTANCE_ITEM
+    return ACCEPTANCE_PLAIN_ITEM
+
+
+def acceptance_items(task_file):
+    """The items of a task file's Acceptance Criteria, in order, as their text (see acceptance_item_pattern)."""
+    pattern = acceptance_item_pattern(task_file)
+    return [pattern.sub("", line).strip() for line in acceptance_lines(task_file) if pattern.match(line)]
 
 
 def acceptance_count(task_file):
@@ -792,12 +809,13 @@ def staging_deferred(task_file):
     sits right under it in the Acceptance Criteria. T14860:C2 (2026-11-07) needed two real GPU
     exports no sandbox has; the owner ruled "check on staging", and autoland still stopped for it."""
     task_id = re.match(r"T\d+", Path(task_file).name).group(0)
+    item = acceptance_item_pattern(task_file)
     deferred, inside, current = set(), False, 0
     for line in Path(task_file).read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
             inside, current = line.lower().startswith("## acceptance"), 0
             continue
-        if inside and ACCEPTANCE_ITEM.match(line):
+        if inside and item.match(line):
             current += 1
         if not (STAGING_WORD.search(line) and RULING_RECORDED.search(line)):
             continue
@@ -1537,11 +1555,9 @@ def autoland(args):
             human = [c for c in human if c not in staging]
             if not failed and not bugs:
                 group["tested_head"] = head
-                def criterion_text(c):
-                    return acceptance_items(task_file_in(checkout, c.split(":")[0]))[int(c.split(":C")[1]) - 1]
-                group["staging_checks"] = [{"id": c, "text": criterion_text(c)} for c in deferred]
+                group["staging_checks"] = [{"id": c, "text": criterion_line(checkout, c)} for c in deferred]
                 skipped = [c.get("id") for c in verdict["criteria"] if c["status"] == "skipped"]
-                group["skipped_checks"] = [{"id": c, "text": criterion_text(c)} for c in skipped] + [
+                group["skipped_checks"] = [{"id": c, "text": criterion_line(checkout, c)} for c in skipped] + [
                     {"id": "Other check", "text": step} for step in verdict.get("skipped_steps", [])]
                 skipped += [f"[{step}]" for step in verdict.get("skipped_steps", [])]
                 save_group(checkout, group)

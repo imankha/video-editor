@@ -1584,6 +1584,24 @@ class AutolandTest(AutolandBase):
         path.write_text("## Solution\n- [ ] not this\n## Acceptance Criteria\n- [ ] a\n1. [x] b\n* [ ] c\nprose\n## After\n- [ ] no\n")
         self.assertEqual(dotask_cli.acceptance_count(path), 3)
 
+    def test_acceptance_items_read_a_plain_list_when_the_section_has_no_checkboxes(self):
+        # g-t15380-1 (2026-11-09): a plain numbered list parsed as zero criteria and crashed autoland.
+        path = self.root / "t.md"
+        path.write_text("## Acceptance criteria\n\n1. Portrait: 0% covered.\n2. Landscape: 75% visible.\n"
+                        "   - indented detail, not a criterion\n* Keyboard still works.\nprose\n## Context\n- no\n")
+        self.assertEqual(dotask_cli.acceptance_items(path),
+                         ["Portrait: 0% covered.", "Landscape: 75% visible.", "Keyboard still works."])
+        # Once the section has a checkbox, plain items are notes, not criteria.
+        path.write_text("## Acceptance Criteria\n- [ ] a\n- note under a\n1. [ ] b\n")
+        self.assertEqual(dotask_cli.acceptance_items(path), ["a", "b"])
+
+    def test_criterion_line_is_empty_not_a_crash_past_the_last_item(self):
+        tasks = self.root / "docs" / "plans" / "tasks"
+        tasks.mkdir(parents=True, exist_ok=True)
+        (tasks / "T7-x.md").write_text("# T7\n\n## Acceptance Criteria\n\nprose only\n")
+        with patch.object(dotask_cli, "task_file_in", return_value=tasks / "T7-x.md"):
+            self.assertEqual(dotask_cli.criterion_line(self.root, "T7:C1"), "")
+
 
 class StallGapsTest(AutolandBase):
     """T15330: the seven ways headless groups stalled on 2026-11-07/08 and needed a person."""
