@@ -174,15 +174,29 @@ describe('AnnotateFullscreenOverlay landscape-inline — drag-peek collapse (T15
     expect(screen.queryByTestId('annotate-landscape-drag-peek')).toBeNull();
   });
 
-  it('dragPeek=true collapses to ONLY the scrub row on a light background', () => {
+  // jsdom applies no Tailwind CSS, so "hidden" is read from the class on an ancestor.
+  const peekHidden = (el) => !!el.closest('.hidden');
+
+  it('dragPeek=true hides everything but the scrub row', () => {
     render(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} dragPeek />);
     const peek = screen.getByTestId('annotate-landscape-drag-peek');
-    expect(peek.className).toMatch(/bg-gray-100/);
-    expect(within(peek).getByTestId('scrub-track')).toBeTruthy();
-    // Everything else from the full form is gone while collapsed.
-    expect(screen.queryByLabelText('Play name')).toBeNull();
-    expect(screen.queryByTestId('add-details-button')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
+    expect(peekHidden(within(peek).getByTestId('scrub-track'))).toBe(false);
+    expect(peekHidden(screen.getByLabelText('Play name'))).toBe(true);
+    expect(peekHidden(screen.getByTestId('add-details-button'))).toBe(true);
+    expect(peekHidden(screen.getByRole('button', { name: 'Done' }))).toBe(true);
+  });
+
+  it('toggling dragPeek keeps the SAME scrub-row DOM node (a remount drops the drag)', () => {
+    // Live 2026-11-09: a separate peek tree remounted ClipScrubRegion on the drag's
+    // first frame; it lost pointer capture, the handle never moved, onDragEnd never
+    // fired and the sheet stayed collapsed with no Done.
+    const { rerender } = render(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} />);
+    const track = screen.getByTestId('scrub-track');
+    rerender(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} dragPeek />);
+    expect(screen.getByTestId('scrub-track')).toBe(track);
+    rerender(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} />);
+    expect(screen.getByTestId('scrub-track')).toBe(track);
+    expect(peekHidden(screen.getByRole('button', { name: 'Done' }))).toBe(false);
   });
 });
 
