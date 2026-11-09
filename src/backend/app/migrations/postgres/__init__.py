@@ -47,6 +47,7 @@ from .v043_user_segments_country import V043UserSegmentsCountry
 from .v044_campaign_spend import V044CampaignSpend
 from .v045_user_segments_landing_path import V045UserSegmentsLandingPath
 from .v046_account_deletion_hash_and_returning import V046AccountDeletionHashAndReturning
+from .v047_user_resume_points import V047UserResumePoints
 
 MIGRATIONS = [
     V001Baseline(),
@@ -95,6 +96,7 @@ MIGRATIONS = [
     V044CampaignSpend(),
     V045UserSegmentsLandingPath(),
     V046AccountDeletionHashAndReturning(),
+    V047UserResumePoints(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL

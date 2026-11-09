@@ -185,6 +185,12 @@ export const useAuthStore = create((set, get) => ({
 
   // T405: Logout — invalidate session and clear cookie
   logout: async () => {
+    // T14980: owner ruling 2026-11-08 -- sign-out records no point and sends no exit
+    // beacon, so the row keeps the page right before it. Dynamic import: resumePoint.js
+    // imports this store back (same module-cycle shape as uiTelemetry), so importing it
+    // at this module's top level would read a binding before the cycle settles.
+    const { suppressNextResumePointExit } = await import('../utils/resumePoint');
+    suppressNextResumePointExit();
     try {
       await apiFetch(`${API_BASE}/api/auth/logout`, {
         method: 'POST',

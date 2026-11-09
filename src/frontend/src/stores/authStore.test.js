@@ -15,8 +15,11 @@ vi.mock('../utils/sessionInit', () => ({
   getUserId: vi.fn(() => null),
   setUserId: vi.fn(),
   resetSession: vi.fn(),
+  clearProfileHeader: vi.fn(),
+  applyUrlProfile: vi.fn(),
 }));
 vi.mock('../utils/analytics', () => ({ track: vi.fn() }));
+vi.mock('../utils/resumePoint', () => ({ suppressNextResumePointExit: vi.fn() }));
 
 const h = vi.hoisted(() => ({
   fetchCredits: vi.fn(),
@@ -77,5 +80,31 @@ describe('authStore.setSessionState — admin recheck on reload (T7200)', () => 
   it('does not call checkAdmin when not authenticated', () => {
     useAuthStore.getState().setSessionState(false);
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+// T14980: sign-out ruling (owner, 2026-11-08) -- the resume point row keeps the page the
+// user was on right before signing out; no DELETE, and the exit beacon that would otherwise
+// fire on this same reload must be suppressed.
+describe('authStore.logout — resume point suppression (T14980)', () => {
+  let useAuthStore;
+  let suppressNextResumePointExit;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    Object.defineProperty(window, 'location', {
+      value: { ...window.location, reload: vi.fn() },
+      writable: true,
+    });
+    ({ useAuthStore } = await import('./authStore'));
+    ({ suppressNextResumePointExit } = await import('../utils/resumePoint'));
+  });
+
+  it('suppresses the exit beacon before reloading', async () => {
+    await useAuthStore.getState().logout();
+    expect(suppressNextResumePointExit).toHaveBeenCalled();
+    expect(window.location.reload).toHaveBeenCalled();
   });
 });

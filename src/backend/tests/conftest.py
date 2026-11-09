@@ -378,6 +378,7 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.services.upload_failures.get_pg", mock_get_pg)
     monkeypatch.setattr("app.routers.payments.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.ip_rate_limit.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.services.resume_points.get_pg", mock_get_pg)
 
     yield dsn
 

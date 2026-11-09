@@ -11,6 +11,7 @@ import {
   adoptUrlProject,
 } from '../utils/pendingNavigation';
 import { getProfileId } from '../utils/sessionInit';
+import { writeResumePoint } from '../utils/resumePoint';
 import { CAMPAIGN_PARAMS } from '../utils/campaignCapture';
 import { useProfileStore } from './profileStore';
 import { useFocusStore } from './focusStore';
@@ -179,6 +180,11 @@ function updatePath(mode, ids) {
     // Same page, fuller address (an old bookmark gaining its profile): not a new history entry.
     window.history.replaceState({ mode }, '', target);
   }
+  // T14980: every handler that reaches this (open a game, open a play, switch
+  // mode) is a real navigation gesture -- write the server-held resume point
+  // from the SAME canonical target the address bar just got, so the two can't
+  // disagree.
+  writeResumePoint({ path: target, mode });
 }
 
 /**

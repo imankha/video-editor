@@ -711,6 +711,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/telemetry/',      # T15090: analytics rows only; see LIGHT_WRITE_ROUTES' rules
         '/api/client-errors/',  # T15090: logs only, no DB write
         '/api/email/',       # T13910: unsubscribe links touch Postgres only
+        '/api/me/resume-point',  # T14980: Postgres-only UPSERT, fires on every navigation
         '/api/fonts',        # T5180: StaticFiles mount, no user data
         '/static',
     )
