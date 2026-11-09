@@ -142,7 +142,7 @@ async function expectVideoAt(page, seconds) {
 // A second profile whose first game has the same id as `game`: the collision ?profile=
 // exists to resolve. It reuses the preset's short video, so it is a real, distinct game.
 async function createTwinProfile(page, game) {
-  return page.evaluate(async ({ hash, duration }) => {
+  const twin = await page.evaluate(async ({ hash, duration }) => {
     const json = { 'Content-Type': 'application/json' };
     const profile = await fetch('/api/profiles', {
       method: 'POST',
@@ -161,6 +161,18 @@ async function createTwinProfile(page, game) {
     }).then((res) => res.json());
     return { id: profile.id, name: profile.name, gameId: created.game_id };
   }, { hash: game.videos.at(-1).blake3_hash, duration: game.videos.at(-1).duration });
+
+  // T15250: the raw POST above bypasses the profile store, so the switcher (which reads the
+  // store, not the server) can still show only the profiles from its last fetch. Force a
+  // refetch and confirm the twin landed in the store before any caller opens the switcher.
+  const storeProfileIds = await page.evaluate(async () => {
+    const { useProfileStore } = await import('/src/stores/profileStore.js');
+    await useProfileStore.getState().fetchProfiles({ force: true });
+    return useProfileStore.getState().profiles.map((p) => p.id);
+  });
+  expect(storeProfileIds, `twin profile ${twin.id} (${twin.name}) is in the profile store`).toContain(twin.id);
+
+  return twin;
 }
 
 async function serverActiveProfile(page) {
@@ -172,7 +184,11 @@ async function serverActiveProfile(page) {
 
 async function switchProfileInUi(page, profileName) {
   await page.getByTitle(/Switch sport or profile/).first().click();
-  await page.getByRole('button', { name: new RegExp(profileName) }).first().click();
+  const option = page.getByRole('button', { name: new RegExp(profileName) }).first();
+  // T15250: fail in seconds, naming the missing profile, instead of a bare click()
+  // auto-waiting out the whole test timeout when the switcher never shows it.
+  await expect(option, `profile switcher shows "${profileName}"`).toBeVisible({ timeout: 8000 });
+  await option.click();
   await expect.poll(() => new URL(page.url()).pathname, { timeout: 30000 }).toMatch(/^\/home/);
 }
 
