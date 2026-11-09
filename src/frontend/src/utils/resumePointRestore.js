@@ -54,7 +54,10 @@ export function restoreFromResumePoint(resumePoint) {
       return;
     }
     useProjectsStore.getState().selectProject(projectId);
-    useEditorStore.getState().setEditorMode(mode, { projectId });
+    // T15340: same rule as Annotate above -- the point's own `t` (exit beacon) is
+    // the playhead; the path's `?t=` wins only when parseEditorPath already
+    // resolved one. The mode view consumes it once it has a working video to seek.
+    useEditorStore.getState().setEditorMode(mode, { projectId, seekTime: seekTime ?? resumePoint.t ?? null });
     return;
   }
 

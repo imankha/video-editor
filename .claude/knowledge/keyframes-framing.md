@@ -1,5 +1,18 @@
 ---
 domain: keyframes-framing
+updated: 2026-11-09 (T15340 — `/focus/p/{id}?t=37` and `/overlay/p/{id}?t=37` now seek the player
+to 0:37 on open, closing the gap where only Annotate's `?t=` actually moved the playhead.
+`FocusModeView`/`OverlayModeView` each own a one-shot `useEffect` gated on `duration > 0` (Overlay
+uses `effectiveOverlayMetadata?.duration || duration`, its usual precedence elsewhere in that
+file) that reads `parseEditorPath()` fresh, calls `seek(t)` -- which already clamps to
+`[0, duration]` and refuses with no duration known (same guard Annotate's one-shot restore
+effect relies on, T10750) -- then calls `editorStore`'s `dropSeekParam()` so a reload or later
+navigation on the same project never reseeks. `editorStore.parseEditorPath`/`canonicalPath`'s
+FRAMING/OVERLAY branch now carry `seekTime` the same way the ANNOTATE branch always did.
+`resumePointRestore.js` passes `seekTime ?? resumePoint.t ?? null` into `setEditorMode` for the
+FRAMING/OVERLAY branch (mirrors the ANNOTATE branch; see [annotate.md](annotate.md) for why the
+path-parsed `seekTime` there is usually null in practice and `resumePoint.t` is the real source).
+See annotate.md's `?t=` bullet for the shared convention this extends.)
 updated: 2026-10-04 (Epic A "Frame Highlight unlock", T11700/T11710/T11720 — the Focus screen now
 TEACHES how to unlock Generate on every layout. **T11700 — "Set focus point" button on every layout:**
 a button under the stage (desktop/tablet in `FramingActionRow`, `hidden sm:flex`; portrait phone

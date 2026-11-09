@@ -58,8 +58,18 @@ describe('restoreFromResumePoint', () => {
   it('opens an existing project at its mode', () => {
     restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: FRESH_LEFT_AT() });
     expect(selectProject).toHaveBeenCalledWith(7);
-    expect(setEditorMode).toHaveBeenCalledWith('framing', { projectId: 7 });
+    expect(setEditorMode).toHaveBeenCalledWith('framing', { projectId: 7, seekTime: null });
     expect(deleteResumePoint).not.toHaveBeenCalled();
+  });
+
+  it('restores a Focus point at its recorded playhead (T15340)', () => {
+    restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: FRESH_LEFT_AT(), t: 37 });
+    expect(setEditorMode).toHaveBeenCalledWith('framing', { projectId: 7, seekTime: 37 });
+  });
+
+  it('restores an Overlay point at its recorded playhead (T15340)', () => {
+    restoreFromResumePoint({ path: '/overlay/p/7', screen: 'overlay', left_at: FRESH_LEFT_AT(), t: 12 });
+    expect(setEditorMode).toHaveBeenCalledWith('overlay', { projectId: 7, seekTime: 12 });
   });
 
   it('lands on Home and clears the point when the project is gone', () => {

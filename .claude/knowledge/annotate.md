@@ -1832,6 +1832,14 @@ profile is an old bookmark. `parseEditorPath` and `modeFromPath` (editorStore) o
   explicitly, because it reopens through `/home`. It is a game-timeline position that need not land on a play, so
   the initial-position effect seeks it with `effectiveSeek`, which resolves either video. The
   early src's `#t=` alone never reached a multi-video game.
+- **T15340 extended `?t=` to `/focus/p/{id}` and `/overlay/p/{id}`** (see
+  [keyframes-framing.md](keyframes-framing.md) for the Focus/Overlay side). `parseEditorPath` and
+  `canonicalPath`'s FRAMING/OVERLAY branch now mirror the ANNOTATE branch's seekTime-carry exactly.
+  Unlike Annotate's single `pendingGame` breadcrumb/effect, Focus/Overlay have no equivalent
+  breadcrumb consumer -- `FocusModeView`/`OverlayModeView` each read the URL directly
+  (`parseEditorPath()`) in a one-shot `useEffect` gated on `duration > 0`, call `seek(t)` (which
+  already clamps to `[0, duration]` and refuses with no duration -- same guard annotate relies on),
+  then call `dropSeekParam()` so a later reload/navigation on the same project never reseeks.
 - **Going home pushes:** `handleModeChange` and the mode-switch discard use `setEditorMode`, so the
   play being left stays reachable with Back.
 - **Unusable ids** (`/focus/p/abc`, 16+ digits) land on `/home/games`; `malformedObjectKind` carries the

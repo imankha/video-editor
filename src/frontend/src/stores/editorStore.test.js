@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { useEditorStore, resolveEditorScreen, APP_SCREENS, EDITOR_MODES, modeFromPath, parseEditorPath, HOME_TAB_PATHS } from './editorStore';
+import { useEditorStore, resolveEditorScreen, APP_SCREENS, EDITOR_MODES, modeFromPath, parseEditorPath, dropSeekParam, HOME_TAB_PATHS } from './editorStore';
 import { useProjectsStore } from './projectsStore';
 import { setPendingGame, peekPendingGame, consumePendingProject } from '../utils/pendingNavigation';
 import { reinstallProfileHeader } from '../utils/sessionInit';
@@ -237,6 +237,12 @@ describe('editorStore', () => {
       expect(parseEditorPath('/overlay/p/7', '?profile=aaaaaaaa')).toEqual({ gameId: null, projectId: 7, seekTime: null, profileId: 'aaaaaaaa' });
     });
 
+    // T15340: Focus/Overlay carry `?t=` the same way Annotate does.
+    it('parseEditorPath reads the seek time on focus/overlay project paths too', () => {
+      expect(parseEditorPath('/focus/p/7', '?t=37')).toEqual({ gameId: null, projectId: 7, seekTime: 37, profileId: null });
+      expect(parseEditorPath('/overlay/p/7', '?t=12')).toEqual({ gameId: null, projectId: 7, seekTime: 12, profileId: null });
+    });
+
     it('parseEditorPath ignores an unusable seek time and bare paths carry no object', () => {
       expect(parseEditorPath('/annotate/g/12', '?t=soon').seekTime).toBeNull();
       expect(parseEditorPath('/annotate/g/12', '?t=-4').seekTime).toBeNull();
@@ -267,6 +273,24 @@ describe('editorStore', () => {
     it('a mode with nothing open stays on the bare path', () => {
       useEditorStore.getState().setEditorMode(EDITOR_MODES.FRAMING);
       expect(window.location.pathname).toBe('/focus');
+    });
+
+    // T15340: a resume point's seekTime lands in the path the same way Annotate's does,
+    // and sticks across a mode switch on the SAME project (Focus -> Overlay handoff).
+    it('an explicit seekTime writes `t` into a project path and survives a mode switch on the same project', () => {
+      useProjectsStore.setState({ selectedProjectId: 7 });
+      useEditorStore.getState().setEditorMode(EDITOR_MODES.FRAMING, { projectId: 7, seekTime: 37 });
+      expect(window.location.pathname + window.location.search).toBe('/focus/p/7?t=37');
+      useEditorStore.getState().setEditorMode(EDITOR_MODES.OVERLAY);
+      expect(window.location.pathname + window.location.search).toBe('/overlay/p/7?t=37');
+    });
+
+    it('dropSeekParam strips `t` without adding a history entry', () => {
+      window.history.replaceState({}, '', '/focus/p/7?t=37');
+      const before = window.history.length;
+      dropSeekParam();
+      expect(window.location.pathname + window.location.search).toBe('/focus/p/7');
+      expect(window.history.length).toBe(before);
     });
 
     it('bindAnnotateGamePath replaces the bare path without adding history', () => {

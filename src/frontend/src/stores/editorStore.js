@@ -70,7 +70,9 @@ const HOME_GAMES_PATH = '/home/games';
 // T14970: canonical editor URLs. The path names the object being edited, so a page can
 // be reloaded, bookmarked or sent to support. Only the object goes here, never view state.
 //   /annotate/g/{gameId}?profile={profileId}[&t={seconds}]
-//   /focus/p/{projectId}?profile={profileId}   /overlay/p/{projectId}?profile={profileId}
+//   /focus/p/{projectId}?profile={profileId}[&t={seconds}]   /overlay/p/{projectId}?profile={profileId}[&t={seconds}]
+// T15340: the mode view consumes `t` once (seeks, then drops it via dropSeekParam) --
+// it names a one-shot resume intent, never a durable part of the object's address.
 // Ids are per-profile, so the profile says which object. A URL without one is an old bookmark.
 // 15 digits stays inside Number's exact range; a longer run is not an id.
 const ANNOTATE_GAME_PATH = /^\/annotate\/g\/(\d{1,15})\/?$/;
@@ -102,7 +104,7 @@ export function parseEditorPath(pathname = window.location.pathname, search = wi
   const game = pathname.match(ANNOTATE_GAME_PATH);
   const project = pathname.match(EDITOR_PROJECT_PATH);
   const params = new URLSearchParams(search);
-  const t = game ? params.get('t') : null;
+  const t = (game || project) ? params.get('t') : null;
   const seekTime = t === null || t === '' ? NaN : Number(t);
   return {
     gameId: game ? Number(game[1]) : null,
@@ -155,8 +157,12 @@ function canonicalPath(mode, { gameId, projectId, seekTime } = {}) {
     return `${base}/g/${id}${objectQuery(seekTime ?? (current.gameId === id ? current.seekTime : null))}`;
   }
   if (mode === EDITOR_MODES.FRAMING || mode === EDITOR_MODES.OVERLAY) {
+    const current = parseEditorPath();
     const id = projectId ?? useProjectsStore.getState().selectedProjectId;
-    return id != null ? `${base}/p/${id}${objectQuery()}` : base;
+    if (id == null) return base;
+    // Same rule as Annotate above: an explicit seekTime wins; otherwise a `t` the
+    // URL already carries stays while this project does (T15340).
+    return `${base}/p/${id}${objectQuery(seekTime ?? (current.projectId === id ? current.seekTime : null))}`;
   }
   return base;
 }
@@ -168,6 +174,19 @@ function objectQuery(seekTime = null) {
   if (seekTime != null) params.set('t', String(seekTime));
   const query = params.toString();
   return query ? `?${query}` : '';
+}
+
+/**
+ * T15340: a Focus/Overlay mode view calls this right after it applies the URL's `t`
+ * (one shot) -- strips it without a new history entry, so a later reload or
+ * navigation on the same project never reseeks.
+ */
+export function dropSeekParam() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('t')) return;
+  params.delete('t');
+  const query = params.toString();
+  window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
 }
 
 function updatePath(mode, ids) {
