@@ -52,11 +52,6 @@ _user_aggregates: dict[str, tuple[Any, str, dict[str, Any]]] = {}
 # connections); Postgres checkouts past the pool wait on pg._checkout_gate, never error.
 USER_READ_WORKERS = 8
 
-# Shard key -> (ETag, blob). A shard changes only when its writer uploads, so each read
-# re-LISTs and downloads only the shards whose ETag moved.
-_shard_blobs: dict[str, tuple[str, bytes]] = {}
-_shard_blobs_lock = threading.Lock()
-
 
 def map_users(fn, user_ids: list[str]) -> list:
     """[fn(uid) for uid in user_ids], in order, USER_READ_WORKERS at a time. Each call runs
@@ -294,8 +289,8 @@ def load_newest_rollup() -> tuple[dict | None, bool]:
     """(newest run across this env's shards, partial). This writer's shard is read from
     the live local store (fresher than its last upload); a shard that cannot be listed
     or read marks the result partial, never disappears silently."""
-    from ..storage import APP_ENV, R2_BUCKET, get_r2_sync_client
-    from .analytics_store import current_store
+    from ..storage import APP_ENV, get_r2_sync_client
+    from .analytics_store import current_store, fetch_other_shard_blobs
 
     store = current_store()
     blobs: list[bytes] = []
@@ -305,34 +300,10 @@ def load_newest_rollup() -> tuple[dict | None, bool]:
     partial = False
     client = get_r2_sync_client()
     if client is not None:
-        prefix = f"{APP_ENV}/analytics/shards/"
-        try:
-            listed = [(obj["Key"], obj["ETag"])
-                      for page in client.get_paginator("list_objects_v2").paginate(Bucket=R2_BUCKET, Prefix=prefix)
-                      for obj in page.get("Contents", [])
-                      if obj["Key"].endswith("/analytics.sqlite") and (store is None or obj["Key"] != store.key)]
-        except Exception as e:
-            logger.error(f"[JourneyRollup] LIST {prefix} failed: {e}")
-            listed, partial = [], True
-        for key, etag in listed:
-            with _shard_blobs_lock:
-                cached = _shard_blobs.get(key)
-            if cached is not None and cached[0] == etag:
-                blobs.append(cached[1])
-                continue
-            try:
-                blob = client.get_object(Bucket=R2_BUCKET, Key=key)["Body"].read()
-            except Exception as e:
-                logger.error(f"[JourneyRollup] shard {key} unreadable: {e}")
-                partial = True
-                continue
-            with _shard_blobs_lock:
-                _shard_blobs[key] = (etag, blob)
-            blobs.append(blob)
-        if not partial:
-            with _shard_blobs_lock:
-                for gone in _shard_blobs.keys() - {key for key, _ in listed}:
-                    del _shard_blobs[gone]
+        other_blobs, partial = fetch_other_shard_blobs(
+            client, f"{APP_ENV}/analytics/shards/", store.key if store is not None else None
+        )
+        blobs.extend(other_blobs)
     conns = []
     for blob in blobs:
         conn = sqlite3.connect(":memory:")

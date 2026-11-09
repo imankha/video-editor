@@ -216,8 +216,8 @@ def load_newest_action_rollup(tables: tuple[str, ...] | None = None) -> tuple[di
     ACTION_ROLLUP_TABLES rows get fetched (T14950:C1)."""
     import sqlite3
 
-    from ..storage import APP_ENV, R2_BUCKET, get_r2_sync_client
-    from .analytics_store import current_store, newest_action_rollup
+    from ..storage import APP_ENV, get_r2_sync_client
+    from .analytics_store import current_store, fetch_other_shard_blobs, newest_action_rollup
 
     store = current_store()
     blobs: list[bytes] = []
@@ -227,21 +227,10 @@ def load_newest_action_rollup(tables: tuple[str, ...] | None = None) -> tuple[di
     partial = False
     client = get_r2_sync_client()
     if client is not None:
-        prefix = f"{APP_ENV}/analytics/shards/"
-        try:
-            listed = [obj["Key"]
-                      for page in client.get_paginator("list_objects_v2").paginate(Bucket=R2_BUCKET, Prefix=prefix)
-                      for obj in page.get("Contents", [])
-                      if obj["Key"].endswith("/analytics.sqlite") and (store is None or obj["Key"] != store.key)]
-        except Exception as e:
-            logger.error(f"[ActionRollup] LIST {prefix} failed: {e}")
-            listed, partial = [], True
-        for key in listed:
-            try:
-                blobs.append(client.get_object(Bucket=R2_BUCKET, Key=key)["Body"].read())
-            except Exception as e:
-                logger.error(f"[ActionRollup] shard {key} unreadable: {e}")
-                partial = True
+        other_blobs, partial = fetch_other_shard_blobs(
+            client, f"{APP_ENV}/analytics/shards/", store.key if store is not None else None
+        )
+        blobs.extend(other_blobs)
     conns = []
     for blob in blobs:
         conn = sqlite3.connect(":memory:")

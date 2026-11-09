@@ -38,6 +38,7 @@ import socket
 import sqlite3
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
@@ -51,6 +52,7 @@ UPLOAD_INTERVAL_SECONDS = 3600
 BASELINE_RETRY_MAX_SECONDS = 3600
 RETENTION_DAYS = 90
 SHUTDOWN_FLUSH_TIMEOUT_SECONDS = 5
+SHARD_FETCH_WORKERS = 8
 
 # Ordered, additive-only schema steps; step N leaves PRAGMA user_version = N.
 _SCHEMA_STEPS: dict[int, list[str]] = {
@@ -554,7 +556,7 @@ def load_visit_totals() -> tuple[dict[VisitKey, int], bool]:
     for VISIT_TOTALS_CACHE_TTL_SECONDS; a partial read (a shard LIST/GET failed) is never
     cached, so the next read retries it. Returns (totals, partial)."""
     global _visit_totals_cache
-    from ..storage import APP_ENV, R2_BUCKET, get_r2_sync_client
+    from ..storage import APP_ENV, get_r2_sync_client
 
     with _visit_totals_lock:
         if _visit_totals_cache is not None and time.monotonic() - _visit_totals_cache[0] < VISIT_TOTALS_CACHE_TTL_SECONDS:
@@ -568,30 +570,87 @@ def load_visit_totals() -> tuple[dict[VisitKey, int], bool]:
         partial = False
         client = get_r2_sync_client()
         if client is not None:
-            prefix = f"{APP_ENV}/analytics/shards/"
-            try:
-                listed = [
-                    obj["Key"]
-                    for page in client.get_paginator("list_objects_v2").paginate(Bucket=R2_BUCKET, Prefix=prefix)
-                    for obj in page.get("Contents", [])
-                    if obj["Key"].endswith("/analytics.sqlite") and obj["Key"] != own_key
-                ]
-            except Exception as e:
-                logger.error(f"[ANALYTICS_STORE] visit totals LIST {prefix} failed: {e}")
-                listed, partial = [], True
-            for key in listed:
-                try:
-                    body = client.get_object(Bucket=R2_BUCKET, Key=key)["Body"].read()
-                except Exception as e:
-                    logger.error(f"[ANALYTICS_STORE] visit totals shard {key} unreadable: {e}")
-                    partial = True
-                    continue
+            other_blobs, partial = fetch_other_shard_blobs(client, f"{APP_ENV}/analytics/shards/", own_key)
+            for body in other_blobs:
                 for day, source, page_class, count in _read_shard_visit_rows(body):
                     k = (day, source, page_class)
                     totals[k] = totals.get(k, 0) + count
         if not partial:
             _visit_totals_cache = (time.monotonic(), totals, partial)
         return totals, partial
+
+
+# -- shared shard fetcher (T15390) -------------------------------------------------
+
+# Shard key -> (ETag, blob). A shard changes only when its writer uploads, so each read
+# re-LISTs and downloads only the shards whose ETag moved. Shared by every reader
+# (by-sport / action-rollup / journey) so one process keeps one cache, not three.
+_shard_blobs: dict[str, tuple[str, bytes]] = {}
+_shard_blobs_lock = threading.Lock()
+
+
+def clear_shard_blob_cache() -> None:
+    with _shard_blobs_lock:
+        _shard_blobs.clear()
+
+
+def fetch_other_shard_blobs(client, prefix: str, own_key: str | None) -> tuple[list[bytes], bool]:
+    """LIST `prefix`, skip `own_key` (the caller reads its own shard from the live
+    store), reuse a cached blob whose ETag still matches, and GET only new/changed
+    shards concurrently (a small bounded pool). A shard no longer listed is dropped
+    from the cache, but only after a full, non-partial LIST -- a failed LIST or GET
+    never silently loses data, it marks the result partial instead. Returns
+    (blobs, partial)."""
+    from ..storage import R2_BUCKET
+
+    try:
+        listed = [
+            (obj["Key"], obj["ETag"])
+            for page in client.get_paginator("list_objects_v2").paginate(Bucket=R2_BUCKET, Prefix=prefix)
+            for obj in page.get("Contents", [])
+            if obj["Key"].endswith("/analytics.sqlite") and obj["Key"] != own_key
+        ]
+    except Exception as e:
+        logger.error(f"[ANALYTICS_STORE] LIST {prefix} failed: {e}")
+        return [], True
+
+    blobs_by_key: dict[str, bytes] = {}
+    to_fetch: list[tuple[str, str]] = []
+    with _shard_blobs_lock:
+        for key, etag in listed:
+            cached = _shard_blobs.get(key)
+            if cached is not None and cached[0] == etag:
+                blobs_by_key[key] = cached[1]
+            else:
+                to_fetch.append((key, etag))
+
+    partial = False
+    if to_fetch:
+        def _get(key_etag: tuple[str, str]):
+            key, etag = key_etag
+            try:
+                return key, etag, client.get_object(Bucket=R2_BUCKET, Key=key)["Body"].read(), None
+            except Exception as e:
+                return key, etag, None, e
+
+        with ThreadPoolExecutor(max_workers=min(SHARD_FETCH_WORKERS, len(to_fetch))) as pool:
+            fetched = list(pool.map(_get, to_fetch))
+        for key, etag, blob, err in fetched:
+            if err is not None:
+                logger.error(f"[ANALYTICS_STORE] shard {key} unreadable: {err}")
+                partial = True
+                continue
+            blobs_by_key[key] = blob
+            with _shard_blobs_lock:
+                _shard_blobs[key] = (etag, blob)
+
+    if not partial:
+        listed_keys = {key for key, _ in listed}
+        with _shard_blobs_lock:
+            for gone in _shard_blobs.keys() - listed_keys:
+                del _shard_blobs[gone]
+
+    return [blobs_by_key[key] for key, _ in listed if key in blobs_by_key], partial
 
 
 def newest_journey_rollup(shards: list[sqlite3.Connection]) -> dict | None:

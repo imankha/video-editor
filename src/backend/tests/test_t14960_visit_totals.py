@@ -42,9 +42,11 @@ def own_store(tmp_path):
     )
     store_mod._store = s
     store_mod.clear_visit_totals_cache()
+    store_mod.clear_shard_blob_cache()
     yield s
     store_mod._store = None
     store_mod.clear_visit_totals_cache()
+    store_mod.clear_shard_blob_cache()
 
 
 def _other_shard_bytes(rows: list[tuple]) -> bytes:
