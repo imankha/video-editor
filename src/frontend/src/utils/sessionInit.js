@@ -246,6 +246,7 @@ export async function initSession() {
     let pictureUrl = null;
     let googleLinked = false;
     let impersonator = null;
+    let resumePoint = null;
 
     try {
       const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`, undefined, { retries: 2, baseDelay: 500 });
@@ -256,6 +257,7 @@ export async function initSession() {
         pictureUrl = meData.picture_url || null;
         googleLinked = !!meData.google_linked;
         impersonator = meData.impersonator || null;
+        resumePoint = meData.resume_point || null;
         _currentUserId = userId;
         if (meData.needs_terms_acceptance) {
           useAuthStore.setState({ needsTermsAcceptance: true });
@@ -343,6 +345,7 @@ export async function initSession() {
       userId,
       isAuthenticated: true,
       profileReady,
+      resumePoint,
     };
   })();
 

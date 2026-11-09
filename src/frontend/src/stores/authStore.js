@@ -23,6 +23,60 @@ const writeHadSession = (had) => {
   } catch { /* storage blocked: the notice is best-effort */ }
 };
 
+// T14990: tab-scoped snapshot of the point the admin landed on, so
+// ImpersonationBanner can offer "Reopen their page" at any later point in
+// the session without a second backend round trip. Ephemeral per-device
+// admin UI state (same narrow exception as a dismissed-hint flag), never
+// the user's own data -- cleared implicitly when the tab/session ends.
+const IMPERSONATION_LANDING_KEY = 'rb_impersonation_landing_point';
+
+/** True when `path` names an object (`/g/{id}` or `/p/{id}`) -- the cases
+ * where T14970's URL grammar requires an explicit `?profile=` or it treats
+ * the link as an old bookmark and may switch the user's active profile. */
+function _pathNamesAnObject(path) {
+  return /\/(g|p)\/\d+/.test(path || '');
+}
+
+/**
+ * T14990: build the impersonation landing URL from a (resolved) resume
+ * point. Never a raw string-concat of point.path + query (the path may
+ * already carry its own query string from the point's own capture) --
+ * parses then re-sets the params that matter, preserving anything else.
+ *
+ * Falls back to '/' whenever landing in the point's own profile can't be
+ * guaranteed: no point, no path, an object path with no profile_id, or an
+ * object path whose profile_id didn't resolve to a real profile (deleted
+ * since the point was written) -- the user's active profile must never
+ * change as a side effect of impersonation (T7520/T14970 invariant).
+ */
+/**
+ * T14990: read back the snapshot `startImpersonation` stored, for the banner's
+ * "Reopen their page" link. Returns null when impersonation started with no
+ * resolvable point (landed on '/', nothing to reopen).
+ */
+export function getImpersonationLandingPoint() {
+  try {
+    const raw = sessionStorage.getItem(IMPERSONATION_LANDING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildImpersonationLandingUrl(point) {
+  if (!point || !point.path) return '/';
+  if (_pathNamesAnObject(point.path) && (!point.profile_id || point.profile_name == null)) {
+    return '/';
+  }
+  const [pathname, search] = point.path.split('?');
+  const params = new URLSearchParams(search || '');
+  if (point.profile_id) params.set('profile', point.profile_id);
+  if (typeof point.t === 'number') params.set('t', String(point.t));
+  if (point.dialog) params.set('dialog', point.dialog);
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
 export const useAuthStore = create((set, get) => ({
   // State
   isAuthenticated: false,
@@ -185,6 +239,12 @@ export const useAuthStore = create((set, get) => ({
 
   // T405: Logout — invalidate session and clear cookie
   logout: async () => {
+    // T14980: owner ruling 2026-11-08 -- sign-out records no point and sends no exit
+    // beacon, so the row keeps the page right before it. Dynamic import: resumePoint.js
+    // imports this store back (same module-cycle shape as uiTelemetry), so importing it
+    // at this module's top level would read a binding before the cycle settles.
+    const { suppressNextResumePointExit } = await import('../utils/resumePoint');
+    suppressNextResumePointExit();
     try {
       await apiFetch(`${API_BASE}/api/auth/logout`, {
         method: 'POST',
@@ -215,6 +275,9 @@ export const useAuthStore = create((set, get) => ({
   // T1510: Start impersonating a target user. Admin gesture only.
   // Full page reload follows so all Zustand data stores reset naturally —
   // the stop flow does the same in reverse.
+  // T14990: lands on the target's resume point (the same page their own
+  // restore would open, dialog reopened) instead of always '/' -- owner
+  // ruling 2026-11-08: no new button, the existing email click does this.
   startImpersonation: async (targetUserId) => {
     const res = await apiFetch(`${API_BASE}/api/admin/impersonate/${targetUserId}`, {
       method: 'POST',
@@ -223,12 +286,19 @@ export const useAuthStore = create((set, get) => ({
       const body = await res.text();
       throw new Error(`Impersonation failed (${res.status}): ${body}`);
     }
+    const body = await res.json();
     // T7520: the session cookie has flipped to the impersonated user, but this
     // (admin) page keeps running until the navigation below. Clear the admin's
     // stale X-Profile-ID NOW so no in-flight request carries the impersonated
     // session + admin profile (which would create a cross-tenant profile DB).
     clearProfileHeader();
-    window.location.href = '/';
+    const point = body.resume_point || null;
+    const landingUrl = buildImpersonationLandingUrl(point);
+    try {
+      if (landingUrl === '/') sessionStorage.removeItem(IMPERSONATION_LANDING_KEY);
+      else sessionStorage.setItem(IMPERSONATION_LANDING_KEY, JSON.stringify(point));
+    } catch { /* storage blocked: the banner summary is best-effort */ }
+    window.location.href = landingUrl;
   },
 
   // T1510: Stop impersonating — server restores the admin's own session,

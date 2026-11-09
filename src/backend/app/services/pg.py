@@ -648,6 +648,17 @@ CREATE TABLE IF NOT EXISTS credit_migration_state (
     last_report      JSONB,
     last_report_at   TIMESTAMPTZ
 );
+
+-- T14980: one row per user, the page/object the user was last on. Written on
+-- navigation gestures + the exit beacon; read once on /api/auth/me. Postgres,
+-- not user.sqlite, because every SQLite write triggers an R2 sync upload --
+-- this is the most frequent write in the app (every navigation), so it must
+-- be a single cheap UPSERT, not a sync-triggering file write.
+CREATE TABLE IF NOT EXISTS user_resume_points (
+    user_id    TEXT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+    point      JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 """
 
 _SEED_SQL = """

@@ -45,7 +45,8 @@ import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useProfileStore } from '../stores/profileStore';
 import { UPLOAD_STATUS, useUploadStore } from '../stores/uploadStore';
 import { useQuestStore } from '../stores/questStore';
-import { parseEditorPath } from '../stores/editorStore';
+import { parseEditorPath, EDITOR_MODES } from '../stores/editorStore';
+import { writeResumePoint } from '../utils/resumePoint';
 import {
   consumePendingRecap,
   setPendingGameReference,
@@ -694,6 +695,9 @@ export function ProjectManager({
       // holds params App hasn't read yet (e.g. a Stripe return), so keep it.
       window.history.replaceState(null, '', path + window.location.search);
     }
+    // T14980: changing the home tab is its own navigation gesture (editorStore's
+    // updatePath never sees it, since the mode stays 'project-manager').
+    writeResumePoint({ path, mode: EDITOR_MODES.PROJECT_MANAGER, tab });
   }, []);
   const seenGamesTabRequest = useRef(gamesTabRequest);
   useEffect(() => {

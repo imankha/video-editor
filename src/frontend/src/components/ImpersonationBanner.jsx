@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuthStore } from '../stores/authStore';
+import { useAuthStore, getImpersonationLandingPoint, buildImpersonationLandingUrl } from '../stores/authStore';
 
 /**
  * T1510: Persistent, unmissable banner shown while an admin is impersonating
@@ -13,6 +13,11 @@ export default function ImpersonationBanner() {
 
   if (!impersonator) return null;
 
+  // T14990: the point captured at the start of THIS impersonation session
+  // (startImpersonation's sessionStorage snapshot) — lets the admin wander
+  // the app and jump straight back to where the user left off.
+  const landingPoint = getImpersonationLandingPoint();
+
   return (
     <div
       role="alert"
@@ -23,12 +28,23 @@ export default function ImpersonationBanner() {
         Impersonating <strong>{email}</strong> as admin{' '}
         <strong>{impersonator.email}</strong>
       </span>
-      <button
-        onClick={() => stopImpersonation()}
-        className="ml-4 bg-white text-red-700 px-3 py-1 rounded font-bold hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-white text-sm"
-      >
-        Stop impersonating
-      </button>
+      <span className="flex items-center gap-2">
+        {landingPoint && (
+          <a
+            href={buildImpersonationLandingUrl(landingPoint)}
+            data-testid="reopen-their-page"
+            className="text-sm underline text-white/90 hover:text-white"
+          >
+            Reopen their page
+          </a>
+        )}
+        <button
+          onClick={() => stopImpersonation()}
+          className="ml-4 bg-white text-red-700 px-3 py-1 rounded font-bold hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-white text-sm"
+        >
+          Stop impersonating
+        </button>
+      </span>
     </div>
   );
 }

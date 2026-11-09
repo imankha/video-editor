@@ -1392,11 +1392,19 @@ async def impersonate(target_user_id: str, request: Request, response: Response)
     _set_session_cookie(response, session_id)
     _clear_machine_pin_cookie(response)
 
+    # T14990: hand the target's resume point (resolved) back so the admin's
+    # browser can land there instead of '/' -- read-only, same as the detail
+    # panel's read; never writes the target's own point.
+    from ..services.resume_points import get_resume_point, resolve_resume_point_titles
+    raw_resume_point = get_resume_point(target_user_id)
+    resume_point = resolve_resume_point_titles(target_user_id, raw_resume_point) if raw_resume_point else None
+
     return {
         "ok": True,
         "target_user_id": target_user_id,
         "target_email": target.get("email"),
         "ttl_minutes": IMPERSONATION_TTL_MINUTES,
+        "resume_point": resume_point,
     }
 
 
@@ -2875,11 +2883,15 @@ def analytics_journey(user_id: str):
         name_select, name_join = _campaign_name_join(cur)
         # T15010: landing_path probed like signup_build/country -- this page loads
         # on every admin user click, so it must not 500 before v044 has run.
-        from ..analytics import segment_has_landing_path
+        from ..analytics import segment_has_landing_path, segment_has_signup_build
         landing_path_select = "s.landing_path" if segment_has_landing_path(cur) else "NULL::text AS landing_path"
+        # T14990: signup_build backs the "where they left off" null-state
+        # message ("no resume point (never navigated since build N)") --
+        # same migration-window guard as landing_path above.
+        build_select = "s.signup_build" if segment_has_signup_build(cur) else "NULL::int AS signup_build"
         cur.execute(f"""
             SELECT s.origin, {name_select}, s.referrer_id, s.acquired_at, s.last_active_at, s.created_at,
-                   {landing_path_select}
+                   {landing_path_select}, {build_select}
             FROM user_segments s {name_join} WHERE s.user_id = %s
         """, (user_id,))
         seg = cur.fetchone()
@@ -2993,6 +3005,12 @@ def analytics_journey(user_id: str):
         session_exits.append({"at": r["created_at"], "last_screen": ctx.get("last_screen"),
                               "dwell": ctx.get("dwell") or {}, "trail": ctx.get("trail") or []})
 
+    # T14990: "Where they left off" -- the server-held resume point (T14980),
+    # read-only, with human titles resolved for the panel.
+    from ..services.resume_points import get_resume_point, resolve_resume_point_titles
+    raw_resume_point = get_resume_point(user_id)
+    resume_point = resolve_resume_point_titles(user_id, raw_resume_point) if raw_resume_point else None
+
     return {
         "user_id": user_id,
         "email": "Deleted account" if email is None else email,
@@ -3007,6 +3025,8 @@ def analytics_journey(user_id: str):
         "last_active_at": seg["last_active_at"].isoformat() if seg["last_active_at"] else None,
         "frustration_signals": {"retry_bursts": retry_bursts},
         "session_exits": session_exits,
+        "signup_build": seg["signup_build"],
+        "resume_point": resume_point,
     }
 
 

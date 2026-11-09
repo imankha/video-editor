@@ -560,6 +560,7 @@ async def auth_me(request: Request):
                     "picture_url": None,
                     "google_linked": False,
                     "impersonator": None,
+                    "resume_point": None,
                 }
 
     import time as _time
@@ -620,6 +621,14 @@ async def auth_me(request: Request):
             "expires_at": session.get("impersonation_expires_at"),
         }
 
+    from app.services.resume_points import get_resume_point
+
+    try:
+        resume_point = get_resume_point(user_id)
+    except Exception:
+        logger.exception(f"[Auth] /me: get_resume_point failed for user={user_id} (ignored)")
+        resume_point = None
+
     return {
         "email": email,
         "user_id": user_id,
@@ -628,6 +637,7 @@ async def auth_me(request: Request):
         "google_linked": bool(session.get("google_id")),
         "impersonator": impersonator,
         "needs_terms_acceptance": needs_terms_acceptance,
+        "resume_point": resume_point,
     }
 
 

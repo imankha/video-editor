@@ -163,6 +163,52 @@ function ClipPhaseBreakdown({ phases }) {
   );
 }
 
+function formatPlayhead(seconds) {
+  const s = Math.max(0, Math.round(seconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+/**
+ * T14990: "Where they left off" -- the server-held resume point (T14980),
+ * resolved for the admin. Explicit null state (never blank) per the task's
+ * closed-vocabulary rendering rule; `platform` isn't in the point schema, so
+ * it's omitted here rather than fabricated.
+ */
+function ResumePointRow({ point, signupBuild }) {
+  if (!point) {
+    return (
+      <div data-testid="resume-point-row" className="text-[11px] pt-1.5 mt-1.5 border-t border-white/5 font-mono text-gray-500">
+        <span className="text-sky-400/80 uppercase tracking-wide">Where they left off</span>{' '}
+        no resume point (never navigated since build {signupBuild ?? '--'})
+      </div>
+    );
+  }
+
+  const parts = [];
+  if (point.screen) parts.push(point.screen);
+  if (point.step) parts.push(`${point.step} step`);
+  if (point.object_title) {
+    const kindLabel = point.object_kind === 'play' ? 'play' : 'game';
+    parts.push(`${kindLabel} ${point.object_id} in "${point.object_title}"`);
+  } else if (point.object_id) {
+    parts.push(`${point.object_kind} ${point.object_id} (deleted)`);
+  }
+  if (point.profile_name) parts.push(`profile ${point.profile_name}`);
+  if (typeof point.t === 'number') parts.push(`playhead ${formatPlayhead(point.t)}`);
+  if (point.dialog) parts.push(`dialog "${point.dialog}" open`);
+  if (point.build != null) parts.push(`build ${point.build}`);
+  if (point.left_at) parts.push(`${formatDelta(Date.now() - new Date(point.left_at).getTime())} ago`);
+
+  return (
+    <div data-testid="resume-point-row" className="text-[11px] pt-1.5 mt-1.5 border-t border-white/5 font-mono text-gray-400">
+      <span className="text-sky-400/80 uppercase tracking-wide">Where they left off</span>{' '}
+      {parts.join(', ')}
+    </div>
+  );
+}
+
 function SessionExitTrail({ exits }) {
   return (
     <div data-testid="session-exit-trail" className="text-[11px] pt-1.5 mt-1.5 border-t border-white/5 space-y-1">
@@ -349,6 +395,9 @@ export function UserDetailPanel({ data, onClose }) {
               ))}
             </div>
           )}
+
+          {/* T14990: "Where they left off" -- always rendered, explicit null state. */}
+          <ResumePointRow point={data.resume_point} signupBuild={data.signup_build} />
 
           {/* T14020: session-exit trail (T7515 tier 4 breadcrumbs from the per-user log):
               last screen, dwell per screen, screen trail. Absent when the user has none. */}

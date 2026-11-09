@@ -398,6 +398,14 @@ function App() {
             });
         }
       }
+
+      // T14980: resume-where-you-left-off. Only a bare `/` cold load with none of the
+      // arrivals above already claimed -- a deep link, share, claim or payment return names
+      // its own destination and must never be overridden by an older resume point.
+      if (!authReturnMode && !deeplinkGameId && !payment && window.location.pathname === '/') {
+        const { restoreFromResumePoint } = await import('./utils/resumePointRestore');
+        restoreFromResumePoint(session.resumePoint);
+      }
     }).catch((err) => {
       console.error('[App] Session init failed after retries:', err);
       markBootstrapSettled();

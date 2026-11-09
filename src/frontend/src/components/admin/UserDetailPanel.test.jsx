@@ -171,3 +171,48 @@ describe('UserDetailPanel session-exit trail (T14020)', () => {
     expect(cell.textContent).toContain('dwell: {"annotate":95.5}');
   });
 });
+
+describe('UserDetailPanel resume point row (T14990)', () => {
+  it('renders the resolved point with object title, playhead and dialog', () => {
+    const data = {
+      ...BASE_DATA, milestones: [],
+      resume_point: {
+        path: '/focus/p/8124', profile_id: 'prof-a', profile_name: 'Lucas',
+        screen: 'framing', step: 'crop', object_kind: 'play', object_id: 8124,
+        object_title: 'Lucas U12', t: 37, dialog: 'Insufficient credits',
+        tab: null, build: 412, left_at: '2026-11-03T22:14:09Z',
+      },
+    };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+    const row = screen.getByTestId('resume-point-row');
+    expect(row.textContent).toContain('framing');
+    expect(row.textContent).toContain('crop step');
+    expect(row.textContent).toContain('play 8124 in "Lucas U12"');
+    expect(row.textContent).toContain('profile Lucas');
+    expect(row.textContent).toContain('playhead 0:37');
+    expect(row.textContent).toContain('dialog "Insufficient credits" open');
+    expect(row.textContent).toContain('build 412');
+  });
+
+  it('shows an explicit null state with the signup build when there is no point', () => {
+    const data = { ...BASE_DATA, milestones: [], resume_point: null, signup_build: 412 };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+    const row = screen.getByTestId('resume-point-row');
+    expect(row.textContent).toContain('no resume point (never navigated since build 412)');
+  });
+
+  it('shows a deleted-object placeholder when the title could not be resolved', () => {
+    const data = {
+      ...BASE_DATA, milestones: [],
+      resume_point: {
+        path: '/annotate/g/999', profile_id: 'prof-a', profile_name: null,
+        screen: 'annotate', step: null, object_kind: 'game', object_id: 999,
+        object_title: null, t: null, dialog: null, tab: null, build: 412,
+        left_at: '2026-11-03T22:14:09Z',
+      },
+    };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+    const row = screen.getByTestId('resume-point-row');
+    expect(row.textContent).toContain('game 999 (deleted)');
+  });
+});
