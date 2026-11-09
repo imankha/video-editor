@@ -1,6 +1,6 @@
 # T15350: dotask frees a merged group's container and app stack
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 1
 **Tier:** S (tooling: scripts/dotask_cli.py and its test)
