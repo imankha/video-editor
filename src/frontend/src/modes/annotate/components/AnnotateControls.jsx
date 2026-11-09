@@ -12,8 +12,14 @@ const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 /**
  * SpeedControl - YouTube-style playback speed selector
+ *
+ * T15370: exported (was module-private) so the landscape cockpit's right
+ * strip can reuse it verbatim. `menuPlacement` picks which edge the popup
+ * opens from -- 'up' (default) keeps the windowed/bottom-bar behavior,
+ * 'left' is for the 72px right strip, where a menu opening further right
+ * would run off the screen.
  */
-function SpeedControl({ speed, onSpeedChange }) {
+export function SpeedControl({ speed, onSpeedChange, menuPlacement = 'up' }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -28,6 +34,10 @@ function SpeedControl({ speed, onSpeedChange }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const menuPositionClass = menuPlacement === 'left'
+    ? 'right-full top-0 mr-1'
+    : 'bottom-full mb-1 right-0';
+
   return (
     <div className="relative" ref={menuRef}>
       <Button
@@ -40,7 +50,7 @@ function SpeedControl({ speed, onSpeedChange }) {
         {speed}x
       </Button>
       {isOpen && (
-        <div className="absolute bottom-full mb-1 right-0 bg-gray-800 border border-gray-600 rounded-lg shadow-lg py-1 z-50">
+        <div className={`absolute ${menuPositionClass} bg-gray-800 border border-gray-600 rounded-lg shadow-lg py-1 z-50`}>
           {SPEED_OPTIONS.map((s) => (
             <button
               key={s}

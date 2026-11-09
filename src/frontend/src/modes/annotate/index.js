@@ -9,7 +9,7 @@ export { default as ClipsSidePanel } from './components/ClipsSidePanel';
 export { default as ClipListItem } from './components/ClipListItem';
 export { default as ClipDetailsEditor } from './components/ClipDetailsEditor';
 export { default as ClipRegionLayer } from './layers/ClipRegionLayer';
-export { default as AnnotateControls } from './components/AnnotateControls';
+export { default as AnnotateControls, SpeedControl } from './components/AnnotateControls';
 export { default as AnnotateFullscreenOverlay } from './components/AnnotateFullscreenOverlay';
 export { default as PlaybackControls } from './components/PlaybackControls';
 export { useVirtualTimeline, buildVirtualTimeline } from './hooks/useVirtualTimeline';

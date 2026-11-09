@@ -1,5 +1,41 @@
 ---
 domain: annotate
+updated: 2026-11-09 (T15370 — mobile fullscreen LANDSCAPE got its own permanent side-strip
+cockpit grid (the T15380 follow-up), replacing the full-bleed-video + auto-hiding bottom
+overlay T15380 left in place. `AnnotateModeView.jsx`'s fullscreen container becomes, ONLY
+when `mobileFsLandscape`, a CSS grid (`grid-cols-[56px_minmax(0,1fr)_72px]
+grid-rows-[minmax(0,1fr)_auto]`) with `env(safe-area-inset-left/right/bottom)` padding; the
+video wrapper moves to `col-start-2 row-start-1` (`w-full h-full` -> grid placement, same
+element, no remount — a unit test flips the landscape mock and asserts the same
+`<video>` node survives). Three new copied components in `modes/annotate/cockpit/`
+(copy-not-extract: this is the 2nd use after Focus's `TransportRail`/`CockpitSheet`, and
+every one of them differs in buttons/behavior from its Focus twin — refactor rule 1,
+"abstract on the 3rd duplication"): `AnnotateTransportStrip` (left, 56px: Exit/Back5/
+FrameBack/Play/FrameFwd/Fwd5, `editorOpen` hides the skips T8960-style, `simplified` hides
+frame-step T11860-style), `AnnotateActionStrip` (right, 72px: Mark/Edit play keeping
+`data-testid="annotate-mark-play-button"`, `SpeedControl` — now exported from
+`AnnotateControls.jsx` with a `menuPlacement` prop, 'left' here so the popup doesn't run off
+the right edge — the source chip gated on 2+ videos, and a 1x/3x zoom toggle via
+`useTimelineZoom`'s `setZoom(pct)`), `AnnotateSideSheet` (the editor/Videos sheet,
+`absolute` — never `fixed` — right-anchored between the strips, NO header-X and NO scrim
+unlike Focus's `CockpitSheet`, `peek` prop is a CLASS CHANGE on the SAME element for the
+T15380 drag-peek carryover — one-tree rule still applies). The timeline zone (bottom grid
+row) drops the mobile finger-scrollbar (`hideScrollbar` prop, additive, threaded through
+`AnnotateMode`/`AnnotateTimeline`/`TimelineBase`) and the zoom chip (`zoom.hideChip` now ORs
+in `mobileFsLandscape`) — the strips replace both. **`data-full-bleed-video` is GONE**
+(removed from `AnnotateModeView.jsx` and from `resolveGuide.js`'s `EDITOR_VIDEO`/
+`ANNOTATE_PLAYER` selectors) — the picture is never full-bleed in landscape anymore, so the
+Guide shade cuts it out the same way as every other surface, and the two strips
+(`annotate-cockpit-left-strip`/`-right-strip`) joined `ANNOTATE_PLAYER` keep-clear. Source
+chip opens a plain `AnnotateSideSheet` holding the existing `SourceBar` unmodified. Unit:
+`AnnotateModeView.landscapeCockpit.test.jsx` (new, 9 tests); updated
+`AnnotateModeView.portraitStrip.test.jsx` (the old "full-bleed landscape-inline sheet" test)
+and `resolveGuide.keepClear.test.js`. Live: new `e2e/T15370-annotate-landscape-cockpit.qa.
+spec.js` (template T10840) covers AC1 (no scroll, picture never overlaps a strip/timeline),
+AC2 (side sheet open/hide), AC3 (44px/52px hit targets), AC7 (rotate-back). **OWED to a
+real device (design doc Risks table):** `env()` notch/home-bar clearance and the iOS
+landscape keyboard over the sheet's name input — headless Chromium has no notch/keyboard to
+emulate; AC8 is the human criterion for this. Prior:)
 updated: 2026-11-02 (T14370 - Mark play is OFF until /load lands: `AnnotateModeView` disables the card on `isLoadingGameData` and `handleAddClipFromButton` refuses loudly on `isGameDataLoading`; `applyGameData`/`clearAnnotateState` reset the selection machine with the regions; every exit of the chain goes through `utils/markPlayFailure.reportMarkPlayFailure` ([MarkPlay] console.error + toast that opens Report a problem via `stores/problemReportStore`); `clientLogger` captures console.log and keeps a separate error ring. See the T14370 paragraph at the end.)
 updated: 2026-11-01 (T14350 - YouTube-style skips. Transport left group is symmetric: `Restart | Back 5 s | Frame back | Play | Frame fwd | Forward 5 s` (`onSeekForward?.(5)`, title "Forward 5 seconds (Right arrow)"; Back is "Back 5 seconds (Left arrow)"); every non-Play button sits under the T8960 `editorOpen` gate. `AnnotateContainer` exposes `effectiveSeekForward` (`multiVideo.seekForward ?? seekForward`) beside `effectiveSeekBackward`; skips must use these, not `effectiveSeek(t + n)`, so a multi-video skip crosses the source boundary via the virtual timeline (pinned by `useMultiVideoScrub.seekForward.test.js`). Keys (`AnnotateScreen` keydown): playhead-layer arrows = 5 s each way (was 4 back / 8 forward); J / L = 10 s on EVERY layer, off while `showAnnotateOverlay`; K = play/pause like Space (stays on in the editor). Plays-layer arrows still jump plays. Double-tap / double-click: `useSkipTap` (modes/annotate/hooks) gives an `onClickCapture` attached to BOTH stage boxes (`data-testid="annotate-video-stage"`, single + multi video) plus `feedback` for `SkipRipple`. Clicks fire for taps too, so one handler covers desktop and touch, in and out of fullscreen. The single tap is never delayed: tap 2 skips and PROPAGATES (its play toggle undoes tap 1's, so playing state is unchanged); taps 3+ in the 700 ms burst are swallowed in the capture phase (stops the inner VideoPlayer/overlay toggle AND the mobile-fullscreen outer toggle). Taps on button/a/input are ignored. Ripple circle is `.skip-ripple-circle` in index.css (hidden under reduced motion; the "N seconds" label always shows). LANDMINE fixed: `play`/`pause` media events are dispatched async, so a play() then pause() within ms (tap 1 / tap 2) delivered a stale `play` to a paused element; `useVideo.handlePlay` set isPlaying=true and the RAF desync loop's hard recovery called play() (video resumed after a skip from paused, ~1 in 15 live). `handlePlay`/`handlePause` now ignore an event the element's `paused` contradicts (`useVideo.staleMediaEvents.test.js`). Live: `e2e/T14350-annotate-skip.qa.spec.js` opens the first active game (uploads the wcfc fixture only if none; an upload can dedupe into an existing game and swap blob->server src mid-test, resetting to 0). Restart the stack (`.devcontainer/container-stack.sh`) before a live re-run after editing: a reused Vite served the pre-edit `useVideo.js`.)
 updated: 2026-10-25 (T13240 - Veo zip routing: `VeoZipRouter` (Games screen game intake + Add Clip) probes the zip with `inspectVeoZip` (last moment only), ranks games by `rankCandidateGames` (effective_duration >= last stamp+length, opponent match from the zip name, newest), offers Path A then Path B; no candidate = clip pick list + note. GameFootagePicker `onVeoZip` diverts a Veo zip before the intake (never creates a game); Path A hands the File through `veoHighlights/pendingZip.js` (memory) and `useAnnotateSuggestions` opens the sheet when that game opens. Annotate Add footage passes `suggested.openZip`.)
@@ -298,11 +334,13 @@ pass — structural acceptance is met (an in-flow sibling strip can't overlay th
 the video keeps its natural windowed height), but the MEASURED numbers the acceptance bar
 demands were not capturable here. Prior:)
 updated: 2026-11-09 (T15380 — mobile fullscreen PORTRAIT stopped covering the video; LANDSCAPE
-is unchanged structurally (side-strip redesign is the T15370 follow-up), with drag-peek +
-auto-hide fixes. `mobileFsLandscape = mobileFs && isLandscape` is the new split inside
-`mobileFs` (`AnnotateModeView.jsx`): only `mobileFsLandscape` still full-bleeds the video
-(`absolute inset-0`, `data-full-bleed-video`) and renders the fixed `landscape-inline`/
-`inline` sheet on top of it. Portrait `mobileFs` now joins the SAME in-flow blocks desktop
+was unchanged structurally by THIS task (side-strip redesign landed right after as the T15370
+follow-up above — see that entry for the current landscape layout, including the removal of
+`data-full-bleed-video`), with drag-peek + auto-hide fixes. `mobileFsLandscape = mobileFs &&
+isLandscape` is the split inside `mobileFs` (`AnnotateModeView.jsx`) this task introduced; AT
+THE TIME, only `mobileFsLandscape` full-bled the video (`absolute inset-0`,
+`data-full-bleed-video`) and rendered the fixed `landscape-inline`/`inline` sheet on top of
+it. Portrait `mobileFs` now joins the SAME in-flow blocks desktop
 fullscreen already uses: the video is `flex-1 min-h-0` (plus
 `pt-[env(safe-area-inset-top)]`), the `!mobileFsLandscape`-gated controls+timeline block
 renders below it (AnnotateControls already carries the exit-fullscreen button via

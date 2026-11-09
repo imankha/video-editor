@@ -30,11 +30,14 @@ const FRAME_SHAPE_CHOICE = tid('focus-shape-choice');
 const TRIM_SCOPE = tid('trim-guide-scope');
 const PLAY_BUTTON = tid('play-button');
 // The watch step keeps only the picture and its transport bright; the timeline and other cards shade.
-const ANNOTATE_PLAYER = [`${ANNOTATE_STAGE} video`, tid('annotate-controls')];
-// The editor cuts the picture out of the shade so the user can judge the play's timing (`shadeClear`: the card may still sit over part of it, because the picture fills most of the screen and keeping the card off it too leaves no slot, which put the card on Done). Mobile fullscreen (data-full-bleed-video) is the whole screen, so no cutout there.
+// T15370: the landscape cockpit's side strips sit beside the picture (never
+// over it), but they are still controls the watch step should keep bright,
+// same as the windowed `annotate-controls` bar.
+const ANNOTATE_PLAYER = [`${ANNOTATE_STAGE} video`, tid('annotate-controls'), tid('annotate-cockpit-left-strip'), tid('annotate-cockpit-right-strip')];
+// The editor cuts the picture out of the shade so the user can judge the play's timing (`shadeClear`: the card may still sit over part of it, because the picture fills most of the screen and keeping the card off it too leaves no slot, which put the card on Done). T15370 removed the data-full-bleed-video exception: the landscape cockpit no longer fills the whole screen (the picture sits in a cutout-able middle column beside the strips), so the editor guide cuts it out there too, same as windowed.
 // Review plays renders its own A/B video box, outside annotate-coach-stage (T13180).
 const REVIEW_VIDEO = tid('annotate-review-video');
-const EDITOR_VIDEO =`${ANNOTATE_STAGE}:not([data-full-bleed-video]) video`;
+const EDITOR_VIDEO = `${ANNOTATE_STAGE} video`;
 const PREVIEW_TOGGLE = tid('framing-preview-toggle');
 const ACTION_BAND = tid('action-band');
 const HOME_HEADING = tid('home-heading');
