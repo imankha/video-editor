@@ -1,6 +1,6 @@
 # T15370: Annotate landscape fullscreen side-strip layout (controls beside the video, not on it)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 7
 **Tier:** L (design gate required)
