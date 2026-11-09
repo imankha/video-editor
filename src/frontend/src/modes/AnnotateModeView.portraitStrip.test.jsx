@@ -114,10 +114,10 @@ describe('AnnotateModeView — useIsMobile decides the editor split (T10620)', (
 
 // T15380 (AC1/AC2): mobile fullscreen PORTRAIT stopped covering the video with
 // an absolute sheet -- the editor joins the SAME in-flow portrait-strip the
-// windowed mobile editor uses, below the video, never over it. Landscape mobile
-// fullscreen is unchanged by this task (still a `data-full-bleed-video`, fixed
-// `landscape-inline` sheet on top of the video) -- the side-strip redesign is
-// the T15370 follow-up.
+// windowed mobile editor uses, below the video, never over it. T15370 gave
+// landscape mobile fullscreen its own side-strip cockpit grid (the picture is
+// no longer full-bleed there either): the editor now opens as a right-anchored
+// sheet beside the picture instead of a bottom sheet on top of it.
 describe('AnnotateModeView — mobile FULLSCREEN editor split by orientation (T15380)', () => {
   beforeEach(() => { isMobileMock = true; isLandscapeMock = false; });
 
@@ -137,11 +137,14 @@ describe('AnnotateModeView — mobile FULLSCREEN editor split by orientation (T1
     expect(overlay.closest('[class*="absolute"]')).toBeNull();
   });
 
-  it('landscape fullscreen + editor open still renders the full-bleed landscape-inline sheet', () => {
+  it('landscape fullscreen + editor open renders the landscape-inline sheet beside the picture, not full-bleed over it (T15370)', () => {
     isLandscapeMock = true;
     render(<AnnotateModeView {...buildProps({ annotateFullscreen: true })} />);
     expect(screen.getByTestId('overlay-layout').textContent).toBe('landscape-inline');
-    expect(screen.getByTestId('annotate-coach-stage').getAttribute('data-full-bleed-video')).toBe('true');
+    // T15370: the picture is never marked full-bleed in the landscape cockpit.
+    expect(screen.getByTestId('annotate-coach-stage').getAttribute('data-full-bleed-video')).toBeNull();
+    // The side sheet is absolutely positioned inside the grid, right-anchored
+    // beside the picture (never a bottom sheet drawn on top of it).
     expect(screen.getByTestId('overlay-layout').closest('[class*="absolute"]')).toBeTruthy();
   });
 });

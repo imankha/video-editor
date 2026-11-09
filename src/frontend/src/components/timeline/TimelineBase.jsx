@@ -103,6 +103,10 @@ export function TimelineBase({
   // T11860: a mode bumps this number to ask for the playhead to be centered once
   // (Annotate's first play, when a phone goes 100% -> 300%). Unchanged = no-op.
   centerPlayheadKey = undefined,
+  // T15370: landscape cockpit's side strips are the way to move along the
+  // timeline, so the finger scrollbar row underneath costs picture height for
+  // nothing there. Additive, default false keeps every other caller unchanged.
+  hideScrollbar = false,
 }) {
   const pageForward = followAnchor === 'page-forward';
   const timelineRef = React.useRef(null);
@@ -566,7 +570,7 @@ export function TimelineBase({
       </div>
 
       {/* Mobile-friendly scrollbar - shown only on small screens when zoomed */}
-      {timelineScale > 1 && (
+      {timelineScale > 1 && !hideScrollbar && (
         <MobileScrollbar scrollContainerRef={scrollContainerRef} timelineScale={timelineScale} />
       )}
 

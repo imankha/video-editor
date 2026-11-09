@@ -900,6 +900,17 @@ export const FOCUS_COCKPIT = {
   OPEN_TRIM: 'Trim and slow-mo',
 };
 
+// T15370: Annotate's own landscape-phone cockpit (side-strip layout, option C
+// of the T15380 follow-up). Copied-component precedent FOCUS_COCKPIT above;
+// this is Annotate's own vocabulary, not shared strings.
+export const ANNOTATE_COCKPIT = {
+  EXIT: 'Exit fullscreen',
+  SHEET_VIDEOS: 'Videos',
+  // The toggle's own label is the CURRENT zoom level (tapping switches to the other one).
+  ZOOM_1X: '1x',
+  ZOOM_3X: '3x',
+};
+
 // T12230: the ONE copy table for the on-screen guide (T9550 single-source rule).
 // resolveGuide.js picks a rule; every sentence it can show lives here. Plain
 // words: the draggable rectangle is the 'box', the child is 'your athlete'

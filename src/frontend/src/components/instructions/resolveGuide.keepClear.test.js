@@ -34,7 +34,10 @@ describe('T12620: the cutout contains every control the sentence names', () => {
       t('annotate-controls'), t('scrub-start-handle'), t('scrub-end-handle'), t('rating-input'), t('add-details-button'),
     ]));
     // The picture is shade-clear only: keeping the card off it too left no slot and put the card on Done.
-    expect(g.shadeClear).toEqual([t('annotate-coach-stage') + ':not([data-full-bleed-video]) video']);
+    // T15370: the landscape cockpit no longer fills the whole screen, so the
+    // old data-full-bleed-video exception is gone -- every surface cuts the
+    // picture out of the shade the same way.
+    expect(g.shadeClear).toEqual([t('annotate-coach-stage') + ' video']);
     expect(g.keepClear).not.toContain(g.shadeClear[0]);
     // Long sentence: compact card so a slot below Done exists on a phone (the card avoids the video when it can).
     expect(g.compact).toBe(true);

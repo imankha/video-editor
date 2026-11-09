@@ -1,0 +1,53 @@
+{
+  "task": "T15370",
+  "criteria": [
+    {
+      "id": "T15370:C1",
+      "kind": "browser",
+      "text": "At 812x334 and 844x390 in landscape fullscreen Annotate, the page does not scroll and strips/timeline/buttons cover 0% of the picture, paused and playing (rect-overlap measurement).",
+      "test": "T15370:C1 - 0% overlap, paused and playing, both viewports"
+    },
+    {
+      "id": "T15370:C2",
+      "kind": "browser",
+      "text": "With Edit play open, at least 60% of the picture is visible and its centre point is uncovered; while a trim handle is dragged, at least 90% is visible.",
+      "test": "T15370:C2 - side sheet open >=60% visible + centre uncovered; drag peek >=90% visible"
+    },
+    {
+      "id": "T15370:C3",
+      "kind": "browser",
+      "text": "Every button in both strips is at least 44x44 px; Play is at least 52 px.",
+      "test": "T15370:C3 - 44x44 button floor, 52px Play"
+    },
+    {
+      "id": "T15370:C4",
+      "kind": "browser",
+      "text": "Left strip has Exit, Back 5s, Frame back, Play, Frame forward and Forward 5s; right strip has Mark/Edit play, Speed, the source chip (2+ videos only) and the zoom toggle; each does what its windowed twin does.",
+      "test": "T15370:C4 - both strips have the required buttons and each is functionally equivalent"
+    },
+    {
+      "id": "T15370:C5",
+      "kind": "browser",
+      "text": "Double-tap on either half of the picture still skips 5s; the zoom toggle switches the timeline between 1x and 3x; the source can be switched from the chip.",
+      "test": "T15370:C5 - double-tap skip, zoom toggle 1x/3x, source chip switch"
+    },
+    {
+      "id": "T15370:C6",
+      "kind": "browser",
+      "text": "Trimming via the side sheet commits once on release (T10610 contract) and the drag survives the peek collapse without a remount.",
+      "test": "T15370:C6 - single commit on release, drag survives peek collapse (no remount)"
+    },
+    {
+      "id": "T15370:C7",
+      "kind": "browser",
+      "text": "Rotating to portrait and back keeps the same video element (no reload) and restores the T15380 portrait layout with no console error.",
+      "test": "T15370:C7 - rotation preserves the video element, restores portrait layout, no console error"
+    },
+    {
+      "id": "T15370:C8",
+      "kind": "human",
+      "text": "(human) On a real iPhone in both landscape directions, Play and Mark play are not under the notch or home bar, and the name field stays visible with the keyboard open.",
+      "test": null
+    }
+  ]
+}
