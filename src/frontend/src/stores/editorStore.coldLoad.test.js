@@ -211,3 +211,29 @@ describe('editorStore cold load of a canonical URL', () => {
     expect(window.location.pathname).toBe('/shared/collection/abc');
   });
 });
+
+// T15360: a bare `/` cold load is rewritten to '/home' by the canonicalization
+// above, BEFORE App.jsx's own module-load code ever runs -- so App's
+// "was this a bare `/` arrival" restore gate can't re-read
+// window.location.pathname (it's already '/home' by then). It must use this
+// captured value instead.
+describe('editorStore cold load captures the pre-canonicalization pathname', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.resetModules();
+    delete window.__popstateHandler;
+  });
+
+  it('captures a bare "/" even though the URL is rewritten to /home', async () => {
+    window.history.pushState({}, '', '/');
+    const { coldLoadPathname } = await import('./editorStore');
+    expect(coldLoadPathname).toBe('/');
+    expect(window.location.pathname).toBe('/home');
+  });
+
+  it('captures a non-root path verbatim', async () => {
+    window.history.pushState({}, '', '/annotate/g/42');
+    const { coldLoadPathname } = await import('./editorStore');
+    expect(coldLoadPathname).toBe('/annotate/g/42');
+  });
+});

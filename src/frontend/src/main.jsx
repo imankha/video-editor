@@ -13,6 +13,7 @@ import './index.css'
 import { installResponsivenessMonitor } from './utils/responsiveness.js'
 import { installClientLogger } from './utils/clientLogger.js'
 import { installSessionBreadcrumbs } from './utils/uiTelemetry.js'
+import { installResumePointExitBeacon } from './utils/resumePoint.js'
 import { setupActionTracking } from './utils/analytics.js'
 import { setupPwaUpdatePrompt, evictStaleDevServiceWorker } from './utils/pwaUpdate.js'
 
@@ -21,6 +22,9 @@ installClientLogger();
 setupActionTracking();
 // T7515 tier 4: accumulate per-screen dwell + trail, flushed on session exit.
 installSessionBreadcrumbs();
+// T15360: was exported but never called -- every resume point stayed at left_at: null
+// forever, so isFreshResumePoint (then requiring left_at) never saw a restorable point.
+installResumePointExitBeacon();
 
 console.info(`[Build] ${__COMMIT_HASH__} (#${__APP_BUILD__})`);
 installResponsivenessMonitor();

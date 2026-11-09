@@ -292,6 +292,12 @@ export function resolveEditorScreen(editorMode, hasSelectedProject) {
 // never into an editor, so a bad URL can't drop the user onto whatever project
 // state happens to be loaded (T5677).
 // T14970: a path with an unusable id or profile lands on Games, so it never picks an editor.
+// T15360: captured BEFORE the module-load canonicalization below rewrites a bare "/" to
+// MODE_PATHS[mode] (e.g. '/home') via history.replaceState. App.jsx's own module-load code
+// runs AFTER this module is imported, so by the time App reads window.location.pathname it is
+// already '/home' -- its "was this a bare `/` arrival" resume-restore gate must read this
+// captured value instead, never window.location.pathname directly.
+export const coldLoadPathname = window.location.pathname;
 const initialMalformedKind = malformedObjectKind(window.location.pathname, window.location.search);
 const initialMode = initialMalformedKind ? EDITOR_MODES.PROJECT_MANAGER : modeFromPath();
 // T14970: the URL is the primary carrier of what is open; hand it to the same breadcrumbs

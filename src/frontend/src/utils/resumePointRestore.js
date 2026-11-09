@@ -8,9 +8,18 @@ import { setPendingGame } from './pendingNavigation';
 
 const RESUME_MAX_AGE_DAYS = 30;
 
-/** A row older than this, or missing `left_at`/`path`, is treated as absent (owner spec). */
+/**
+ * A row with no `path` is treated as absent. `left_at` is set only by the exit
+ * beacon (best effort) -- a navigation-gesture write, or the last write before a
+ * suppressed sign-out beacon (T15360), always carries `left_at: null`. The
+ * server already dropped anything older than RESUME_MAX_AGE_DAYS before handing
+ * the point back (its own `updated_at` column -- resume_points.get_resume_point),
+ * so a missing `left_at` must NOT be treated as stale; only re-check the age
+ * client-side when `left_at` is actually present.
+ */
 export function isFreshResumePoint(resumePoint) {
-  if (!resumePoint?.path || !resumePoint?.left_at) return false;
+  if (!resumePoint?.path) return false;
+  if (!resumePoint.left_at) return true;
   const ageMs = Date.now() - new Date(resumePoint.left_at).getTime();
   return Number.isFinite(ageMs) && ageMs >= 0 && ageMs < RESUME_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 }

@@ -19,14 +19,23 @@ const FRESH_LEFT_AT = () => new Date(Date.now() - 1000).toISOString();
 const STALE_LEFT_AT = () => new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
 
 describe('isFreshResumePoint', () => {
-  it('rejects a point with no path or left_at', () => {
+  it('rejects a point with no path', () => {
     expect(isFreshResumePoint(null)).toBe(false);
     expect(isFreshResumePoint({ left_at: FRESH_LEFT_AT() })).toBe(false);
-    expect(isFreshResumePoint({ path: '/focus/p/1' })).toBe(false);
   });
 
-  it('rejects a point older than 30 days', () => {
+  it('rejects a point older than 30 days (left_at present)', () => {
     expect(isFreshResumePoint({ path: '/focus/p/1', left_at: STALE_LEFT_AT() })).toBe(false);
+  });
+
+  // T15360: a gesture write (navigation, or the last write before a suppressed
+  // sign-out beacon) always carries left_at: null. The server already dropped
+  // anything older than RESUME_MAX_AGE_DAYS before handing the point back (its
+  // own `updated_at` column), so a missing left_at must NOT be treated as
+  // "absent" -- that was the bug: no stored point was ever restorable.
+  it('trusts the server age filter when left_at is absent', () => {
+    expect(isFreshResumePoint({ path: '/focus/p/1' })).toBe(true);
+    expect(isFreshResumePoint({ path: '/focus/p/1', left_at: null })).toBe(true);
   });
 
   it('accepts a fresh point', () => {
