@@ -10,12 +10,21 @@ the route that calls this is listed in db_sync.SKIP_SYNC_PATHS.
 
 import json
 import logging
+import re
+import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from app.analytics import BREADCRUMB_SCREENS
 from app.services.pg import get_pg
 
 logger = logging.getLogger(__name__)
+
+# T14990: the object id lives IN the path (editorStore's canonicalPath:
+# "/annotate/g/{gameId}" or "/framing|overlay/p/{projectId}"), never a
+# separate stored field -- these mirror that grammar for the admin's
+# read-only title lookup.
+_PATH_GAME_RE = re.compile(r"/g/(\d+)")
+_PATH_PROJECT_RE = re.compile(r"/p/(\d+)")
 
 # Mirrors the frontend EDITOR_MODES home entry ("project-manager" in
 # BREADCRUMB_SCREENS) plus the home sub-tabs, which BREADCRUMB_SCREENS does not
@@ -160,6 +169,79 @@ def get_resume_point(user_id: str) -> dict | None:
 
     point = row["point"]
     return json.loads(point) if isinstance(point, str) else point
+
+
+def _resolve_object_title(conn: sqlite3.Connection, path: str) -> tuple[str | None, int | None, str | None]:
+    """Pure query against an already-open profile.sqlite connection: given the
+    resume point's path, return (object_kind, object_id, object_title).
+
+    object_kind is "game" for an annotate `/g/{id}` path, "play" for a
+    framing/overlay `/p/{id}` path (the project's containing game's name --
+    the task's "play 8124 in <game>"), or (None, None, None) when the path
+    names no object or the row is gone (deleted since the point was written).
+    """
+    game_match = _PATH_GAME_RE.search(path)
+    if game_match:
+        game_id = int(game_match.group(1))
+        row = conn.execute("SELECT name FROM games WHERE id = ?", (game_id,)).fetchone()
+        return ("game", game_id, row["name"] if row else None)
+
+    project_match = _PATH_PROJECT_RE.search(path)
+    if project_match:
+        project_id = int(project_match.group(1))
+        row = conn.execute(
+            "SELECT g.name AS game_name FROM projects p "
+            "LEFT JOIN raw_clips r ON r.id = p.source_raw_clip_id "
+            "LEFT JOIN games g ON g.id = r.game_id "
+            "WHERE p.id = ?",
+            (project_id,),
+        ).fetchone()
+        return ("play", project_id, row["game_name"] if row else None)
+
+    return (None, None, None)
+
+
+def resolve_resume_point_titles(user_id: str, point: dict) -> dict:
+    """Read-only admin-panel enrichment (T14990): adds `profile_name` and the
+    `object_kind`/`object_id`/`object_title` the path's `/g/{id}` or `/p/{id}`
+    names, by opening the point's OWN profile `mode=ro` (same read path as
+    clip_phases.compute_user_clip_phases -- no write, no new cross-user access).
+    A missing profile/object/db is left None, never guessed; this adds no
+    access the admin doesn't already have via the panel it renders into.
+    """
+    from app.services.materialization import open_profile_db_readonly
+    from app.services.user_db import get_profiles
+
+    enriched = dict(point)
+    enriched["profile_name"] = None
+    enriched["object_kind"] = None
+    enriched["object_id"] = None
+    enriched["object_title"] = None
+
+    profile_id = point.get("profile_id")
+    if profile_id:
+        profile = next((p for p in get_profiles(user_id) if p["id"] == profile_id), None)
+        if profile:
+            enriched["profile_name"] = profile["name"]
+
+    path = point.get("path") or ""
+    if not profile_id or not (_PATH_GAME_RE.search(path) or _PATH_PROJECT_RE.search(path)):
+        return enriched
+
+    conn = open_profile_db_readonly(user_id, profile_id)
+    if conn is None:
+        return enriched
+    try:
+        kind, obj_id, title = _resolve_object_title(conn, path)
+        enriched["object_kind"] = kind
+        enriched["object_id"] = obj_id
+        enriched["object_title"] = title
+    except Exception:
+        logger.warning("[ResumePoint] title resolution failed for user=%s", user_id, exc_info=True)
+    finally:
+        conn.close()
+
+    return enriched
 
 
 def delete_resume_point(user_id: str) -> None:
