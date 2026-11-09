@@ -48,7 +48,12 @@ export default function AnnotateActionStrip({
       </button>
 
       <div className="flex flex-col items-center gap-1.5">
-        <SpeedControl speed={playbackSpeed} onSpeedChange={onSpeedChange} menuPlacement="left" />
+        <SpeedControl
+          speed={playbackSpeed}
+          onSpeedChange={onSpeedChange}
+          menuPlacement="left"
+          className="h-11 w-16"
+        />
         {sourceLabel && (
           <button
             type="button"

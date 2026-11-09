@@ -17,9 +17,12 @@ const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
  * strip can reuse it verbatim. `menuPlacement` picks which edge the popup
  * opens from -- 'up' (default) keeps the windowed/bottom-bar behavior,
  * 'left' is for the 72px right strip, where a menu opening further right
- * would run off the screen.
+ * would run off the screen. `className` lets a caller (the cockpit strip)
+ * size the trigger button to its own 44px touch-target floor -- the shared
+ * `Button` component's coarse-pointer floor only applies to `iconOnly`
+ * buttons, and this one shows a text label ("1x"), so it gets none by default.
  */
-export function SpeedControl({ speed, onSpeedChange, menuPlacement = 'up' }) {
+export function SpeedControl({ speed, onSpeedChange, menuPlacement = 'up', className = '' }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -45,7 +48,7 @@ export function SpeedControl({ speed, onSpeedChange, menuPlacement = 'up' }) {
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
         title="Playback speed"
-        className="font-mono"
+        className={`font-mono ${className}`}
       >
         {speed}x
       </Button>
