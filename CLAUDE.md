@@ -133,7 +133,8 @@ task at a time (fix, commit, next; a stuck task is skipped, not blocking). A dis
 turns is restarted up to twice with a handoff note; a `human` criterion the owner ruled "check on
 staging" rides in the PR body instead of stopping the push; a worker whose change makes another group
 task's criterion false stops with `CONFLICT` before committing; groups hold at most 4 tasks;
-`/dotask resume <slug>` continues a stopped group; every `/dotask` relay carries an `eta:` line and a
+a verifier is capped at 10 minutes, and a batch past the cap is skipped and listed in the PR body as
+not verified, never counted as a pass; `/dotask resume <slug>` continues a stopped group; every `/dotask` relay carries an `eta:` line and a
 change of more than 15 minutes is reported as a change.
 
 By hand, `/dotask land <slug>` first starts the group's app stack and stops for a human test (no push,

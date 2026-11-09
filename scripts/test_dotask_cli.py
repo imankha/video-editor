@@ -1689,10 +1689,10 @@ class DispatchTurnCapTest(unittest.TestCase):
     def _env_seen_by_task_sh(self, phase, environ):
         seen = {}
 
-        def run(cmd, env=None, **kwargs):
+        def popen(cmd, env=None, **kwargs):
             seen.update(env)
-            return SimpleNamespace(returncode=1)
-        with patch.dict(os.environ, environ), patch.object(dotask_cli.subprocess, "run", run), \
+            return SimpleNamespace(pid=1, wait=lambda timeout=None: 1)
+        with patch.dict(os.environ, environ), patch.object(dotask_cli.subprocess, "Popen", popen), \
                 patch.object(dotask_cli, "bash", lambda: "bash"):
             if "DOTASK_MAX_TURNS" not in environ:
                 os.environ.pop("DOTASK_MAX_TURNS", None)
@@ -1707,6 +1707,64 @@ class DispatchTurnCapTest(unittest.TestCase):
 
     def test_an_explicit_cap_wins_for_every_phase(self):
         self.assertEqual(self._env_seen_by_task_sh("qa", {"DOTASK_MAX_TURNS": "50"})["DOTASK_MAX_TURNS"], "50")
+
+
+REAL_DISPATCH = dotask_cli.dispatch  # AutolandBase patches it out; these tests need the real one
+
+
+class VerifierTimeCapTest(AutolandBase):
+    """Owner rule 2026-11-08: a verifier never runs past 10 minutes; one that does not come back is skipped."""
+
+    def _popen(self, wait):
+        return lambda cmd, env=None, **kw: SimpleNamespace(pid=7, wait=wait)
+
+    def test_a_qa_dispatch_past_its_cap_is_killed_and_raises(self):
+        waits, stopped = [], []
+
+        def wait(timeout=None):
+            waits.append(timeout)
+            raise subprocess.TimeoutExpired("task.sh", timeout)
+        with patch.object(dotask_cli.subprocess, "Popen", self._popen(wait)), \
+                patch.object(dotask_cli, "bash", lambda: "bash"), \
+                patch.object(dotask_cli, "stop_dispatch", lambda slug, process: stopped.append((slug, process.pid))), \
+                self.assertRaises(dotask_cli.DispatchTimedOut):
+            REAL_DISPATCH("g-t1-1", {"wave_id": "w1", "tasks": ["T1"]}, "qa", "go")
+        self.assertEqual(waits, [dotask_cli.VERIFY_TIMEOUT_MINUTES * 60])
+        self.assertEqual(stopped, [("g-t1-1", 7)])
+
+    def test_an_implementation_dispatch_has_no_wall_clock_cap(self):
+        waits = []
+        with patch.object(dotask_cli.subprocess, "Popen", self._popen(lambda timeout=None: waits.append(timeout) or 1)), \
+                patch.object(dotask_cli, "bash", lambda: "bash"):
+            REAL_DISPATCH("g-t1-1", {"wave_id": "w1", "tasks": ["T1"]}, "implementation", "go")
+        self.assertEqual(waits, [None])
+
+    def test_a_timed_out_verifier_is_skipped_and_the_group_still_lands(self):
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            self.dispatches.append((phase, instruction))
+            raise dotask_cli.DispatchTimedOut("qa dispatch passed its 10-minute cap")
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(), 0)
+        self.assertEqual(self._phases(), ["qa"])  # never retried, never sent to a fix round
+        self.land.assert_called_once()
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C1", "T1:C2"])
+        lines = self.status.read_text().splitlines()
+        self.assertTrue(any("VERIFY_SKIPPED batch 1 of 1" in line for line in lines))
+        self.assertIn("not verified (verifier timed out): T1:C1 T1:C2", self._last())
+        body = dotask_cli.render_pr_body(group)
+        self.assertIn("Not verified: the verifier passed its time cap", body)
+        self.assertIn("- T1:C1: First", body)
+
+    def test_a_timed_out_verifier_that_left_edits_is_not_trusted(self):
+        self.dirty = " M src/app.js"
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            raise dotask_cli.DispatchTimedOut("cap")
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(), 1)
+        self.assertIn("VERIFY_BLOCKED", self._last())
+        self.land.assert_not_called()
 
 
 if __name__ == "__main__":

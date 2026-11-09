@@ -426,6 +426,9 @@ def render_pr_body(group):
     if group.get("staging_checks"):
         lines += ["", "Check on staging after merge (owner ruling in the task file; not verified before the push):"]
         lines += [f"- {item['id']}: {item['text']}" for item in group["staging_checks"]]
+    if group.get("skipped_checks"):
+        lines += ["", "Not verified: the verifier passed its time cap, so these were skipped (owner rule 2026-11-08):"]
+        lines += [f"- {item['id']}: {item['text']}" for item in group["skipped_checks"]]
     return "\n".join(lines)
 
 
@@ -877,6 +880,37 @@ def append_status(checkout, text):
 # before it ran out twice; a worker's 120 stays. An explicit DOTASK_MAX_TURNS wins for every phase.
 PHASE_MAX_TURNS = {"qa": 200}
 
+# Owner rule 2026-11-08: a verifier never runs longer than 10 minutes, and one that does not come back
+# in time is skipped, not waited on. g-t15240-2's single verify batch ran over two hours that day.
+# Its criteria land as `skipped` and the PR body lists them as not verified. DOTASK_VERIFY_TIMEOUT_MIN
+# overrides the cap.
+VERIFY_TIMEOUT_MINUTES = float(os.environ.get("DOTASK_VERIFY_TIMEOUT_MIN", "10"))
+PHASE_TIMEOUT_MINUTES = {"qa": VERIFY_TIMEOUT_MINUTES}
+
+
+class DispatchTimedOut(Exception):
+    """A dispatch passed its phase's wall-clock cap and was killed."""
+
+
+# The container has no ps or pkill. The loop skips its own shell, whose command line names the pattern.
+KILL_DISPATCH_SCRIPT = (r'for p in /proc/[0-9]*; do n=${p#/proc/}; [ "$n" = "$$" ] && continue; '
+                        r'c=$(tr "\0" " " < "$p/cmdline" 2>/dev/null); '
+                        r'case "$c" in *dotask-wave-profile*|*claude*) kill -9 "$n" 2>/dev/null;; esac; done')
+
+
+def stop_dispatch(slug, process):
+    """Kill a timed-out dispatch on both sides: the host process tree (task.sh, docker exec) and the
+    `claude -p` run inside the container, which outlives a killed `docker exec`."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, check=False)
+    else:
+        process.kill()
+    with contextlib.suppress(subprocess.SubprocessError):
+        process.wait(timeout=30)
+    with contextlib.suppress(OSError, subprocess.SubprocessError, SystemExit):
+        subprocess.run([tool("docker"), "exec", cname(slug), "bash", "-c", KILL_DISPATCH_SCRIPT],
+                       capture_output=True, check=False, timeout=60)
+
 
 def dispatch(slug, group, phase, instruction, task_ids=None):
     """One fresh `claude -p` in the group's container. True only if it ended on PUSHREADY. `task_ids`
@@ -886,9 +920,15 @@ def dispatch(slug, group, phase, instruction, task_ids=None):
            "DOTASK_TASK_IDS": ",".join(task_ids or group["tasks"])}
     if "DOTASK_MAX_TURNS" not in os.environ and phase in PHASE_MAX_TURNS:
         env["DOTASK_MAX_TURNS"] = str(PHASE_MAX_TURNS[phase])
-    result = subprocess.run([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "drive", slug, instruction],
-                            env=env, check=False)
-    return result.returncode == 0 and " PUSHREADY " in last_status(TASKS_ROOT / sanitize(slug))
+    process = subprocess.Popen([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "drive", slug, instruction],
+                               env=env)
+    cap = PHASE_TIMEOUT_MINUTES.get(phase)
+    try:
+        returncode = process.wait(timeout=cap * 60 if cap else None)
+    except subprocess.TimeoutExpired:
+        stop_dispatch(slug, process)
+        raise DispatchTimedOut(f"{phase} dispatch passed its {cap:g}-minute cap") from None
+    return returncode == 0 and " PUSHREADY " in last_status(TASKS_ROOT / sanitize(slug))
 
 
 def latest_run(checkout):
@@ -1311,13 +1351,31 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
         instruction = VERIFY_INSTRUCTION.format(
             round=round_number, batch=label, head=head, scope=scope, branch=group["branch"],
             regression=REGRESSION_STEP if last else NO_REGRESSION_STEP)
+        timed_out = False
         for attempt in range(VERIFY_ATTEMPTS):
             (checkout / VERIFY_FILE).unlink(missing_ok=True)
-            finished = dispatch(slug, group, "qa", instruction)
+            try:
+                finished = dispatch(slug, group, "qa", instruction)
+            except DispatchTimedOut:
+                finished, timed_out = False, True
+                break
             # A transport failure (g-t15220-10, 2026-11-07: ENOTFOUND 7 minutes in) says nothing about the code.
             if finished or "outcome=error" not in last_status(checkout) or tracked_changes(checkout):
                 break
             print(f"[dotask] verifier dispatch errored (attempt {attempt + 1}); retrying", file=sys.stderr)
+        if timed_out:
+            noise, changed = split_tool_noise(tracked_changes(checkout))
+            restore_tool_noise(checkout, noise)
+            if git_head(checkout) != head or changed:
+                raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
+            skipped = wanted if wanted is not None else [
+                f"{t}:C{i + 1}" for t in batch for i in range(max(1, acceptance_count(task_file_in(checkout, t))))]
+            merged["criteria"] += [{"id": c, "status": "skipped", "evidence": (
+                f"verifier passed the {VERIFY_TIMEOUT_MINUTES:g}-minute cap; not verified (owner rule 2026-11-08)")}
+                for c in skipped]
+            append_status(checkout, f"VERIFY_SKIPPED batch {label}: verifier passed the "
+                                    f"{VERIFY_TIMEOUT_MINUTES:g}-minute cap; {' '.join(skipped) or 'regression pass'} not verified")
+            continue
         if not finished and out_of_turns(checkout) and len(batch) > 1:
             # A batch of three tasks (about 12 criteria) still ran out of 120 turns (g-t15220-10 batch 3,
             # 2026-11-07). A verifier has nothing to hand off, so its tasks are proved one at a time.
@@ -1444,15 +1502,18 @@ def autoland(args):
             human = [c for c in human if c not in staging]
             if not failed and not bugs:
                 group["tested_head"] = head
-                group["staging_checks"] = [
-                    {"id": c, "text": acceptance_items(task_file_in(checkout, c.split(":")[0]))[int(c.split(":C")[1]) - 1]}
-                    for c in deferred]
+                def criterion_text(c):
+                    return acceptance_items(task_file_in(checkout, c.split(":")[0]))[int(c.split(":C")[1]) - 1]
+                group["staging_checks"] = [{"id": c, "text": criterion_text(c)} for c in deferred]
+                skipped = [c.get("id") for c in verdict["criteria"] if c["status"] == "skipped"]
+                group["skipped_checks"] = [{"id": c, "text": criterion_text(c)} for c in skipped]
                 save_group(checkout, group)
                 if human:
                     append_status(checkout, f"VERIFY_NEEDS_USER {head[:9]}: check {' '.join(human)}, "
                                             f"then run /dotask land {slug} --after-test")
                     return 0
                 staging_note = f"; check on staging after merge: {' '.join(deferred)}" if deferred else ""
+                staging_note += f"; not verified (verifier timed out): {' '.join(skipped)}" if skipped else ""
                 append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}{staging_note}")
                 if args.no_land:
                     return 0
