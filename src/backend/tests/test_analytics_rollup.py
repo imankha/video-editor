@@ -327,3 +327,36 @@ def test_by_sport_endpoint_before_any_rollup_run_returns_empty_rows(rollup_clien
     resp = rollup_client.get("/api/admin/analytics/by-sport", headers={"X-User-ID": "admin-user"})
     assert resp.status_code == 200, resp.text
     assert resp.json()["rows"] == []
+
+
+def test_by_sport_endpoint_queries_only_the_by_sport_rollup_table(rollup_client):
+    # T14950:C1 -- "one query on the rollup": the by-sport endpoint must not fetch
+    # rollup_action_weekly/rollup_engagement_monthly rows it never reads.
+    import sqlite3
+
+    from app.analytics import create_user_segment
+    from app.services.auth_db import create_user
+
+    create_user("user-1", email="user-1@test.com")
+    create_user_segment("user-1", "organic", None, "otp")
+    _log("user-1", [_row("clip_created", "2026-09-29T10:00:00Z", sport="basketball")])
+
+    with patch("app.services.analytics_rollup.rollup_population",
+               return_value=_users(("user-1", date(2026, 9, 28)))):
+        rollup_client.post("/api/admin/analytics/rollup", headers={"X-User-ID": "admin-user"})
+
+    queries = []
+    original_connect = sqlite3.connect
+
+    def _connect_with_trace(*args, **kwargs):
+        conn = original_connect(*args, **kwargs)
+        conn.set_trace_callback(queries.append)
+        return conn
+
+    with patch("sqlite3.connect", side_effect=_connect_with_trace):
+        resp = rollup_client.get("/api/admin/analytics/by-sport", headers={"X-User-ID": "admin-user"})
+    assert resp.status_code == 200, resp.text
+
+    unrelated = [q for q in queries if "rollup_action_weekly" in q or "rollup_engagement_monthly" in q]
+    assert unrelated == [], f"by-sport endpoint fetched unrelated rollup tables: {unrelated}"
+    assert any("rollup_action_by_sport" in q for q in queries)

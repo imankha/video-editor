@@ -2119,7 +2119,7 @@ def analytics_by_sport():
     _require_admin()
     from ..services.analytics_rollup import load_newest_action_rollup
 
-    rollup, partial = load_newest_action_rollup()
+    rollup, partial = load_newest_action_rollup(tables=("rollup_action_by_sport",))
     if rollup is None:
         return {"computed_at": None, "partial": partial, "rows": []}
     rows = [

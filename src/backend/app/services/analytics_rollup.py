@@ -208,9 +208,12 @@ def sweep(users: list[dict], store: AnalyticsStore | None) -> dict[str, Any]:
         _sweep_lock.release()
 
 
-def load_newest_action_rollup() -> tuple[dict | None, bool]:
+def load_newest_action_rollup(tables: tuple[str, ...] | None = None) -> tuple[dict | None, bool]:
     """(newest run across this env's shards, partial) -- same shard-collection shape as
-    analytics_journey_rollup.load_newest_rollup."""
+    analytics_journey_rollup.load_newest_rollup.
+
+    `tables` is forwarded to analytics_store.newest_action_rollup to restrict which
+    ACTION_ROLLUP_TABLES rows get fetched (T14950:C1)."""
     import sqlite3
 
     from ..storage import APP_ENV, R2_BUCKET, get_r2_sync_client
@@ -245,7 +248,7 @@ def load_newest_action_rollup() -> tuple[dict | None, bool]:
         conn.deserialize(blob)
         conns.append(conn)
     try:
-        return newest_action_rollup(conns), partial
+        return newest_action_rollup(conns, tables=tables), partial
     finally:
         for conn in conns:
             conn.close()

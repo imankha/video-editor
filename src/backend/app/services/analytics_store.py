@@ -624,10 +624,17 @@ def newest_journey_rollup(shards: list[sqlite3.Connection]) -> dict | None:
     return result
 
 
-def newest_action_rollup(shards: list[sqlite3.Connection]) -> dict | None:
+def newest_action_rollup(
+    shards: list[sqlite3.Connection], tables: tuple[str, ...] | None = None
+) -> dict | None:
     """T7400: the run with the newest computed_at across shards (same selection rule as
     newest_journey_rollup -- full rebuild per run, never summed). None if no shard holds
-    a run (fresh store, or shards from before schema step 4)."""
+    a run (fresh store, or shards from before schema step 4).
+
+    `tables` restricts which ACTION_ROLLUP_TABLES rows get fetched (T14950:C1 -- a reader
+    that only needs rollup_action_by_sport must not also fetch the other rollup tables).
+    Defaults to all of them."""
+    wanted = ACTION_ROLLUP_TABLES if tables is None else {t: ACTION_ROLLUP_TABLES[t] for t in tables}
     newest: tuple[str, sqlite3.Connection, tuple] | None = None
     for conn in shards:
         has_meta = conn.execute(
@@ -645,7 +652,7 @@ def newest_action_rollup(shards: list[sqlite3.Connection]) -> dict | None:
         return None
     _, conn, meta_row = newest
     result: dict = {"meta": dict(zip(_ACTION_ROLLUP_META_COLUMNS, meta_row))}
-    for table, cols in ACTION_ROLLUP_TABLES.items():
+    for table, cols in wanted.items():
         result[table] = [
             tuple(r) for r in conn.execute(
                 f"SELECT {', '.join(cols)} FROM {table} WHERE run_id = ? ORDER BY {', '.join(cols)}",
