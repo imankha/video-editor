@@ -157,7 +157,7 @@ User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `au
    become a `group` bug for a fix round, then the re-check and a new push to the same PR (PRs #720, #722,
    #723 waited on a person for this, 2026-11-08). It counts against `MAX_FIX_ROUNDS`.
 
-**A verifier never runs past 10 minutes** (owner rule 2026-11-08; `DOTASK_VERIFY_TIMEOUT_MIN` overrides). At the cap the
+**A verifier never runs past 15 minutes** (owner rule 2026-11-08, raised from 10 on 2026-11-09; `DOTASK_VERIFY_TIMEOUT_MIN` overrides). At the cap the
 dispatch is killed on the host and in the container, its one criterion is recorded `skipped` (`VERIFY_SKIPPED`
 status line; a verifier out of turns is skipped the same way; a skipped regression pass or bug re-check is listed as
 "Other check"), and the loop moves on: skipped criteria never count as a pass or a fail, they ride in the PR body under

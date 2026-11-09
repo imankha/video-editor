@@ -917,11 +917,13 @@ def append_status(checkout, text):
 # before it ran out twice; a worker's 120 stays. An explicit DOTASK_MAX_TURNS wins for every phase.
 PHASE_MAX_TURNS = {"qa": 200}
 
-# Owner rule 2026-11-08: a verifier never runs longer than 10 minutes, and one that does not come back
-# in time is skipped, not waited on. g-t15240-2's single verify batch ran over two hours that day.
+# Owner rule 2026-11-08: a verifier has a hard wall-clock cap, and one that does not come back in time
+# is skipped, not waited on. g-t15240-2's single verify batch ran over two hours that day. The cap was 10
+# minutes until 2026-11-09, when 5 of g-t15340-1's 8 one-criterion verifiers passed it (a cold load or a
+# sign-out and back in takes longer to set up); the owner raised it to 15.
 # Its criteria land as `skipped` and the PR body lists them as not verified. DOTASK_VERIFY_TIMEOUT_MIN
 # overrides the cap.
-VERIFY_TIMEOUT_MINUTES = float(os.environ.get("DOTASK_VERIFY_TIMEOUT_MIN", "10"))
+VERIFY_TIMEOUT_MINUTES = float(os.environ.get("DOTASK_VERIFY_TIMEOUT_MIN", "15"))
 PHASE_TIMEOUT_MINUTES = {"qa": VERIFY_TIMEOUT_MINUTES}
 
 
@@ -1489,7 +1491,11 @@ def resume_focus(checkout, group, head):
     rounds = [int(m.group(1)) for p in (TASKS_ROOT / "waves" / group["wave_id"]).glob("verify-round-*.json")
               if (m := re.fullmatch(r"verify-round-(\d+)\.json", p.name))
               and json.loads(p.read_text(encoding="utf-8")).get("head") == seen]
-    return {"criteria": failed, "bugs": bugs, "previous": previous}, (max(rounds) if rounds else 1) + 1
+    return {"criteria": failed + skipped_ids(previous), "bugs": bugs, "previous": previous},         (max(rounds) if rounds else 1) + 1
+
+
+def skipped_ids(verdict):
+    return [c.get("id") for c in verdict.get("criteria", []) if c.get("status") == "skipped"]
 
 
 def autoland(args):
@@ -1584,8 +1590,10 @@ def autoland(args):
                 append_status(checkout, f"CI_RED {head[:9]}: Branch CI failed after VERIFY_PASS; sending it to a fix round")
                 failed, bugs = [], [ci_bug["title"]]
             summary = f"round {round_number} on {head[:9]}: failed {failed}, new bugs {bugs}"
-            focus = {"criteria": failed, "bugs": [b for b in verdict["bugs"] if b["scope"] == "group"],
-                     "previous": verdict}
+            # A criterion skipped at the cap gets another verifier in the re-check, or it would reach the
+            # PR unverified although a fix round was running anyway (g-t15340-1, 2026-11-09).
+            focus = {"criteria": failed + skipped_ids(verdict),
+                     "bugs": [b for b in verdict["bugs"] if b["scope"] == "group"], "previous": verdict}
         if fix_round == MAX_FIX_ROUNDS:
             append_status(checkout, f"VERIFY_EXHAUSTED after {MAX_FIX_ROUNDS} fix rounds; {summary}")
             return 1

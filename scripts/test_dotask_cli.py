@@ -732,14 +732,14 @@ class DotaskCliTest(unittest.TestCase):
         best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
         self.assertIn("fix 1 task(s) x 25 min", basis)
         # One fix, then the failed criterion and the regression pass re-checked, each capped at 10 min.
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 2 * 10 + 8))
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 2 * dotask_cli.VERIFY_TIMEOUT_MINUTES + 8))
         # Findings in four tasks: four fix dispatches and five re-checks (four criteria and the regression pass).
         group["tasks"] = ["T1", "T2", "T3", "T4"]
         (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps({"head": "abc", "criteria": [
             {"id": f"{t}:C1", "status": "fail", "evidence": "x"} for t in ("T1", "T2", "T3", "T4")], "bugs": []}))
         best, _with_fix, basis = dotask_cli.estimate(group, checkout, now)
-        self.assertIn("fix 4 task(s) x 25 min, 5 re-check batch(es) x 10 min", basis)
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=4 * 25 + 5 * 10 + 8))
+        self.assertIn(f"fix 4 task(s) x 25 min, 5 re-check batch(es) x {dotask_cli.VERIFY_TIMEOUT_MINUTES:.0f} min", basis)
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=4 * 25 + 5 * dotask_cli.VERIFY_TIMEOUT_MINUTES + 8))
         with (checkout / ".dotask-status").open("a") as stream:
             stream.write("t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
                          "t RESUMED Fix round 1 dispatch 2 of 3: ran out of turns, handoff written\n")
@@ -1872,6 +1872,30 @@ class TaskFileCollisionTest(AutolandBase):
         branch.mkdir(parents=True)
         (branch / "T1-fix-the-thing.md").write_text(self.TASK_TEXT)
         self.assertEqual(dotask_cli.task_file_in(self.checkout, "T1"), branch / "T1-fix-the-thing.md")
+
+
+class SkippedRecheckTest(AutolandBase):
+    def test_a_criterion_skipped_at_the_cap_is_re_checked_in_the_fix_round(self):
+        # g-t15340-1, 2026-11-09: five criteria skipped in round 1 would have reached the PR unverified
+        # although a fix round re-ran verifiers anyway.
+        recheck_verdict = self._verdict()
+        del recheck_verdict["head"]  # it is for the fixed HEAD
+        self.verdicts = [self._verdict(("fail", "pass")), recheck_verdict]
+        original, calls = self._dispatch, []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None):
+            calls.append(instruction)
+            if phase == "qa" and len(calls) == 2:  # round 1, T1:C2's verifier
+                self.dispatches.append((phase, instruction))
+                raise dotask_cli.DispatchTimedOut("cap")
+            return original(slug, group, phase, instruction)
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        recheck = [text for phase, text in self.dispatches if phase == "qa"][3:]
+        self.assertIn("Prove ONLY criterion T1:C1:", recheck[0])
+        self.assertIn("Prove ONLY criterion T1:C2:", recheck[1])
+        final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
+        self.assertEqual([c["status"] for c in final["criteria"]], ["pass", "pass"])
 
 
 if __name__ == "__main__":
