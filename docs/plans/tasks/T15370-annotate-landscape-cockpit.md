@@ -27,11 +27,11 @@ This is the user's "permanent bar" in a shape that fits a sideways phone: side s
 
 ## Acceptance criteria (draft)
 
-1. At 812x334 and 852x393 the page does not scroll vertically, and the transport controls cover 0% of the picture.
-2. With Edit play open, at least 60% of the picture is visible, including its middle.
-3. Every strip button is at least 44px.
-4. Double-tap skip still works on both halves of the video; the 3x timeline zoom still works; the source can still be switched.
-5. Rotating back to portrait restores the T15380 portrait layout with no console error.
+1. [ ] At 812x334 and 852x393 the page does not scroll vertically, and the transport controls cover 0% of the picture.
+2. [ ] With Edit play open, at least 60% of the picture is visible, including its middle.
+3. [ ] Every strip button is at least 44px.
+4. [ ] Double-tap skip still works on both halves of the video; the 3x timeline zoom still works; the source can still be switched.
+5. [ ] Rotating back to portrait restores the T15380 portrait layout with no console error.
 
 ## Context
 

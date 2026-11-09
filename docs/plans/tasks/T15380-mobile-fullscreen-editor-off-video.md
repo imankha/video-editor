@@ -1,6 +1,6 @@
 # T15380: Mobile fullscreen Annotate stops covering the video (portrait layout + peek while dragging)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M (frontend only, no schema change)
@@ -38,11 +38,11 @@ Causes:
 
 ## Acceptance criteria
 
-1. Portrait fullscreen with Edit play open: 0% of the video picture is covered (picture rect vs editor rect).
-2. Portrait fullscreen with controls showing: 0% of the picture is covered.
-3. Landscape fullscreen while dragging a trim handle: at least 75% of the picture is visible. After release the full editor is back and the drag has not lost its touch.
-4. Landscape fullscreen, paused: after a control tap, the controls hide within the auto-hide delay (3 s).
-5. These keep working: double-tap skip, long-press drag mode, the soft keyboard over the name input in portrait, and the multi-video source bar.
+1. [ ] Portrait fullscreen with Edit play open: 0% of the video picture is covered (picture rect vs editor rect).
+2. [ ] Portrait fullscreen with controls showing: 0% of the picture is covered.
+3. [ ] Landscape fullscreen while dragging a trim handle: at least 75% of the picture is visible. After release the full editor is back and the drag has not lost its touch.
+4. [ ] Landscape fullscreen, paused: after a control tap, the controls hide within the auto-hide delay (3 s).
+5. [ ] These keep working: double-tap skip, long-press drag mode, the soft keyboard over the name input in portrait, and the multi-video source bar.
 
 ## Context
 
