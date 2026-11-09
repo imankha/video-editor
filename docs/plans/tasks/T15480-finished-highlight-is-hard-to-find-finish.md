@@ -1,0 +1,35 @@
+# T15480: Finished highlight is hard to find: Finish lands on an empty screen and Highlights shows only locked reels
+
+**Status:** TODO
+**Impact:** 7
+**Complexity:** 3
+**Created:** 2026-11-09
+**Updated:** 2026-11-09
+
+## Problem
+
+Bug, found by the 2026-11-09 Playwright QA pass on staging (new-user flow + version check, desktop / iPhone 14 / iPad gen 7).
+Viewports: desktop, iPhone 14, iPad.
+
+**Steps:** Finish a highlight (Spotlight done). Look for it afterwards.
+
+**Expected:** Finish lands where the new highlight is visible; the Highlights tab lists it.
+
+**Actual:** Finish goes to /home/published showing 'Highlights 0' until you navigate again; a cold load of /home/published redirects to /home/games. The Highlights tab shows two locked reels ('Add more highlights to unlock this game's highlight reel 8s / 30s', 'Your top-rated highlights, once you have enough') and the new clip is not obviously listed. On iPad the 'Just finished' section vanished on reload.
+
+## Acceptance Criteria
+
+- [ ] After Finish, the new highlight is visible on the landing screen without re-navigation.
+- [ ] The Highlights tab lists each finished highlight above locked reel tiles.
+- [ ] Cold-loading /home/published shows published highlights.
+
+## Context
+
+### Evidence (local screenshots, gitignored)
+- `qa/staging-qa-2026-11-09/nuf-desktop/desktop-home-reels.png`
+
+### Related Tasks
+T14770 (list of highlights made)
+
+### Relevant Files (REQUIRED)
+- To be found.
