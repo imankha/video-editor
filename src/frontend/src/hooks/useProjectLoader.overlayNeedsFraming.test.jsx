@@ -39,6 +39,12 @@ import { EDITOR_MODES } from '../stores/editorStore';
 // Production shape: GET /api/projects/{id} for a play never framed yet.
 const noWorkingVideoProject = { id: 80, name: 'Unframed Play', working_video_id: null, has_final_video: false, clip_count: 1 };
 const framedProject = { id: 81, name: 'Framed Play', working_video_id: 9, working_video_url: null, has_final_video: false, clip_count: 1 };
+// T15490: a published reel ("Move to My Reels") is archived -- archive_project() nulls
+// working_video_id and deletes working_clips, but the project IS finished (has_final_video
+// stays true). This looks identical to noWorkingVideoProject to a check that only reads
+// working_video_id, which wrongly redirected to Framing with the "make your highlight
+// first" toast for a highlight that already exists.
+const finishedArchivedProject = { id: 82, name: 'Published Play', working_video_id: null, has_final_video: true, clip_count: 1 };
 
 describe('useProjectLoader.loadProject overlay-needs-framing redirect (T15260)', () => {
   beforeEach(() => {
@@ -60,6 +66,15 @@ describe('useProjectLoader.loadProject overlay-needs-framing redirect (T15260)',
     const { result } = renderHook(() => useProjectLoader());
 
     const loaded = await result.current.loadProject(framedProject, { mode: EDITOR_MODES.OVERLAY });
+
+    expect(loaded.mode).toBe(EDITOR_MODES.OVERLAY);
+    expect(loaded.redirectedFromOverlay).toBe(false);
+  });
+
+  it('T15490: an explicit Overlay request for a finished (published/archived) project is NOT redirected to Framing', async () => {
+    const { result } = renderHook(() => useProjectLoader());
+
+    const loaded = await result.current.loadProject(finishedArchivedProject, { mode: EDITOR_MODES.OVERLAY });
 
     expect(loaded.mode).toBe(EDITOR_MODES.OVERLAY);
     expect(loaded.redirectedFromOverlay).toBe(false);
