@@ -198,7 +198,7 @@ sees a group's PR merged, it starts `python scripts/dotask_cli.py staging-check 
 the merge commit (`deploy-frontend.yml` and `deploy-backend.yml`; a commit touching neither app deploys
 nothing and is checked anyway), runs every task's browser checks against staging inside the group's
 container (`E2E_BASE_URL`, `E2E_API_BASE`, seeded account `E2E_CHECK_EMAIL`, default `e2e-gate@test.local`;
-`DOTASK_STAGING_URL`/`_API`/`_EMAIL` override), files each failure as a bug task at once ("Filed by /dotask
+`DOTASK_STAGING_URL`, `DOTASK_STAGING_API` and `DOTASK_STAGING_EMAIL` override), files each failure as a bug task at once ("Filed by /dotask
 staging check"), appends `STAGING_CHECK PR #n: k of m browser checks passed`, and frees the container. A
 failed or timed-out deploy stops it with `STAGING_CHECK_BLOCKED` and keeps the container for a re-run.
 `code` checks are not repeated: CI ran them. A group with no browser checks is freed at once.
