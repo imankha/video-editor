@@ -122,19 +122,21 @@ It does not write the implementation or its proof tests. Code review and proof v
 are separate verdicts. Missing reproducibility stays unverified; request more evidence from
 the implementor/tester before asking the user for a genuinely human-only observation.
 
-A headless group lands itself (user decision, 2026-11-07): after `PUSHREADY`, `autoland` has a fresh
-verifier prove every acceptance criterion with Playwright, sends failures to a fresh worker, re-checks
-only what failed plus a regression pass (earlier passes carry forward in the verdict), and repeats for
-at most 3 fix rounds. A clean verdict on the exact HEAD replaces the human test unless a criterion
+A headless group lands itself (user decision, 2026-11-07): after `PUSHREADY`, `autoland` verifies every
+acceptance criterion through the worker's checks (below), sends failures to a fresh worker, re-checks
+only what failed (earlier passes carry forward in the verdict), and repeats for at most 3 fix rounds. A clean verdict on the exact HEAD replaces the human test unless a criterion
 needs a person, then pushes and opens the PR. Merging stays with the user. A headless worker has
 nobody to ask, so `start` refuses a task whose file still waits on a user ruling: record it under
 `## Ruling` first (`/nextup` collects these before the container starts). Fix rounds dispatch one owning
 task at a time (fix, commit, next; a stuck task is skipped, not blocking). A dispatch that runs out of
-turns is restarted up to twice with a handoff note; a `human` criterion the owner ruled "check on
-staging" rides in the PR body instead of stopping the push; a worker whose change makes another group
-task's criterion false stops with `CONFLICT` before committing; groups hold at most 4 tasks;
-each verifier dispatch proves one criterion and is capped at 15 minutes (10 until 2026-11-09), and one past the cap is skipped and listed in the PR body as
-not verified, never counted as a pass; `/dotask resume <slug>` continues a stopped group; every `/dotask` relay carries an `eta:` line and a
+turns is restarted up to twice with a handoff note; a worker whose change makes another group
+task's criterion false stops with `CONFLICT` before committing; groups hold at most 4 tasks.
+Verification (owner decision 2026-11-09): the worker commits one check per criterion under
+`src/frontend/e2e/checks/`, the harness runs them, and one reviewer per round judges each check against its
+criterion's text; a group has one 30-minute verify budget, and what it does not reach is listed in the PR
+body as not verified, never counted as a pass; a `human` criterion rides in the PR body as a staging check.
+After merge, `staging-check` runs the browser checks against staging and files each failure as a bug task:
+staging is the real gate; `/dotask resume <slug>` continues a stopped group; every `/dotask` relay carries an `eta:` line and a
 change of more than 15 minutes is reported as a change.
 
 By hand, `/dotask land <slug>` first starts the group's app stack and stops for a human test (no push,

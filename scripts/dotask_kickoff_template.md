@@ -79,6 +79,27 @@ __TASK_LIST__
   non-obvious mechanism, spawn `expert` (Opus) once with the knowledge doc name and a precise
   question; also for design tradeoffs, async/persistence/concurrency, or real performance
   analysis. Use `code-expert` first for an unknown entry point or a stale knowledge doc.
+- **Checks** (required, every criterion; owner rule 2026-11-09): commit one check per acceptance
+  criterion with the task's commit. Nobody re-tests by hand: the harness runs these checks, one
+  reviewer reads each against its criterion's text, and after merge they run against staging. In
+  `src/frontend/e2e/checks/T<id>.checks.json`:
+  `{"criteria": {"T<id>:C1": {"kind": "browser"}, "T<id>:C2": {"kind": "code", "command": "<cmd>"},
+  "T<id>:C3": {"kind": "human", "why": "<what no automation can observe>"}}}`.
+  - `browser` (anything a user can see): a test whose title starts with the id (`T<id>:C1 ...`) in
+    `src/frontend/e2e/checks/T<id>.check.spec.js`. Log in with `loginForCheck(page)` and call the
+    API through `checkApi('/path')` (both from `../helpers/checkAuth`): the same file runs on your
+    stack and on staging, against different accounts, so read every id from the API, never
+    hard-code one. Drive the app the way the criterion says a user does: if the text says the app
+    writes something on leaving a page, navigate and close the page; never set that state with an
+    API POST. Assert what the text says. Allow a slow dev stack: wait for the state with
+    `expect.poll`/`waitForURL` (60 s), not a fixed sleep.
+  - `code` (a test exists, a file is listed, a backend rule holds): one command run from
+    /workspace that exits 0 only when the criterion holds: a grep or ONE targeted test file, never
+    a suite. Five minutes at most.
+  - `human`: only what no automation can observe (a real card payment, a physical phone).
+  A check must fail on the code before your change and pass after it: run it both ways (browser:
+  `bash scripts/dev-verify.sh e2e/checks/T<id>.check.spec.js --reporter=line`). A missing, failing
+  or weak check is a finding that comes back to a fix round.
 - Persistence: gesture-based only; no `useEffect` that writes to a store/backend. No silent
   fallbacks for internal data.
 - Headless run: every command in the foreground (a backgrounded command or ScheduleWakeup ends

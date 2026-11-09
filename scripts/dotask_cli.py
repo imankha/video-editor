@@ -364,7 +364,7 @@ def start(args):
     for group in live_groups():  # a merged group's container would still count as owning its files
         merged = merged_pr(group.get("branch"))
         if merged:
-            print(f"[dotask] {group.get('slug')}: {free_group(group.get('slug'), merged)}")
+            print(f"[dotask] {group.get('slug')}: {on_merge(group.get('slug'), merged)}")
     files_by_task, owned, shared = preflight(task_ids, args.allow_overlap)
 
     slug = f"g-{task_ids[0].lower()}-{len(task_ids)}"
@@ -435,7 +435,7 @@ def render_pr_body(group):
         lines += ["", "Check on staging after merge (owner ruling in the task file; not verified before the push):"]
         lines += [f"- {item['id']}: {item['text']}" for item in group["staging_checks"]]
     if group.get("skipped_checks"):
-        lines += ["", "Not verified: the verifier passed its time cap, so these were skipped (owner rule 2026-11-08):"]
+        lines += ["", "Not verified: no check proved these before the verify budget ran out (owner rule 2026-11-09):"]
         lines += [f"- {item['id']}: {item['text']}" for item in group["skipped_checks"]]
     return "\n".join(lines)
 
@@ -704,38 +704,29 @@ def land(args):
 VERIFY_FILE = ".dotask-verify.json"
 MAX_FIX_ROUNDS = 3  # a flaky test or an unfixable bug must not burn usage forever
 VERIFY_ATTEMPTS = 2  # retries cover only a dispatch that errored out, never a bad verdict
-# One verifier dispatch proves ONE criterion (owner decision 2026-11-08). Batches of three tasks each
-# passed the 10-minute verifier cap on all three groups that day (g-t14980-2, g-t15240-2, g-t15260-1), so
-# 25 criteria landed unverified. One criterion fits the cap, and a stall costs that criterion alone. A
-# previous round's bug is re-run in its own dispatch, and the regression pass is the last dispatch.
-# The tests that import what the branch changed run here: a T14800 rollup bug reached Branch CI after a
-# clean verdict because no verifier ran the backend tests (g-t15220-10, PR 717, 2026-11-07). Selection is
-# by import, as Branch CI does it; never a whole suite.
-REGRESSION_STEP = ("Regression pass: from `git diff origin/master...HEAD --stat`, exercise the flows this branch "
-                   "touches and look for anything broken that no criterion names. Then run the tests that import "
-                   "what the branch changed: for src/frontend, `npx vitest related --run <changed files>` in "
-                   "src/frontend; for src/backend, pytest on every test file under src/backend/tests that imports "
-                   "a changed module (grep for the module name), never the whole suite. Run each failing test once "
-                   "more on its own before reporting it. A failure on this branch is a `group` bug naming the "
-                   "test; one that also fails on origin/master is `unrelated`.")
-NO_REGRESSION_STEP = "Skip the regression pass: another verifier dispatch runs it. Report bugs you happen to see."
-ONE_CRITERION_STEP = ("Prove ONLY criterion {id}: item {number} of the `## Acceptance Criteria` in {task}'s file under "
-                      "docs/plans/tasks, which reads: {text!r}. Give it exactly one entry with id {id} and list no other "
-                      "criterion: each one has its own verifier dispatch.")
-NO_CRITERION_STEP = ("Prove no acceptance criterion and list none under `criteria` (leave it []): each one has its own "
-                     "verifier dispatch.")
-# After a fix round only what failed is re-checked: re-proving 40 passing criteria cost an hour per
-# round on g-t15220-10 (2026-11-07). The regression pass still runs, and earlier passes carry forward.
-RECHECK_PREFIX = ("This is a re-check after fix round {fix_round}; criteria not named here passed on the previous "
-                  "HEAD and carry forward. ")
+# Worker-written checks (owner decision 2026-11-09). One fresh verifier per criterion still passed the 15-minute
+# cap on most criteria (g-t15340-1: 9 of 12), mostly rebuilding Playwright setup the worker already had. So the
+# worker who knows the code commits one check per criterion under CHECKS_DIR, the harness runs every check
+# itself (no agent), and ONE reviewer per round reads each check against its criterion's text and flags a
+# weak or missing one. Verification shares one budget per group; when it is spent the PR opens and lists
+# what is unverified. The real gate is the staging check after merge, which runs the same checks.
+CHECKS_DIR = "src/frontend/e2e/checks"
+CHECK_KINDS = ("browser", "code", "human")
+VERIFY_BUDGET_MINUTES = float(os.environ.get("DOTASK_VERIFY_BUDGET_MIN", "30"))
+CHECK_COMMAND_SECONDS = 300  # one `code` check: a grep or a targeted test run
+CHECK_SPEC_SECONDS = 900  # one task's browser checks in one Playwright run
+BUDGET_SPENT = "not verified: the group's verify budget was spent (owner rule 2026-11-09)"
+RECHECK_NOTE = ("This is a re-check after fix round {fix_round}; criteria not named here passed on the previous "
+                "HEAD and carry forward. ")
 # A fixer that disputed a finding stopped the whole loop as VERIFY_BLOCKED, and the owner had to rule on
-# a flake by hand (g-t14940-1, 2026-11-08). The dispute now goes to a fresh verifier first; only a
-# finding the verifier still upholds after reading the dispute reaches the owner.
+# a flake by hand (g-t14940-1, 2026-11-08). The dispute now goes to a fresh reviewer first; only a
+# finding the reviewer still upholds after reading the dispute reaches the owner.
 DISPUTE_STEP = (" The fix worker disputed these findings instead of fixing them; re-examine each one fresh, deferring "
                 "to neither side. Keep a finding only if you reproduce it on this HEAD; one that also happens on "
                 "origin/master is an `unrelated` bug (run it there before deciding). Disputes: {disputes}")
 BUGS_STEP = ("Re-run the steps of each of these bugs and list any still present under `bugs` with the same title "
              "(a fixed bug gets no entry): {titles}. ")
+NO_BUGS_STEP = "Report a bug only if you see one while reading; there is no separate regression pass."
 VERIFY_STATUSES = ("pass", "fail", "human")
 BUG_SCOPES = ("group", "unrelated")
 ACCEPTANCE_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]")
@@ -745,32 +736,31 @@ ACCEPTANCE_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]")
 ACCEPTANCE_PLAIN_ITEM = re.compile(r"^(?:[-*]|\d+\.)\s+")
 BUG_SECTION = "### Bugs found by /dotask verify"
 PLAN_TAIL_HEADING = "## Environment Configuration"
-VERIFY_INSTRUCTION = """You are the independent verifier for this group, verify round {round}, batch {batch}. You did not write this code.
-Do not trust the worker's claims, qa/proof.json or .dotask-notes.md conclusions: observe behavior yourself.
-Do NOT edit tracked files, commit, or change qa/proof.json. Put Playwright specs you write in /workspace/src/frontend/e2e/_verify/ (untracked, so module imports resolve) and other scripts under /tmp. HEAD is {head}.
+REVIEW_INSTRUCTION = """You review the acceptance checks of this group, verify round {round}. You did not write this code or these checks.
+Do NOT edit tracked files, commit, or change qa/proof.json. Scripts of your own go under /tmp. HEAD is {head}.
 
-The app stack was just restarted on this code: http://localhost:5173, backend :8000, dev accounts ?dev_account=empty|upload|full.
+The worker committed one check per acceptance criterion: `{checks_dir}/T<id>.checks.json` names each criterion's kind (`browser`: the test titled with its id in `{checks_dir}/T<id>.check.spec.js`; `code`: a shell command; `human`), and the harness has already run every check on this HEAD against the app stack (http://localhost:5173, backend :8000). Your job is to judge each check against its criterion, not to re-test the app.
 
-1. {scope}
-2. Prove each criterion by observation. Use Playwright for anything a user can see; the repo already has the setup, so do not build your own: first grep src/frontend/e2e for the task id and, if the worker wrote a spec for this criterion, read it to check it drives the real app and asserts the criterion's text, then run it. Otherwise write a short spec in e2e/_verify/ that logs in with `loginAsDevPreset(page, 'full')` from '../helpers/realAuth' (each call mints a NEW account, so read ids through page.request in the same test) and run it with `bash scripts/dev-verify.sh e2e/_verify/<name>.spec.js --reporter=line`. Run everything in the foreground with an explicit timeout: nothing notifies you when a background command ends. The stack is a dev server under load: a cold load can render Home first and reach its target 15-45 s later, so wait for the state you are checking (expect.poll or waitForURL with a 60 s timeout) before calling it a fail. You have 15 minutes in all, so prove the criterion and write the verdict; do not explore beyond it. Use the real API or the task's targeted tests only for what no user can see.
-3. Read each criterion literally. Code that meets the intent but not the text is a `fail`, with that said in the evidence.
-4. src/landing changes: this stack does not serve the landing site. Run `npm run build` in src/landing (`npm ci` first if node_modules is missing), then serve dist from a small node script under /tmp, mapping /x to x.html.
-5. {regression}
-6. Before believing a surprising result, confirm the served code is the code on disk. Pass an explicit long Bash timeout for builds, installs and e2e runs. Stop investigating a finding once you can state its steps; fixing is not your job.
+1. {recheck}For each criterion below, read its check and the criterion's text in the task file under docs/plans/tasks.
+   A check is `pass` only if it passed AND it would fail were the criterion false: it drives the real app (or the real code) the way the criterion says and asserts what the text says.
+   A passing check that is weak is `fail`, with what it misses in the evidence: it asserts less than the text, mocks or stubs the behavior under test, sets up through a back door state the criterion says a user creates (an API POST where the text says the app writes it), or would pass on broken code.
+   A failed or missing check is `fail`: restate its error. `human` only for what no automation can observe (a real card payment, a physical phone).
+{criteria}
+2. {bugs}
+3. Read, don't explore. Run a check yourself only to settle a doubt, in the foreground with an explicit timeout (`bash scripts/dev-verify.sh e2e/checks/<file> --reporter=line --grep '<id>'`). You have {minutes:.0f} minutes in all.
 
-Write /workspace/.dotask-verify.json, exactly:
+Write /workspace/.dotask-verify.json, exactly, with every criterion above listed once:
 {{"head": "{head}",
-  "criteria": [{{"id": "T1:C1", "status": "pass|fail|human", "evidence": "what you observed"}}],
+  "criteria": [{{"id": "T1:C1", "status": "pass|fail|human", "evidence": "why the check proves it, or what it misses"}}],
   "bugs": [{{"scope": "group|unrelated", "task": "T1", "title": "...", "steps": "...", "expected": "...", "actual": "..."}}]}}
-`human` is only for what no automation can observe (a real card payment, a physical phone). Never use it to save effort.
 A bug's scope is `group` if this branch caused it and `unrelated` if master has it too: check before deciding.
-Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round} batch {batch}` to /workspace/.dotask-status and stop. If you cannot run the checks at all, append `BLOCKED <reason>` instead."""
+Then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} {head} verify round {round} review` to /workspace/.dotask-status and stop. If you cannot read the checks at all, append `BLOCKED <reason>` instead."""
 # A fix round is one dispatch per owning task: fix, commit, next. One worker given every finding went
 # straight to the hardest (T15220's export race), ran out of turns three times and committed nothing,
 # so three finished fixes sat uncommitted for three hours (g-t15220-10, 2026-11-07).
 FIX_INSTRUCTION = """Independent verification of {head} found problems, listed in /workspace/.dotask-verify.json. This dispatch fixes ONLY {scope}: {items}. Every other finding in that file gets its own dispatch after this one: do not touch it. All tasks already have commits, so do not start a new one.
 Before your first code edit, append a `## {label} progress` checklist to .dotask-notes.md with one line per finding above (unless one with that exact heading is already there: then continue it), and tick each line as it is fixed: a dispatch can run out of turns, and the next worker resumes from that list. A progress checklist under any other heading is from another task or round: ignore it.
-Fix each finding at its root, failing test first. Re-run only the tests that failed and the ones you wrote; a test that already passed on this code stays passed and is not run again (user rule, 2026-11-07). Lint the files you changed. Commit with explicit paths, subject `{subject}: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
+Fix each finding at its root, failing test first. A finding that a criterion's check is missing or weak is fixed by writing or strengthening that check in {checks_dir} (the kickoff's Checks rule) until it fails on broken code and passes on yours; a failing check means the code is wrong, not the check, unless you can show otherwise. Re-run only the tests that failed and the ones you wrote; a test that already passed on this code stays passed and is not run again (user rule, 2026-11-07). Lint the files you changed. Commit with explicit paths, subject `{subject}: fix <what>`, ending with the Co-Authored-By line from the kickoff. Append what a later fix round needs to .dotask-notes.md. If you changed a test named in qa/proof.json, update its entry (new red and green logs, new sha256), or landing cannot build the evidence.
 A finding you believe is wrong (this branch did not cause it, it is a flake, or the verifier misread the criterion): do not work around it, and never edit a task file's Acceptance Criteria to make one pass: they are the user's. Commit any finished fix first, then append `<UTC yyyy-mm-ddTHH:MM> DISPUTED {label} <finding id or bug title>: <your evidence: what you ran on this branch and on origin/master, and what you saw>` to /workspace/.dotask-status and stop. A fresh verifier re-examines it with your evidence. Append `BLOCKED <reason>` only if you cannot work at all.
 Otherwise run `bash scripts/dotask_preland_check.sh`, then append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY {branch} <new sha> {label}` to /workspace/.dotask-status and stop."""
 
@@ -823,34 +813,6 @@ def acceptance_items(task_file):
 def acceptance_count(task_file):
     """Checkbox items in a task file's Acceptance Criteria: the floor a verdict must cover."""
     return len(acceptance_items(task_file))
-
-
-STAGING_WORD = re.compile(r"\bstaging\b", re.I)
-CRITERION_REF = re.compile(r"\bC(\d+)\b")
-
-
-def staging_deferred(task_file):
-    """Criterion ids whose check the owner moved to staging after merge: a recorded ruling (see
-    RULING_RECORDED) that says `staging` and names the criterion (`C2 ... verified on staging`), or
-    sits right under it in the Acceptance Criteria. T14860:C2 (2026-11-07) needed two real GPU
-    exports no sandbox has; the owner ruled "check on staging", and autoland still stopped for it."""
-    task_id = re.match(r"T\d+", Path(task_file).name).group(0)
-    item = acceptance_item_pattern(task_file)
-    deferred, inside, current = set(), False, 0
-    for line in Path(task_file).read_text(encoding="utf-8").splitlines():
-        if line.startswith("## "):
-            inside, current = line.lower().startswith("## acceptance"), 0
-            continue
-        if inside and item.match(line):
-            current += 1
-        if not (STAGING_WORD.search(line) and RULING_RECORDED.search(line)):
-            continue
-        named = [int(n) for n in CRITERION_REF.findall(line)]
-        if named:
-            deferred.update(named)
-        elif inside and current:
-            deferred.add(current)
-    return {f"{task_id}:C{n}" for n in sorted(deferred)}
 
 
 def read_verdict(checkout, group, head, tasks=None, criteria_ids=None):
@@ -977,9 +939,10 @@ def stop_dispatch(slug, process):
                        capture_output=True, check=False, timeout=60)
 
 
-def dispatch(slug, group, phase, instruction, task_ids=None):
+def dispatch(slug, group, phase, instruction, task_ids=None, cap_minutes=None):
     """One fresh `claude -p` in the group's container. True only if it ended on PUSHREADY. `task_ids`
-    names the task(s) this dispatch is for (the profile records it; default: the whole group)."""
+    names the task(s) this dispatch is for (the profile records it; default: the whole group).
+    `cap_minutes` overrides the phase's wall-clock cap (the reviewer gets what is left of the budget)."""
     env = {**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
            "DOTASK_WAVE_ID": group["wave_id"], "DOTASK_PHASE": phase,
            "DOTASK_TASK_IDS": ",".join(task_ids or group["tasks"])}
@@ -987,7 +950,7 @@ def dispatch(slug, group, phase, instruction, task_ids=None):
         env["DOTASK_MAX_TURNS"] = str(PHASE_MAX_TURNS[phase])
     process = subprocess.Popen([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "drive", slug, instruction],
                                env=env)
-    cap = PHASE_TIMEOUT_MINUTES.get(phase)
+    cap = cap_minutes if cap_minutes is not None else PHASE_TIMEOUT_MINUTES.get(phase)
     try:
         returncode = process.wait(timeout=cap * 60 if cap else None)
     except subprocess.TimeoutExpired:
@@ -1246,7 +1209,7 @@ def run_fix_round(slug, group, checkout, round_number, verdict, resuming=False):
             continue
         items = "; ".join([*criteria, *(f"bug: {title}" for title in bugs)])
         scope = f"{task}'s findings" if task else "the findings no single task owns"
-        instruction = FIX_INSTRUCTION.format(head=head, scope=scope, items=items, label=label,
+        instruction = FIX_INSTRUCTION.format(head=head, scope=scope, items=items, label=label, checks_dir=CHECKS_DIR,
                                              subject=task or "<owning task id>", branch=group["branch"])
         if dirty_from_before:
             # Changes left by the interrupted dispatch may belong to any task: the first worker sorts them.
@@ -1295,9 +1258,10 @@ def interrupted_fix_round(checkout, group):
     return max(rounds) if rounds else 1
 
 
-def file_unrelated_bug(bug, group, head):
-    """A bug this branch did not cause must not hold its PR up: file it as a TODO task instead.
-    Returns the new id, or None if PLAN.md already names that title."""
+def file_unrelated_bug(bug, group, head, found_by=None):
+    """A bug this branch did not cause must not hold its PR up: file it as a TODO task instead. The
+    staging check files its failures the same way, with `found_by` saying so. Returns the new id, or None
+    if PLAN.md already names that title."""
     plan_path = MAIN_REPO / "docs" / "plans" / "PLAN.md"
     plan = plan_path.read_bytes().decode("utf-8")
     title = " ".join(str(bug["title"]).replace("|", "/").split())
@@ -1311,14 +1275,18 @@ def file_unrelated_bug(bug, group, head):
     today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
     write_lf(tasks_dir / name, (
         f"# {task_id}: {title}\n\n**Status:** TODO\n**Impact:** 5\n**Complexity:** 3\n**Created:** {today}\n"
-        f"**Updated:** {today}\n\n## Problem\n\nFound by the /dotask verifier on group {group['slug']} at {head[:9]}, "
-        f"which judged it unrelated to that branch. Impact and complexity are unscored defaults.\n\n"
+        f"**Updated:** {today}\n\n## Problem\n\n"
+        + (f"Found by {found_by} (group {group['slug']}, {head[:9]}). " if found_by else
+           f"Found by the /dotask verifier on group {group['slug']} at {head[:9]}, which judged it unrelated to "
+           "that branch. ")
+        + "Impact and complexity are unscored defaults.\n\n"
         f"**Steps:** {bug.get('steps', 'not recorded')}\n\n**Expected:** {bug.get('expected', 'not recorded')}\n\n"
         f"**Actual:** {bug.get('actual', 'not recorded')}\n\n## Acceptance Criteria\n\n- [ ] The steps above give the "
         f"expected result.\n\n## Context\n\n### Relevant Files (REQUIRED)\n\n- To be found.\n"))
 
     newline = "\r\n" if "\r\n" in plan else "\n"
-    row = f"| {task_id} | [{title}](tasks/{name}) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |"
+    source = "staging check" if found_by else "verify"
+    row = f"| {task_id} | [{title}](tasks/{name}) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask {source}. |"
     lines = plan.replace("\r\n", "\n").split("\n")
     if BUG_SECTION in lines:
         at = lines.index(BUG_SECTION) + 1
@@ -1383,102 +1351,234 @@ def criterion_line(checkout, criterion):
     return items[int(number) - 1] if int(number) <= len(items) else ""
 
 
-def verify_units(group, checkout, focus=None):
-    """The verifier dispatches of one round, in order: one per criterion, one per previous-round bug to
-    re-run (after a fix round), then the regression pass. Each is {"criteria", "bugs", "regression"}."""
-    if focus:
-        criteria = list(focus["criteria"])
-        bugs = list(focus["bugs"])
+def check_manifest(checkout, task_id):
+    """{criterion id: {"kind": browser|code|human, ...}} from the task's committed checks file ({} if none)."""
+    path = Path(checkout) / CHECKS_DIR / f"{task_id}.checks.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    criteria = data.get("criteria") if isinstance(data, dict) else None
+    return {str(k): v for k, v in criteria.items() if isinstance(v, dict)} if isinstance(criteria, dict) else {}
+
+
+def container_run(slug, command, timeout, env=None):
+    """(exit code or None on timeout, output tail) of a bash command in the group's container."""
+    argv = [tool("docker"), "exec"] + [f"-e{k}={v}" for k, v in (env or {}).items()] + [cname(slug), "bash", "-lc", command]
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None, f"timed out after {timeout:.0f}s"
+    except OSError as exc:
+        return 1, str(exc)
+    return result.returncode, (result.stdout + result.stderr)[-2000:]
+
+
+def playwright_outcomes(report):
+    """{spec title: (ok, first error line)} from a Playwright JSON report, every nested suite included."""
+    found = {}
+
+    def walk(suite):
+        for spec in suite.get("specs", []):
+            error = ""
+            for test in spec.get("tests", []):
+                for result in test.get("results", []):
+                    message = ((result.get("error") or {}).get("message") or "").strip()
+                    if message and not error:
+                        error = message.splitlines()[0][:400]
+            found[spec.get("title", "")] = (bool(spec.get("ok")), error)
+        for child in suite.get("suites", []):
+            walk(child)
+    for suite in report.get("suites", []):
+        walk(suite)
+    return found
+
+
+def check_location(task_id, entry):
+    if entry.get("kind") == "browser":
+        return f"{CHECKS_DIR}/{task_id}.check.spec.js"
+    if entry.get("kind") == "code":
+        return f"command `{str(entry.get('command', ''))[:300]}`"
+    return "declared human"
+
+
+def run_browser_checks(slug, task_id, ids, timeout, staging=None):
+    """{id: (status, detail)} for one task's browser checks, run in one Playwright process inside the
+    container: against the group's stack via dev-verify.sh, or against `staging` ({"url", "api", "email"})."""
+    report_path = f"/tmp/dotask-check-{task_id}.json"
+    grep = "|".join(re.escape(i) for i in ids)
+    spec = f"e2e/checks/{task_id}.check.spec.js"
+    env = {"PLAYWRIGHT_JSON_OUTPUT_NAME": report_path}
+    if staging:
+        env.update({"E2E_BASE_URL": staging["url"], "E2E_API_BASE": staging["api"], "E2E_CHECK_EMAIL": staging["email"]})
+        command = f"cd /workspace/src/frontend && npx playwright test {spec} --reporter=json --grep '{grep}'"
     else:
-        criteria = [c for t in group["tasks"] for c in criterion_ids(checkout, t)]
-        bugs = []
-    units = [{"criteria": [c], "bugs": [], "regression": False} for c in criteria]
-    units += [{"criteria": [], "bugs": [b], "regression": False} for b in bugs]
-    return units + [{"criteria": [], "bugs": [], "regression": True}]
+        command = f"cd /workspace && bash scripts/dev-verify.sh {spec} --reporter=json --grep '{grep}'"
+    code, output = container_run(slug, f"rm -f {report_path}; {command}", timeout, env)
+    if code is None:
+        return {i: ("skipped", f"browser checks {output}") for i in ids}
+    _code, raw = container_run(slug, f"cat {report_path}", 60)
+    try:
+        outcomes = playwright_outcomes(json.loads(raw))
+    except ValueError:
+        return {i: ("fail", f"no Playwright report (exit {code}): {output[-600:]}") for i in ids}
+    results = {}
+    for criterion in ids:
+        mine = [(ok, err) for title, (ok, err) in outcomes.items()
+                if re.search(rf"(^|\W){re.escape(criterion)}(\W|$)", title)]
+        if not mine:
+            results[criterion] = ("missing", f"no test titled with {criterion} in {spec}")
+        elif all(ok for ok, _ in mine):
+            results[criterion] = ("pass", f"{len(mine)} test(s) passed")
+        else:
+            results[criterion] = ("fail", next(err for ok, err in mine if not ok) or "test failed")
+    return results
+
+
+def run_checks(slug, checkout, group, wanted, deadline):
+    """{criterion id: {"status": pass|fail|missing|human|skipped, "where", "detail"}}: every check the
+    worker committed for `wanted`, run by the harness itself (no agent). Past `deadline` the rest are
+    skipped."""
+    results = {}
+    by_task = {}
+    for criterion in wanted:
+        by_task.setdefault(criterion.split(":")[0], []).append(criterion)
+    for task_id, ids in by_task.items():
+        manifest = check_manifest(checkout, task_id)
+        browser = []
+        for criterion in ids:
+            entry = manifest.get(criterion)
+            if not entry or entry.get("kind") not in CHECK_KINDS:
+                results[criterion] = {"status": "missing", "where": f"{CHECKS_DIR}/{task_id}.checks.json",
+                                      "detail": "no check declared for this criterion"}
+                continue
+            where = check_location(task_id, entry)
+            left = deadline - time.time()
+            if entry["kind"] == "human":
+                results[criterion] = {"status": "human", "where": where, "detail": str(entry.get("why", ""))[:300]}
+            elif left <= 0:
+                results[criterion] = {"status": "skipped", "where": where, "detail": BUDGET_SPENT}
+            elif entry["kind"] == "code":
+                code, output = container_run(slug, f"cd /workspace && {entry.get('command', 'false')}",
+                                             min(CHECK_COMMAND_SECONDS, left))
+                status = "skipped" if code is None else "pass" if code == 0 else "fail"
+                results[criterion] = {"status": status, "where": where,
+                                      "detail": "exit 0" if status == "pass" else f"exit {code}: {output[-600:]}"}
+            else:
+                browser.append(criterion)
+                results[criterion] = {"status": "skipped", "where": where, "detail": BUDGET_SPENT}
+        left = deadline - time.time()
+        if browser and left > 0:
+            for criterion, (status, detail) in run_browser_checks(slug, task_id, browser,
+                                                                   min(CHECK_SPEC_SECONDS, left)).items():
+                results[criterion].update(status=status, detail=detail)
+    return results
+
+
+def budget_left_minutes(group):
+    return VERIFY_BUDGET_MINUTES - group.get("verify_spent_s", 0) / 60
+
+
+def spend_budget(group, checkout, seconds):
+    group["verify_spent_s"] = group.get("verify_spent_s", 0) + seconds
+    save_group(checkout, group)
+
+
+def review_checks(slug, group, checkout, head, round_number, wanted, results, bugs, disputes, focus, minutes):
+    """One reviewer dispatch for the round. Returns its verdict, or None if it passed its time or turns
+    (what it was to judge then lands unverified). Raises UntrustedVerdict for a verdict it cannot use."""
+    lines = "\n".join(f"   - {c}: {criterion_line(checkout, c)!r}. Check: {results[c]['where']}. "
+                      f"Result: {results[c]['status']} ({results[c]['detail'][:300]})" for c in wanted)
+    bugs_step = BUGS_STEP.format(titles="; ".join(
+        f"{b['title']} (steps: {str(b.get('steps') or 'see the title')[:3000]})" for b in bugs)) if bugs else NO_BUGS_STEP
+    if disputes:
+        bugs_step += DISPUTE_STEP.format(disputes="; ".join(f"[{', '.join(d['items'])}] {d['reason']}" for d in disputes))
+    instruction = REVIEW_INSTRUCTION.format(
+        round=round_number, head=head, branch=group["branch"], checks_dir=CHECKS_DIR, criteria=lines, bugs=bugs_step,
+        minutes=minutes, recheck=RECHECK_NOTE.format(fix_round=round_number - 1) if focus else "")
+    finished = timed_out = False
+    for attempt in range(VERIFY_ATTEMPTS):
+        (checkout / VERIFY_FILE).unlink(missing_ok=True)
+        try:
+            finished = dispatch(slug, group, "qa", instruction, cap_minutes=minutes)
+        except DispatchTimedOut:
+            timed_out = True
+            break
+        # A transport failure (g-t15220-10, 2026-11-07: ENOTFOUND 7 minutes in) says nothing about the code.
+        if finished or "outcome=error" not in last_status(checkout) or tracked_changes(checkout):
+            break
+        print(f"[dotask] reviewer dispatch errored (attempt {attempt + 1}); retrying", file=sys.stderr)
+    ran_out = not finished and not timed_out and out_of_turns(checkout)
+    noise, changed = split_tool_noise(tracked_changes(checkout))
+    restore_tool_noise(checkout, noise)
+    if git_head(checkout) != head or changed:
+        raise UntrustedVerdict(f"reviewer changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
+    if timed_out or ran_out:
+        why = f"passed its {minutes:.0f}-minute share of the budget" if timed_out else "ran out of turns"
+        append_status(checkout, f"VERIFY_SKIPPED round {round_number} review: reviewer {why}; passing checks not reviewed")
+        return None
+    if not finished:
+        raise UntrustedVerdict(f"reviewer did not finish: {last_status(checkout)[:200]}")
+    verdict = read_verdict(checkout, group, head, criteria_ids=wanted)
+    verdict["criteria"] = [c for c in verdict["criteria"] if str(c.get("id")) in wanted]
+    return verdict
 
 
 def verify_once(slug, group, checkout, head, round_number, focus=None):
-    """Stack up on HEAD, then one fresh verifier per criterion (see verify_units). After a fix round
-    `focus` names the previous verdict's failed criteria and group bugs (and carries that verdict): only
-    those are re-checked, plus the regression pass, and the rest of the previous verdict carries forward.
-    A verifier that passes its time cap is skipped. Returns the merged verdict, which lists every
-    criterion; raises UntrustedVerdict if any dispatch cannot be used."""
-    try:
-        bring_up_stack(slug)
-    except subprocess.CalledProcessError as exc:
-        raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
-    warm_stack(slug)
-    units = verify_units(group, checkout, focus)
+    """The harness runs every check the worker committed for this round's criteria (all of them, or after
+    a fix round only `focus`: the failed and skipped ones), then ONE reviewer judges each check against its
+    criterion. Everything shares the group's verify budget; past it, what is left is `skipped`. A failed or
+    missing check is a `fail` whatever the reviewer says. Returns the merged verdict, which lists every
+    criterion (re-checked ones fresh, the rest carried forward); raises UntrustedVerdict if the review
+    cannot be used."""
+    wanted = list(focus["criteria"]) if focus else [c for t in group["tasks"] for c in criterion_ids(checkout, t)]
+    bugs = list(focus["bugs"]) if focus else []
     disputes = list(group.get("disputes", []))
-    for unit in units:  # a dispute travels with the dispatch that re-checks what it disputes
-        names = {*unit["criteria"], *(b.get("title") for b in unit["bugs"])}
-        unit["disputes"] = [d for d in disputes if set(d["items"]) & names]
-    units[-1]["disputes"] += [d for d in disputes if not any(d in u["disputes"] for u in units[:-1])]
     merged = {"head": head, "criteria": [], "bugs": [], "skipped_steps": []}
-    archive_dir = TASKS_ROOT / "waves" / group["wave_id"]
-    archive_dir.mkdir(parents=True, exist_ok=True)
-    for number, unit in enumerate(units, 1):
-        label = f"{number} of {len(units)}"
-        wanted = unit["criteria"]
-        if wanted:
-            task_id, item = wanted[0].split(":C")
-            scope = ONE_CRITERION_STEP.format(id=wanted[0], number=item, task=task_id,
-                                              text=criterion_line(checkout, wanted[0]))
-        else:
-            scope = NO_CRITERION_STEP
-        if unit["bugs"]:
-            # The verdict file is cleared before each verifier, so the steps travel in the instruction.
-            scope += " " + BUGS_STEP.format(titles="; ".join(
-                f"{b['title']} (steps: {str(b.get('steps') or 'see the title')[:3000]})" for b in unit["bugs"]))
-        if focus:
-            scope = RECHECK_PREFIX.format(fix_round=round_number - 1) + scope
-        if unit["disputes"]:
-            scope += DISPUTE_STEP.format(disputes="; ".join(
-                f"[{', '.join(d['items'])}] {d['reason']}" for d in unit["disputes"]))
-        instruction = VERIFY_INSTRUCTION.format(
-            round=round_number, batch=label, head=head, scope=scope, branch=group["branch"],
-            regression=REGRESSION_STEP if unit["regression"] else NO_REGRESSION_STEP)
-        what = " ".join(wanted) or ("regression pass" if unit["regression"] else
-                                    "bug re-check: " + "; ".join(b["title"] for b in unit["bugs"]))
-        timed_out = False
-        for attempt in range(VERIFY_ATTEMPTS):
-            (checkout / VERIFY_FILE).unlink(missing_ok=True)
+    started, left = time.time(), budget_left_minutes(group)
+    if left <= 0:
+        merged["criteria"] = [{"id": c, "status": "skipped", "evidence": BUDGET_SPENT} for c in wanted]
+        append_status(checkout, f"VERIFY_SKIPPED round {round_number}: verify budget spent; {' '.join(wanted)} not verified")
+    else:
+        try:
             try:
-                finished = dispatch(slug, group, "qa", instruction)
-            except DispatchTimedOut:
-                finished, timed_out = False, True
-                break
-            # A transport failure (g-t15220-10, 2026-11-07: ENOTFOUND 7 minutes in) says nothing about the code.
-            if finished or "outcome=error" not in last_status(checkout) or tracked_changes(checkout):
-                break
-            print(f"[dotask] verifier dispatch errored (attempt {attempt + 1}); retrying", file=sys.stderr)
-        # A verifier with one criterion has nothing smaller to split into: out of turns is skipped like
-        # out of time.
-        ran_out = not finished and not timed_out and out_of_turns(checkout)
-        noise, changed = split_tool_noise(tracked_changes(checkout))
-        restore_tool_noise(checkout, noise)
-        if git_head(checkout) != head or changed:
-            raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
-        if timed_out or ran_out:
-            why = f"passed the {VERIFY_TIMEOUT_MINUTES:g}-minute cap" if timed_out else "ran out of turns"
-            merged["criteria"] += [{"id": c, "status": "skipped", "evidence": (
-                f"verifier {why}; not verified (owner rule 2026-11-08)")} for c in wanted]
-            if not wanted:
-                merged["skipped_steps"].append(what)
-            append_status(checkout, f"VERIFY_SKIPPED batch {label}: verifier {why}; {what} not verified")
-            continue
-        if not finished:
-            raise UntrustedVerdict(f"verifier batch {label} did not finish: {last_status(checkout)[:200]}")
-        verdict = read_verdict(checkout, group, head, criteria_ids=wanted)
-        # Entries it was not asked for are dropped: another dispatch owns them.
-        verdict["criteria"] = [c for c in verdict["criteria"] if str(c.get("id")) in wanted]
-        (archive_dir / f"verify-round-{round_number}-batch-{number}.json").write_text(
-            json.dumps(verdict, indent=2) + "\n", encoding="utf-8")
-        merged["criteria"] += verdict["criteria"]
-        merged["bugs"] += verdict["bugs"]
+                bring_up_stack(slug)
+            except subprocess.CalledProcessError as exc:
+                raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
+            warm_stack(slug)
+            results = run_checks(slug, checkout, group, wanted, started + left * 60)
+            remaining = left - (time.time() - started) / 60
+            review = None
+            if remaining > 1:
+                review = review_checks(slug, group, checkout, head, round_number, wanted, results, bugs, disputes,
+                                       focus, min(VERIFY_TIMEOUT_MINUTES, remaining))
+            else:
+                append_status(checkout, f"VERIFY_SKIPPED round {round_number} review: verify budget spent; "
+                                        "passing checks not reviewed")
+        finally:
+            spend_budget(group, checkout, time.time() - started)
+        judged = {str(c.get("id")): c for c in (review or {}).get("criteria", [])}
+        for criterion in wanted:
+            result = results[criterion]
+            entry = judged.get(criterion, {})
+            if result["status"] in ("fail", "missing"):
+                evidence = f"check {result['status']} ({result['where']}): {result['detail']}"
+                if entry.get("evidence"):
+                    evidence += f" | reviewer: {entry['evidence']}"
+                merged["criteria"].append({"id": criterion, "status": "fail", "evidence": evidence})
+            elif result["status"] == "human" or entry.get("status") == "human":
+                merged["criteria"].append({"id": criterion, "status": "human",
+                                           "evidence": entry.get("evidence") or result["detail"]})
+            elif result["status"] == "skipped" or not entry:
+                why = result["detail"] if result["status"] == "skipped" else "check passed; the review did not finish"
+                merged["criteria"].append({"id": criterion, "status": "skipped", "evidence": why})
+            else:
+                merged["criteria"].append({"id": criterion, "status": entry["status"],
+                                           "evidence": f"check passed ({result['where']}); reviewer: {entry.get('evidence', '')}"})
+        merged["bugs"] = (review or {}).get("bugs", [])
     if focus:
         # Every criterion stays in the verdict: the re-checked ones fresh, the rest as the previous
-        # verifier saw them, marked with the HEAD that observation was made on.
+        # round saw them, marked with the HEAD that observation was made on.
         previous = focus["previous"]
         fresh = {str(c.get("id")): c for c in merged["criteria"]}
         ordered = []
@@ -1487,6 +1587,8 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
             ordered.append(fresh.pop(item_id) if item_id in fresh
                            else {**item, "carried_from": item.get("carried_from") or previous["head"]})
         merged["criteria"] = ordered + list(fresh.values())
+    archive_dir = TASKS_ROOT / "waves" / group["wave_id"]
+    archive_dir.mkdir(parents=True, exist_ok=True)
     # The fix worker reads the whole round's findings from this one file.
     write_lf(checkout / VERIFY_FILE, json.dumps(merged, indent=2) + "\n")
     (archive_dir / f"verify-round-{round_number}.json").write_text(json.dumps(merged, indent=2) + "\n",
@@ -1548,7 +1650,6 @@ def autoland(args):
     if focus:
         print(f"[dotask] resuming at round {first_round}: re-checking {focus['criteria']} and "
               f"{len(focus['bugs'])} bug(s) from {focus['previous']['head'][:9]}")
-    staging = set().union(*(staging_deferred(task_file_in(checkout, t)) for t in group["tasks"]))
     eta = EtaReporter(group, checkout)
     for fix_round in range(first_round - 1, MAX_FIX_ROUNDS + 1):
         round_number = fix_round + 1
@@ -1581,11 +1682,10 @@ def autoland(args):
                                                                  f" (fixer: {d['reason'][:200]})" for d in upheld)
                                         + f". Rule in the task file, then /dotask resume {slug}")
                 return 1
-            human = [c.get("id") for c in verdict["criteria"] if c["status"] == "human"]
-            # A `human` criterion the owner already ruled "check on staging" is answered: it rides
-            # along in the PR body instead of stopping the push.
-            deferred = [c for c in human if c in staging]
-            human = [c for c in human if c not in staging]
+            # Staging is the real gate (owner decision 2026-11-09): a `human` criterion rides along in the
+            # PR body as a staging check instead of stopping the push.
+            deferred = [c.get("id") for c in verdict["criteria"] if c["status"] == "human"]
+            human = []
             if not failed and not bugs:
                 group["tested_head"] = head
                 group["staging_checks"] = [{"id": c, "text": criterion_line(checkout, c)} for c in deferred]
@@ -1599,7 +1699,7 @@ def autoland(args):
                                             f"then run /dotask land {slug} --after-test")
                     return 0
                 staging_note = f"; check on staging after merge: {' '.join(deferred)}" if deferred else ""
-                staging_note += f"; not verified (verifier timed out): {' '.join(skipped)}" if skipped else ""
+                staging_note += f"; not verified: {' '.join(skipped)}" if skipped else ""
                 append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}{staging_note}")
                 if args.no_land:
                     return 0
@@ -1750,7 +1850,6 @@ DEFAULT_MINUTES = {"implementation": 25, "qa": 35, "ci": 8}
 ETA_SHIFT_MINUTES = 15
 STOP_WORDS = ("VERIFY_BLOCKED", "VERIFY_EXHAUSTED", "VERIFY_NEEDS_USER", "BLOCKED", "CONFLICT", "DISPATCH_FAILED",
               "ENDED_WITHOUT_STATUS", "AUTH_DEAD", "PHASE_VIOLATION")
-BATCH_PROGRESS = re.compile(r"verify round \d+ batch (\d+) of (\d+)")
 
 
 def run_records(slug):
@@ -1782,19 +1881,17 @@ def estimate(group, checkout, now=None):
     lines = [line for line in text.splitlines() if line.strip()]
     last = lines[-1] if lines else ""
     records = run_records(group["slug"])
-    # A verify batch cannot outlast its cap, so no recorded median from before the cap counts past it.
-    impl, batch, ci = (phase_minutes(records, "implementation"),
-                       min(phase_minutes(records, "qa"), VERIFY_TIMEOUT_MINUTES), DEFAULT_MINUTES["ci"])
+    # Verification cannot outlast the group's budget (owner rule 2026-11-09), so that is its upper bound.
+    impl, ci = phase_minutes(records, "implementation"), DEFAULT_MINUTES["ci"]
+    verify = max(0.0, budget_left_minutes(group))
     source = f"medians of {len(records)} timed dispatch(es)" if records else "defaults, no timed dispatch yet"
     left = [t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in text]
-    batches = sum(safe_criterion_count(checkout, t) for t in group["tasks"]) + 1  # + the regression pass
-    # A fix round is one worker dispatch per task with findings, then one verifier per finding plus the
-    # regression pass; counting one of each underestimated g-t15220-10 by an hour (2026-11-07).
+    # A fix round is one worker dispatch per task with findings, then a re-check inside what is left of
+    # the verify budget; counting one fix underestimated g-t15220-10 by an hour (2026-11-07).
     owners = findings_tasks(checkout, group) or group["tasks"][:1]
-    rechecks = verdict_findings(checkout) + 1
-    fix_work, recheck = len(owners) * impl, rechecks * batch
-    fix_round = fix_work + recheck
-    fix_parts = [f"fix {len(owners)} task(s) x {impl:.0f} min", f"{rechecks} re-check batch(es) x {batch:.0f} min"]
+    fix_work = len(owners) * impl
+    fix_round = fix_work + verify
+    fix_parts = [f"fix {len(owners)} task(s) x {impl:.0f} min", f"re-check up to {verify:.0f} min (verify budget left)"]
     parts, verify_ahead = [], True
     if "VERIFY_PASS" in last:
         minutes, verify_ahead = ci, False
@@ -1806,28 +1903,25 @@ def estimate(group, checkout, now=None):
         minutes = fix_round + ci
         parts += ["fix round (restarted)", *fix_parts, f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last and "verify round" in last:
-        found = BATCH_PROGRESS.search(last)
-        remaining = int(found.group(2)) - int(found.group(1)) if found else batches
-        if remaining == 0 and verdict_has_findings(checkout):
-            # The last batch is in and found problems: the fix round is running now.
+        if verdict_has_findings(checkout):
+            # The review is in and found problems: the fix round is running now.
             minutes = fix_round + ci
             parts += [*fix_parts, f"CI {ci:.0f} min"]
         else:
-            minutes = remaining * batch + ci
-            parts += [f"{remaining} verify batch(es) x {batch:.0f} min", f"CI {ci:.0f} min"]
+            minutes = ci
+            parts.append(f"CI {ci:.0f} min")
     elif " PUSHREADY " in last and "fix round" in last:
-        minutes = recheck + ci
+        minutes = verify + ci
         parts += [fix_parts[1], f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last and (checkout / VERIFY_FILE).is_file():
         minutes = fix_round + ci  # a verdict with findings is on disk: the fix round is running
         parts += [*fix_parts, f"CI {ci:.0f} min"]
     elif " PUSHREADY " in last:
-        minutes = batches * batch + ci
-        parts += [f"{batches} verify batch(es) x {batch:.0f} min", f"CI {ci:.0f} min"]
+        minutes = verify + ci
+        parts += [f"verify up to {verify:.0f} min", f"CI {ci:.0f} min"]
     else:
-        minutes = len(left) * impl + batches * batch + ci
-        parts += [f"{len(left)} task(s) x {impl:.0f} min", f"{batches} verify batch(es) x {batch:.0f} min",
-                  f"CI {ci:.0f} min"]
+        minutes = len(left) * impl + verify + ci
+        parts += [f"{len(left)} task(s) x {impl:.0f} min", f"verify up to {verify:.0f} min", f"CI {ci:.0f} min"]
     best = now + dt.timedelta(minutes=minutes)
     with_fix = best + dt.timedelta(minutes=fix_round) if verify_ahead else None
     return best, with_fix, f"{', '.join(parts)}; {source}"
@@ -1840,24 +1934,6 @@ def findings_tasks(checkout, group):
     except (OSError, ValueError):
         return []
     return [task for task, _criteria, _bugs in fix_units(group, verdict) if task]
-
-
-def safe_criterion_count(checkout, task_id):
-    """A task's criterion count for an estimate, which must never stop `status`: 1 if its file is missing."""
-    try:
-        return len(criterion_ids(checkout, task_id))
-    except (SystemExit, OSError):
-        return 1
-
-
-def verdict_findings(checkout):
-    """How many failed criteria and group bugs the verdict on disk holds (1 when there is none to read)."""
-    try:
-        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return 1
-    return max(1, sum(c.get("status") == "fail" for c in verdict.get("criteria", []))
-               + sum(b.get("scope") == "group" for b in verdict.get("bugs", [])))
 
 
 def verdict_has_findings(checkout):
@@ -1930,13 +2006,132 @@ def status(args):
         if merged:
             print(f"  eta: done -- PR #{merged} merged")
             if running == "running":
-                print(f"  {free_group(slug, merged)}")
+                print(f"  {on_merge(slug, merged)}")
         elif running == "stopped":
             print(f"  eta: none (container stopped; `bash scripts/dotask.sh resume {slug}` continues it, "
                   f"`task.sh nuke {slug}` clears it)")
         else:
             print(f"  {eta_line({**group, 'slug': slug}, group_path.parent)}")
     return 0
+
+
+# --- staging check after merge -------------------------------------------------
+# Staging is the real gate (owner decision 2026-11-09): after a group's PR merges and staging has deployed
+# the merge commit, the browser checks the worker committed run against staging, and each failure is filed
+# as a bug task at once (T14980's staging miss and T15360's never-restoring resume point were both found
+# only there). `code` checks prove code, which CI already ran, so they are not repeated.
+STAGING = {"url": os.environ.get("DOTASK_STAGING_URL", "https://reel-ballers-staging.pages.dev"),
+           "api": os.environ.get("DOTASK_STAGING_API", "https://reel-ballers-api-staging.fly.dev/api"),
+           # A seeded staging account (e2e/STAGING-GATE.md lane B): dev preset accounts exist only in dev.
+           "email": os.environ.get("DOTASK_STAGING_EMAIL", "e2e-gate@test.local")}
+DEPLOY_WORKFLOWS = ("deploy-frontend.yml", "deploy-backend.yml")
+STAGING_DONE, STAGING_STARTED = "STAGING_CHECK ", "STAGING_CHECK_STARTED "
+
+
+def merge_commit(pr_number):
+    result = subprocess.run([tool("gh"), "pr", "view", str(pr_number), "--json", "mergeCommit", "-q", ".mergeCommit.oid"],
+                            capture_output=True, text=True, check=False)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def wait_for_staging_deploy(sha, cap_minutes=40, appear_minutes=5, interval=30):
+    """'deployed', 'not deployed' (no deploy ran for this commit: it touched no app path), 'timed out', or
+    'failed: <workflows>'. A run cancelled by a newer push counts once the newest run of that workflow
+    has succeeded, since it deployed this commit too."""
+    started = time.time()
+    while True:
+        runs = {}
+        for workflow in DEPLOY_WORKFLOWS:
+            listed = subprocess.run([tool("gh"), "run", "list", "--workflow", workflow, "--branch", "master", "--limit", "30",
+                                     "--json", "headSha,status,conclusion"], capture_output=True, text=True, check=False)
+            entries = json.loads(listed.stdout or "[]") if listed.returncode == 0 else []
+            mine = [r for r in entries if r.get("headSha") == sha]
+            if mine and mine[0].get("conclusion") == "cancelled" and entries:
+                mine = entries[:1]  # superseded: the newest run carries this commit
+            runs[workflow] = mine[0] if mine else None
+        found = [r for r in runs.values() if r]
+        waited = (time.time() - started) / 60
+        if not found and waited > appear_minutes:
+            return "not deployed"
+        if found and all(r.get("status") == "completed" for r in found) and \
+                (len(found) == len(DEPLOY_WORKFLOWS) or waited > appear_minutes):
+            bad = [w for w, r in runs.items() if r and r.get("conclusion") != "success"]
+            return f"failed: {' '.join(bad)}" if bad else "deployed"
+        if waited > cap_minutes:
+            return "timed out"
+        time.sleep(interval)
+
+
+def staging_check(args):
+    """Run a merged group's browser checks against staging and file each failure as a bug task, then free
+    the group's container."""
+    slug = args.slug
+    checkout = TASKS_ROOT / sanitize(slug)
+    group = json.loads((checkout / GROUP_FILE).read_text(encoding="utf-8"))
+    pr = merged_pr(group.get("branch"))
+    if not pr:
+        die(f"{slug}: no merged PR from {group.get('branch')}; the staging check runs after merge")
+    sha = merge_commit(pr) or git_head(checkout)
+    deploy = wait_for_staging_deploy(sha)
+    if deploy.startswith("failed") or deploy == "timed out":
+        append_status(checkout, f"STAGING_CHECK_BLOCKED PR #{pr}: staging deploy {deploy}; checks not run. "
+                                f"Re-run: python scripts/dotask_cli.py staging-check {slug}")
+        return 1
+    task_sh("up", slug)
+    ran, failed, skipped, filed = [], [], [], []
+    for task_id in group["tasks"]:
+        ids = [c for c, entry in check_manifest(checkout, task_id).items() if entry.get("kind") == "browser"]
+        if not ids:
+            continue
+        for criterion, (state, detail) in run_browser_checks(slug, task_id, ids, CHECK_SPEC_SECONDS, STAGING).items():
+            ran.append(criterion)
+            if state == "skipped":
+                skipped.append(criterion)
+            elif state != "pass":
+                failed.append(criterion)
+                text = criterion_line(checkout, criterion)
+                bug = {"title": f"Staging check failed: {criterion} {' '.join(text.split()[:10])}",
+                       "steps": (f"After PR #{pr} merged ({sha[:9]}), run `npx playwright test e2e/checks/{task_id}.check.spec.js "
+                                 f"--grep '{criterion}'` in src/frontend with E2E_BASE_URL={STAGING['url']} "
+                                 f"E2E_API_BASE={STAGING['api']} E2E_CHECK_EMAIL={STAGING['email']}."),
+                       "expected": text or criterion, "actual": f"{state}: {detail}"}
+                filed.append(file_unrelated_bug(bug, group, sha, found_by=f"the staging check after PR #{pr} merged")
+                             or "already filed")
+    human = [item["id"] for item in group.get("staging_checks", [])]
+    line = (f"{STAGING_DONE}PR #{pr} ({deploy}): {len(ran) - len(failed) - len(skipped)} of {len(ran)} browser checks "
+            f"passed on staging")
+    line += f"; failed {' '.join(failed)}, filed {' '.join(filed)}" if failed else ""
+    line += f"; timed out {' '.join(skipped)}" if skipped else ""
+    line += f"; still for a person on staging: {' '.join(human)}" if human else ""
+    append_status(checkout, line)
+    print(f"[dotask] {line}")
+    print(f"[dotask] {slug}: {free_group(slug, pr)}")
+    return 1 if failed else 0
+
+
+def on_merge(slug, pr_number):
+    """What a merged group needs next: its staging check (started detached; it frees the container when
+    done), or, once that has run or when the group committed no browser checks, freeing the container."""
+    checkout = TASKS_ROOT / sanitize(slug)
+    status_path = checkout / ".dotask-status"
+    text = status_path.read_text(encoding="utf-8") if status_path.is_file() else ""
+    try:
+        tasks = json.loads((checkout / GROUP_FILE).read_text(encoding="utf-8")).get("tasks", [])
+    except (OSError, ValueError):
+        tasks = []
+    has_checks = any(e.get("kind") == "browser" for t in tasks for e in check_manifest(checkout, t).values())
+    if STAGING_DONE in text or not has_checks:
+        return free_group(slug, pr_number)
+    if STAGING_STARTED in text:
+        return f"staging check for PR #{pr_number} already started; it frees the container when done"
+    log = (TASKS_ROOT / "profiles" / sanitize(slug)).joinpath("staging-check.log")
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with log.open("a", encoding="utf-8") as stream:  # the child keeps its own handle
+        subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "staging-check", slug],
+                         stdout=stream, stderr=subprocess.STDOUT, cwd=str(REPO_ROOT),
+                         creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+    append_status(checkout, f"{STAGING_STARTED}PR #{pr_number}")
+    return f"staging check started for PR #{pr_number} (log {log}); it frees the container when done"
 
 
 def free_group(slug, pr_number):
@@ -1998,13 +2193,17 @@ def main(argv=None):
 
     sub.add_parser("status")
 
+    after_merge = sub.add_parser("staging-check", help="after merge: run the group's browser checks on staging, "
+                                                       "file failures as bug tasks, free the container")
+    after_merge.add_argument("slug")
+
     upcoming = sub.add_parser("nextup", help="bundle TODO tasks that share files or an epic folder, PLAN order")
     upcoming.add_argument("--limit", type=int, default=5)
 
     args = parser.parse_args(argv)
     try:
         return {"start": start, "land": land, "autoland": locked(autoland), "resume": locked(resume), "stack": stack,
-                "status": status, "nextup": nextup}[args.action](args)
+                "status": status, "nextup": nextup, "staging-check": staging_check}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)
         return 1

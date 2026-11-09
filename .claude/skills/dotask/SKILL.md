@@ -131,45 +131,53 @@ it still never edits code or drives the worker.
 
 User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `autoland` loops:
 
+**Worker-written checks** (owner decision 2026-11-09). One fresh verifier per criterion still passed the
+15-minute cap on 9 of 12 criteria on g-t15340-1, mostly rebuilding Playwright setup the worker already had.
+So the worker commits one check per acceptance criterion with its task (kickoff, "Checks" rule):
+`src/frontend/e2e/checks/T<id>.checks.json` names each criterion's kind: `browser` (a test titled with the id
+in `T<id>.check.spec.js`, logged in through `loginForCheck` from `e2e/helpers/checkAuth.js` so the same file
+runs on the dev stack and on staging), `code` (one command: a grep or one targeted test file), or `human`.
+
 1. Preland check, then restart the stack on HEAD and load the signed-in app once (`warm_stack`), so Vite's
-   first compile is not paid inside a verifier's 15 minutes (g-t15340-1, 2026-11-09: a cold load reached its
-   play 15-45 s late under load and verifiers read /home). Verifiers reuse the worker's spec, `loginAsDevPreset`
-   and `scripts/dev-verify.sh` (specs in `e2e/_verify/`), and wait up to 60 s for a state to settle.
-2. Fresh verifier dispatches (`qa` phase, 200 turns, no shared context with the worker), ONE per
-   acceptance criterion (owner decision 2026-11-08: three-task batches all passed the 10-minute cap),
-   prove each criterion by observation, Playwright for anything a user can see; after a fix round each
-   previous bug is re-run in its own dispatch; the last dispatch runs only the regression pass over the flows the diff touches, plus the tests that
-   import what the branch changed (`vitest related`; pytest on backend test files importing a changed
-   module, never a whole suite: a T14800 rollup bug first surfaced in Branch CI on PR 717). They write
-   `.dotask-verify.json`; each round is archived as `waves/<wave>/verify-round-N.json`.
+   first compile is not paid inside the verify budget.
+2. The harness runs every check itself, no agent (`run_checks`): `code` commands in the container, each
+   task's browser checks in one Playwright run through `scripts/dev-verify.sh`. A failed or missing check is
+   a `fail` whatever anyone says. Then ONE reviewer dispatch (`qa` phase, no shared context with the worker)
+   reads each check against its criterion's text and fails a weak one: it asserts less than the text, mocks
+   the behavior under test, sets up through a back door state the criterion says a user creates (g-t15340-1's
+   cold-load test POSTed the resume point the app writes itself, and passed on broken code), or would pass on
+   broken code. There is no separate regression pass: Branch CI and the staging check cover that. The merged
+   verdict is `.dotask-verify.json`; each round is archived as `waves/<wave>/verify-round-N.json`.
 3. Any `fail` criterion or `group` bug goes to a fix round: one fresh worker dispatch per owning task,
    in group order, each fixing and committing only its task's findings (findings no task owns go last).
    A task whose dispatch commits nothing is recorded (`FIX_SKIPPED`), its leftover changes stashed, and
    the round moves on; its findings fail again in the re-check. One worker given every finding chased
    the hardest one and committed nothing for three hours (g-t15220-10, 2026-11-07). A fix dispatch that
-   runs out of turns is restarted up to twice with a handoff note (below). Then back to step 1, where the
-   verifier re-checks only what failed plus the regression pass; earlier passes carry forward
-   (`carried_from`). A restarted `autoland` resumes at that point.
+   runs out of turns is restarted up to twice with a handoff note (below). A missing or weak check comes back
+   as a finding, and the fix worker writes or strengthens it. Then back to step 1, where only what failed or
+   was skipped is run and reviewed again; earlier passes carry forward (`carried_from`). A restarted
+   `autoland` resumes at that point.
    A fix worker that believes a finding is wrong (a flake, not this branch's, a misread criterion) ends on
    `DISPUTED <label> <finding>: <evidence>` instead of working around it. The dispute is not a stop: the
-   next verifier gets the fixer's evidence and re-examines the finding fresh (one that also fails on
-   origin/master becomes an `unrelated` bug). Only a finding that verifier still upholds stops the loop,
+   next reviewer gets the fixer's evidence and re-examines the finding fresh (one that also fails on
+   origin/master becomes an `unrelated` bug). Only a finding that reviewer still upholds stops the loop,
    with `VERIFY_NEEDS_USER` naming both sides (g-t14940-1, 2026-11-08, needed the owner for a flake).
 4. Clean verdict: `VERIFY_PASS`, then push, PR, CI, evidence (`land --after-test`). Merging stays with the user.
    Red Branch CI on that head is a finding too: `CI_RED`, and the failed jobs and the tail of their logs
    become a `group` bug for a fix round, then the re-check and a new push to the same PR (PRs #720, #722,
    #723 waited on a person for this, 2026-11-08). It counts against `MAX_FIX_ROUNDS`.
 
-**A verifier never runs past 15 minutes** (owner rule 2026-11-08, raised from 10 on 2026-11-09; `DOTASK_VERIFY_TIMEOUT_MIN` overrides). At the cap the
-dispatch is killed on the host and in the container, its one criterion is recorded `skipped` (`VERIFY_SKIPPED`
-status line; a verifier out of turns is skipped the same way; a skipped regression pass or bug re-check is listed as
-"Other check"), and the loop moves on: skipped criteria never count as a pass or a fail, they ride in the PR body under
-"Not verified". A timed-out verifier that left edits in the tree still stops the loop (`VERIFY_BLOCKED`).
+**One verify budget per group: 30 minutes** (owner rule 2026-11-09; `DOTASK_VERIFY_BUDGET_MIN` overrides),
+shared by every round's stack start, checks and review (`verify_spent_s` in the group file, so a restart keeps
+it). The reviewer gets what is left, at most 15 minutes. When the budget is spent, nothing more is checked:
+what is left is recorded `skipped` (`VERIFY_SKIPPED` status line), never a pass or a fail, and the PR opens
+listing it under "Not verified". A reviewer past its time or out of turns lands its passing checks the same way.
+A reviewer that left edits in the tree still stops the loop (`VERIFY_BLOCKED`).
 
 The loop stops at `MAX_FIX_ROUNDS` (3) with `VERIFY_EXHAUSTED`. Anything it cannot trust stops it with
 `VERIFY_BLOCKED` and never counts as a pass: a missing verdict, a verdict for another HEAD, one covering
-fewer criteria than the task file has, a verifier that changed the tree, a fix that committed nothing.
-What the verifier's own tooling rewrites (`package-lock.json` from `npm install`, files under `qa/` from a
+fewer criteria than the task file has, a reviewer that changed the tree, a fix that committed nothing.
+What the reviewer's own tooling rewrites (`package-lock.json` from `npm install`, files under `qa/` from a
 landing build) is put back with `git checkout` and is not "changed the tree"; any other edit still is.
 
 One driver per group: `resume` and `autoland` hold `.dotask-run.lock` (the process id) for the whole run,
@@ -177,14 +185,23 @@ and a second launch for the same group is refused while that process lives; a lo
 is taken over. Two autolands once raced on one checkout after a launch that looked dead was relaunched.
 `task.sh drive` retries a failed `claude auth status` up to 3 times (20 s apart, re-seeding credentials
 each time) before `AUTH_DEAD`; every AUTH_DEAD seen so far cleared on a plain resume.
-A `human` criterion (something no automation can observe) stops before the push with `VERIFY_NEEDS_USER`,
-unless the task file records the owner's ruling to check it on staging (`**<date> (owner ruling)**: C2 ...
-verified on staging after merge`, or a ruling line right under the criterion): then it is answered, the
-push goes ahead and the PR body lists it under "Check on staging after merge" (`staging_checks` on the
-group). `unrelated` bugs are filed as TODO tasks in PLAN.md and do not block. The filing is committed at
+A `human` criterion (something no automation can observe) never stops the push: staging is the real gate,
+so it rides in the PR body under "Check on staging after merge" (`staging_checks` on the group).
+`unrelated` bugs are filed as TODO tasks in PLAN.md and do not block. The filing is committed at
 once to master in the main checkout (the task file and its PLAN row only, not pushed), so no one else takes
 the id; if PLAN.md already held someone's uncommitted edit, it is left uncommitted with a warning. "No
 new bugs" means none found by these checks.
+
+**The staging check after merge is the real gate** (owner decision 2026-11-09). When `status` or `start`
+sees a group's PR merged, it starts `python scripts/dotask_cli.py staging-check <slug>` detached
+(`STAGING_CHECK_STARTED`; log in `profiles/<slug>/staging-check.log`). That waits for the staging deploy of
+the merge commit (`deploy-frontend.yml` and `deploy-backend.yml`; a commit touching neither app deploys
+nothing and is checked anyway), runs every task's browser checks against staging inside the group's
+container (`E2E_BASE_URL`, `E2E_API_BASE`, seeded account `E2E_CHECK_EMAIL`, default `e2e-gate@test.local`;
+`DOTASK_STAGING_URL`/`_API`/`_EMAIL` override), files each failure as a bug task at once ("Filed by /dotask
+staging check"), appends `STAGING_CHECK PR #n: k of m browser checks passed`, and frees the container. A
+failed or timed-out deploy stops it with `STAGING_CHECK_BLOCKED` and keeps the container for a re-run.
+`code` checks are not repeated: CI ran them. A group with no browser checks is freed at once.
 
 **Running out of turns is not a stop.** A worker dispatch (build or fix round) whose run record says
 `budget_stop` left its work uncommitted; the loop appends a `## <task> handoff` section to
