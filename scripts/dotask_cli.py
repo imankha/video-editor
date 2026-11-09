@@ -357,6 +357,10 @@ def start(args):
         die(f"{len(task_ids)} tasks in one group: at landing one failing task holds back every other one "
             f"(g-t15220-10, 2026-11-07: one export bug held eight passing tasks). The cap is {MAX_GROUP_TASKS}.\n"
             f"Start /dotask {' '.join(first)} now and /dotask {' '.join(rest)} after it, or add --allow-large.")
+    for group in live_groups():  # a merged group's container would still count as owning its files
+        merged = merged_pr(group.get("branch"))
+        if merged:
+            print(f"[dotask] {group.get('slug')}: {free_group(group.get('slug'), merged)}")
     files_by_task, owned, shared = preflight(task_ids, args.allow_overlap)
 
     slug = f"g-{task_ids[0].lower()}-{len(task_ids)}"
@@ -1823,12 +1827,24 @@ def status(args):
         merged = merged_pr(group.get("branch"))
         if merged:
             print(f"  eta: done -- PR #{merged} merged")
+            if running == "running":
+                print(f"  {free_group(slug, merged)}")
         elif running == "stopped":
             print(f"  eta: none (container stopped; `bash scripts/dotask.sh resume {slug}` continues it, "
                   f"`task.sh nuke {slug}` clears it)")
         else:
             print(f"  {eta_line({**group, 'slug': slug}, group_path.parent)}")
     return 0
+
+
+def free_group(slug, pr_number):
+    """Stop a merged group's container and app stack; its checkout and files stay (`task.sh nuke` clears
+    them). Owner rule 2026-11-08 ("we should do this on merge"): five merged groups kept their stacks
+    running and slowed the three live ones on a 4-core host."""
+    result = task_sh("down", slug, check=False, capture_output=True)
+    if result.returncode:
+        return f"could not stop the container of merged PR #{pr_number}: {(result.stderr or result.stdout).strip()[:200]}"
+    return f"freed: container stopped (PR #{pr_number} merged; checkout kept, `task.sh nuke {slug}` clears it)"
 
 
 def merged_pr(branch):
