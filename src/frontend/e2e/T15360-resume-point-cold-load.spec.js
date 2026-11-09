@@ -78,4 +78,23 @@ test.describe('T15360 resume point cold load', () => {
 
     await expect.poll(() => new URL(page.url()).pathname, { timeout: 30000 }).toMatch(/^\/home/);
   });
+
+  // T15360:C1 - both writers (the navigation-gesture POST and the exit beacon)
+  // actually store `path` as pathname + search (editorStore's canonicalPath appends
+  // `?profile=<id>` whenever a profile is set, which is always true for a real
+  // session) -- a point with a bare pathname like the tests above never reproduced
+  // the bug. restoreFromResumePoint must still resolve mode/id off a path like this.
+  test('a cold load of / restores a point whose path carries a query string', async ({ page }) => {
+    await loginAsDevPreset(page, 'full');
+    const projectId = await firstProjectId(page);
+    await setResumePoint(page, {
+      path: `/focus/p/${projectId}?profile=9fa7378c&t=5`,
+      screen: 'framing',
+      left_at: new Date().toISOString(),
+    });
+
+    await page.goto('/');
+
+    await expect.poll(() => new URL(page.url()).pathname, { timeout: 30000 }).toBe(`/focus/p/${projectId}`);
+  });
 });

@@ -107,4 +107,17 @@ describe('restoreFromResumePoint', () => {
     expect(setEditorMode).toHaveBeenCalledWith('project-manager');
     expect(deleteResumePoint).not.toHaveBeenCalled();
   });
+
+  // T15360: both writers store path = pathname + search (e.g. '/annotate/g/42?profile=9fa7378c&t=5').
+  // modeFromPath/parseEditorPath must still resolve mode and id off the pathname alone.
+  it('restores a game point whose stored path carries a query string', () => {
+    restoreFromResumePoint({ path: '/annotate/g/42?profile=9fa7378c', screen: 'annotate', left_at: FRESH_LEFT_AT() });
+    expect(setEditorMode).toHaveBeenCalledWith('annotate');
+    expect(deleteResumePoint).not.toHaveBeenCalled();
+  });
+
+  it('restores a project point whose stored path carries a query string, with t read from it', () => {
+    restoreFromResumePoint({ path: '/focus/p/7?profile=9fa7378c&t=5', screen: 'framing', left_at: FRESH_LEFT_AT() });
+    expect(setEditorMode).toHaveBeenCalledWith('framing', { projectId: 7, seekTime: 5 });
+  });
 });

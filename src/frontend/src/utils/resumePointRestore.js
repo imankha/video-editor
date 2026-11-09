@@ -40,8 +40,12 @@ function landMissing(kind) {
 export function restoreFromResumePoint(resumePoint) {
   if (!isFreshResumePoint(resumePoint)) return;
 
-  const mode = modeFromPath(resumePoint.path);
-  const { gameId, projectId, seekTime } = parseEditorPath(resumePoint.path);
+  // T15360: both writers store `path` as pathname + search (e.g.
+  // '/annotate/g/42?profile=9fa7378c'); modeFromPath/parseEditorPath expect them
+  // split, so a raw pass-through never matches and restore silently no-ops.
+  const u = new URL(resumePoint.path, window.location.origin);
+  const mode = modeFromPath(u.pathname);
+  const { gameId, projectId, seekTime } = parseEditorPath(u.pathname, u.search);
 
   if (mode === EDITOR_MODES.ANNOTATE && gameId != null) {
     const game = useGamesDataStore.getState().games.find((g) => g.id === gameId);
