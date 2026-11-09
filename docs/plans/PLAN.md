@@ -1371,7 +1371,7 @@ features cut, sample reels, FAQ) deferred to For Launch. Pricing dropped (freemi
 |---|---|---|---|---|---|---|---|
 | T15300 | [pg_conn test fixture can silently drop and empty the shared dev Postgres analytics tables](tasks/T15300-pg-conn-test-fixture-can-silently.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 | T15320 | [test_analytics_dashboards.py has pre-existing failures against shared Postgres test state](tasks/T15320-test-analytics-dashboards-py-has-pre.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
-| T15390 | [By-sport and action-rollup reads download every analytics shard from R2 on every request (~9.5s)](tasks/T15390-get-api-admin-analytics-by-sport.md) | 5 | 3 | 1.7 | WIP | [ ] | M-tier, backend. `load_newest_action_rollup` (T7400) LISTs and serially GETs every shard on every request, no cache; shards grow with retired Fly machines. Shared ETag-keyed shard fetcher in analytics_store (moves the Journey reader's cache), concurrent misses, partial semantics kept. |
+| T15390 | [By-sport and action-rollup reads download every analytics shard from R2 on every request (~9.5s)](tasks/T15390-get-api-admin-analytics-by-sport.md) | 5 | 3 | 1.7 | STAGING | [ ] | M-tier, backend. `load_newest_action_rollup` (T7400) LISTs and serially GETs every shard on every request, no cache; shards grow with retired Fly machines. Shared ETag-keyed shard fetcher in analytics_store (moves the Journey reader's cache), concurrent misses, partial semantics kept. |
 
 ## Environment Configuration
 

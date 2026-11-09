@@ -1,6 +1,6 @@
 # T15390: By-sport and action-rollup reads download every analytics shard from R2 on every request (~9.5s)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (backend read path only; no schema change, no new endpoint)
