@@ -53,7 +53,7 @@ Causes:
 - Tests: `AnnotateFullscreenOverlay.portraitStrip.test.jsx`, `AnnotateModeView.portraitStrip.test.jsx`, the render-site inventory test
 
 ### Repro
-The measurement harness (picture rect from `object-contain` vs overlay rect, for portrait 393x852 and landscape 852x393, `loginAsDevPreset(context, 'full')`) is in the uncommitted local file `src/frontend/e2e/zz-repro-mobile-overlay.tmp.spec.js`. Turn it into the acceptance e2e spec for this task.
+The measurement harness (picture rect from `object-contain` vs overlay rect, for portrait 393x852 and landscape 852x393, `loginAsDevPreset(context, 'full')`) is in the appendix below (it reproduced the numbers above against pre-fix master on 2026-11-08). Turn it into the acceptance e2e spec for this task and assert the criteria thresholds.
 
 ### Knowledge
 `.claude/knowledge/annotate.md`: T10620, T9500, T10800, T10780, T14350 (double-tap skip).
@@ -62,3 +62,94 @@ The measurement harness (picture rect from `object-contain` vs overlay rect, for
 - T15370 (landscape side-strip layout, the follow-up)
 - T10620 (portrait in-flow strip, windowed)
 - T10840 (Focus landscape side-strip layout)
+
+## Appendix: repro harness (pre-fix, 2026-11-08)
+
+```js
+// TEMP repro for user feedback (mobile editor/controls cover video). Not committed.
+import { test, expect } from '@playwright/test';
+import { loginAsDevPreset, openGameInAnnotate } from './helpers/realAuth.js';
+
+const OUT = process.env.REPRO_OUT;
+const VPS = [
+  { label: 'portrait-393x852', width: 393, height: 852 },
+  { label: 'landscape-852x393', width: 852, height: 393 },
+];
+
+// Fraction of the visible video PICTURE (object-contain rect) covered by `sel`.
+async function coverage(page, sel) {
+  return page.evaluate((sel) => {
+    const v = [...document.querySelectorAll('video')].find(x => x.getBoundingClientRect().width > 50);
+    const o = document.querySelector(sel);
+    if (!v || !o) return { err: `video=${!!v} overlay=${!!o}` };
+    const r = v.getBoundingClientRect();
+    const vw = v.videoWidth || 16, vh = v.videoHeight || 9;
+    const s = Math.min(r.width / vw, r.height / vh);
+    const pw = vw * s, ph = vh * s;
+    const pic = { x: r.x + (r.width - pw) / 2, y: r.y + (r.height - ph) / 2, w: pw, h: ph };
+    const ob = o.getBoundingClientRect();
+    const ix = Math.max(0, Math.min(pic.x + pic.w, ob.right) - Math.max(pic.x, ob.left));
+    const iy = Math.max(0, Math.min(pic.y + pic.h, ob.bottom) - Math.max(pic.y, ob.top));
+    return {
+      picture: [pic.x, pic.y, pic.w, pic.h].map(Math.round),
+      overlay: [ob.x, ob.y, ob.width, ob.height].map(Math.round),
+      coveredPct: Math.round((ix * iy) / (pic.w * pic.h) * 100),
+      viewport: [innerWidth, innerHeight],
+    };
+  }, sel);
+}
+
+for (const vp of VPS) {
+  test(`repro ${vp.label}`, async ({ browser }) => {
+    test.setTimeout(180_000);
+    const context = await browser.newContext({
+      viewport: { width: vp.width, height: vp.height }, hasTouch: true, isMobile: true,
+      deviceScaleFactor: 2, baseURL: 'http://localhost:5173',
+    });
+    const page = await context.newPage();
+    await loginAsDevPreset(context, 'full');
+    const games = (await (await context.request.get('/api/games')).json()).games || [];
+    const g = games.find(x => x.storage_status === 'active' && (x.clip_count || 0) > 0) || games[0];
+    console.log(`[repro] game ${g?.id} clips=${g?.clip_count}`);
+    await openGameInAnnotate(page, g.id);
+    await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 60000 });
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: `${OUT}/${vp.label}-0-windowed.png` });
+
+    // Enter fullscreen (the user's state in both screenshots)
+    await page.locator('button[title="Fullscreen"]').first().click();
+    await page.waitForTimeout(800);
+    // Tap stage to wake controls
+    await page.mouse.click(vp.width / 2, vp.height / 3);
+    await page.waitForTimeout(400);
+    await page.mouse.click(vp.width / 2, vp.height / 3); // toggle play back
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${OUT}/${vp.label}-1-fs-controls.png` });
+    const ctrl = await coverage(page, '[data-testid="annotate-controls"]');
+    const ctrlBlock = await page.evaluate(() => {
+      const c = document.querySelector('[data-testid="annotate-controls"]');
+      let n = c; while (n && !(n.className || '').toString().includes('absolute inset-x-0 bottom-0')) n = n.parentElement;
+      if (!n) return null; n.setAttribute('data-repro', 'ctrl'); return true;
+    });
+    const ctrlFull = ctrlBlock ? await coverage(page, '[data-repro="ctrl"]') : null;
+    console.log(`[repro] ${vp.label} controls-row`, JSON.stringify(ctrl), 'controls-block', JSON.stringify(ctrlFull));
+
+    await page.mouse.move(vp.width/2+5, vp.height/3+5); await page.mouse.move(vp.width/2, vp.height/3); await page.waitForTimeout(200);
+    // Open editor on an existing play (as the user did)
+    await page.locator('.clip-marker').first().click({ force: true });
+    await page.waitForTimeout(500);
+    const cta = page.locator('[data-testid="annotate-primary-cta"]');
+    if (await cta.isVisible().catch(() => false)) await cta.click();
+    else await page.locator('button[title^="Edit selected play"]:visible, button[title^="Mark play"]:visible').first().click();
+    await page.waitForTimeout(1200);
+    await page.screenshot({ path: `${OUT}/${vp.label}-2-fs-editor.png` });
+    await page.evaluate(() => {
+      const f = document.querySelector('[data-add-clip-form]');
+      let n = f; while (n && !(n.className || '').toString().includes('overflow-y-auto bg-gray-900/95')) n = n.parentElement;
+      (n || f)?.setAttribute('data-repro', 'editor');
+    });
+    console.log(`[repro] ${vp.label} editor`, JSON.stringify(await coverage(page, '[data-repro="editor"]')));
+    await context.close();
+  });
+}
+```
