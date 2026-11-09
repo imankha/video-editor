@@ -146,7 +146,7 @@ New tasks (board rows), stage order. The nine rows from T14800 down were dropped
 | T15240 | [Email link give-up path moves, misses or mislabels in three edge cases](tasks/T15240-email-link-give-up-path.md) | 4 | 2 | 2.0 | STAGING | [ ] | S to M-tier, frontend only. A user who moved tabs inside 5 s is moved to Games; a slow list loses a valid link; an empty profile routes through the editor. Decide on the list's load state, not a timer. |
 | T15250 | [T14970 e2e spec can hang on a profile the store never loaded](tasks/T15250-t14970-spec-profile-fixture-race.md) | 3 | 1 | 3.0 | STAGING | [ ] | S-tier, test only. A raw POST creates the twin profile, so the switcher can miss it and the test waits out 300 s. Confirm the twin first and fail fast. |
 | T15260 | [Small deep link gaps left after T14970](tasks/T15260-deep-link-small-gaps.md) | 3 | 2 | 1.5 | STAGING | [ ] | S to M-tier. Locked Spotlight on a play with no working video, URL left behind on a failed load, stale pendingGameId, dead FocusScreen fallback, a stronger clip /file proof. |
-| T15340 | [Resume point restores the playhead on Focus and Overlay](tasks/T15340-resume-playhead-focus-overlay.md) | 3 | 3 | 1.0 | TODO | [ ] | M-tier, frontend only. Split from T14980 (owner 2026-11-08): extend `?t=` seek-on-open to Focus and Overlay; restore passes it. |
+| T15340 | [Resume point restores the playhead on Focus and Overlay](tasks/T15340-resume-playhead-focus-overlay.md) | 3 | 3 | 1.0 | WIP | [ ] | M-tier, frontend only. Split from T14980 (owner 2026-11-08): extend `?t=` seek-on-open to Focus and Overlay; restore passes it. |
 
 ### Deploy Candidate (P1, user-ordered 2026-10-13: THE next prod deploy)
 

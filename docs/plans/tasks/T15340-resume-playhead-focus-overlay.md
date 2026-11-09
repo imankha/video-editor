@@ -1,6 +1,6 @@
 # T15340: Resume point restores the playhead on Focus and Overlay
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 3
 **Tier:** M (frontend only, no schema change)
