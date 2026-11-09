@@ -181,6 +181,23 @@ describe('editorStore cold load of a canonical URL', () => {
     expect(useEditorStore.getState().urlLandingNotice).toMatchObject({ kind });
   });
 
+  it.each([
+    ['/annotate/g/abc', 'setPendingGame'],
+    ['/focus/p/abc', 'setPendingProject'],
+  ])('%s clears a stale breadcrumb a PRIOR navigation left behind (%s)', async (path, setter) => {
+    window.history.pushState({}, '', path);
+    const nav = await import('../utils/pendingNavigation');
+    if (setter === 'setPendingGame') {
+      nav.setPendingGame(99);
+    } else {
+      nav.setPendingProject(99, { mode: 'framing' });
+    }
+    await import('./editorStore');
+    expect(window.location.pathname).toBe('/home/games');
+    expect(nav.hasPendingGame()).toBe(false);
+    expect(nav.hasPendingProject()).toBe(false);
+  });
+
   it('an unknown route that names no object stays noticeless', async () => {
     window.history.pushState({}, '', '/focus/p/');
     const { useEditorStore } = await import('./editorStore');

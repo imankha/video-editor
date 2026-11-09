@@ -275,6 +275,15 @@ const initialMode = initialMalformedKind ? EDITOR_MODES.PROJECT_MANAGER : modeFr
 const initialObject = initialMalformedKind
   ? { gameId: null, projectId: null, seekTime: null, profileId: null }
   : parseEditorPath();
+// T15260: a malformed URL names no object, so neither branch below consumes whatever
+// breadcrumb a PRIOR navigation left behind (e.g. a chunk-reload mid-navigation) — it would
+// otherwise sit in sessionStorage with nothing left to open it. Same cleanup rejectUrlProfile
+// does at runtime for the same "named something unusable" case.
+if (initialMalformedKind) {
+  consumePendingGame();
+  clearAnnotateResume();
+  clearPendingProject();
+}
 if (initialObject.gameId != null) {
   adoptUrlGame(initialObject.gameId, initialObject.seekTime);
 } else if (initialObject.projectId != null) {
@@ -361,6 +370,24 @@ export const useEditorStore = create((set, get) => ({
    */
   bindAnnotateGamePath: (gameId) => {
     window.history.replaceState({ mode: EDITOR_MODES.ANNOTATE }, '', canonicalPath(EDITOR_MODES.ANNOTATE, { gameId }));
+  },
+
+  /**
+   * T15260: Overlay asked for a project with no working video yet (nothing to show --
+   * the locked Spotlight tab). Land on Focus instead, replacing the entry that asked
+   * for Overlay (not pushing a new one) since the URL named the wrong step, not a new
+   * navigation.
+   */
+  redirectOverlayToFraming: (projectId) => {
+    window.history.replaceState(
+      { mode: EDITOR_MODES.FRAMING },
+      '',
+      canonicalPath(EDITOR_MODES.FRAMING, { projectId })
+    );
+    set({
+      editorMode: EDITOR_MODES.FRAMING,
+      screen: getScreenByType(EDITOR_MODES.FRAMING),
+    });
   },
 
   /** Land on the Games tab, replacing the entry that named a missing object. */

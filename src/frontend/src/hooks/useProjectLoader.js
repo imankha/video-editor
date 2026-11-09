@@ -124,7 +124,14 @@ export function useProjectLoader() {
       const framingNewerThanFinal = project.working_video_created_at && project.final_video_created_at &&
         project.working_video_created_at > project.final_video_created_at;
       const needsOverlay = project.working_video_id && (!project.has_final_video || framingNewerThanFinal);
-      const targetMode = mode || (needsOverlay ? 'overlay' : 'framing');
+      // T15260: Overlay has nothing to show for a project with no working video yet (the
+      // locked Spotlight tab) -- ModeSwitcher already disables that tab in-app, but a URL
+      // can ask for Overlay directly (e.g. /overlay/p/{id}). Focus is the step this play
+      // can actually use.
+      const overlayNeedsFraming = mode === EDITOR_MODES.OVERLAY && !project.working_video_id;
+      const targetMode = overlayNeedsFraming
+        ? EDITOR_MODES.FRAMING
+        : (mode || (needsOverlay ? 'overlay' : 'framing'));
 
       // T11220: project-OPEN default-mode guard — a SEPARATE entry point from the
       // mode-switch guards (header ModeSwitcher / App.handleModeChange /
@@ -276,6 +283,7 @@ export function useProjectLoader() {
         workingVideo,
         mode: targetMode,
         clipMetadata: overlayClipMetadata,
+        redirectedFromOverlay: overlayNeedsFraming,
       };
     } catch (err) {
       console.error('[useProjectLoader] Failed to load project:', err);

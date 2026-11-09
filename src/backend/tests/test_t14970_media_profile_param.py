@@ -33,6 +33,30 @@ def _seed_game(user_id, profile_id, name):
         conn.commit()
 
 
+def _seed_working_clip(user_id, profile_id, project_id, clip_id, filename):
+    """A real project + raw_clip + working_clip, in ONE profile's own SQLite file."""
+    from app.database import get_db_connection
+    from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
+    set_current_user_id(user_id)
+    set_current_profile_id(profile_id)
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO projects (id, name, aspect_ratio) VALUES (?, ?, ?)",
+            (project_id, "Test project", "9:16"),
+        )
+        cur.execute(
+            "INSERT INTO raw_clips (id, filename) VALUES (?, ?)",
+            (clip_id, filename),
+        )
+        cur.execute(
+            "INSERT INTO working_clips (id, project_id, raw_clip_id) VALUES (?, ?, ?)",
+            (clip_id, project_id, clip_id),
+        )
+        conn.commit()
+
+
 @pytest.fixture
 def client(tmp_path):
     from app.session_init import _init_cache
@@ -99,6 +123,32 @@ def test_unowned_query_profile_on_a_media_route_is_a_404(client, path, value):
     response = client.get(f"{path}?profile_id={value}", headers={"X-User-ID": USER})
     assert response.status_code == 404, response.text
     assert response.json() == {"detail": "Profile not found"}
+
+
+def test_clip_file_query_profile_reads_that_profiles_real_clip(client):
+    """T15260: the prior clip /file coverage above only proved a 404 for an id that
+    exists in NEITHER profile -- that 404 would survive even a broken profile check.
+    Seed a real working_clip in TAB only, and prove ?profile_id=TAB serves ITS row
+    (ACTIVE has no such project/clip, so the active-profile default genuinely 404s)."""
+    project_id, clip_id = 1, 1
+    _seed_working_clip(USER, TAB, project_id, clip_id, "tab-clip.mp4")
+    with patch(
+        "app.routers.clips.get_working_clip_url",
+        side_effect=lambda filename, _source_type: f"https://r2/{filename}",
+    ):
+        tab_response = client.get(
+            f"/api/clips/projects/{project_id}/clips/{clip_id}/file?profile_id={TAB}",
+            headers={"X-User-ID": USER},
+        )
+        assert tab_response.status_code == 302, tab_response.text
+        assert tab_response.headers["location"] == "https://r2/tab-clip.mp4"
+
+        active_response = client.get(
+            f"/api/clips/projects/{project_id}/clips/{clip_id}/file",
+            headers={"X-User-ID": USER},
+        )
+    assert active_response.status_code == 404, active_response.text
+    assert active_response.json() == {"detail": "We couldn't find that play."}
 
 
 def test_unowned_query_profile_on_a_media_route_is_a_404_for_head_too(client):

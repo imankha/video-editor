@@ -17,7 +17,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { setPendingProject, settlePendingProject, consumePendingProject, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared/Toast';
-import { ERROR_COPY, CREDIT_COPY } from '../config/displayNames';
+import { ERROR_COPY, CREDIT_COPY, MODE_SWITCHER_LOCKED } from '../config/displayNames';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -294,6 +294,13 @@ export function ProjectsScreen({
         // T14970: a URL can name a play in another of the user's profiles, or one that is gone.
         if (options.fromUrl) {
           useProjectsStore.getState().clearSelection();
+          // T15260: settle the breadcrumb HERE, in the same tick selectedProjectId clears --
+          // App.jsx's URL-normalize effect reads both and only fires once neither is set. Left
+          // for the `finally` below (same projectId, so idempotent), a non-404 failure (e.g. a
+          // 500) left the URL on /focus|overlay/p/{id} after Home rendered: the effect ran on
+          // the selectedProjectId change above while this breadcrumb was still present, so its
+          // `!hasPendingProject()` check was false, and nothing re-ran it once settled later.
+          settlePendingProject(projectId);
           const outcome = await recoverDeepLink({
             kind: DEEP_LINK_KIND.PROJECT,
             id: projectId,
@@ -323,8 +330,15 @@ export function ProjectsScreen({
       });
       if (result.stale || !isStillOpening(projectId)) return;
 
-      // Sync with editorStore for legacy compatibility
-      setEditorMode(result.mode);
+      if (result.redirectedFromOverlay) {
+        // T15260: Overlay had nothing to show (no working video yet) -- land on Focus,
+        // replacing the /overlay/p/{id} entry rather than pushing a new one.
+        useEditorStore.getState().redirectOverlayToFraming(projectId);
+        toast.info(MODE_SWITCHER_LOCKED.SPOTLIGHT_NEEDS_HIGHLIGHT);
+      } else {
+        // Sync with editorStore for legacy compatibility
+        setEditorMode(result.mode);
+      }
 
       console.log('[ProjectsScreen] Project loaded with mode:', result);
     } catch (err) {

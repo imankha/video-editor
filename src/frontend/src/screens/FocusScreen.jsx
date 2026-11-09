@@ -900,7 +900,7 @@ export function FocusScreen({
     clearError();
 
     const filename = selectedClipWithMeta.filename || `${selectedClipWithMeta.id}.mp4`;
-    const localFallbackUrl = `${API_BASE}/api/clips/${selectedClipWithMeta.id}/file`;
+    const localFallbackUrl = getClipFileUrlSelector(selectedClipWithMeta, projectId);
 
     try {
       const freshUrl = await forceRefreshUrl('raw_clips', filename, localFallbackUrl);
@@ -915,7 +915,7 @@ export function FocusScreen({
     } catch (err) {
       console.error('[FocusScreen] Failed to retry video load:', err);
     }
-  }, [selectedClipWithMeta, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl]);
+  }, [selectedClipWithMeta, projectId, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl]);
 
   // Outdated clips dialog handlers
   // T740: handleContinueWithOriginal and handleUseLatestClips removed — auto-refresh is silent
