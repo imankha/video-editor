@@ -87,6 +87,8 @@ export const useAdminStore = create((set, get) => ({
   // T14020: step inspector payload for the selected stage (view-state read, never persisted).
   journeyStep: null, journeyStepLoading: false, journeyStepError: null,
   journeyRollup: { running: false, error: null, result: null },
+  // T7400: action/engagement rollup sweep (admin "Run rollup" click, By Sport section).
+  actionRollup: { running: false, error: null, result: null },
   // T14910: Spend readiness panel (Journey tab). Read on mount and on the Refresh gesture;
   // one Diagnose entry per gate key, loaded when its drawer opens. Never written back.
   spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
@@ -113,6 +115,8 @@ export const useAdminStore = create((set, get) => ({
   // exactly one mount request for that endpoint).
   uploadFailuresData: null, uploadFailuresLoading: false, uploadFailuresError: null,
   packMixData: null, packMixLoading: false, packMixError: null,
+  // T14950: "By sport" table, reads T7400's rollup (on-demand -- never on mount).
+  bySportData: null, bySportLoading: false, bySportError: null,
   // T13931: R2 usage by source (on-demand -- never on mount; the backend caches 10 min).
   r2UsageData: null, r2UsageLoading: false, r2UsageError: null,
 
@@ -566,6 +570,24 @@ export const useAdminStore = create((set, get) => ({
     }
   },
 
+  // T7400: admin "Run rollup" click (By Sport section) -> in-process sweep into
+  // analytics.sqlite's rollup_action_weekly/rollup_engagement_monthly/rollup_action_by_sport.
+  // Returns the run summary (users_swept/users_failed/computed_at, null on failure).
+  runActionRollup: async () => {
+    set({ actionRollup: { running: true, error: null, result: null } });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/rollup`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
+      set({ actionRollup: { running: false, error: null, result } });
+      return result;
+    } catch (err) {
+      console.error('[Admin] action rollup failed', err);
+      set({ actionRollup: { running: false, error: String(err.message || err), result: null } });
+      return null;
+    }
+  },
+
   fetchChannels: async (from, to) => {
     const requestId = ++channelsRequestId;
     set({ channelsLoading: true });
@@ -782,6 +804,21 @@ export const useAdminStore = create((set, get) => ({
       set({ packMixData: await res.json(), packMixLoading: false });
     } catch (err) {
       set({ packMixLoading: false, packMixError: err.message });
+    }
+  },
+
+  // T14950: "By sport" table -- one read of the admin-triggered rollup, no per-user access.
+  fetchBySport: async () => {
+    set({ bySportLoading: true, bySportError: null });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/by-sport`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ bySportData: await res.json(), bySportLoading: false });
+    } catch (err) {
+      set({ bySportLoading: false, bySportError: err.message });
     }
   },
 

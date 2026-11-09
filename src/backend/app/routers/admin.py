@@ -2085,6 +2085,50 @@ def analytics_journey_rollup():
         raise HTTPException(status_code=409, detail=str(e)) from None
 
 
+@router.post("/analytics/rollup")
+# T7400: plain def -> threadpool (T14030 pattern). Admin click only, no scheduler: walks
+# every non-test user in-process through the JIT seam and writes one full-rebuild
+# action-weekly/engagement-monthly run to this writer's analytics.sqlite shard.
+def analytics_action_rollup():
+    _require_admin()
+    from ..services import analytics_rollup as rollup
+    from ..services.analytics_store import current_store
+
+    try:
+        return rollup.sweep(rollup.rollup_population(), current_store())
+    except rollup.ActionRollupStoreUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from None
+    except rollup.ActionRollupAlreadyRunning as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@router.get("/analytics/rollup")
+# T7400: freshness/status read -- the newest run's meta across shards, no row data.
+def analytics_action_rollup_status():
+    _require_admin()
+    from ..services.analytics_rollup import load_newest_action_rollup
+
+    rollup, partial = load_newest_action_rollup()
+    return {"computed_at": None, "partial": partial} if rollup is None else {**rollup["meta"], "partial": partial}
+
+
+@router.get("/analytics/by-sport")
+# T14950: "By sport" admin table source -- one read of the existing rollup's
+# rollup_action_by_sport table (no per-user DB access at read, no new sweep trigger).
+def analytics_by_sport():
+    _require_admin()
+    from ..services.analytics_rollup import load_newest_action_rollup
+
+    rollup, partial = load_newest_action_rollup(tables=("rollup_action_by_sport",))
+    if rollup is None:
+        return {"computed_at": None, "partial": partial, "rows": []}
+    rows = [
+        {"month": month, "sport": sport, "action": action, "events": events, "distinct_users": distinct_users}
+        for month, sport, action, events, distinct_users in rollup["rollup_action_by_sport"]
+    ]
+    return {**rollup["meta"], "partial": partial, "rows": rows}
+
+
 @router.get("/analytics/spend-readiness")
 # T14910: plain def -> threadpool (T8000 pattern). Read-only; the rules and the per-gate
 # readers live in services/analytics_spend_readiness.py, thresholds in
