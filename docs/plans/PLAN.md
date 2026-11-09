@@ -1332,6 +1332,7 @@ features cut, sample reels, FAQ) deferred to For Launch. Pricing dropped (freemi
 |---|---|---|---|---|---|---|---|
 | T15300 | [pg_conn test fixture can silently drop and empty the shared dev Postgres analytics tables](tasks/T15300-pg-conn-test-fixture-can-silently.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 | T15320 | [test_analytics_dashboards.py has pre-existing failures against shared Postgres test state](tasks/T15320-test-analytics-dashboards-py-has-pre.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
+| T15390 | [GET /api/admin/analytics/by-sport is slow in this sandbox (~9.5s, dozens of R2 GetObject calls)](tasks/T15390-get-api-admin-analytics-by-sport.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 
 ## Environment Configuration
 
