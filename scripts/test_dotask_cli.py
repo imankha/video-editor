@@ -1208,6 +1208,16 @@ class RunChecksTest(unittest.TestCase):
             return (1 if "grep -q" in command else 0), "out"
         return run
 
+    def test_a_criteria_list_with_ids_reads_like_the_map(self):
+        # g-t15370-1 (2026-11-09): the worker wrote `"criteria": [{"id": "T15370:C1", ...}]`; the
+        # loader read {} and every criterion came back "no check declared" for two rounds.
+        (self.checkout / dotask_cli.CHECKS_DIR / "T1.checks.json").write_text(json.dumps({"criteria": [
+            {"id": "T1:C1", "kind": "browser"}, {"id": "T1:C3", "kind": "human", "why": "a real card"},
+            {"kind": "browser"}]}))
+        manifest = dotask_cli.check_manifest(self.checkout, "T1")
+        self.assertEqual(sorted(manifest), ["T1:C1", "T1:C3"])
+        self.assertEqual(manifest["T1:C3"]["kind"], "human")
+
     def test_each_kind_is_run_or_recorded_and_an_undeclared_criterion_is_missing(self):
         report = {"suites": [{"title": "T1.check.spec.js", "specs": [], "suites": [{"title": "d", "specs": [
             {"title": "T1:C1 opens at the playhead", "ok": True, "tests": []},

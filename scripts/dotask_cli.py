@@ -1386,6 +1386,8 @@ def check_manifest(checkout, task_id):
     except (OSError, ValueError):
         return {}
     criteria = data.get("criteria") if isinstance(data, dict) else None
+    if isinstance(criteria, list):  # [{"id": "T1:C1", "kind": ...}]: g-t15370-1 lost two rounds reading it as {}
+        criteria = {entry["id"]: entry for entry in criteria if isinstance(entry, dict) and entry.get("id")}
     return {str(k): v for k, v in criteria.items() if isinstance(v, dict)} if isinstance(criteria, dict) else {}
 
 
