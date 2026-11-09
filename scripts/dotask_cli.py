@@ -721,12 +721,12 @@ BUG_SECTION = "### Bugs found by /dotask verify"
 PLAN_TAIL_HEADING = "## Environment Configuration"
 VERIFY_INSTRUCTION = """You are the independent verifier for this group, verify round {round}, batch {batch}. You did not write this code.
 Do not trust the worker's claims, qa/proof.json or .dotask-notes.md conclusions: observe behavior yourself.
-Do NOT edit tracked files, commit, or change qa/proof.json. Keep every script you write under /tmp. HEAD is {head}.
+Do NOT edit tracked files, commit, or change qa/proof.json. Put Playwright specs you write in /workspace/src/frontend/e2e/_verify/ (untracked, so module imports resolve) and other scripts under /tmp. HEAD is {head}.
 
 The app stack was just restarted on this code: http://localhost:5173, backend :8000, dev accounts ?dev_account=empty|upload|full.
 
 1. {scope}
-2. Prove each criterion by observation. Use Playwright for anything a user can see (require('/workspace/src/frontend/node_modules/@playwright/test'), scripts under /tmp, chromium headless). Use the real API or the task's targeted tests only for what no user can see.
+2. Prove each criterion by observation. Use Playwright for anything a user can see; the repo already has the setup, so do not build your own: first grep src/frontend/e2e for the task id and, if the worker wrote a spec for this criterion, read it to check it drives the real app and asserts the criterion's text, then run it. Otherwise write a short spec in e2e/_verify/ that logs in with `loginAsDevPreset(page, 'full')` from '../helpers/realAuth' (each call mints a NEW account, so read ids through page.request in the same test) and run it with `bash scripts/dev-verify.sh e2e/_verify/<name>.spec.js --reporter=line`. Run everything in the foreground with an explicit timeout: nothing notifies you when a background command ends. You have 15 minutes in all, so prove the criterion and write the verdict; do not explore beyond it. Use the real API or the task's targeted tests only for what no user can see.
 3. Read each criterion literally. Code that meets the intent but not the text is a `fail`, with that said in the evidence.
 4. src/landing changes: this stack does not serve the landing site. Run `npm run build` in src/landing (`npm ci` first if node_modules is missing), then serve dist from a small node script under /tmp, mapping /x to x.html.
 5. {regression}

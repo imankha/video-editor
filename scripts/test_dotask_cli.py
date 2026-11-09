@@ -1132,6 +1132,17 @@ class StartModeFlagTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 2)
 
 
+class VerifierInstructionTest(unittest.TestCase):
+    # g-t15340-1, 2026-11-09: four verifiers in a row passed the 15-minute cap rebuilding Playwright
+    # setup (module resolution from /tmp, fresh dev accounts, background waits) instead of proving.
+    def test_the_verifier_is_pointed_at_the_repo_playwright_setup(self):
+        text = dotask_cli.VERIFY_INSTRUCTION
+        self.assertIn("loginAsDevPreset(page, 'full')", text)
+        self.assertIn("bash scripts/dev-verify.sh e2e/_verify/", text)
+        self.assertIn("in the foreground", text)
+        self.assertNotIn("require('/workspace/src/frontend/node_modules/@playwright/test')", text)
+
+
 class ContainerDefaultsTest(unittest.TestCase):
     def test_long_commands_stay_in_the_foreground(self):
         with tempfile.TemporaryDirectory() as tmp:
