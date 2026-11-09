@@ -1,6 +1,6 @@
 # T15650: Frame preview player is tiny with a clipped time readout, and the timeline zoom pill is clipped on iPad
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-09

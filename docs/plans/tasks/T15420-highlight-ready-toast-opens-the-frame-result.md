@@ -1,6 +1,6 @@
 # T15420: Highlight ready toast opens the Frame result and offers Finish without spotlight after Spotlight was done
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-11-09

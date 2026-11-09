@@ -1,6 +1,6 @@
 # T15410: Frame hangs on Loading when opened cold from resume, the Continue card or after export
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-11-09
