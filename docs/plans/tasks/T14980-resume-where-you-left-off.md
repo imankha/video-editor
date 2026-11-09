@@ -104,9 +104,9 @@ moves the user's own resume point. Covered by a test.
   cannot loop.
 - No chip or "Picking up where you left off" note on arrival (owner ruling 2026-11-08): the
   restore is silent. No "Saved" copy anywhere (owner rule). The 404 notice above stays.
-- The step is recorded (for the admin, T14990) but not restored: the user's restore opens the
-  object at the playhead; `?t=` is extended to Focus and Overlay where a player is on screen
-  (owner ruling 2026-11-08).
+- The step is recorded (for the admin, T14990) but not restored. The playhead is restored on
+  Annotate only (the existing `?t=` seek); Focus and Overlay reopen the right play at the start,
+  because no seek-on-open exists there (owner ruling 2026-11-08, follow-up T15340).
 - A user who explicitly taps Home has made a gesture; the point updates to Home and the next
   visit lands on Home. There is no setting; the behaviour is the product.
 
@@ -181,11 +181,14 @@ the "stale state reads as a broken app" failure that rule was written for.
   Criterion 1 amended accordingly.
 - Sign-out (Q3): do not record the sign-out. The point stays at the page right before it, and the
   row is kept; no DELETE on sign-out. Account deletion still cascades.
+- **(owner, 2026-11-08, later)** Playhead restore is Annotate only. Focus and Overlay reopen the
+  play at the start; seek-on-open for those two is follow-up T15340.
 
 ## Acceptance Criteria
 
-- [ ] Close the tab on a play, reopen the app (same or another device): the same play opens at
-      the same playhead, with no chip or note. The step is recorded, not restored.
+- [ ] Close the tab on a play, reopen the app (same or another device): the same play opens, with
+      no chip or note. On Annotate it opens at the same playhead; on Focus and Overlay it opens at
+      the start (owner ruling 2026-11-08). The step is recorded, not restored.
 - [ ] Sign out on a play, sign back in: the same play opens. Signing out writes no point and
       sends no beacon; the row is kept (deleted only with the account).
 - [ ] Arriving by share, claim, payment-return or deep link never triggers the restore.
