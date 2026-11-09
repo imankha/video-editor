@@ -36,8 +36,14 @@ function landMissing(kind) {
  * validated against the lists bootstrap already loaded (never a fresh fetch, so this stays a
  * single read, same rule as the rest of restore). The caller (App.jsx) gates on bare `/` and
  * absence of those other arrivals BEFORE calling this -- this function assumes that gate held.
+ *
+ * @param {Function} loadProject - App.jsx's useProjectLoader().loadProject, passed in because
+ *   this file is a plain module, not a component. T15410: selectProject() alone only fetches
+ *   the project record -- it never populates projectDataStore's clips/working video, which is
+ *   what FocusScreen/OverlayScreen actually render from (same gap T15220 fixed for the
+ *   payment-return path in App.jsx). Without it the restored editor hangs on "Loading...".
  */
-export function restoreFromResumePoint(resumePoint) {
+export function restoreFromResumePoint(resumePoint, { loadProject } = {}) {
   if (!isFreshResumePoint(resumePoint)) return;
 
   // T15360: both writers store `path` as pathname + search (e.g.
@@ -66,11 +72,19 @@ export function restoreFromResumePoint(resumePoint) {
       landMissing(DEEP_LINK_KIND.PROJECT);
       return;
     }
-    useProjectsStore.getState().selectProject(projectId);
     // T15340: same rule as Annotate above -- the point's own `t` (exit beacon) is
     // the playhead; the path's `?t=` wins only when parseEditorPath already
     // resolved one. The mode view consumes it once it has a working video to seek.
     useEditorStore.getState().setEditorMode(mode, { projectId, seekTime: seekTime ?? resumePoint.t ?? null });
+    // T15410: fire-and-forget, same as App.jsx's payment-return load -- this restore and the
+    // mode/URL update above are independent and must not block each other.
+    useProjectsStore.getState().selectProject(projectId).then(async (selected) => {
+      if (!selected) return;
+      const result = await loadProject(selected, { mode });
+      if (!result.stale && result.mode !== mode) {
+        useEditorStore.getState().setEditorMode(result.mode, { projectId });
+      }
+    }).catch((err) => console.error('[resumePointRestore] Project load failed:', err));
     return;
   }
 

@@ -407,7 +407,7 @@ function App() {
       // value, captured before that canonicalization ran.
       if (!authReturnMode && !deeplinkGameId && !payment && coldLoadPathname === '/') {
         const { restoreFromResumePoint } = await import('./utils/resumePointRestore');
-        restoreFromResumePoint(session.resumePoint);
+        restoreFromResumePoint(session.resumePoint, { loadProject });
       }
     }).catch((err) => {
       console.error('[App] Session init failed after retries:', err);
