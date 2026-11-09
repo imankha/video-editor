@@ -63,6 +63,14 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Detection seek timing: tracks when seek was initiated for latency measurement
   const seekTimingRef = useRef(null);
 
+  // T15340 fix round 1: a seek can be requested (e.g. a resume-point one-shot
+  // effect gated on the store's `duration`) before the native <video> element
+  // itself has loaded -- `duration`/`clipOffset` land in the store ahead of
+  // the element's own readyState. handleLoadedMetadata's clip-start seek must
+  // not clobber that already-requested target once the real `loadedmetadata`
+  // event finally arrives. Reset whenever a new source starts loading.
+  const seekRequestedForLoadRef = useRef(false);
+
   // Seek watchdog: recovers from stuck seeks (browser gave up fetching)
   const seekWatchdogRef = useRef(null);
 
@@ -453,6 +461,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
       const target = clipToVideo(validTime);
       const fps = getFramerate(videoRef.current);
+      seekRequestedForLoadRef.current = true;
       seekTimingRef.current = { t0: performance.now(), requestedTime: time, validTime, videoTarget: target, fps };
       console.log(`[DetectionSeek] SEEK requested=${time.toFixed(6)}s clamped=${validTime.toFixed(6)}s videoElement=${target.toFixed(6)}s requestedFrame=${Math.round(time * fps)} clampedFrame=${Math.round(validTime * fps)}`);
       setIsSeeking(true);
@@ -949,8 +958,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         setMetadata(extractedMetadata);
       }
 
-      // If clip offset is set, seek the video element to the clip start
-      if (clipOffset > 0) {
+      // If clip offset is set, seek the video element to the clip start --
+      // unless a seek has already been requested for this load (T15340 fix
+      // round 1: a resume-point one-shot seek can run before this native
+      // event fires; don't clobber it back to the clip start).
+      if (clipOffset > 0 && !seekRequestedForLoadRef.current) {
         video.currentTime = clipOffset;
       }
     }
@@ -966,6 +978,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       console.log(`[VIDEO] Loading: ${urlPreview}`);
       console.log(`[VIDEO] Mode: ${loadMode}`);
       console.log(`[VIDEO] networkState: ${video.networkState}, readyState: ${video.readyState}`);
+      // New load -- any earlier seek no longer applies to this source.
+      seekRequestedForLoadRef.current = false;
       // New src — reset load-phase stall nudge state.
       if (loadNudgeTimerRef.current) {
         clearTimeout(loadNudgeTimerRef.current);

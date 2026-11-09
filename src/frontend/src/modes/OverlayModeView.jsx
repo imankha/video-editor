@@ -304,16 +304,18 @@ export function OverlayModeView({
   // T15340: `/overlay/p/{id}?t=37` resume seek -- one shot, once the player has a
   // real duration to clamp against (same T10750 guard Annotate relies on). Drops
   // the URL's `t` right after so a later reload/navigation on this project never
-  // reseeks. `effectiveOverlayMetadata.duration` lands before the `duration` prop
-  // on a fresh load (same precedence used elsewhere in this file).
-  const resumeSeekDuration = effectiveOverlayMetadata?.duration || duration;
+  // reseeks. Gates on `duration` -- the same video-element-sourced duration
+  // `useVideo.seek()` itself checks -- not `effectiveOverlayMetadata.duration`,
+  // which is API-sourced and lands before the player can actually seek (fix
+  // round 1: that mismatch let this effect fire while seek() still refused,
+  // permanently dropping the one-shot `t`).
   useEffect(() => {
-    if (!projectId || !(resumeSeekDuration > 0)) return;
+    if (!projectId || !(duration > 0)) return;
     const { projectId: urlProjectId, seekTime } = parseEditorPath();
     if (seekTime == null || urlProjectId !== projectId) return;
     seek?.(seekTime);
     dropSeekParam();
-  }, [projectId, resumeSeekDuration, seek]);
+  }, [projectId, duration, seek]);
   const fsControls = useFullscreenControls({ isPlaying });
   // Mobile fullscreen video is opt-in (tap the expand button). Defaulting to it
   // hid the overlay settings + Add Spotlight/export controls with no way to reach

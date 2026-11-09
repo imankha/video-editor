@@ -67,7 +67,7 @@ describe('OverlayModeView resume seek (T15340)', () => {
   it('seeks once the player has a duration, using the URL `t`, then drops the param', () => {
     window.history.pushState({}, '', '/overlay/p/7?t=37');
     const seek = vi.fn();
-    renderView({ projectId: 7, effectiveOverlayMetadata: { width: 1920, height: 1080, framerate: 30, duration: 60 }, seek });
+    renderView({ projectId: 7, effectiveOverlayMetadata: { width: 1920, height: 1080, framerate: 30, duration: 60 }, duration: 60, seek });
 
     expect(seek).toHaveBeenCalledWith(37);
     expect(window.location.pathname + window.location.search).toBe('/overlay/p/7');
@@ -82,10 +82,25 @@ describe('OverlayModeView resume seek (T15340)', () => {
     expect(window.location.search).toBe('?t=37');
   });
 
+  // T15340 fix round 1: the gate must use the real (video-element-sourced)
+  // `duration`, not the API-sourced `effectiveOverlayMetadata.duration` --
+  // the latter lands before the player can actually seek, so a resume seek
+  // fired on it alone used to be refused by useVideo.seek() and permanently
+  // lost (C2). Pin that `effectiveOverlayMetadata.duration` being ready is NOT
+  // sufficient on its own.
+  it('does not seek on metadata duration alone -- waits for the real video duration', () => {
+    window.history.pushState({}, '', '/overlay/p/7?t=37');
+    const seek = vi.fn();
+    renderView({ projectId: 7, effectiveOverlayMetadata: { width: 1920, height: 1080, framerate: 30, duration: 60 }, duration: 0, seek });
+
+    expect(seek).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('?t=37');
+  });
+
   it('does not seek for a `t` that names a different project', () => {
     window.history.pushState({}, '', '/overlay/p/9?t=37');
     const seek = vi.fn();
-    renderView({ projectId: 7, effectiveOverlayMetadata: { width: 1920, height: 1080, framerate: 30, duration: 60 }, seek });
+    renderView({ projectId: 7, effectiveOverlayMetadata: { width: 1920, height: 1080, framerate: 30, duration: 60 }, duration: 60, seek });
 
     expect(seek).not.toHaveBeenCalled();
   });
