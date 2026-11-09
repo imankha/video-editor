@@ -155,6 +155,12 @@ export function AnnotateFullscreenOverlay({
   // backbone / an angle-free game -- ClipScrubRegion falls back to the whole
   // timeline (videoDuration) when this is null.
   mediaBounds = null,
+  // T15380: while a trim handle or the scrub bar is being dragged in mobile
+  // fullscreen LANDSCAPE, the caller collapses the full `landscape-inline`
+  // sheet down to just this row (so most of the picture peeks through) --
+  // only `landscape-inline` reads this; the other three layouts never cover
+  // enough of the video to need it.
+  dragPeek = false,
 }) {
   const isMobile = useIsMobile();
   // T11130 (H8): the editor's own stage-aware CTA (getClipStage / linkedProject)
@@ -715,6 +721,32 @@ export function AnnotateFullscreenOverlay({
   }
 
   if (layout === 'landscape-inline') {
+    // T15380 (AC3): mid-drag, swap the whole sheet for just the scrub row on
+    // a light background so the picture peeks through behind it. ClipScrubRegion
+    // stays the first child in both branches so its drag/touch capture survives
+    // the swap (same element, same position -- React keeps the DOM node).
+    if (dragPeek) {
+      return (
+        <div data-add-clip-form data-testid="annotate-landscape-drag-peek" className="border-t border-gray-700 px-3 py-2 bg-gray-100">
+          <ClipScrubRegion
+            currentTime={currentTime}
+            videoDuration={videoDuration}
+            existingClip={existingClip}
+            startTime={scrubStartTime}
+            endTime={scrubEndTime}
+            onStartTimeChange={setScrubStartTime}
+            onEndTimeChange={setScrubEndTime}
+            onSeek={onSeek}
+            onDragStart={() => onScrubDragChange?.(true)}
+            onDragEnd={(finalStart, finalEnd) => { onScrubDragChange?.(false); handleTrimCommit(finalStart, finalEnd); }}
+            videoController={videoController}
+            mediaBounds={mediaBounds}
+            clipEditorActive
+            compact
+          />
+        </div>
+      );
+    }
     return (
       <div data-add-clip-form className="border-t border-gray-700 px-3 py-2 flex max-h-[76dvh] flex-col overflow-y-auto">
         {/* T8892: which camera this play is cut from (angle-active only). Same

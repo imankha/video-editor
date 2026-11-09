@@ -372,6 +372,12 @@ export function AnnotateModeView({
   const fsControls = useFullscreenControls({ isPlaying });
   const playbackFsControls = useFullscreenControls({ isPlaying: playback?.isPlaying });
   const mobileFs = annotateFullscreen && isMobile;
+  // T15380: portrait mobile fullscreen stopped being a full-bleed video with
+  // an overlay sheet on top of it (option B) -- the video is pinned to the
+  // top and the editor/controls render below it in normal flow. Landscape
+  // keeps the full-bleed overlay surface (option C, the side-strip layout, is
+  // the T15370 follow-up) with just the drag-peek/auto-hide fixes (option D).
+  const mobileFsLandscape = mobileFs && isLandscape;
   const [isDraggingScrub, setIsDraggingScrub] = useState(false);
 
   // T10930: timeline zoom lives HERE, not in AnnotateTimeline, because the
@@ -786,18 +792,23 @@ export function AnnotateModeView({
       {(!annotateFullscreen || showAnnotateOverlay) && (
         <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />
       )}
-      <div data-testid="annotate-coach-stage" data-full-bleed-video={mobileFs ? 'true' : undefined} className={`${annotateFullscreen ? '' : `bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20 ${SHORT_DESKTOP_PANEL_CLASS}`}`}>
+      <div data-testid="annotate-coach-stage" data-full-bleed-video={mobileFsLandscape ? 'true' : undefined} className={`${annotateFullscreen ? '' : `bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20 ${SHORT_DESKTOP_PANEL_CLASS}`}`}>
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={annotateContainerRef}
-          className={`${annotateFullscreen ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
+          className={`${annotateFullscreen ? `fixed inset-0 z-[100] bg-gray-900${mobileFsLandscape ? '' : ' flex flex-col'}` : ''}`}
           onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
         >
-          {/* Video Player with annotate overlays */}
+          {/* Video Player with annotate overlays. T15380: portrait mobile
+              fullscreen is pinned to the top (flex-1 min-h-0, same sizing as
+              desktop fullscreen) with the editor/controls as in-flow siblings
+              below -- only landscape mobile fullscreen still fills the whole
+              container (its editor is a fixed sheet on top, option C's
+              side-strip layout is the T15370 follow-up). */}
           <div
             className={`relative bg-gray-900 ${
               annotateFullscreen
-                ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0 flex flex-col'
+                ? mobileFsLandscape ? 'w-full h-full' : `flex-1 min-h-0 flex flex-col${mobileFs ? ' pt-[env(safe-area-inset-top)]' : ''}`
                 : 'rounded-lg'
             }`}
             onClick={mobileFs && !showAnnotateOverlay ? togglePlay : undefined}
@@ -805,9 +816,12 @@ export function AnnotateModeView({
             onTouchMove={mobileFs && !showAnnotateOverlay ? fsControls.handleLongPressTouchMove : undefined}
             onTouchEnd={mobileFs && !showAnnotateOverlay ? fsControls.handleLongPressTouchEnd : undefined}
           >
-            {/* In fullscreen: flex-1 fills remaining space after controls/timeline */}
+            {/* In fullscreen: flex-1 fills remaining space after controls/timeline.
+                T15380: portrait mobile fullscreen now sizes like desktop
+                fullscreen (flex-1 min-h-0) instead of filling the container --
+                only landscape mobile fullscreen is still a full-bleed `absolute inset-0`. */}
             <div
-              className={annotateFullscreen ? (mobileFs ? 'absolute inset-0' : 'flex-1 min-h-0 relative') : 'contents'}
+              className={annotateFullscreen ? (mobileFsLandscape ? 'absolute inset-0' : 'flex-1 min-h-0 relative') : 'contents'}
             >
               {isPlaysOnly ? (
                 <PlaysOnlyPanel
@@ -990,10 +1004,14 @@ export function AnnotateModeView({
                 now renders the SAME bottom-center strip as windowed desktop (the
                 `desktopEditorOpen` block below), so both surfaces share one editor
                 (labels, stage CTA, save/stay-open) and the strip's fiber survives
-                the fullscreen toggle. Mobile fullscreen keeps its own inline sheet. */}
+                the fullscreen toggle. Landscape mobile fullscreen keeps its own
+                inline sheet (T15380: portrait mobile fullscreen joined this
+                in-flow block instead -- see the `mobileFsLandscape` gate below). */}
 
-            {/* Controls + timeline inside video container for desktop fullscreen & non-fullscreen */}
-            {!mobileFs && (
+            {/* Controls + timeline inside video container for desktop fullscreen,
+                non-fullscreen, AND portrait mobile fullscreen (T15380 AC1/AC2:
+                this renders BELOW the video in flow, never over it). */}
+            {!mobileFsLandscape && (
               <>
                 <div className={annotateFullscreen ? 'w-full shrink-0' : ''}>
                   <AnnotateControls
@@ -1123,13 +1141,17 @@ export function AnnotateModeView({
             </div>
           )}
 
-          {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
-          {mobileFs && (
+          {/* Mobile fullscreen LANDSCAPE: YouTube-style overlay controls +
+              timeline. T15380: portrait mobile fullscreen no longer renders
+              here -- it joined the in-flow `!mobileFsLandscape` controls
+              block above and the `desktopEditorOpen`-style editor panel
+              below, so nothing is ever drawn over its picture (AC1/AC2). */}
+          {mobileFsLandscape && (
             <>
               {showAnnotateOverlay ? (
                 <div
                   className="absolute inset-x-0 bottom-0 z-20 flex flex-col overflow-y-auto bg-gray-900/95"
-                  style={{ maxHeight: isLandscape ? '76dvh' : '70dvh' }}
+                  style={{ maxHeight: '76dvh' }}
                   onClick={e => e.stopPropagation()}
                 >
                   <AnnotateFullscreenOverlay
@@ -1145,12 +1167,16 @@ export function AnnotateModeView({
                     onSeek={seek}
                     videoController={videoController}
                     isFullscreen={false}
-                    layout={isLandscape ? 'landscape-inline' : 'inline'}
+                    layout="landscape-inline"
                     activeSourceName={activeSourceName}
                     mediaBounds={activeSourceMediaBounds}
                     teammateSuggestions={teammateSuggestions}
                     framingInProgress={selectedRegionFraming}
                     onScrubDragChange={setIsDraggingScrub}
+                    // T15380 (AC3): collapse to just the scrub row while a trim
+                    // handle or the bar itself is being dragged, so most of the
+                    // picture peeks through behind the sheet.
+                    dragPeek={isDraggingScrub}
                     // T11130: Done -> Highlight choice card (in-place mode-swap)
                     showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
                     onHighlightChoiceNow={onHighlightChoiceNow}
@@ -1228,6 +1254,40 @@ export function AnnotateModeView({
                 />
               </div>
             </>
+          )}
+
+          {/* T15380 (AC1/AC2): portrait mobile fullscreen's Add/Edit play editor --
+              an in-flow strip below the video (option B), the SAME portrait-strip
+              surface the windowed mobile editor uses (`mobileInlineForm` above),
+              not the fixed/absolute sheet landscape still uses. Nothing here is
+              ever positioned over the picture. */}
+          {mobileFs && !isLandscape && showAnnotateOverlay && (
+            <div className="w-full shrink-0 overflow-y-auto max-h-[45vh]">
+              <AnnotateFullscreenOverlay
+                isVisible={showAnnotateOverlay}
+                currentTime={currentTime}
+                videoDuration={duration || annotateVideoMetadata?.duration || 0}
+                existingClip={existingClip}
+                onUpdateClip={onFullscreenUpdateClip}
+                onClose={onOverlayClose}
+                onDeleteClip={onDeletePlayFromEditor}
+                onAwaitWrites={onAwaitRegionWrites}
+                writeStatus={writeStatus}
+                onSeek={seek}
+                videoController={videoController}
+                isFullscreen={false}
+                layout="portrait-strip"
+                activeSourceName={activeSourceName}
+                mediaBounds={activeSourceMediaBounds}
+                teammateSuggestions={teammateSuggestions}
+                framingInProgress={selectedRegionFraming}
+                // T11130: Done -> Highlight choice card (in-place mode-swap)
+                showHighlightChoice={!!highlightChoice && highlightChoice.regionId === existingClip?.id}
+                onHighlightChoiceNow={onHighlightChoiceNow}
+                onHighlightChoiceLater={onHighlightChoiceLater}
+                onHighlightChoiceDismiss={onHighlightChoiceDismiss}
+              />
+            </div>
           )}
 
           {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}

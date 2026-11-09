@@ -282,14 +282,13 @@ every layout (T10520); `ANNOTATE.DETAILS` stays the single source for the disclo
 **`AddDetailsPopup.jsx`** gained OPTIONAL `myAthlete`/`onLayerChange`/`layerDisabled`/
 `layerDisabledReason`, `taggedTeammates`/`onTeammatesChange`/`teammateSuggestions`,
 `hasProject`/`onDelete` — ONLY `portrait-strip` passes them, so the `inline`/`mobileFs`
-popup renders byte-identical without them. **`mobileFs` (T9500) is a SEPARATE surface** —
-`mobileFs = annotateFullscreen && isMobile`, mutually exclusive with `mobileInlineForm =
-showAnnotateOverlay && !annotateFullscreen && isMobile`; it keeps its own render site (~835,
-`absolute inset-x-0 bottom-0 maxHeight:70vh`) and `layout="inline"`, UNTOUCHED. The
-`layout="inline"` branch itself survives (still used by `mobileFs` portrait AND the
-`ClipsSidePanel` sidebar). Split is gated by `useIsMobile` (max-width 1023px OR coarse
-pointer), NEVER a Tailwind `sm:` breakpoint (T10590 finding 2) — pinned by
-`AnnotateModeView.portraitStrip.test.jsx`. Tests: new `AnnotateFullscreenOverlay.
+popup renders byte-identical without them. **`mobileFs` (T9500) was a SEPARATE surface
+(UPDATED T15380 below for portrait)** — `mobileFs = annotateFullscreen && isMobile`,
+mutually exclusive with `mobileInlineForm = showAnnotateOverlay && !annotateFullscreen &&
+isMobile`; `layout="inline"` still survives for LANDSCAPE mobileFs AND the `ClipsSidePanel`
+sidebar. Split is gated by `useIsMobile` (max-width 1023px OR coarse pointer), NEVER a
+Tailwind `sm:` breakpoint (T10590 finding 2) — pinned by `AnnotateModeView.
+portraitStrip.test.jsx`. Tests: new `AnnotateFullscreenOverlay.
 portraitStrip.test.jsx` (12) + `AnnotateModeView.portraitStrip.test.jsx` (2); updated
 `renderSiteInventory` windowed-mobile assertion to `portrait-strip`; 631 annotate unit
 tests green. **QA OWED (container has no browser + no backend venv/.env):** the measured
@@ -298,6 +297,29 @@ and the iOS-Safari dynamic-toolbar real-device check are OWED to the staging/rea
 pass — structural acceptance is met (an in-flow sibling strip can't overlay the video and
 the video keeps its natural windowed height), but the MEASURED numbers the acceptance bar
 demands were not capturable here. Prior:)
+updated: 2026-11-09 (T15380 — mobile fullscreen PORTRAIT stopped covering the video; LANDSCAPE
+is unchanged structurally (side-strip redesign is the T15370 follow-up), with drag-peek +
+auto-hide fixes. `mobileFsLandscape = mobileFs && isLandscape` is the new split inside
+`mobileFs` (`AnnotateModeView.jsx`): only `mobileFsLandscape` still full-bleeds the video
+(`absolute inset-0`, `data-full-bleed-video`) and renders the fixed `landscape-inline`/
+`inline` sheet on top of it. Portrait `mobileFs` now joins the SAME in-flow blocks desktop
+fullscreen already uses: the video is `flex-1 min-h-0` (plus
+`pt-[env(safe-area-inset-top)]`), the `!mobileFsLandscape`-gated controls+timeline block
+renders below it (AnnotateControls already carries the exit-fullscreen button via
+`onToggleFullscreen`, so no separate floating button was needed for portrait), and a new
+`mobileFs && !isLandscape && showAnnotateOverlay` block renders the editor with
+`layout="portrait-strip"` (the T10620 surface) the same way `desktopEditorOpen` does.
+`data-full-bleed-video` MUST track `mobileFsLandscape`, not `mobileFs` — the Guide shade
+cutout (`resolveGuide.js` EDITOR_VIDEO selector) depends on it to know whether the video
+still needs a cutout. **Landscape drag-peek (AC3):** `AnnotateFullscreenOverlay` gained a
+`dragPeek` prop, read ONLY by `layout === 'landscape-inline'`: when true it returns a
+light-background (`bg-gray-100`) wrapper containing JUST `ClipScrubRegion` (same position as
+the full form's first child, so React doesn't remount it — the drag/touch capture survives
+the swap) instead of the full sheet. Wired from `AnnotateModeView` as
+`dragPeek={isDraggingScrub}` (the same state `onScrubDragChange` already set). **Auto-hide
+while paused (AC4):** `useFullscreenControls.handleInteraction` used to gate
+`startTimer()` behind `if (isPlaying)` — trimming/scrubbing happens PAUSED, so the controls
+never auto-hid while editing. It now always arms the timer on interaction.)
 updated: 2026-09-19 (T10610 — the play editor is autosave, no Save/Update/Cancel button
 anywhere. FRONTEND-ONLY (backend `RawClipUpdate`/`update_raw_clip` already supported every
 field optional; zero backend changes). Supersedes/rewrites the T8140, T9330, T9630, T9830, and

@@ -43,10 +43,11 @@ export function useFullscreenControls({ isPlaying = false } = {}) {
     if (state === ControlState.HIDDEN) {
       setState(ControlState.VISIBLE);
     }
-    if (isPlaying) {
-      startTimer();
-    }
-  }, [state, isPlaying, startTimer]);
+    // T15380: auto-hide must also arm while PAUSED -- trimming/scrubbing
+    // happens paused, and that's exactly when the controls must not sit
+    // over the picture indefinitely.
+    startTimer();
+  }, [state, startTimer]);
 
   const handleTouchControl = useCallback(() => {
     if (state === ControlState.DRAG_MODE) return;

@@ -161,6 +161,31 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
 // T11130 (H8): the editor's own stage CTA is removed from every layout — the ONE
 // surviving stage button lives on the main Annotate screen. The portrait strip
 // renders no Frame / Apply / View button whether or not the play has a project.
+// T15380 (AC3): mobile fullscreen LANDSCAPE, mid-drag -- the landscape-inline
+// sheet collapses to just the scrub row (light background) so most of the
+// picture peeks through, then restores the full form on release.
+describe('AnnotateFullscreenOverlay landscape-inline — drag-peek collapse (T15380)', () => {
+  const landscapeProps = { ...baseProps, layout: 'landscape-inline' };
+
+  it('dragPeek=false renders the full landscape-inline form (name input, Details, footer)', () => {
+    render(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} />);
+    expect(screen.getByLabelText('Play name')).toBeTruthy();
+    expect(screen.getByTestId('add-details-button')).toBeTruthy();
+    expect(screen.queryByTestId('annotate-landscape-drag-peek')).toBeNull();
+  });
+
+  it('dragPeek=true collapses to ONLY the scrub row on a light background', () => {
+    render(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} dragPeek />);
+    const peek = screen.getByTestId('annotate-landscape-drag-peek');
+    expect(peek.className).toMatch(/bg-gray-100/);
+    expect(within(peek).getByTestId('scrub-track')).toBeTruthy();
+    // Everything else from the full form is gone while collapsed.
+    expect(screen.queryByLabelText('Play name')).toBeNull();
+    expect(screen.queryByTestId('add-details-button')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull();
+  });
+});
+
 describe('AnnotateFullscreenOverlay portrait-strip — no editor stage CTA (T11130 / H8)', () => {
   it('renders NO stage CTA for a play WITH a project (H8: it moved to the main screen)', () => {
     render(
