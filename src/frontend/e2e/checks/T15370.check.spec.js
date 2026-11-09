@@ -224,6 +224,7 @@ test.describe('T15370 checks: strip contents, functional equivalence, double-tap
     await expect(leftStrip.getByTitle('Step forward (one frame)')).toBeVisible();
     await expect(leftStrip.getByTitle('Forward 5 seconds')).toBeVisible();
     await expect(rightStrip.getByTestId('annotate-mark-play-button')).toBeVisible();
+    await expect(rightStrip.getByTitle('Playback speed'), 'right strip has the Speed control').toBeVisible();
     await expect(rightStrip.getByTestId('annotate-cockpit-zoom-toggle')).toBeVisible();
 
     // Functional equivalence: Back 5s / Forward 5s move currentTime by ~5s,
@@ -242,10 +243,38 @@ test.describe('T15370 checks: strip contents, functional equivalence, double-tap
     const afterBack = await video.evaluate((v) => v.currentTime);
     expect(afterFwd - afterBack, 'Back 5 seconds undid the forward skip by ~5s').toBeGreaterThan(3);
 
+    // Frame back / Frame forward step by exactly one frame, same effect the
+    // windowed AnnotateControls step buttons have.
+    const beforeStep = await video.evaluate((v) => v.currentTime);
+    await leftStrip.getByTitle('Step forward (one frame)').click({ force: true });
+    await page.waitForTimeout(100);
+    const afterStepFwd = await video.evaluate((v) => v.currentTime);
+    expect(afterStepFwd, 'Frame forward moved currentTime forward').toBeGreaterThan(beforeStep);
+    await leftStrip.getByTitle('Step backward (one frame)').click({ force: true });
+    await page.waitForTimeout(100);
+    const afterStepBack = await video.evaluate((v) => v.currentTime);
+    expect(afterStepBack, 'Frame backward moved currentTime back').toBeLessThan(afterStepFwd);
+
+    // Speed changes playback rate, same effect the windowed SpeedControl has.
+    const speedBtn = rightStrip.getByTitle('Playback speed');
+    await speedBtn.click({ force: true });
+    await page.getByRole('button', { name: '2x' }).click({ force: true });
+    await page.waitForTimeout(100);
+    expect(await video.evaluate((v) => v.playbackRate), 'Speed set the video playbackRate to 2x').toBe(2);
+    await speedBtn.click({ force: true });
+    await page.getByRole('button', { name: '1x' }).click({ force: true });
+    await page.waitForTimeout(100);
+    expect(await video.evaluate((v) => v.playbackRate), 'Speed restored the video playbackRate to 1x').toBe(1);
+
     // Mark/Edit play opens the editor (same action the windowed Add/Edit CTA has).
     await page.locator('.clip-marker').first().click({ force: true });
     await domClick(rightStrip.getByTestId('annotate-mark-play-button'));
     await expect(page.getByTestId('annotate-cockpit-sheet')).toBeVisible();
+
+    // Exit, same effect the windowed Fullscreen toggle has: the cockpit strips unmount.
+    await leftStrip.getByTitle('Exit fullscreen (Esc)').click({ force: true });
+    await page.waitForTimeout(300);
+    await expect(page.getByTestId('annotate-cockpit-left-strip'), 'Exit left the landscape cockpit').toHaveCount(0);
   });
 
   test('T15370:C5 - double-tap skips 5s, zoom toggle switches 1x/3x, source chip switches video', async ({ page }) => {
@@ -345,6 +374,11 @@ test.describe('T15370 checks: strip contents, functional equivalence, double-tap
     await expect(video).toBeVisible();
     const survivedPortrait = await video.evaluate((v) => v.dataset.t15370Marker === 'pre-rotate');
     expect(survivedPortrait, 'the video element was not reloaded when rotating to portrait').toBe(true);
+    // Positively confirm the T15380 portrait layout is restored, not merely
+    // that the landscape strip is gone: the in-flow AnnotateControls bar
+    // (annotate-controls) renders below the video, the T15380 surface that
+    // replaces the landscape cockpit's side strips in portrait.
+    await expect(page.getByTestId('annotate-controls'), 'the T15380 in-flow portrait controls bar is restored').toBeVisible();
 
     await page.setViewportSize({ width: 844, height: 390 });
     await page.waitForTimeout(300);
