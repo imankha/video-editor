@@ -1,5 +1,16 @@
 ---
 domain: annotate
+updated: 2026-11-09 (T15430 — LANDMINE fixed: T15370's landscape cockpit grid container
+(`AnnotateModeView.jsx`, `mobileFsLandscape` branch) never set `data-covers-header`, the
+contract `GuidanceToggle.jsx` checks (`document.querySelector('[data-covers-header]')`) before
+painting its fixed floating switch at the UnifiedHeader slot's last-measured rect. Without it,
+the toggle floated over the right cockpit strip and ate taps meant for Mark (elementFromPoint
+at Mark's centre resolved to `guidance-toggle`). `FocusCockpit.jsx` already sets this attribute
+on its own fixed root — ANY new full-bleed fullscreen/landscape surface must do the same. Fixed
+by adding `data-covers-header={mobileFsLandscape ? '' : undefined}` to the grid container.
+Pinned by a new assertion in `AnnotateModeView.landscapeCockpit.test.jsx` plus
+`e2e/checks/T15430.check.spec.js` (elementFromPoint check, live-verified red/green on the dev
+stack).)
 updated: 2026-11-09 (T15370 — mobile fullscreen LANDSCAPE got its own permanent side-strip
 cockpit grid (the T15380 follow-up), replacing the full-bleed-video + auto-hiding bottom
 overlay T15380 left in place. `AnnotateModeView.jsx`'s fullscreen container becomes, ONLY

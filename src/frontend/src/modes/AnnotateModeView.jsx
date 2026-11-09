@@ -815,6 +815,7 @@ export function AnnotateModeView({
             instead of a full-bleed surface with controls drawn on top. */}
         <div
           ref={annotateContainerRef}
+          data-covers-header={mobileFsLandscape ? '' : undefined}
           className={`${annotateFullscreen ? (
             mobileFsLandscape
               ? 'fixed inset-x-0 top-0 h-dvh z-[100] bg-black grid grid-cols-[56px_minmax(0,1fr)_72px] grid-rows-[minmax(0,1fr)_auto] overflow-hidden'

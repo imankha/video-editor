@@ -175,6 +175,14 @@ describe('AnnotateModeView — landscape fullscreen cockpit grid (T15370)', () =
     expect(screen.getByTestId('source-bar')).toBeTruthy();
   });
 
+  it('T15430: the cockpit grid container marks itself data-covers-header, so GuidanceToggle hides its floating button instead of overlapping Mark', () => {
+    render(<AnnotateModeView {...buildProps()} />);
+    const right = screen.getByTestId('annotate-cockpit-right-strip');
+    const mark = within(right).getByTestId('annotate-mark-play-button');
+    const covering = mark.closest('[data-covers-header]');
+    expect(covering).toBeTruthy();
+  });
+
   it('portrait mobile fullscreen does not render the cockpit grid strips', () => {
     isLandscapeMock = false;
     render(<AnnotateModeView {...buildProps()} />);
