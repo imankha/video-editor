@@ -27,10 +27,39 @@ export function groupBySportByMonth(rows) {
     }));
 }
 
-export function BySportTable({ data, loading, error, onRefresh }) {
+// T7400: "Run rollup" control -- triggers the admin-only POST /api/admin/analytics/rollup
+// sweep (rollup_action_weekly/rollup_engagement_monthly/rollup_action_by_sport) and reports
+// the run summary the acceptance criterion names: users_swept/users_failed/computed_at.
+function ActionRollupControl({ actionRollup, onRunRollup }) {
+  const running = Boolean(actionRollup && actionRollup.running);
+  const result = actionRollup && actionRollup.result;
+  const error = actionRollup && actionRollup.error;
+  return (
+    <div className="flex items-center gap-3 mb-2">
+      <button
+        type="button"
+        data-testid="action-rollup-run"
+        onClick={onRunRollup}
+        disabled={running}
+        className="px-3 py-1.5 text-xs rounded-lg bg-white/10 text-gray-200 border border-white/20 hover:bg-white/20 disabled:opacity-50 transition-colors"
+      >
+        {running ? 'Running...' : 'Run rollup'}
+      </button>
+      {error && <span data-testid="action-rollup-error" className="text-red-400 text-xs">Error: {error}</span>}
+      {!error && result && (
+        <span data-testid="action-rollup-stamp" className="text-gray-500 text-xs">
+          swept {result.users_swept}, failed {result.users_failed}, computed {result.computed_at.slice(0, 16).replace('T', ' ')} UTC
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function BySportTable({ data, loading, error, onRefresh, actionRollup, onRunRollup }) {
   const months = groupBySportByMonth(data?.rows);
   return (
     <div>
+      <ActionRollupControl actionRollup={actionRollup} onRunRollup={onRunRollup} />
       <div className="flex items-center gap-3 mb-4">
         <button
           onClick={onRefresh}

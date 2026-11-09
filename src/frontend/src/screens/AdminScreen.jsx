@@ -119,6 +119,8 @@ export function AdminScreen({ onBack }) {
   const bySportLoading = useAdminStore(s => s.bySportLoading);
   const bySportError = useAdminStore(s => s.bySportError);
   const fetchBySport = useAdminStore(s => s.fetchBySport);
+  const actionRollup = useAdminStore(s => s.actionRollup);
+  const runActionRollup = useAdminStore(s => s.runActionRollup);
   const fetchCampaigns = useAdminStore(s => s.fetchCampaigns);
   const [showCampaigns, setShowCampaigns] = useState(false);
   const [usersOpen, setUsersOpen] = useState(true);
@@ -395,6 +397,8 @@ export function AdminScreen({ onBack }) {
             loading={bySportLoading}
             error={bySportError}
             onRefresh={() => fetchBySport()}
+            actionRollup={actionRollup}
+            onRunRollup={() => runActionRollup()}
           />
         </CollapsibleSection>
 

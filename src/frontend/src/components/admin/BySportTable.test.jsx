@@ -44,3 +44,59 @@ describe('BySportTable (T14950)', () => {
     expect(screen.getByText('No export data yet.')).toBeTruthy();
   });
 });
+
+describe('BySportTable action rollup control (T7400)', () => {
+  it('clicking Run rollup calls onRunRollup', () => {
+    const onRunRollup = vi.fn();
+    render(
+      <BySportTable
+        data={null} loading={false} error={null} onRefresh={vi.fn()}
+        actionRollup={{ running: false, error: null, result: null }}
+        onRunRollup={onRunRollup}
+      />
+    );
+    screen.getByTestId('action-rollup-run').click();
+    expect(onRunRollup).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the button and shows Running... while the sweep is in flight', () => {
+    render(
+      <BySportTable
+        data={null} loading={false} error={null} onRefresh={vi.fn()}
+        actionRollup={{ running: true, error: null, result: null }}
+        onRunRollup={vi.fn()}
+      />
+    );
+    const btn = screen.getByTestId('action-rollup-run');
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent).toMatch(/Running/);
+  });
+
+  it('reports users_swept/users_failed/computed_at after a successful run', () => {
+    render(
+      <BySportTable
+        data={null} loading={false} error={null} onRefresh={vi.fn()}
+        actionRollup={{
+          running: false, error: null,
+          result: { computed_at: '2026-11-09T12:34:00+00:00', users_swept: 12, users_failed: 1 },
+        }}
+        onRunRollup={vi.fn()}
+      />
+    );
+    const stamp = screen.getByTestId('action-rollup-stamp');
+    expect(stamp.textContent).toMatch(/12/);
+    expect(stamp.textContent).toMatch(/1/);
+    expect(stamp.textContent).toMatch(/2026-11-09/);
+  });
+
+  it('shows the rollup error when the sweep fails', () => {
+    render(
+      <BySportTable
+        data={null} loading={false} error={null} onRefresh={vi.fn()}
+        actionRollup={{ running: false, error: 'HTTP 503', result: null }}
+        onRunRollup={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('action-rollup-error').textContent).toMatch(/503/);
+  });
+});

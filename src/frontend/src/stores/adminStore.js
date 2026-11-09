@@ -87,6 +87,8 @@ export const useAdminStore = create((set, get) => ({
   // T14020: step inspector payload for the selected stage (view-state read, never persisted).
   journeyStep: null, journeyStepLoading: false, journeyStepError: null,
   journeyRollup: { running: false, error: null, result: null },
+  // T7400: action/engagement rollup sweep (admin "Run rollup" click, By Sport section).
+  actionRollup: { running: false, error: null, result: null },
   // T14910: Spend readiness panel (Journey tab). Read on mount and on the Refresh gesture;
   // one Diagnose entry per gate key, loaded when its drawer opens. Never written back.
   spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
@@ -564,6 +566,24 @@ export const useAdminStore = create((set, get) => ({
     } catch (err) {
       console.error('[Admin] journey rollup failed', err);
       set({ journeyRollup: { running: false, error: String(err.message || err), result: null } });
+      return null;
+    }
+  },
+
+  // T7400: admin "Run rollup" click (By Sport section) -> in-process sweep into
+  // analytics.sqlite's rollup_action_weekly/rollup_engagement_monthly/rollup_action_by_sport.
+  // Returns the run summary (users_swept/users_failed/computed_at, null on failure).
+  runActionRollup: async () => {
+    set({ actionRollup: { running: true, error: null, result: null } });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/rollup`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
+      set({ actionRollup: { running: false, error: null, result } });
+      return result;
+    } catch (err) {
+      console.error('[Admin] action rollup failed', err);
+      set({ actionRollup: { running: false, error: String(err.message || err), result: null } });
       return null;
     }
   },
