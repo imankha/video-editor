@@ -690,14 +690,21 @@ class DotaskCliTest(unittest.TestCase):
     def test_eta_uses_the_group_s_own_medians_and_what_is_left(self):
         now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
         group, checkout = self._group_for_eta("t STAGE_DONE T1 commit x\n", minutes=[
-            ("implementation", 20), ("implementation", 30), ("implementation", 40), ("qa", 40)])
+            ("implementation", 20), ("implementation", 30), ("implementation", 40), ("qa", 8)])
         best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
-        # 2 tasks x 30 (median) + 1 verify batch x 40 + CI 8 = 108 min; one fix round adds 30 + 40.
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=108))
-        self.assertEqual(with_fix, best + dotask_cli.dt.timedelta(minutes=70))
+        # 2 tasks x 30 (median) + 1 verify batch x 8 + CI 8 = 76 min; one fix round adds 30 + 8.
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=76))
+        self.assertEqual(with_fix, best + dotask_cli.dt.timedelta(minutes=38))
         self.assertIn("2 task(s) x 30 min", basis)
         self.assertIn("medians of 4 timed dispatch(es)", basis)
-        self.assertIn("eta: PR about 11:48 (12:58 with one fix round)", dotask_cli.eta_line(group, checkout, now))
+        self.assertIn("eta: PR about 11:16 (11:54 with one fix round)", dotask_cli.eta_line(group, checkout, now))
+
+    def test_eta_never_counts_a_verify_batch_past_the_verifier_cap(self):
+        now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
+        group, checkout = self._group_for_eta("t STAGE_DONE T1 commit x\n", minutes=[
+            ("implementation", 30), ("qa", 120)])
+        best, _, basis = dotask_cli.estimate(group, checkout, now)
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=2 * 30 + dotask_cli.VERIFY_TIMEOUT_MINUTES + 8))
 
     def test_eta_after_a_clean_verdict_is_ci_only_and_a_stopped_group_has_none(self):
         now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
@@ -722,14 +729,14 @@ class DotaskCliTest(unittest.TestCase):
             {"head": "abc", "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}))
         best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
         self.assertIn("fix 1 task(s) x 25 min", basis)
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 35 + 8))
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 10 + 8))  # a verify batch is capped at 10 min
         # Findings in four tasks: four fix dispatches and two re-check batches, not one of each.
         group["tasks"] = ["T1", "T2", "T3", "T4"]
         (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps({"head": "abc", "criteria": [
             {"id": f"{t}:C1", "status": "fail", "evidence": "x"} for t in ("T1", "T2", "T3", "T4")], "bugs": []}))
         best, _with_fix, basis = dotask_cli.estimate(group, checkout, now)
-        self.assertIn("fix 4 task(s) x 25 min, 2 re-check batch(es) x 35 min", basis)
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=4 * 25 + 2 * 35 + 8))
+        self.assertIn("fix 4 task(s) x 25 min, 2 re-check batch(es) x 10 min", basis)
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=4 * 25 + 2 * 10 + 8))
         with (checkout / ".dotask-status").open("a") as stream:
             stream.write("t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
                          "t RESUMED Fix round 1 dispatch 2 of 3: ran out of turns, handoff written\n")

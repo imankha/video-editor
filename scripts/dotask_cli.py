@@ -1694,8 +1694,9 @@ def estimate(group, checkout, now=None):
     lines = [line for line in text.splitlines() if line.strip()]
     last = lines[-1] if lines else ""
     records = run_records(group["slug"])
-    impl, batch, ci = (phase_minutes(records, "implementation"), phase_minutes(records, "qa"),
-                       DEFAULT_MINUTES["ci"])
+    # A verify batch cannot outlast its cap, so no recorded median from before the cap counts past it.
+    impl, batch, ci = (phase_minutes(records, "implementation"),
+                       min(phase_minutes(records, "qa"), VERIFY_TIMEOUT_MINUTES), DEFAULT_MINUTES["ci"])
     source = f"medians of {len(records)} timed dispatch(es)" if records else "defaults, no timed dispatch yet"
     left = [t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in text]
     batches = -(-len(group["tasks"]) // VERIFY_BATCH)
