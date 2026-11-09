@@ -1,6 +1,6 @@
 # T15380: Mobile fullscreen Annotate stops covering the video (portrait layout + peek while dragging)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M (frontend only, no schema change)
