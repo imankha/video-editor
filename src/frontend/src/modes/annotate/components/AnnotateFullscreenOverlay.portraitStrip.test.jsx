@@ -161,6 +161,45 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
 // T11130 (H8): the editor's own stage CTA is removed from every layout — the ONE
 // surviving stage button lives on the main Annotate screen. The portrait strip
 // renders no Frame / Apply / View button whether or not the play has a project.
+// T15380 (AC3): mobile fullscreen LANDSCAPE, mid-drag -- the landscape-inline
+// sheet collapses to just the scrub row (light background) so most of the
+// picture peeks through, then restores the full form on release.
+describe('AnnotateFullscreenOverlay landscape-inline — drag-peek collapse (T15380)', () => {
+  const landscapeProps = { ...baseProps, layout: 'landscape-inline' };
+
+  it('dragPeek=false renders the full landscape-inline form (name input, Details, footer)', () => {
+    render(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} />);
+    expect(screen.getByLabelText('Play name')).toBeTruthy();
+    expect(screen.getByTestId('add-details-button')).toBeTruthy();
+    expect(screen.queryByTestId('annotate-landscape-drag-peek')).toBeNull();
+  });
+
+  // jsdom applies no Tailwind CSS, so "hidden" is read from the class on an ancestor.
+  const peekHidden = (el) => !!el.closest('.hidden');
+
+  it('dragPeek=true hides everything but the scrub row', () => {
+    render(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} dragPeek />);
+    const peek = screen.getByTestId('annotate-landscape-drag-peek');
+    expect(peekHidden(within(peek).getByTestId('scrub-track'))).toBe(false);
+    expect(peekHidden(screen.getByLabelText('Play name'))).toBe(true);
+    expect(peekHidden(screen.getByTestId('add-details-button'))).toBe(true);
+    expect(peekHidden(screen.getByRole('button', { name: 'Done' }))).toBe(true);
+  });
+
+  it('toggling dragPeek keeps the SAME scrub-row DOM node (a remount drops the drag)', () => {
+    // Live 2026-11-09: a separate peek tree remounted ClipScrubRegion on the drag's
+    // first frame; it lost pointer capture, the handle never moved, onDragEnd never
+    // fired and the sheet stayed collapsed with no Done.
+    const { rerender } = render(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} />);
+    const track = screen.getByTestId('scrub-track');
+    rerender(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} dragPeek />);
+    expect(screen.getByTestId('scrub-track')).toBe(track);
+    rerender(<AnnotateFullscreenOverlay {...landscapeProps} existingClip={editClip} />);
+    expect(screen.getByTestId('scrub-track')).toBe(track);
+    expect(peekHidden(screen.getByRole('button', { name: 'Done' }))).toBe(false);
+  });
+});
+
 describe('AnnotateFullscreenOverlay portrait-strip — no editor stage CTA (T11130 / H8)', () => {
   it('renders NO stage CTA for a play WITH a project (H8: it moved to the main screen)', () => {
     render(

@@ -22,9 +22,10 @@ vi.mock('./annotate/components/PlaybackControls', () => ({ default: () => <div /
 vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));
 
 let isMobileMock = false;
+let isLandscapeMock = false;
 vi.mock('../hooks/useIsMobile', () => ({
   useIsMobile: () => isMobileMock,
-  useIsLandscape: () => false,
+  useIsLandscape: () => isLandscapeMock,
 }));
 vi.mock('../hooks/useFullscreenControls', () => ({
   useFullscreenControls: () => ({
@@ -96,7 +97,7 @@ function buildProps(overrides = {}) {
 }
 
 describe('AnnotateModeView — useIsMobile decides the editor split (T10620)', () => {
-  beforeEach(() => { isMobileMock = false; });
+  beforeEach(() => { isMobileMock = false; isLandscapeMock = false; });
 
   it('mobile + editor open (windowed) renders the in-flow portrait-strip', () => {
     isMobileMock = true;
@@ -108,5 +109,39 @@ describe('AnnotateModeView — useIsMobile decides the editor split (T10620)', (
     isMobileMock = false;
     render(<AnnotateModeView {...buildProps()} />);
     expect(screen.getByTestId('overlay-layout').textContent).toBe('strip');
+  });
+});
+
+// T15380 (AC1/AC2): mobile fullscreen PORTRAIT stopped covering the video with
+// an absolute sheet -- the editor joins the SAME in-flow portrait-strip the
+// windowed mobile editor uses, below the video, never over it. Landscape mobile
+// fullscreen is unchanged by this task (still a `data-full-bleed-video`, fixed
+// `landscape-inline` sheet on top of the video) -- the side-strip redesign is
+// the T15370 follow-up.
+describe('AnnotateModeView — mobile FULLSCREEN editor split by orientation (T15380)', () => {
+  beforeEach(() => { isMobileMock = true; isLandscapeMock = false; });
+
+  it('portrait fullscreen + editor open renders in-flow portrait-strip, not a full-bleed sheet', () => {
+    render(<AnnotateModeView {...buildProps({ annotateFullscreen: true })} />);
+    expect(screen.getByTestId('overlay-layout').textContent).toBe('portrait-strip');
+    // AC1: nothing marks the video as full-bleed once the editor lives below it.
+    expect(screen.getByTestId('annotate-coach-stage').getAttribute('data-full-bleed-video')).toBeNull();
+  });
+
+  it('portrait fullscreen editor panel is an in-flow block, not an absolute overlay sheet', () => {
+    render(<AnnotateModeView {...buildProps({ annotateFullscreen: true })} />);
+    const overlay = screen.getByTestId('overlay-layout');
+    // The portrait-strip panel wraps in a plain shrink-0 block (shares the
+    // desktop fullscreen strip's in-flow treatment); it must never carry the
+    // `absolute inset-x-0 bottom-0` sheet classes landscape still uses.
+    expect(overlay.closest('[class*="absolute"]')).toBeNull();
+  });
+
+  it('landscape fullscreen + editor open still renders the full-bleed landscape-inline sheet', () => {
+    isLandscapeMock = true;
+    render(<AnnotateModeView {...buildProps({ annotateFullscreen: true })} />);
+    expect(screen.getByTestId('overlay-layout').textContent).toBe('landscape-inline');
+    expect(screen.getByTestId('annotate-coach-stage').getAttribute('data-full-bleed-video')).toBe('true');
+    expect(screen.getByTestId('overlay-layout').closest('[class*="absolute"]')).toBeTruthy();
   });
 });

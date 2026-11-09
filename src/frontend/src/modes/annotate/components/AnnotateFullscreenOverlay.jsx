@@ -155,6 +155,12 @@ export function AnnotateFullscreenOverlay({
   // backbone / an angle-free game -- ClipScrubRegion falls back to the whole
   // timeline (videoDuration) when this is null.
   mediaBounds = null,
+  // T15380: while a trim handle or the scrub bar is being dragged in mobile
+  // fullscreen LANDSCAPE, the caller collapses the full `landscape-inline`
+  // sheet down to just this row (so most of the picture peeks through) --
+  // only `landscape-inline` reads this; the other three layouts never cover
+  // enough of the video to need it.
+  dragPeek = false,
 }) {
   const isMobile = useIsMobile();
   // T11130 (H8): the editor's own stage-aware CTA (getClipStage / linkedProject)
@@ -715,12 +721,23 @@ export function AnnotateFullscreenOverlay({
   }
 
   if (layout === 'landscape-inline') {
+    // T15380 (AC3): mid-drag, collapse the sheet to just the scrub row so the
+    // picture shows above it. ONE tree for both states: the siblings only get
+    // `hidden`. Returning a separate peek tree remounted ClipScrubRegion at the
+    // drag's first frame, which dropped its pointer capture: the handle never
+    // moved, onDragEnd never fired, and the sheet stayed collapsed with no
+    // Done/rating (caught live 2026-11-09).
+    const peekHidden = dragPeek ? 'hidden' : '';
     return (
-      <div data-add-clip-form className="border-t border-gray-700 px-3 py-2 flex max-h-[76dvh] flex-col overflow-y-auto">
+      <div
+        data-add-clip-form
+        data-testid={dragPeek ? 'annotate-landscape-drag-peek' : undefined}
+        className={`border-t border-gray-700 px-3 py-2 flex flex-col ${dragPeek ? '' : 'max-h-[76dvh] overflow-y-auto'}`}
+      >
         {/* T8892: which camera this play is cut from (angle-active only). Same
             chip as the other editor surfaces so landscape phone isn't the one
             orientation left without it. */}
-        <CutFromAngleChip name={activeSourceName} />
+        <div className={peekHidden}><CutFromAngleChip name={activeSourceName} /></div>
         <ClipScrubRegion
           currentTime={currentTime}
           videoDuration={videoDuration}
@@ -744,7 +761,7 @@ export function AnnotateFullscreenOverlay({
             The star input and Details follow on their own rows. Tags/notes/category live BEHIND Details (the
             full-screen AddDetailsPopup), NOT inline, matching the other four
             layouts' time -> name+rating -> Details hierarchy. */}
-        <div className="flex items-center gap-2 mt-1.5">
+        <div className={`flex items-center gap-2 mt-1.5 ${peekHidden}`}>
           <input
             ref={nameInputRef}
             type="text"
@@ -758,8 +775,8 @@ export function AnnotateFullscreenOverlay({
           />
           <span className="order-1"><HighlightMadeChip show={highlightMade} /></span>
         </div>
-        {ratingRow('mt-1.5')}
-        <div className="mt-1.5 flex justify-end">
+        {ratingRow(dragPeek ? 'hidden' : 'mt-1.5')}
+        <div className={`mt-1.5 flex justify-end ${peekHidden}`}>
           <button
             type="button"
             onClick={() => setDetailsOpen(o => !o)}
@@ -771,7 +788,7 @@ export function AnnotateFullscreenOverlay({
             {detailsLabel}
           </button>
         </div>
-        <div className="mt-1.5 border-t border-gray-700 bg-gray-900/95 pt-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+        <div className={`mt-1.5 border-t border-gray-700 bg-gray-900/95 pt-2 pb-[max(0.25rem,env(safe-area-inset-bottom))] ${peekHidden}`}>
           <PlayEditorFooter onDelete={() => onDeleteClip(existingClip.id)} onDone={closeWithCommit} />
         </div>
         {/* T9630: same real Unsaved/Saving/Saved/error state as the other two
@@ -779,7 +796,7 @@ export function AnnotateFullscreenOverlay({
             feedback at all. Own line so it never competes with the button row
             on the height-starved landscape layout. */}
         {displayStatus && (
-          <p className="mt-1"><SaveStatusBadge status={displayStatus} /></p>
+          <p className={`mt-1 ${peekHidden}`}><SaveStatusBadge status={displayStatus} /></p>
         )}
         {/* Details -> full-screen AddDetailsPopup (category first per H16, then
             teammates, tags, notes). Delete stays inline above, so onDelete is
