@@ -22,6 +22,10 @@ shards the store already has — NOT a flat single-writer file. Update "Schema" 
 when this task starts: shard-aware (summed across shards, since each writer reduces its own users)
 rather than a single store-wide table.
 
+**Grouped with T14950 2026-11-09 (owner):** build `rollup_action_weekly` with a `sport` key from the
+start (`cohort_week, sport, action, week_index, distinct_users`), events without a sport tag under
+`unrecorded`, so T14950 adds its by-sport table and view without a further schema step.
+
 ## Problem
 
 Cohort × action × time questions ("% of the Fall cohort still exporting in week 6", "clip-library usage over the season") cannot be answered today: per-event history exists only inside each user's SQLite `user_action_log`, and the shared stores hold lifetime counts (`user_actions`) or global-not-per-user daily aggregates (`daily_counters`). Per the epic's binding directives we may NOT solve this with a Postgres event table or any per-event shared store.

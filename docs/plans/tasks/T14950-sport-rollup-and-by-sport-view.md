@@ -1,11 +1,14 @@
 # T14950: Sport key in the analytics.sqlite rollup + "By sport" admin table (Total exports by sport)
 
-**Status:** BLOCKED (by T7400's sweep, after T14940)
+**Status:** TODO
 **Impact:** 6
 **Complexity:** 4
 **Tier:** M (extends T7400's rollup and adds one read-only admin table)
 **Created:** 2026-11-03
-**Updated:** 2026-11-03
+**Updated:** 2026-11-09
+
+**Unblocked 2026-11-09 (owner):** T14940 is in STAGING; this task runs in the same group as T7400,
+so the sport key goes into T7400's schema step 3 tables from the start (no separate step 4).
 
 Piece 3 of 3 of the sport dimension. Owner 2026-11-03: "it should be possible to link things like
 Total Exports to sports"; no DB change; no read-time cost.
@@ -43,12 +46,13 @@ it at request time would open every user DB per admin page. The planned analytic
 - Tests: rollup with tagged and untagged rows; overlap; endpoint shape
 
 ### Related Tasks
-- Blocked by: T7400 (the store and the sweep), T14940 (the tag).
+- Grouped with T7400 (the sweep; same group, runs after it). T14940 (the tag) is in STAGING.
 - Siblings: T14930 (arrival sport, the Journey-side cut).
 - Feeds: T14910 (per-sport export and payer gates can read the rollup instead of Postgres), T7440.
 
 ### Technical Notes
-- analytics.sqlite is a flat file store, not the Postgres DB; this honours the "no DB change" ruling
+- analytics.sqlite is a per-writer-shard flat file store (see T7400's 2026-11-08 note), not the
+  Postgres DB; rollup reads sum across shards; this honours the "no DB change" ruling
   and the Investor-Grade Analytics directives (aggregates only, no per-event rows in shared stores).
 - Read cost is one indexed query of a small table; write cost is paid once per sweep.
 
