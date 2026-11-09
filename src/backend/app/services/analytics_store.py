@@ -118,6 +118,50 @@ _SCHEMA_STEPS: dict[int, list[str]] = {
             PRIMARY KEY (day, source, page_class)
         )""",
     ],
+    # T7400: action-weekly cohort rollup + monthly engagement distributions. Full
+    # rebuild per run, same per-writer-shard shape as step 2 (newest run wins, never
+    # summed across shards). Table name distinct from step 2's `rollup_meta` --
+    # separate run lineage, separate reader.
+    4: [
+        """CREATE TABLE IF NOT EXISTS action_rollup_meta (
+            run_id           TEXT PRIMARY KEY,
+            computed_at      TEXT NOT NULL,
+            users_swept      INTEGER NOT NULL,
+            users_failed     INTEGER NOT NULL,
+            log_rows_reduced INTEGER NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS rollup_action_weekly (
+            run_id         TEXT NOT NULL,
+            cohort_week    TEXT NOT NULL,
+            sport          TEXT NOT NULL,
+            action         TEXT NOT NULL,
+            week_index     INTEGER NOT NULL,
+            distinct_users INTEGER NOT NULL,
+            PRIMARY KEY (run_id, cohort_week, sport, action, week_index)
+        )""",
+        """CREATE TABLE IF NOT EXISTS rollup_engagement_monthly (
+            run_id       TEXT NOT NULL,
+            month        TEXT NOT NULL,
+            action       TEXT NOT NULL,
+            active_users INTEGER NOT NULL,
+            median_count REAL NOT NULL,
+            p25          REAL NOT NULL,
+            p75          REAL NOT NULL,
+            PRIMARY KEY (run_id, month, action)
+        )""",
+        # T14950: per-sport monthly totals, same full-rebuild-per-run shape as the other
+        # action_rollup_meta-keyed tables above (step 4, not a separate step -- the sport
+        # key was unblocked before this schema ever shipped).
+        """CREATE TABLE IF NOT EXISTS rollup_action_by_sport (
+            run_id         TEXT NOT NULL,
+            month          TEXT NOT NULL,
+            sport          TEXT NOT NULL,
+            action         TEXT NOT NULL,
+            events         INTEGER NOT NULL,
+            distinct_users INTEGER NOT NULL,
+            PRIMARY KEY (run_id, month, sport, action)
+        )""",
+    ],
 }
 
 # Column order after run_id, as written and as newest_journey_rollup returns rows.
@@ -128,6 +172,14 @@ JOURNEY_ROLLUP_TABLES: dict[str, tuple[str, ...]] = {
     "rollup_transition": ("from_stage", "to_stage", "cohort_month", "users", "transitions"),
 }
 _ROLLUP_META_COLUMNS = ("run_id", "computed_at", "users_walked", "users_failed", "below_head_skipped")
+
+# T7400: column order after run_id, as written and as newest_action_rollup returns rows.
+ACTION_ROLLUP_TABLES: dict[str, tuple[str, ...]] = {
+    "rollup_action_weekly": ("cohort_week", "sport", "action", "week_index", "distinct_users"),
+    "rollup_engagement_monthly": ("month", "action", "active_users", "median_count", "p25", "p75"),
+    "rollup_action_by_sport": ("month", "sport", "action", "events", "distinct_users"),
+}
+_ACTION_ROLLUP_META_COLUMNS = ("run_id", "computed_at", "users_swept", "users_failed", "log_rows_reduced")
 
 
 class StoreState(str, Enum):
@@ -419,6 +471,28 @@ class AnalyticsStore:
                     )
             self._dirty_gen += 1
 
+    def write_action_rollup(self, meta: dict, rows: dict[str, list[tuple]]) -> None:
+        """T7400: replace this shard's action-weekly/engagement-monthly rollup with one
+        full-rebuild run, same shape as write_journey_rollup."""
+        if self._conn is None:
+            raise RuntimeError(f"analytics store {self.key} has no confirmed baseline")
+        with self._lock:
+            with self._conn:
+                for table in (*ACTION_ROLLUP_TABLES, "action_rollup_meta"):
+                    self._conn.execute(f"DELETE FROM {table}")
+                self._conn.execute(
+                    f"INSERT INTO action_rollup_meta ({', '.join(_ACTION_ROLLUP_META_COLUMNS)}) "
+                    f"VALUES (?, ?, ?, ?, ?)",
+                    tuple(meta[c] for c in _ACTION_ROLLUP_META_COLUMNS),
+                )
+                for table, cols in ACTION_ROLLUP_TABLES.items():
+                    self._conn.executemany(
+                        f"INSERT INTO {table} (run_id, {', '.join(cols)}) "
+                        f"VALUES ({', '.join('?' for _ in range(len(cols) + 1))})",
+                        [(meta["run_id"], *r) for r in rows[table]],
+                    )
+            self._dirty_gen += 1
+
     def snapshot(self) -> bytes | None:
         """This shard's current bytes (None before a confirmed baseline)."""
         with self._lock:
@@ -541,6 +615,44 @@ def newest_journey_rollup(shards: list[sqlite3.Connection]) -> dict | None:
     _, conn, meta_row = newest
     result: dict = {"meta": dict(zip(_ROLLUP_META_COLUMNS, meta_row))}
     for table, cols in JOURNEY_ROLLUP_TABLES.items():
+        result[table] = [
+            tuple(r) for r in conn.execute(
+                f"SELECT {', '.join(cols)} FROM {table} WHERE run_id = ? ORDER BY {', '.join(cols)}",
+                (meta_row[0],),
+            )
+        ]
+    return result
+
+
+def newest_action_rollup(
+    shards: list[sqlite3.Connection], tables: tuple[str, ...] | None = None
+) -> dict | None:
+    """T7400: the run with the newest computed_at across shards (same selection rule as
+    newest_journey_rollup -- full rebuild per run, never summed). None if no shard holds
+    a run (fresh store, or shards from before schema step 4).
+
+    `tables` restricts which ACTION_ROLLUP_TABLES rows get fetched (T14950:C1 -- a reader
+    that only needs rollup_action_by_sport must not also fetch the other rollup tables).
+    Defaults to all of them."""
+    wanted = ACTION_ROLLUP_TABLES if tables is None else {t: ACTION_ROLLUP_TABLES[t] for t in tables}
+    newest: tuple[str, sqlite3.Connection, tuple] | None = None
+    for conn in shards:
+        has_meta = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'action_rollup_meta'"
+        ).fetchone()
+        if not has_meta:
+            continue
+        row = conn.execute(
+            f"SELECT {', '.join(_ACTION_ROLLUP_META_COLUMNS)} FROM action_rollup_meta "
+            f"ORDER BY computed_at DESC LIMIT 1"
+        ).fetchone()
+        if row and (newest is None or row[1] > newest[0]):
+            newest = (row[1], conn, row)
+    if newest is None:
+        return None
+    _, conn, meta_row = newest
+    result: dict = {"meta": dict(zip(_ACTION_ROLLUP_META_COLUMNS, meta_row))}
+    for table, cols in wanted.items():
         result[table] = [
             tuple(r) for r in conn.execute(
                 f"SELECT {', '.join(cols)} FROM {table} WHERE run_id = ? ORDER BY {', '.join(cols)}",
