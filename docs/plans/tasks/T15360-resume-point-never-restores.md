@@ -1,6 +1,6 @@
 # T15360: Resume where you left off never restores (exit beacon not installed, `/` rewritten before the gate)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 2
 **Tier:** S to M (frontend only, no schema change)
