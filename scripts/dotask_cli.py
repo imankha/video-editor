@@ -107,9 +107,13 @@ def container_running(slug):
 
 
 # --- task file resolution -----------------------------------------------------
+def task_file_matches(root, task_id):
+    return sorted(m for m in (Path(root) / "docs" / "plans" / "tasks").rglob(f"{task_id}-*.md")
+                  if not m.name.endswith("-design.md"))
+
+
 def resolve_task_file(task_id):
-    matches = sorted(m for m in (MAIN_REPO / "docs" / "plans" / "tasks").rglob(f"{task_id}-*.md")
-                     if not m.name.endswith("-design.md"))
+    matches = task_file_matches(MAIN_REPO, task_id)
     if not matches:
         die(f"no task file matches {task_id}-*.md under docs/plans/tasks")
     if len(matches) > 1:
@@ -604,7 +608,7 @@ def land(args):
     print(f"[dotask] pushing {branch}...")
     task_sh("push", slug)
 
-    title = ", ".join(group["tasks"]) + ": " + task_title(resolve_task_file(group["tasks"][0]))
+    title = ", ".join(group["tasks"]) + ": " + task_title(task_file_in(checkout, group["tasks"][0]))
     # A file, not an argument (newlines survive Windows shims), outside the checkout (which must stay clean).
     with tempfile.TemporaryDirectory(prefix="dotask-pr-") as scratch:
         body_file = Path(scratch) / "body.md"
@@ -748,7 +752,12 @@ class UntrustedVerdict(Exception):
 def task_file_in(checkout, task_id):
     """The group branch's copy of a task file, falling back to master's. Rulings and amended criteria are
     committed on the branch, so reading master missed them: T14860's "verify on staging" ruling still
-    stopped autoland (g-t15220-10, 2026-11-07)."""
+    stopped autoland (g-t15220-10, 2026-11-07). The branch is searched first, so another session's
+    uncommitted file in the shared main checkout cannot collide with it (g-t15340-1, 2026-11-09: an
+    untracked T15360-mobile-*.md next to the committed T15360 task)."""
+    own = task_file_matches(checkout, task_id)
+    if len(own) == 1:
+        return own[0]
     main = resolve_task_file(task_id)
     try:
         branch_copy = Path(checkout) / main.relative_to(MAIN_REPO)

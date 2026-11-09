@@ -1844,5 +1844,17 @@ class VerifierTimeCapTest(AutolandBase):
         self.land.assert_not_called()
 
 
+class TaskFileCollisionTest(AutolandBase):
+    def test_the_branch_copy_wins_over_a_colliding_uncommitted_file_in_the_main_checkout(self):
+        # g-t15340-1, 2026-11-09: another session's untracked T15360-mobile-*.md in the shared checkout made
+        # every lookup of the group's committed T15360 die with "matches multiple task files".
+        tasks = self.main_repo / "docs" / "plans" / "tasks"
+        (tasks / "T1-mobile-other.md").write_text("# T1: someone else's draft")
+        branch = self.checkout / "docs" / "plans" / "tasks"
+        branch.mkdir(parents=True)
+        (branch / "T1-fix-the-thing.md").write_text(self.TASK_TEXT)
+        self.assertEqual(dotask_cli.task_file_in(self.checkout, "T1"), branch / "T1-fix-the-thing.md")
+
+
 if __name__ == "__main__":
     unittest.main()
