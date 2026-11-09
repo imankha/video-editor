@@ -674,9 +674,10 @@ def land(args):
 VERIFY_FILE = ".dotask-verify.json"
 MAX_FIX_ROUNDS = 3  # a flaky test or an unfixable bug must not burn usage forever
 VERIFY_ATTEMPTS = 2  # retries cover only a dispatch that errored out, never a bad verdict
-# One verifier for 10 tasks (about 45 criteria) ran out of 120 turns (g-t15220-10, 2026-11-07), so each
-# dispatch proves a few tasks and the last one also runs the regression pass.
-VERIFY_BATCH = 3
+# One verifier dispatch proves ONE criterion (owner decision 2026-11-08). Batches of three tasks each
+# passed the 10-minute verifier cap on all three groups that day (g-t14980-2, g-t15240-2, g-t15260-1), so
+# 25 criteria landed unverified. One criterion fits the cap, and a stall costs that criterion alone. A
+# previous round's bug is re-run in its own dispatch, and the regression pass is the last dispatch.
 # The tests that import what the branch changed run here: a T14800 rollup bug reached Branch CI after a
 # clean verdict because no verifier ran the backend tests (g-t15220-10, PR 717, 2026-11-07). Selection is
 # by import, as Branch CI does it; never a whole suite.
@@ -688,13 +689,15 @@ REGRESSION_STEP = ("Regression pass: from `git diff origin/master...HEAD --stat`
                    "more on its own before reporting it. A failure on this branch is a `group` bug naming the "
                    "test; one that also fails on origin/master is `unrelated`.")
 NO_REGRESSION_STEP = "Skip the regression pass: another verifier dispatch runs it. Report bugs you happen to see."
-FULL_SCOPE_STEP = ("For EACH task ({tasks}), read the `## Acceptance Criteria` of its file under docs/plans/tasks and "
-                   "give EVERY criterion one entry, in order, named T<id>:C1, T<id>:C2, ...")
+ONE_CRITERION_STEP = ("Prove ONLY criterion {id}: item {number} of the `## Acceptance Criteria` in {task}'s file under "
+                      "docs/plans/tasks, which reads: {text!r}. Give it exactly one entry with id {id} and list no other "
+                      "criterion: each one has its own verifier dispatch.")
+NO_CRITERION_STEP = ("Prove no acceptance criterion and list none under `criteria` (leave it []): each one has its own "
+                     "verifier dispatch.")
 # After a fix round only what failed is re-checked: re-proving 40 passing criteria cost an hour per
 # round on g-t15220-10 (2026-11-07). The regression pass still runs, and earlier passes carry forward.
-FOCUSED_SCOPE_STEP = ("This is a re-check after fix round {fix_round}. Prove ONLY these criteria from the task files "
-                      "under docs/plans/tasks, one entry each with the same id: {criteria}. {bugs_step}Every other "
-                      "criterion passed on the previous HEAD and is not re-checked here; do not list it.")
+RECHECK_PREFIX = ("This is a re-check after fix round {fix_round}; criteria not named here passed on the previous "
+                  "HEAD and carry forward. ")
 # A fixer that disputed a finding stopped the whole loop as VERIFY_BLOCKED, and the owner had to rule on
 # a flake by hand (g-t14940-1, 2026-11-08). The dispute now goes to a fresh verifier first; only a
 # finding the verifier still upholds after reading the dispute reaches the owner.
@@ -1314,50 +1317,73 @@ def commit_filed_bug(task_id, title, paths, plan_was_dirty):
     return False
 
 
+def criterion_ids(checkout, task_id):
+    return [f"{task_id}:C{i + 1}" for i in range(max(1, acceptance_count(task_file_in(checkout, task_id))))]
+
+
+def criterion_line(checkout, criterion):
+    """A criterion id's text from its task file, or "" when the file has fewer items than the id."""
+    task_id, number = criterion.split(":C")
+    items = acceptance_items(task_file_in(checkout, task_id))
+    return items[int(number) - 1] if int(number) <= len(items) else ""
+
+
+def verify_units(group, checkout, focus=None):
+    """The verifier dispatches of one round, in order: one per criterion, one per previous-round bug to
+    re-run (after a fix round), then the regression pass. Each is {"criteria", "bugs", "regression"}."""
+    if focus:
+        criteria = list(focus["criteria"])
+        bugs = list(focus["bugs"])
+    else:
+        criteria = [c for t in group["tasks"] for c in criterion_ids(checkout, t)]
+        bugs = []
+    units = [{"criteria": [c], "bugs": [], "regression": False} for c in criteria]
+    units += [{"criteria": [], "bugs": [b], "regression": False} for b in bugs]
+    return units + [{"criteria": [], "bugs": [], "regression": True}]
+
+
 def verify_once(slug, group, checkout, head, round_number, focus=None):
-    """Stack up on HEAD, then fresh verifiers a few tasks at a time. After a fix round `focus` names the
-    previous verdict's failed criteria and group bugs (and carries that verdict): only those are
-    re-checked, plus the regression pass, and the rest of the previous verdict carries forward.
-    Returns the merged verdict, which lists every criterion; raises UntrustedVerdict if any batch
-    cannot be used."""
+    """Stack up on HEAD, then one fresh verifier per criterion (see verify_units). After a fix round
+    `focus` names the previous verdict's failed criteria and group bugs (and carries that verdict): only
+    those are re-checked, plus the regression pass, and the rest of the previous verdict carries forward.
+    A verifier that passes its time cap is skipped. Returns the merged verdict, which lists every
+    criterion; raises UntrustedVerdict if any dispatch cannot be used."""
     try:
         bring_up_stack(slug)
     except subprocess.CalledProcessError as exc:
         raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
-    if focus:
-        tasks = [t for t in group["tasks"] if any(c.startswith(f"{t}:") for c in focus["criteria"])
-                 or any(b.get("task") == t for b in focus["bugs"])]
-        tasks = tasks or group["tasks"][-1:]  # a bug the verifier left without a task is still re-run
-    else:
-        tasks = list(group["tasks"])
-    queue = [tasks[i:i + VERIFY_BATCH] for i in range(0, len(tasks), VERIFY_BATCH)]
-    merged = {"head": head, "criteria": [], "bugs": []}
+    units = verify_units(group, checkout, focus)
+    disputes = list(group.get("disputes", []))
+    for unit in units:  # a dispute travels with the dispatch that re-checks what it disputes
+        names = {*unit["criteria"], *(b.get("title") for b in unit["bugs"])}
+        unit["disputes"] = [d for d in disputes if set(d["items"]) & names]
+    units[-1]["disputes"] += [d for d in disputes if not any(d in u["disputes"] for u in units[:-1])]
+    merged = {"head": head, "criteria": [], "bugs": [], "skipped_steps": []}
     archive_dir = TASKS_ROOT / "waves" / group["wave_id"]
     archive_dir.mkdir(parents=True, exist_ok=True)
-    number = 0
-    while queue:
-        batch = queue.pop(0)
-        number += 1
-        label = f"{number} of {number + len(queue)}"
-        last = not queue
-        wanted = None
-        if focus:
-            wanted = [c for c in focus["criteria"] if c.split(":")[0] in batch]
-            bugs = [b for b in focus["bugs"]
-                    if b.get("task") in batch or (last and b.get("task") not in group["tasks"])]
-            # The verdict file is cleared before each verifier, so the steps travel in the instruction.
-            bugs_step = BUGS_STEP.format(titles="; ".join(
-                f"{b['title']} (steps: {str(b.get('steps') or 'see the title')[:3000]})" for b in bugs)) if bugs else ""
-            scope = FOCUSED_SCOPE_STEP.format(fix_round=round_number - 1, criteria=", ".join(wanted) or "(none)",
-                                              bugs_step=bugs_step)
+    for number, unit in enumerate(units, 1):
+        label = f"{number} of {len(units)}"
+        wanted = unit["criteria"]
+        if wanted:
+            task_id, item = wanted[0].split(":C")
+            scope = ONE_CRITERION_STEP.format(id=wanted[0], number=item, task=task_id,
+                                              text=criterion_line(checkout, wanted[0]))
         else:
-            scope = FULL_SCOPE_STEP.format(tasks=", ".join(batch))
-        disputes = [d for d in group.get("disputes", []) if d["task"] in batch or (last and d["task"] not in tasks)]
-        if disputes:
-            scope += DISPUTE_STEP.format(disputes="; ".join(f"[{', '.join(d['items'])}] {d['reason']}" for d in disputes))
+            scope = NO_CRITERION_STEP
+        if unit["bugs"]:
+            # The verdict file is cleared before each verifier, so the steps travel in the instruction.
+            scope += " " + BUGS_STEP.format(titles="; ".join(
+                f"{b['title']} (steps: {str(b.get('steps') or 'see the title')[:3000]})" for b in unit["bugs"]))
+        if focus:
+            scope = RECHECK_PREFIX.format(fix_round=round_number - 1) + scope
+        if unit["disputes"]:
+            scope += DISPUTE_STEP.format(disputes="; ".join(
+                f"[{', '.join(d['items'])}] {d['reason']}" for d in unit["disputes"]))
         instruction = VERIFY_INSTRUCTION.format(
             round=round_number, batch=label, head=head, scope=scope, branch=group["branch"],
-            regression=REGRESSION_STEP if last else NO_REGRESSION_STEP)
+            regression=REGRESSION_STEP if unit["regression"] else NO_REGRESSION_STEP)
+        what = " ".join(wanted) or ("regression pass" if unit["regression"] else
+                                    "bug re-check: " + "; ".join(b["title"] for b in unit["bugs"]))
         timed_out = False
         for attempt in range(VERIFY_ATTEMPTS):
             (checkout / VERIFY_FILE).unlink(missing_ok=True)
@@ -1370,33 +1396,26 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
             if finished or "outcome=error" not in last_status(checkout) or tracked_changes(checkout):
                 break
             print(f"[dotask] verifier dispatch errored (attempt {attempt + 1}); retrying", file=sys.stderr)
-        if timed_out:
-            noise, changed = split_tool_noise(tracked_changes(checkout))
-            restore_tool_noise(checkout, noise)
-            if git_head(checkout) != head or changed:
-                raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
-            skipped = wanted if wanted is not None else [
-                f"{t}:C{i + 1}" for t in batch for i in range(max(1, acceptance_count(task_file_in(checkout, t))))]
-            merged["criteria"] += [{"id": c, "status": "skipped", "evidence": (
-                f"verifier passed the {VERIFY_TIMEOUT_MINUTES:g}-minute cap; not verified (owner rule 2026-11-08)")}
-                for c in skipped]
-            append_status(checkout, f"VERIFY_SKIPPED batch {label}: verifier passed the "
-                                    f"{VERIFY_TIMEOUT_MINUTES:g}-minute cap; {' '.join(skipped) or 'regression pass'} not verified")
-            continue
-        if not finished and out_of_turns(checkout) and len(batch) > 1:
-            # A batch of three tasks (about 12 criteria) still ran out of 120 turns (g-t15220-10 batch 3,
-            # 2026-11-07). A verifier has nothing to hand off, so its tasks are proved one at a time.
-            print(f"[dotask] verifier batch {label} ran out of turns; proving its tasks one at a time",
-                  file=sys.stderr)
-            queue[0:0] = [[t] for t in batch]
-            continue
-        if not finished:
-            raise UntrustedVerdict(f"verifier batch {label} did not finish: {last_status(checkout)[:200]}")
+        # A verifier with one criterion has nothing smaller to split into: out of turns is skipped like
+        # out of time.
+        ran_out = not finished and not timed_out and out_of_turns(checkout)
         noise, changed = split_tool_noise(tracked_changes(checkout))
         restore_tool_noise(checkout, noise)
         if git_head(checkout) != head or changed:
             raise UntrustedVerdict(f"verifier changed the tree: {git_head(checkout)[:9]} {changed[:200]}")
-        verdict = read_verdict(checkout, group, head, tasks=batch, criteria_ids=wanted)
+        if timed_out or ran_out:
+            why = f"passed the {VERIFY_TIMEOUT_MINUTES:g}-minute cap" if timed_out else "ran out of turns"
+            merged["criteria"] += [{"id": c, "status": "skipped", "evidence": (
+                f"verifier {why}; not verified (owner rule 2026-11-08)")} for c in wanted]
+            if not wanted:
+                merged["skipped_steps"].append(what)
+            append_status(checkout, f"VERIFY_SKIPPED batch {label}: verifier {why}; {what} not verified")
+            continue
+        if not finished:
+            raise UntrustedVerdict(f"verifier batch {label} did not finish: {last_status(checkout)[:200]}")
+        verdict = read_verdict(checkout, group, head, criteria_ids=wanted)
+        # Entries it was not asked for are dropped: another dispatch owns them.
+        verdict["criteria"] = [c for c in verdict["criteria"] if str(c.get("id")) in wanted]
         (archive_dir / f"verify-round-{round_number}-batch-{number}.json").write_text(
             json.dumps(verdict, indent=2) + "\n", encoding="utf-8")
         merged["criteria"] += verdict["criteria"]
@@ -1513,7 +1532,9 @@ def autoland(args):
                     return acceptance_items(task_file_in(checkout, c.split(":")[0]))[int(c.split(":C")[1]) - 1]
                 group["staging_checks"] = [{"id": c, "text": criterion_text(c)} for c in deferred]
                 skipped = [c.get("id") for c in verdict["criteria"] if c["status"] == "skipped"]
-                group["skipped_checks"] = [{"id": c, "text": criterion_text(c)} for c in skipped]
+                group["skipped_checks"] = [{"id": c, "text": criterion_text(c)} for c in skipped] + [
+                    {"id": "Other check", "text": step} for step in verdict.get("skipped_steps", [])]
+                skipped += [f"[{step}]" for step in verdict.get("skipped_steps", [])]
                 save_group(checkout, group)
                 if human:
                     append_status(checkout, f"VERIFY_NEEDS_USER {head[:9]}: check {' '.join(human)}, "
@@ -1706,14 +1727,14 @@ def estimate(group, checkout, now=None):
                        min(phase_minutes(records, "qa"), VERIFY_TIMEOUT_MINUTES), DEFAULT_MINUTES["ci"])
     source = f"medians of {len(records)} timed dispatch(es)" if records else "defaults, no timed dispatch yet"
     left = [t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in text]
-    batches = -(-len(group["tasks"]) // VERIFY_BATCH)
-    # A fix round is one worker dispatch per task with findings, then a re-check of those tasks in
-    # batches of VERIFY_BATCH; counting one of each underestimated g-t15220-10 by an hour (2026-11-07).
+    batches = sum(safe_criterion_count(checkout, t) for t in group["tasks"]) + 1  # + the regression pass
+    # A fix round is one worker dispatch per task with findings, then one verifier per finding plus the
+    # regression pass; counting one of each underestimated g-t15220-10 by an hour (2026-11-07).
     owners = findings_tasks(checkout, group) or group["tasks"][:1]
-    fix_work, recheck = len(owners) * impl, -(-len(owners) // VERIFY_BATCH) * batch
+    rechecks = verdict_findings(checkout) + 1
+    fix_work, recheck = len(owners) * impl, rechecks * batch
     fix_round = fix_work + recheck
-    fix_parts = [f"fix {len(owners)} task(s) x {impl:.0f} min", f"{-(-len(owners) // VERIFY_BATCH)} re-check batch(es) "
-                 f"x {batch:.0f} min"]
+    fix_parts = [f"fix {len(owners)} task(s) x {impl:.0f} min", f"{rechecks} re-check batch(es) x {batch:.0f} min"]
     parts, verify_ahead = [], True
     if "VERIFY_PASS" in last:
         minutes, verify_ahead = ci, False
@@ -1759,6 +1780,24 @@ def findings_tasks(checkout, group):
     except (OSError, ValueError):
         return []
     return [task for task, _criteria, _bugs in fix_units(group, verdict) if task]
+
+
+def safe_criterion_count(checkout, task_id):
+    """A task's criterion count for an estimate, which must never stop `status`: 1 if its file is missing."""
+    try:
+        return len(criterion_ids(checkout, task_id))
+    except (SystemExit, OSError):
+        return 1
+
+
+def verdict_findings(checkout):
+    """How many failed criteria and group bugs the verdict on disk holds (1 when there is none to read)."""
+    try:
+        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 1
+    return max(1, sum(c.get("status") == "fail" for c in verdict.get("criteria", []))
+               + sum(b.get("scope") == "group" for b in verdict.get("bugs", [])))
 
 
 def verdict_has_findings(checkout):

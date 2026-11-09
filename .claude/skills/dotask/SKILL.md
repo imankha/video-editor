@@ -132,9 +132,10 @@ it still never edits code or drives the worker.
 User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `autoland` loops:
 
 1. Preland check, then restart the stack on HEAD.
-2. Fresh verifier dispatches (`qa` phase, 200 turns, no shared context with the worker), three tasks
-   per batch, prove every acceptance criterion by observation, Playwright for anything a user can see;
-   the last batch also runs a regression pass over the flows the diff touches, plus the tests that
+2. Fresh verifier dispatches (`qa` phase, 200 turns, no shared context with the worker), ONE per
+   acceptance criterion (owner decision 2026-11-08: three-task batches all passed the 10-minute cap),
+   prove each criterion by observation, Playwright for anything a user can see; after a fix round each
+   previous bug is re-run in its own dispatch; the last dispatch runs only the regression pass over the flows the diff touches, plus the tests that
    import what the branch changed (`vitest related`; pytest on backend test files importing a changed
    module, never a whole suite: a T14800 rollup bug first surfaced in Branch CI on PR 717). They write
    `.dotask-verify.json`; each round is archived as `waves/<wave>/verify-round-N.json`.
@@ -157,8 +158,9 @@ User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `au
    #723 waited on a person for this, 2026-11-08). It counts against `MAX_FIX_ROUNDS`.
 
 **A verifier never runs past 10 minutes** (owner rule 2026-11-08; `DOTASK_VERIFY_TIMEOUT_MIN` overrides). At the cap the
-dispatch is killed on the host and in the container, its batch's criteria are recorded `skipped` (`VERIFY_SKIPPED`
-status line), and the loop moves on: skipped criteria never count as a pass or a fail, they ride in the PR body under
+dispatch is killed on the host and in the container, its one criterion is recorded `skipped` (`VERIFY_SKIPPED`
+status line; a verifier out of turns is skipped the same way; a skipped regression pass or bug re-check is listed as
+"Other check"), and the loop moves on: skipped criteria never count as a pass or a fail, they ride in the PR body under
 "Not verified". A timed-out verifier that left edits in the tree still stops the loop (`VERIFY_BLOCKED`).
 
 The loop stops at `MAX_FIX_ROUNDS` (3) with `VERIFY_EXHAUSTED`. Anything it cannot trust stops it with

@@ -3,6 +3,7 @@ temp TASKS_ROOT + fixture MAIN_REPO. Never touches real Docker/VS Code/GitHub.""
 import contextlib
 import io
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -692,19 +693,20 @@ class DotaskCliTest(unittest.TestCase):
         group, checkout = self._group_for_eta("t STAGE_DONE T1 commit x\n", minutes=[
             ("implementation", 20), ("implementation", 30), ("implementation", 40), ("qa", 8)])
         best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
-        # 2 tasks x 30 (median) + 1 verify batch x 8 + CI 8 = 76 min; one fix round adds 30 + 8.
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=76))
-        self.assertEqual(with_fix, best + dotask_cli.dt.timedelta(minutes=38))
+        # 2 tasks x 30 (median) + 4 verifiers (3 criteria, the task files are missing so 1 each, and the
+        # regression pass) x 8 + CI 8 = 100 min; one fix round adds 30 + 2 re-checks x 8.
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=100))
+        self.assertEqual(with_fix, best + dotask_cli.dt.timedelta(minutes=46))
         self.assertIn("2 task(s) x 30 min", basis)
         self.assertIn("medians of 4 timed dispatch(es)", basis)
-        self.assertIn("eta: PR about 11:16 (11:54 with one fix round)", dotask_cli.eta_line(group, checkout, now))
+        self.assertIn("eta: PR about 11:40 (12:26 with one fix round)", dotask_cli.eta_line(group, checkout, now))
 
     def test_eta_never_counts_a_verify_batch_past_the_verifier_cap(self):
         now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
         group, checkout = self._group_for_eta("t STAGE_DONE T1 commit x\n", minutes=[
             ("implementation", 30), ("qa", 120)])
         best, _, basis = dotask_cli.estimate(group, checkout, now)
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=2 * 30 + dotask_cli.VERIFY_TIMEOUT_MINUTES + 8))
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=2 * 30 + 4 * dotask_cli.VERIFY_TIMEOUT_MINUTES + 8))
 
     def test_eta_after_a_clean_verdict_is_ci_only_and_a_stopped_group_has_none(self):
         now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
@@ -729,14 +731,15 @@ class DotaskCliTest(unittest.TestCase):
             {"head": "abc", "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}))
         best, with_fix, basis = dotask_cli.estimate(group, checkout, now)
         self.assertIn("fix 1 task(s) x 25 min", basis)
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 10 + 8))  # a verify batch is capped at 10 min
-        # Findings in four tasks: four fix dispatches and two re-check batches, not one of each.
+        # One fix, then the failed criterion and the regression pass re-checked, each capped at 10 min.
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=25 + 2 * 10 + 8))
+        # Findings in four tasks: four fix dispatches and five re-checks (four criteria and the regression pass).
         group["tasks"] = ["T1", "T2", "T3", "T4"]
         (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps({"head": "abc", "criteria": [
             {"id": f"{t}:C1", "status": "fail", "evidence": "x"} for t in ("T1", "T2", "T3", "T4")], "bugs": []}))
         best, _with_fix, basis = dotask_cli.estimate(group, checkout, now)
-        self.assertIn("fix 4 task(s) x 25 min, 2 re-check batch(es) x 10 min", basis)
-        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=4 * 25 + 2 * 10 + 8))
+        self.assertIn("fix 4 task(s) x 25 min, 5 re-check batch(es) x 10 min", basis)
+        self.assertEqual(best, now + dotask_cli.dt.timedelta(minutes=4 * 25 + 5 * 10 + 8))
         with (checkout / ".dotask-status").open("a") as stream:
             stream.write("t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
                          "t RESUMED Fix round 1 dispatch 2 of 3: ran out of turns, handoff written\n")
@@ -1185,13 +1188,33 @@ class AutolandBase(unittest.TestCase):
     def _dispatch(self, slug, group, phase, instruction, task_ids=None):
         self.dispatches.append((phase, instruction))
         if phase == "qa":
-            verdict = self.verdicts.pop(0)
-            if verdict is not None:
-                verdict.setdefault("head", self.head)  # None-free verdicts made before a fix moved HEAD
-                (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
+            self._serve_verdict(instruction)
         elif self.fix_commits:
             self.head = f"{len(self.dispatches):040d}"
         return True
+
+    def _serve_verdict(self, instruction):
+        """self.verdicts holds one verdict per verify ROUND. Each per-criterion verifier gets that
+        criterion's entry, a bug re-check the bugs it names, and the regression pass (the round's last
+        dispatch) the remaining bugs, then the round's verdict is used up. None: no verdict file."""
+        verdict = self.verdicts[0]
+        if verdict is None:
+            self.verdicts.pop(0)
+            return
+        verdict.setdefault("head", self.head)  # verdicts made before a fix moved HEAD
+        asked = re.search(r"Prove ONLY criterion (\S+?):? item", instruction)
+        served = verdict.setdefault("_served_bugs", [])
+        if asked:
+            criteria, bugs = [c for c in verdict["criteria"] if c["id"] == asked.group(1)], []
+        elif dotask_cli.REGRESSION_STEP in instruction:
+            criteria, bugs = [], [b for b in verdict["bugs"] if b["title"] not in served]
+            self.verdicts.pop(0)
+        else:
+            criteria = []
+            bugs = [b for b in verdict["bugs"] if b["title"] in instruction]
+            served += [b["title"] for b in bugs]
+        (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(
+            {"head": verdict["head"], "criteria": criteria, "bugs": bugs}))
 
     def _verdict(self, statuses=("pass", "pass"), bugs=(), head=None):
         return {"head": head or self.head, "bugs": list(bugs),
@@ -1205,11 +1228,16 @@ class AutolandBase(unittest.TestCase):
         return self.status.read_text().splitlines()[-1]
 
     def _phases(self):
-        return [phase for phase, _ in self.dispatches]
+        """Dispatch phases, with each verify round's run of per-criterion verifiers counted once."""
+        phases = []
+        for phase, _ in self.dispatches:
+            if not (phase == "qa" and phases[-1:] == ["qa"]):
+                phases.append(phase)
+        return phases
 
 
 class AutolandTest(AutolandBase):
-    def test_a_large_group_is_verified_in_batches_and_only_the_last_runs_the_regression_pass(self):
+    def test_every_criterion_gets_its_own_verifier_and_only_the_last_runs_the_regression_pass(self):
         ids = [f"T{n}" for n in range(1, 5)]
         for task_id in ids[1:]:
             (self.main_repo / "docs" / "plans" / "tasks" / f"{task_id}-x.md").write_text(
@@ -1222,17 +1250,26 @@ class AutolandTest(AutolandBase):
         def batch_verdict(task_ids, status="pass"):
             return {"bugs": [], "criteria": [
                 {"id": f"{t}:C{i}", "status": status, "evidence": "seen"} for t in task_ids for i in (1, 2)]}
-        self.verdicts = [batch_verdict(ids[:3]), batch_verdict(ids[3:], "fail"), batch_verdict(ids[3:])]
+        round_one = batch_verdict(ids[:3])
+        round_one["criteria"] += batch_verdict(ids[3:], "fail")["criteria"]
+        self.verdicts = [round_one, batch_verdict(ids[3:])]
         self.assertEqual(self._run(no_land=True), 0)
         qa = [text for phase, text in self.dispatches if phase == "qa"]
-        # After the fix only T4 is re-checked: one batch, which also runs the regression pass.
-        self.assertEqual(self._phases(), ["qa", "qa", "implementation", "qa"])
-        self.assertIn("T1, T2, T3", qa[0])
+        # Round 1: 8 criteria, one verifier each, then the regression pass. After the fix only T4's two
+        # criteria are re-checked, then the regression pass again.
+        self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
+        self.assertEqual(len(qa), 9 + 3)
+        self.assertIn("Prove ONLY criterion T1:C1:", qa[0])
+        self.assertIn("which reads: 'First'", qa[0])
+        self.assertIn("batch 1 of 9", qa[0])
         self.assertIn("Skip the regression pass", qa[0])
-        self.assertIn(dotask_cli.REGRESSION_STEP, qa[1])
-        self.assertIn("T4:C1, T4:C2", qa[2])
-        self.assertIn(dotask_cli.REGRESSION_STEP, qa[2])
-        # The fix worker saw the whole round, not just the last batch.
+        self.assertIn("Prove ONLY criterion T4:C2:", qa[7])
+        self.assertIn(dotask_cli.NO_CRITERION_STEP, qa[8])
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[8])
+        self.assertIn("Prove ONLY criterion T4:C1:", qa[9])
+        self.assertIn("re-check after fix round 1", qa[9])
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[11])
+        # The fix worker saw the whole round, not just the last verifier.
         merged = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-1.json").read_text())
         self.assertEqual(len(merged["criteria"]), 8)
         final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
@@ -1256,13 +1293,15 @@ class AutolandTest(AutolandBase):
         with patch.object(dotask_cli, "dispatch", dispatch):
             self.assertEqual(self._run(no_land=True), 0)
         qa = [text for phase, text in self.dispatches if phase == "qa"]
-        self.assertIn("EVERY criterion", qa[0])
-        scope = next(line for line in qa[1].splitlines() if line.startswith("1. "))
-        self.assertIn("Prove ONLY these criteria", scope)
-        self.assertIn("same id: T1:C2.", scope)
+        self.assertIn("Prove ONLY criterion T1:C1:", qa[0])
+        self.assertEqual(len(qa), 3 + 3)  # C1, C2, regression; then C2, the bug, regression
+        scope = next(line for line in qa[3].splitlines() if line.startswith("1. "))
+        self.assertIn("re-check after fix round 1", scope)
+        self.assertIn("Prove ONLY criterion T1:C2:", scope)
         self.assertNotIn("T1:C1", scope)  # the JSON example below step 1 always shows T1:C1
-        self.assertIn("Crash on save", scope)
-        self.assertIn(dotask_cli.REGRESSION_STEP, qa[1])
+        self.assertIn("Crash on save", qa[4])
+        self.assertIn(dotask_cli.NO_CRITERION_STEP, qa[4])
+        self.assertIn(dotask_cli.REGRESSION_STEP, qa[5])
         final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
         self.assertEqual([c["id"] for c in final["criteria"]], ["T1:C1", "T1:C2"])
         self.assertEqual(final["criteria"][0]["carried_from"], first_head)
@@ -1280,8 +1319,9 @@ class AutolandTest(AutolandBase):
         with patch.object(dotask_cli, "is_ancestor", lambda checkout, older, newer: older == old_head):
             self.assertEqual(self._run(no_land=True), 0)
         qa = [text for phase, text in self.dispatches if phase == "qa"]
-        self.assertEqual(len(qa), 1)
-        self.assertIn("Prove ONLY these criteria", qa[0])
+        self.assertEqual(len(qa), 2)  # T1:C2, then the regression pass
+        self.assertIn("Prove ONLY criterion T1:C2:", qa[0])
+        self.assertIn("re-check after fix round 1", qa[0])
         final = json.loads((waves / "verify-round-2.json").read_text())
         self.assertEqual(final["criteria"][0]["carried_from"], old_head)
         self.assertIn("VERIFY_PASS", self._last())
@@ -1292,7 +1332,9 @@ class AutolandTest(AutolandBase):
         with patch.object(dotask_cli, "is_ancestor", lambda checkout, older, newer: True):
             self.assertEqual(self._run(no_land=True), 0)
         qa = [text for phase, text in self.dispatches if phase == "qa"]
-        self.assertIn("EVERY criterion", qa[0])
+        self.assertEqual(len(qa), 3)
+        self.assertIn("Prove ONLY criterion T1:C1:", qa[0])
+        self.assertNotIn("re-check", qa[0])
 
     def test_a_re_check_that_skips_a_failed_criterion_never_passes(self):
         self.verdicts = [self._verdict(("fail", "pass"))]
@@ -1342,41 +1384,28 @@ class AutolandTest(AutolandBase):
         self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
         self.land.assert_called_once()
 
-    def test_a_verifier_batch_that_runs_out_of_turns_is_rerun_one_task_at_a_time(self):
+    def test_a_verifier_that_runs_out_of_turns_is_skipped_like_one_out_of_time(self):
         (self.checkout / ".dotask-profile").mkdir()
-        ids = [f"T{n}" for n in range(1, 5)]
-        for task_id in ids[1:]:
-            (self.main_repo / "docs" / "plans" / "tasks" / f"{task_id}-x.md").write_text(
-                self.TASK_TEXT.replace("T1:", f"{task_id}:"))
-        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
-        group["tasks"] = ids
-        (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
-        self.status.write_text("".join(f"t STAGE_DONE {t} commit \"x\"\n" for t in ids))
-        qa_calls = []
+        self.verdicts = [self._verdict()]
+        original, qa_calls = self._dispatch, []
 
         def dispatch(slug, group, phase, instruction, task_ids=None):
             qa_calls.append(instruction)
             first = len(qa_calls) == 1
             (self.checkout / ".dotask-profile" / f"{len(qa_calls)}.json").write_text(json.dumps(
                 {"schema_version": 2, "started_at": f"2026-11-07T{len(qa_calls):02d}:00:00+00:00",
-                 "outcome_class": "budget_stop" if first else "success", "requests": 120}))
+                 "outcome_class": "budget_stop" if first else "success", "requests": 200}))
             if first:
-                return False  # the three-task batch ran out of turns: no verdict file
-            batch = [t for t in ids if f"({t})" in instruction or f"{t}, " in instruction or f", {t}" in instruction]
-            (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps({"head": self.head, "bugs": [], "criteria": [
-                {"id": f"{t}:C{i}", "status": "pass", "evidence": "seen"} for t in batch for i in (1, 2)]}))
-            return True
+                self.dispatches.append((phase, instruction))
+                return False  # T1:C1's verifier ran out of turns: no verdict file
+            return original(slug, group, phase, instruction)
         with patch.object(dotask_cli, "dispatch", dispatch):
             self.assertEqual(self._run(no_land=True), 0)
-        self.assertEqual(len(qa_calls), 5)  # T1-T3 together, then T1, T2, T3 alone, then T4
-        self.assertIn("(T1, T2, T3)", qa_calls[0])
-        self.assertIn("(T1)", qa_calls[1])
-        self.assertIn("batch 2 of 5", qa_calls[1])
-        self.assertIn("(T4)", qa_calls[4])
-        self.assertIn(dotask_cli.REGRESSION_STEP, qa_calls[4])
-        self.assertNotIn(dotask_cli.REGRESSION_STEP, qa_calls[3])
-        merged = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-1.json").read_text())
-        self.assertEqual(len(merged["criteria"]), 8)
+        self.assertEqual(len(qa_calls), 3)  # never retried: C1 skipped, C2 and the regression pass ran
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C1"])
+        self.assertIn("VERIFY_SKIPPED batch 1 of 3: verifier ran out of turns; T1:C1 not verified",
+                      self.status.read_text())
 
     def test_a_fix_round_that_runs_out_of_turns_is_restarted_with_a_handoff(self):
         (self.checkout / ".dotask-profile").mkdir()
@@ -1564,10 +1593,8 @@ class StallGapsTest(AutolandBase):
         def dispatch(slug, group, phase, instruction, task_ids=None):
             self.dispatches.append((phase, instruction))
             if phase == "qa":
-                verdict = self.verdicts.pop(0)
-                verdict.setdefault("head", self.head)
-                verdict["head"] = self.head
-                (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
+                self.verdicts[0]["head"] = self.head
+                self._serve_verdict(instruction)
                 return True
             return on_fix(instruction)
         return dispatch
@@ -1587,8 +1614,9 @@ class StallGapsTest(AutolandBase):
         self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
         self.assertEqual(self.land.call_count, 2)
         self.assertTrue(all(c.args[0].fix_on_red for c in self.land.call_args_list))
-        self.assertIn("Branch CI failed", self.dispatches[1][1])
-        self.assertIn("test_x.py::test_kpis", self.dispatches[2][1])  # the re-check gets the failing tests
+        fix = next(i for i, (phase, _) in enumerate(self.dispatches) if phase == "implementation")
+        self.assertIn("Branch CI failed", self.dispatches[fix][1])
+        self.assertIn("test_x.py::test_kpis", self.dispatches[fix + 1][1])  # the re-check gets the failing tests
         self.assertIn("CI_RED", self.status.read_text())
 
     # Gap 3: g-t14940-1, a fixer disputed a flake and the loop stopped as VERIFY_BLOCKED.
@@ -1603,8 +1631,11 @@ class StallGapsTest(AutolandBase):
         with patch.object(dotask_cli, "dispatch", self._fix_dispatch(self._dispute)):
             self.assertEqual(self._run(), 0)
         self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
-        self.assertIn("also fails on origin/master; a timing flake", self.dispatches[2][1])
-        self.assertIn("deferring to neither side", self.dispatches[2][1])
+        fix = next(i for i, (phase, _) in enumerate(self.dispatches) if phase == "implementation")
+        recheck = self.dispatches[fix + 1][1]  # T1:C1's own verifier carries the dispute
+        self.assertIn("Prove ONLY criterion T1:C1:", recheck)
+        self.assertIn("also fails on origin/master; a timing flake", recheck)
+        self.assertIn("deferring to neither side", recheck)
         self.land.assert_called_once()
         self.assertNotIn("VERIFY_BLOCKED", self.status.read_text())
         self.assertEqual(json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())["disputes"], [])
@@ -1626,7 +1657,7 @@ class StallGapsTest(AutolandBase):
         with patch.object(dotask_cli, "restore_tool_noise", lambda checkout, paths: restored.extend(paths)):
             self.assertEqual(self._run(), 0)
         self.land.assert_called_once()
-        self.assertEqual(restored, ["src/frontend/package-lock.json", "qa/landing-build.log"])
+        self.assertEqual(restored, ["src/frontend/package-lock.json", "qa/landing-build.log"] * 3)  # each verifier
 
     def test_a_real_edit_next_to_tool_output_still_blocks(self):
         self.verdicts = [self._verdict()]
@@ -1793,13 +1824,14 @@ class VerifierTimeCapTest(AutolandBase):
         self.assertEqual(self._phases(), ["qa"])  # never retried, never sent to a fix round
         self.land.assert_called_once()
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
-        self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C1", "T1:C2"])
+        self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C1", "T1:C2", "Other check"])
         lines = self.status.read_text().splitlines()
-        self.assertTrue(any("VERIFY_SKIPPED batch 1 of 1" in line for line in lines))
-        self.assertIn("not verified (verifier timed out): T1:C1 T1:C2", self._last())
+        self.assertTrue(any("VERIFY_SKIPPED batch 1 of 3" in line for line in lines))
+        self.assertIn("not verified (verifier timed out): T1:C1 T1:C2 [regression pass]", self._last())
         body = dotask_cli.render_pr_body(group)
         self.assertIn("Not verified: the verifier passed its time cap", body)
         self.assertIn("- T1:C1: First", body)
+        self.assertIn("- Other check: regression pass", body)
 
     def test_a_timed_out_verifier_that_left_edits_is_not_trusted(self):
         self.dirty = " M src/app.js"
