@@ -1,6 +1,6 @@
 # T15310: Upload-failure beacon test reads back before the background write lands (flaky on slow disks)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S/M (backend test or beacon path; no schema change)

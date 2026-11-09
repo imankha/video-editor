@@ -1,6 +1,6 @@
 # T7400: analytics.sqlite store + on-demand cohort rollup sweep
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-08-20
