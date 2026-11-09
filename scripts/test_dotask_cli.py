@@ -1736,6 +1736,24 @@ class DispatchTurnCapTest(unittest.TestCase):
         self.assertEqual(self._env_seen_by_task_sh("qa", {"DOTASK_MAX_TURNS": "50"})["DOTASK_MAX_TURNS"], "50")
 
 
+class TrackedChangesTest(unittest.TestCase):
+    def test_a_deleted_qa_file_on_the_first_porcelain_line_is_tool_noise(self):
+        # g-t15260-1, 2026-11-08: stripping the output ate the first line's leading space, so
+        # " D qa/x.log" parsed as "a/x.log" and stopped the loop as "verifier changed the tree".
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git = ["git", "-C", tmp, "-c", "user.email=t@t", "-c", "user.name=t"]
+            subprocess.run(git[:3] + ["init", "-q"], check=True)
+            (repo / "qa").mkdir()
+            (repo / "qa" / "red.log").write_text("x")
+            subprocess.run(git + ["add", "."], check=True)
+            subprocess.run(git + ["commit", "-qm", "x"], check=True)
+            (repo / "qa" / "red.log").unlink()
+            noise, real = dotask_cli.split_tool_noise(dotask_cli.tracked_changes(repo))
+        self.assertEqual(noise, ["qa/red.log"])
+        self.assertFalse(real)
+
+
 REAL_DISPATCH = dotask_cli.dispatch  # AutolandBase patches it out; these tests need the real one
 
 

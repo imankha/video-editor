@@ -832,8 +832,11 @@ def read_verdict(checkout, group, head, tasks=None, criteria_ids=None):
 
 
 def tracked_changes(checkout):
+    # rstrip, never strip: porcelain's first column is a space for an unstaged change, and stripping it
+    # shifted the first path by one character, so " D qa/x.log" read as "a/x.log" and escaped the
+    # TOOL_NOISE rule (g-t15260-1, 2026-11-08: "verifier changed the tree: D qa/red-...log").
     return subprocess.run([tool("git"), "-C", str(checkout), "status", "--porcelain", "--untracked-files=no"],
-                          capture_output=True, text=True, check=True).stdout.strip()
+                          capture_output=True, text=True, check=True).stdout.rstrip()
 
 
 # What a verifier's own tooling rewrites without editing code: `npm install` churns package-lock.json and
