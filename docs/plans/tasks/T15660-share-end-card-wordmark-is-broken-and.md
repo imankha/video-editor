@@ -17,6 +17,8 @@ Viewports: desktop, mobile.
 
 **Actual:** 'Reel' above and 'Ballers' below-right of the logo. 'Make your own highlights' goes to www.reelballers.com (prod) while 'Open ReelBallers' goes to the staging app (both carry ref, sport, utm_source=share_endcard). The prod link may be by design.
 
+**Second repro (editor version check, e2e-gate@test.local):** End card in phone landscape is small with the logo overlapping 'Reel'/'Ballers'. CTAs carry `?ref=55cf2d11&sport=soccer&utm_source=share_endcard&utm_medium=viral&utm_campaign=reel_endcard`; 'Make your own highlights' goes to www.reelballers.com, 'Open ReelBallers' to the app.
+
 ## Acceptance Criteria
 
 - [ ] Wordmark renders on one line with the logo.
@@ -24,8 +26,13 @@ Viewports: desktop, mobile.
 
 ## Context
 
-### Evidence (local screenshots, gitignored)
-- `qa/staging-qa-2026-11-09/nuf-desktop/desktop-share-end.png`
+### Evidence (local only: `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09`, gitignored, not in git)
+Repo-relative: `qa/staging-qa-2026-11-09/`. Tester brief (accounts, viewports, how codes were read): `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\QA-BRIEF.md`.
+Test accounts on staging: `imankh+qa-{desktop,mobile,ipad,upload}-1109@gmail.com` (new users), `e2e-gate@test.local` (editor checks; game 3, projects 9-13), admin `imankh@gmail.com`.
+
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\nuf-desktop\desktop-share-end.png`
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\nuf-mobile\iphone-46-endcard.png`
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\nuf-ipad\ipadP-61-shared-end.png`
 
 ### Related Tasks
 T15070

@@ -23,8 +23,17 @@ Viewports: iPhone 14 and iPad gen 7 (WebKit).
 
 ## Context
 
-### Evidence (local screenshots, gitignored)
-- none
+### Evidence (local only: `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09`, gitignored, not in git)
+Repo-relative: `qa/staging-qa-2026-11-09/`. Tester brief (accounts, viewports, how codes were read): `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\QA-BRIEF.md`.
+Test accounts on staging: `imankh+qa-{desktop,mobile,ipad,upload}-1109@gmail.com` (new users), `e2e-gate@test.local` (editor checks; game 3, projects 9-13), admin `imankh@gmail.com`.
+
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\vc-upload\mobile-20-upload-tab0.png`
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\vc-upload\mobile-21-after-pick.png`
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\vc-upload\mobile-22-after-upload.png`: modal still on 'Upload game' after the pick, Upload button disabled; earlier killed runs left '0 / 10 parts' resume cards behind it
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\vc-upload\ipad-20-upload-tab0.png`
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\vc-upload\ipad-21-after-pick.png`
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\vc-upload\ipad-22-after-upload.png`
+- Log `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\logs\mob-upload.txt`: page text and file-input accept lists captured during the mobile pick
 
 ### Related Tasks
 T15020, T15040

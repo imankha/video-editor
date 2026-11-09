@@ -42,6 +42,11 @@
 | T15690 | [Admin Journey controls and map are clipped on mobile and iPad with no scroll](tasks/T15690-admin-journey-controls-and-map-are-clipped.md) | 3 | 2 | 1.5 | TODO | [ ] | QA 2026-11-09. |
 | T15700 | [Games card stats line is missing a label between the dots](tasks/T15700-games-card-stats-line-is-missing-a.md) | 3 | 1 | 3.0 | TODO | [ ] | QA 2026-11-09. |
 | T15710 | [Poster images blocked by CORS and Preflight 403 errors during load bursts](tasks/T15710-poster-images-blocked-by-cors-and-preflight.md) | 4 | 3 | 1.3 | TODO | [ ] | QA 2026-11-09, possible. Seen once each. |
+| T15720 | [Safari may fail to load game and clip video on staging (preflight 403, credentials CORS on the R2 redirect)](tasks/T15720-safari-may-fail-to-load-game-and.md) | 9 | 3 | 3.0 | TODO | [ ] | QA 2026-11-09, possible, BLOCKER if real: WebKit video fetch fails on the API-to-R2 redirect. Check on a real iPhone first. |
+| T15730 | [Frame on a play from a game still uploading says Video format not supported and keeps Sharpen enabled](tasks/T15730-frame-on-a-play-from-a-game.md) | 5 | 2 | 2.5 | TODO | [ ] | QA 2026-11-09. Misleading error text on a 409; credits-spending button stays live. |
+| T15740 | [Your highlight is ready toast overlaps the action bar and the chat bubble](tasks/T15740-your-highlight-is-ready-toast-overlaps-the.md) | 3 | 1 | 3.0 | TODO | [ ] | QA 2026-11-09. |
+| T15750 | [Phone portrait fullscreen with Edit play open shrinks the picture to a 114x64 thumbnail](tasks/T15750-phone-portrait-fullscreen-with-edit-play-open.md) | 4 | 2 | 2.0 | TODO | [ ] | QA 2026-11-09. |
+| T15760 | [Finished highlight player keeps the URL at /home, so it can't be linked or resumed](tasks/T15760-finished-highlight-player-keeps-the-url-at.md) | 3 | 2 | 1.5 | TODO | [ ] | QA 2026-11-09. |
 
 ### Payment return and campaign attribution lost on arrival (priority, owner-requested 2026-11-05, BUGS FIRST)
 

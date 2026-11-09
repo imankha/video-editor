@@ -24,9 +24,12 @@ Viewports: iPad portrait (Chromium emulation).
 
 ## Context
 
-### Evidence (local screenshots, gitignored)
-- `qa/staging-qa-2026-11-09/nuf-ipad/ipadP-45-after-view.png`
-- `qa/staging-qa-2026-11-09/nuf-ipad/ipadP-46-after-finish.png`
+### Evidence (local only: `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09`, gitignored, not in git)
+Repo-relative: `qa/staging-qa-2026-11-09/`. Tester brief (accounts, viewports, how codes were read): `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\QA-BRIEF.md`.
+Test accounts on staging: `imankh+qa-{desktop,mobile,ipad,upload}-1109@gmail.com` (new users), `e2e-gate@test.local` (editor checks; game 3, projects 9-13), admin `imankh@gmail.com`.
+
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\nuf-ipad\ipadP-45-after-view.png`
+- `C:\Users\imank\projects\video-editor\qa\staging-qa-2026-11-09\nuf-ipad\ipadP-46-after-finish.png`
 
 ### Related Tasks
 T14770
