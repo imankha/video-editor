@@ -1140,7 +1140,23 @@ class VerifierInstructionTest(unittest.TestCase):
         self.assertIn("loginAsDevPreset(page, 'full')", text)
         self.assertIn("bash scripts/dev-verify.sh e2e/_verify/", text)
         self.assertIn("in the foreground", text)
+        self.assertIn("15-45 s later", text)  # a cold load under load settles late (g-t15340-1)
         self.assertNotIn("require('/workspace/src/frontend/node_modules/@playwright/test')", text)
+
+
+class WarmStackTest(unittest.TestCase):
+    def test_a_failed_warm_up_never_stops_the_round(self):
+        with patch.object(dotask_cli.subprocess, "run", side_effect=dotask_cli.subprocess.TimeoutExpired("docker", 240)),                 contextlib.redirect_stderr(io.StringIO()) as err:
+            dotask_cli.warm_stack("g-x")
+        self.assertIn("stack warm-up failed", err.getvalue())
+
+    def test_the_warm_up_loads_the_signed_in_app_in_the_container(self):
+        with patch.object(dotask_cli.subprocess, "run", return_value=SimpleNamespace(returncode=0, stderr="")) as run,                 contextlib.redirect_stderr(io.StringIO()) as err:
+            dotask_cli.warm_stack("g-x")
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[1:3], ["exec", dotask_cli.cname("g-x")])
+        self.assertIn("?dev_account=full", argv[-1])
+        self.assertIn("stack warm-up ok", err.getvalue())
 
 
 class ContainerDefaultsTest(unittest.TestCase):
@@ -1189,6 +1205,7 @@ class AutolandBase(unittest.TestCase):
         self.preland = [SimpleNamespace(returncode=0, stdout="", stderr="")]
         for name, value in (("MAIN_REPO", self.main_repo), ("TASKS_ROOT", self.tasks_root),
                             ("dispatch", self._dispatch), ("bring_up_stack", lambda slug: "http://x"),
+                            ("warm_stack", lambda slug: None),
                             ("git_head", lambda checkout: self.head), ("land", self.land),
                             ("tracked_changes", lambda checkout: self.dirty),
                             ("run_preland_check", lambda checkout: self.preland[0])):

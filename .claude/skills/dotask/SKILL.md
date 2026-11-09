@@ -131,7 +131,10 @@ it still never edits code or drives the worker.
 
 User decision, 2026-11-07: a headless group lands itself. After `PUSHREADY`, `autoland` loops:
 
-1. Preland check, then restart the stack on HEAD.
+1. Preland check, then restart the stack on HEAD and load the signed-in app once (`warm_stack`), so Vite's
+   first compile is not paid inside a verifier's 15 minutes (g-t15340-1, 2026-11-09: a cold load reached its
+   play 15-45 s late under load and verifiers read /home). Verifiers reuse the worker's spec, `loginAsDevPreset`
+   and `scripts/dev-verify.sh` (specs in `e2e/_verify/`), and wait up to 60 s for a state to settle.
 2. Fresh verifier dispatches (`qa` phase, 200 turns, no shared context with the worker), ONE per
    acceptance criterion (owner decision 2026-11-08: three-task batches all passed the 10-minute cap),
    prove each criterion by observation, Playwright for anything a user can see; after a fix round each

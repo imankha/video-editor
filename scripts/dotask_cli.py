@@ -549,6 +549,32 @@ def bring_up_stack(slug):
     return frontend
 
 
+# A freshly started Vite dev server compiles each module on its first request, and the verifier's own
+# browser and tests run beside it: on g-t15340-1 (2026-11-09) /api/health kept aborting and a cold load of
+# `/` reached its play 15-45 s late, so verifiers read /home, investigated, and passed the 15-minute cap.
+# One signed-in page load before the round pays the compile cost outside every verifier's budget.
+WARM_STACK_SCRIPT = (
+    "const {chromium} = require('/workspace/src/frontend/node_modules/@playwright/test');"
+    "(async () => { const b = await chromium.launch(); const p = await b.newPage();"
+    " await p.goto('http://localhost:5173/?dev_account=full', {timeout: 180000});"
+    " await p.waitForLoadState('networkidle', {timeout: 180000}); await b.close(); })()"
+    ".catch(e => { console.error(String(e).slice(0, 300)); process.exit(1); });")
+WARM_STACK_SECONDS = 240
+
+
+def warm_stack(slug):
+    """Load the signed-in app once so Vite has compiled it before the first verifier starts. Never
+    raises: a failed warm-up only means the first verifier pays the compile cost."""
+    started = time.time()
+    try:
+        result = subprocess.run([tool("docker"), "exec", cname(slug), "node", "-e", WARM_STACK_SCRIPT],
+                                capture_output=True, text=True, timeout=WARM_STACK_SECONDS)
+        outcome = "ok" if result.returncode == 0 else f"failed: {result.stderr.strip()[:300]}"
+    except (OSError, subprocess.SubprocessError) as exc:
+        outcome = f"failed: {exc}"
+    print(f"[dotask] stack warm-up {outcome} ({time.time() - started:.0f}s)", file=sys.stderr)
+
+
 def stack(args):
     bring_up_stack(args.slug)
     return 0
@@ -726,7 +752,7 @@ Do NOT edit tracked files, commit, or change qa/proof.json. Put Playwright specs
 The app stack was just restarted on this code: http://localhost:5173, backend :8000, dev accounts ?dev_account=empty|upload|full.
 
 1. {scope}
-2. Prove each criterion by observation. Use Playwright for anything a user can see; the repo already has the setup, so do not build your own: first grep src/frontend/e2e for the task id and, if the worker wrote a spec for this criterion, read it to check it drives the real app and asserts the criterion's text, then run it. Otherwise write a short spec in e2e/_verify/ that logs in with `loginAsDevPreset(page, 'full')` from '../helpers/realAuth' (each call mints a NEW account, so read ids through page.request in the same test) and run it with `bash scripts/dev-verify.sh e2e/_verify/<name>.spec.js --reporter=line`. Run everything in the foreground with an explicit timeout: nothing notifies you when a background command ends. You have 15 minutes in all, so prove the criterion and write the verdict; do not explore beyond it. Use the real API or the task's targeted tests only for what no user can see.
+2. Prove each criterion by observation. Use Playwright for anything a user can see; the repo already has the setup, so do not build your own: first grep src/frontend/e2e for the task id and, if the worker wrote a spec for this criterion, read it to check it drives the real app and asserts the criterion's text, then run it. Otherwise write a short spec in e2e/_verify/ that logs in with `loginAsDevPreset(page, 'full')` from '../helpers/realAuth' (each call mints a NEW account, so read ids through page.request in the same test) and run it with `bash scripts/dev-verify.sh e2e/_verify/<name>.spec.js --reporter=line`. Run everything in the foreground with an explicit timeout: nothing notifies you when a background command ends. The stack is a dev server under load: a cold load can render Home first and reach its target 15-45 s later, so wait for the state you are checking (expect.poll or waitForURL with a 60 s timeout) before calling it a fail. You have 15 minutes in all, so prove the criterion and write the verdict; do not explore beyond it. Use the real API or the task's targeted tests only for what no user can see.
 3. Read each criterion literally. Code that meets the intent but not the text is a `fail`, with that said in the evidence.
 4. src/landing changes: this stack does not serve the landing site. Run `npm run build` in src/landing (`npm ci` first if node_modules is missing), then serve dist from a small node script under /tmp, mapping /x to x.html.
 5. {regression}
@@ -1381,6 +1407,7 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
         bring_up_stack(slug)
     except subprocess.CalledProcessError as exc:
         raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
+    warm_stack(slug)
     units = verify_units(group, checkout, focus)
     disputes = list(group.get("disputes", []))
     for unit in units:  # a dispute travels with the dispatch that re-checks what it disputes
