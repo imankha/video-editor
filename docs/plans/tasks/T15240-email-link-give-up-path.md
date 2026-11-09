@@ -1,6 +1,6 @@
 # T15240: Email link give-up path moves, misses or mislabels in three edge cases
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S to M (frontend only, no schema change)

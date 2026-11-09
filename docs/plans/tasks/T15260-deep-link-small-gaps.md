@@ -1,6 +1,6 @@
 # T15260: Small deep link gaps left after T14970
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S to M (frontend only, no schema change)
