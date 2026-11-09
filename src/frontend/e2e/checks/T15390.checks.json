@@ -1,6 +1,6 @@
 {"criteria": {
-  "T15390:C1": {"kind": "code", "command": "cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_analytics_store.py -k test_fetch_other_shard_blobs_second_read_lists_only_no_gets -v"},
-  "T15390:C2": {"kind": "code", "command": "cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_analytics_store.py -k 'test_fetch_other_shard_blobs_refetches_changed_etag_and_drops_delisted or test_fetch_other_shard_blobs_failed_list_is_partial_and_keeps_cache or test_fetch_other_shard_blobs_failed_get_is_partial_and_keeps_other_shard' -v"},
-  "T15390:C3": {"kind": "code", "command": "cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_analytics_store.py -k test_fetch_other_shard_blobs_fetches_cold_misses_concurrently -v"},
-  "T15390:C4": {"kind": "code", "command": "cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_analytics_rollup.py tests/test_analytics_journey_rollup.py tests/test_t14960_visit_totals.py -v"}
+  "T15390:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_store.py -k test_fetch_other_shard_blobs_second_read_lists_only_no_gets -v"},
+  "T15390:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_store.py -k 'test_fetch_other_shard_blobs_refetches_changed_etag_and_drops_delisted or test_fetch_other_shard_blobs_failed_list_is_partial_and_keeps_cache or test_fetch_other_shard_blobs_failed_get_is_partial_and_keeps_other_shard' -v"},
+  "T15390:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_store.py -k test_fetch_other_shard_blobs_fetches_cold_misses_concurrently -v"},
+  "T15390:C4": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_rollup.py tests/test_analytics_journey_rollup.py tests/test_t14960_visit_totals.py -v"}
 }}
