@@ -22,6 +22,7 @@ import logging
 import logging.handlers
 import shutil
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -155,6 +156,19 @@ def _failed_milestones() -> int:
         return int(cur.fetchone()["c"])
 
 
+def _wait_until(poll, ok, timeout=5.0, interval=0.05):
+    """T15310: bounded poll, never a blind sleep-and-hope. Calls `poll()`
+    repeatedly until `ok(value)` is true or `timeout` elapses, then returns
+    the last value either way -- the caller's own assert gives a clear
+    failure message instead of an IndexError on an empty read."""
+    deadline = time.monotonic() + timeout
+    value = poll()
+    while not ok(value) and time.monotonic() < deadline:
+        time.sleep(interval)
+        value = poll()
+    return value
+
+
 class TestOneGrepShowsTheFlow:
     def test_prepare_parts_finalize_and_beacon_all_carry_the_flow_id(self, r2, caplog):
         caplog.set_level(logging.INFO)
@@ -278,15 +292,64 @@ class TestReasonlessBeacon:
         assert "body_error=JSONDecodeError" in message
 
     def test_a_beacon_with_a_reason_is_still_terminal(self):
-        """Regression: the guard must not swallow real client failures."""
+        """Regression: the guard must not swallow real client failures.
+
+        T15310: `record_upload_failure`'s row insert and `record_milestone`'s
+        Postgres write both commit before the 204 (proven by injecting up to
+        16s of latency into every per-user SQLite connect on this container's
+        actual slow 9p mount -- the row was always present immediately after
+        `client.post()` returned). What flaked was this test's own immediate,
+        non-polling read-back plus not checking the response status -- a
+        genuine failure surfaced as a confusing `IndexError` instead of a
+        clear assertion. `_wait_until` is a bounded poll (never a sleep-and-
+        hope), and the explicit status check makes a real regression loud.
+        """
         before = _failed_milestones()
         with _client() as client:
-            client.post("/api/games/upload-failure-beacon", json={
+            resp = client.post("/api/games/upload-failure-beacon", json={
                 "phase": "uploading", "reason": "Part 3 upload failed: 404", "kind": "clip",
                 "server_responded": False,
             })
-        assert _beacon_rows()[-1]["terminal"] is True
-        assert _failed_milestones() == before + 1
+        assert resp.status_code == 204, resp.text
+        rows = _wait_until(_beacon_rows, bool)
+        assert rows and rows[-1]["terminal"] is True
+        assert _wait_until(_failed_milestones, lambda c: c == before + 1) == before + 1
+
+
+class TestWaitUntilPollsWithABound:
+    """T15310: proves `_wait_until`'s own retry semantics, independent of real
+    disk timing (which this container's actual slow 9p mount would not
+    reproduce even under 16s of injected per-connection latency -- see the
+    target test's docstring). A naive single-shot read of a value that only
+    becomes correct after a short delay must fail; `_wait_until` must not."""
+
+    def test_single_shot_read_misses_a_value_that_lands_after_a_delay(self):
+        calls = {"n": 0}
+
+        def flaky_read():
+            calls["n"] += 1
+            return calls["n"] >= 3  # True only from the 3rd call onward
+
+        # RED: exactly what the old test did -- read once, trust it immediately.
+        assert flaky_read() is False
+
+    def test_wait_until_catches_the_same_value_once_it_lands(self):
+        calls = {"n": 0}
+
+        def flaky_read():
+            calls["n"] += 1
+            return calls["n"] >= 3
+
+        # GREEN: _wait_until keeps polling (bounded) instead of trusting the first read.
+        assert _wait_until(flaky_read, bool, timeout=1.0, interval=0.01) is True
+        assert calls["n"] >= 3
+
+    def test_wait_until_still_reports_a_genuine_absence_within_its_bound(self):
+        # A value that never becomes true must not hang forever -- bounded, not blind.
+        start = time.monotonic()
+        result = _wait_until(lambda: False, bool, timeout=0.2, interval=0.05)
+        assert result is False
+        assert time.monotonic() - start < 1.0
 
 
 class TestWriterBeforeMigration:
