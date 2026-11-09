@@ -768,6 +768,26 @@ class DotaskCliTest(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()) as out:
             dotask_cli.main(["status"])
         self.assertIn("eta: done -- PR #716 merged", out.getvalue())
+        self.assertNotIn("freed", out.getvalue())  # a stopped container has nothing to free
+
+    def test_a_merged_groups_running_container_is_freed_by_status_and_start(self):
+        # T15350, owner rule 2026-11-08: merged groups kept their stacks up and slowed the live ones.
+        group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\n")
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        (self.docker_state / f"{dotask_cli.cname('g-x')}.running").touch()
+        calls = []
+        down = lambda *args, **kw: calls.append(args) or SimpleNamespace(returncode=0, stdout="", stderr="")
+        with patch.object(dotask_cli, "merged_pr", lambda branch: "716"), patch.object(dotask_cli, "task_sh", down), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            dotask_cli.main(["status"])
+        self.assertEqual(calls, [("down", "g-x")])
+        self.assertIn("freed: container stopped (PR #716 merged", out.getvalue())
+        calls.clear()
+        with patch.object(dotask_cli, "merged_pr", lambda branch: "716"), patch.object(dotask_cli, "task_sh", down), \
+                patch.object(dotask_cli, "preflight", MagicMock(side_effect=SystemExit(2))), \
+                contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            dotask_cli.main(["start", "T1"])
+        self.assertEqual(calls, [("down", "g-x")])
 
     # --- D3 / D4: land ------------------------------------------------------------
     def _group_dir_with_ports(self, slug):
