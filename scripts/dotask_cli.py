@@ -385,19 +385,48 @@ def render_kickoff(task_ids, files_by_task, branch, group):
     return template
 
 
-def flip_plan_status(task_ids):
+def flip_plan_status(task_ids, status="WIP", only_from=None):
+    """Set the PLAN.md row and task-file status of task_ids (left uncommitted in the main checkout, like
+    start's WIP flips). only_from limits it to rows currently in one of those statuses."""
+    def allowed(current):
+        return only_from is None or (current.split() or [""])[0] in only_from
     plan_path = MAIN_REPO / "docs" / "plans" / "PLAN.md"
     lines = plan_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    changed = False
     for i, line in enumerate(lines):
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) >= 6 and cells[0] in task_ids:
-            cells[5] = "WIP"
+        if len(cells) >= 6 and cells[0] in task_ids and cells[5] != status and allowed(cells[5]):
+            cells[5] = status
             lines[i] = "| " + " | ".join(cells) + " |\n"
-    plan_path.write_text("".join(lines), encoding="utf-8")
+            changed = True
+    if changed:
+        plan_path.write_text("".join(lines), encoding="utf-8")
     for task_id in task_ids:
-        path = resolve_task_file(task_id)
-        content = re.sub(r"\*\*Status:\*\*\s*\S.*", "**Status:** WIP", path.read_text(encoding="utf-8"), count=1)
-        path.write_text(content, encoding="utf-8")
+        matches = task_file_matches(MAIN_REPO, task_id)
+        if len(matches) != 1:  # start's preflight already refused these; on merge, one bad id skips only itself
+            print(f"WARNING: {task_id}: {len(matches)} task files match; status not set to {status}", file=sys.stderr)
+            continue
+        path = matches[0]
+        text = path.read_text(encoding="utf-8")
+        current = task_status(path) or ""
+        if current != status and allowed(current):
+            path.write_text(re.sub(r"\*\*Status:\*\*\s*\S.*", f"**Status:** {status}", text, count=1),
+                            encoding="utf-8")
+
+
+# A merged task is STAGING (CLAUDE.md Task Status Rule): merging deploys staging, which is the test phase.
+# Nothing set it, so PR #734's four tasks still read WIP on the board after merge (owner, 2026-11-09).
+STAGING_FROM = ("TODO", "WIP", "WAITING")
+
+
+def mark_staging(tasks):
+    """Idempotent; called for every merged group by `status` (running or stopped) and by on_merge."""
+    if not tasks:
+        return
+    try:
+        flip_plan_status(tasks, "STAGING", only_from=STAGING_FROM)
+    except OSError as exc:  # never blocks freeing the group
+        print(f"WARNING: could not set {', '.join(tasks)} to STAGING: {exc}", file=sys.stderr)
 
 
 def shared_files_section(shared):
@@ -2099,6 +2128,7 @@ def status(args):
         merged = merged_pr(group.get("branch"))
         if merged:
             print(f"  eta: done -- PR #{merged} merged")
+            mark_staging(group.get("tasks"))  # PR #734's container was already freed when status ran
             if running == "running":
                 print(f"  {on_merge(slug, merged)}")
         elif running == "stopped":
@@ -2213,6 +2243,7 @@ def on_merge(slug, pr_number):
         tasks = json.loads((checkout / GROUP_FILE).read_text(encoding="utf-8")).get("tasks", [])
     except (OSError, ValueError):
         tasks = []
+    mark_staging(tasks)
     has_checks = any(e.get("kind") == "browser" for t in tasks for e in check_manifest(checkout, t).values())
     if STAGING_DONE in text or not has_checks:
         return free_group(slug, pr_number)

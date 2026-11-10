@@ -849,6 +849,15 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("eta: done -- PR #716 merged", out.getvalue())
         self.assertNotIn("freed", out.getvalue())  # a stopped container has nothing to free
 
+    def test_status_marks_a_merged_group_staging_even_after_its_container_stopped(self):
+        # PR #734 (2026-11-09): the staging check had freed the container before status saw the merge.
+        group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\n")
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        with patch.object(dotask_cli, "merged_pr", lambda branch: "734"), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            dotask_cli.main(["status"])
+        self.assertEqual(dotask_cli.task_status(dotask_cli.resolve_task_file("T1")), "STAGING")
+
     def test_a_merged_groups_running_container_is_freed_by_status_and_start(self):
         # T15350, owner rule 2026-11-08: merged groups kept their stacks up and slowed the live ones.
         group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\n")
@@ -861,6 +870,16 @@ class DotaskCliTest(unittest.TestCase):
             dotask_cli.main(["status"])
         self.assertEqual(calls, [("down", "g-x")])
         self.assertIn("freed: container stopped (PR #716 merged", out.getvalue())
+        # A merged task is STAGING on the board (PR #734's tasks stayed WIP, 2026-11-09).
+        # The fixture group names T1-T3 but only T1 has a file and row: the others are skipped, not fatal.
+        row = next(line for line in self._plan_text().splitlines() if line.startswith("| T1 |"))
+        self.assertEqual(row.split("|")[6].strip(), "STAGING")
+        self.assertEqual(dotask_cli.task_status(dotask_cli.resolve_task_file("T1")), "STAGING")
+        # ...but a status the user already moved on (DONE) is never pulled back.
+        with contextlib.redirect_stderr(io.StringIO()):
+            dotask_cli.flip_plan_status(["T1"], "DONE")
+            dotask_cli.flip_plan_status(["T1"], "STAGING", only_from=dotask_cli.STAGING_FROM)
+        self.assertEqual(dotask_cli.task_status(dotask_cli.resolve_task_file("T1")), "DONE")
         calls.clear()
         with patch.object(dotask_cli, "merged_pr", lambda branch: "716"), patch.object(dotask_cli, "task_sh", down), \
                 patch.object(dotask_cli, "preflight", MagicMock(side_effect=SystemExit(2))), \
