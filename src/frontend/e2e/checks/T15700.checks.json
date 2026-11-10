@@ -1,0 +1,11 @@
+{
+  "task": "T15700",
+  "criteria": [
+    {
+      "id": "T15700:C1",
+      "kind": "code",
+      "text": "Every count on the game card has its label.",
+      "command": "cd src/frontend && npx vitest run src/components/GameTile.counts.test.jsx"
+    }
+  ]
+}

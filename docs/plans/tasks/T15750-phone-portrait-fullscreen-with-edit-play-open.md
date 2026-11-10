@@ -1,6 +1,6 @@
 # T15750: Phone portrait fullscreen with Edit play open shrinks the picture to a 114x64 thumbnail
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-09

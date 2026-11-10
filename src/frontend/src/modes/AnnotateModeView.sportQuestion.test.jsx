@@ -1,5 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * T8140 — the full-screen "What sport is this?" question is wired to a MOBILE
@@ -44,8 +44,8 @@ vi.mock('../stores', () => ({
 
 import { AnnotateModeView } from './AnnotateModeView';
 
-function renderView(overrides = {}) {
-  const props = {
+function buildProps(overrides = {}) {
+  return {
     videoController: { _renderRefs: { videoARef: { current: null }, videoBRef: { current: null } } },
     annotateVideoUrl: '/api/games/1/video',
     annotateVideoMetadata: { width: 1920, height: 1080, duration: 100, format: 'mp4', size: 0 },
@@ -90,7 +90,10 @@ function renderView(overrides = {}) {
     hasUnsentShares: false,
     ...overrides,
   };
-  return render(<AnnotateModeView {...props} />);
+}
+
+function renderView(overrides = {}) {
+  return render(<AnnotateModeView {...buildProps(overrides)} />);
 }
 
 describe('AnnotateModeView — first-tap sport question (T8140, T10610)', () => {
@@ -129,6 +132,52 @@ describe('AnnotateModeView — first-tap sport question (T8140, T10610)', () => 
 
   it('does not ask when the tap is editing an already-SELECTED play, not creating one', () => {
     renderView({ annotateSelectedRegionId: 'r1', clipRegions: [{ id: 'r1' }] });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
+  });
+});
+
+describe('AnnotateModeView — sport question remembers a skip per game (T15630)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('does not re-ask after a remount (new mount of the same game) once skipped', () => {
+    const { unmount } = renderView({ gameId: 42 });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(screen.getByRole('dialog', { name: 'What sport is this?' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    unmount();
+
+    // Simulate the user leaving Annotate and coming back (new mount, e.g. after
+    // navigating away or a page reload) for the SAME game.
+    renderView({ gameId: 42 });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
+  });
+
+  it('still asks for a DIFFERENT game after being skipped on another', () => {
+    const { unmount } = renderView({ gameId: 42 });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    unmount();
+
+    renderView({ gameId: 99 });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(screen.getByRole('dialog', { name: 'What sport is this?' })).toBeTruthy();
+  });
+
+  // T15630 fix round 1: AnnotateContainer passes gameId as null on first
+  // render and only supplies the real id once its load resolves, within the
+  // SAME mount (no unmount in between). A fix that only reads localStorage in
+  // a lazy useState initializer never notices the id arriving afterwards.
+  it('picks up an already-remembered skip for a game whose id arrives after mount (gameId null -> real, same mount)', () => {
+    localStorage.setItem('rb.annotate.sportPromptDismissed.42', '1');
+    const props = buildProps({ gameId: null });
+    const { rerender } = render(<AnnotateModeView {...props} />);
+    act(() => {
+      rerender(<AnnotateModeView {...props} gameId={42} />);
+    });
     fireEvent.click(screen.getByTestId('stub-add-clip'));
     expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
   });

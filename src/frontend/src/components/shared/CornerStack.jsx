@@ -10,7 +10,7 @@ export function CornerStack({ children }) {
   return (
     <div
       data-testid="corner-stack"
-      className={`fixed bottom-4 right-4 lg:bottom-20 ${Z.TOAST} flex flex-col-reverse items-end gap-2 w-full max-w-xs pointer-events-none`}
+      className={`fixed bottom-[calc(var(--cta-bar-h,0px)+1rem)] right-4 lg:bottom-[calc(var(--cta-bar-h,0px)+5rem)] ${Z.TOAST} flex flex-col-reverse items-end gap-2 w-full max-w-xs pointer-events-none`}
     >
       {children}
     </div>

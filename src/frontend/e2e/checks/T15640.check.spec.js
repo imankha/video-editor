@@ -86,6 +86,21 @@ test.describe('T15640:C2 Mark play near 0:00 still makes a full-length play', ()
     await openGameInAnnotate(page, target.id);
     await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 90000 });
 
+    // T15940: the e2e-gate account has Guidance on, and a focusable coach step
+    // shades everything outside its named targets (data-testid="guide-shade",
+    // pointer-events captured by design). The Forward/Back 5s buttons driven
+    // below aren't among those targets, so their clicks were silently retried
+    // into this test's own 5s timeout (same mechanism T15930 found for
+    // T15550). Turn Guidance off once via its header toggle so the transport
+    // stays reachable for the rest of this check.
+    const guidanceToggle = page.getByTestId('guidance-toggle').first();
+    if (await guidanceToggle.count().catch(() => 0)) {
+      if ((await guidanceToggle.getAttribute('aria-checked')) !== 'false') {
+        await guidanceToggle.click();
+        await expect(guidanceToggle).toHaveAttribute('aria-checked', 'false', { timeout: 10000 });
+      }
+    }
+
     // Drive real seek gestures (the transport's 5s step buttons), same as the
     // other checks in this group: forward well past every existing play, then
     // back down to the 5s-aligned free spot near 0:00.

@@ -14,6 +14,18 @@ test.use({ hasTouch: true, isMobile: true, viewport: { width: 844, height: 390 }
 
 test('T15430:C1 Mark button is hit-testable at its centre in landscape fullscreen', async ({ context, page }) => {
   await loginForCheck(context);
+
+  // T15920: the e2e-gate account can have Guidance on, and a focusable coach step shades
+  // everything outside its named targets (data-testid="guide-shade", pointer-events captured
+  // by design -- see .claude/knowledge/guidance.md "modal shade is a GUARANTEE"). At this
+  // 844x390 landscape viewport the header's `guidance-toggle` chip renders outside the
+  // viewport (it follows the full-width header, not the collapsed landscape cockpit), so
+  // clicking it times out; disable Guidance via the settings API instead -- the toggle
+  // SWITCH itself (`guidance-toggle-layer`) still renders regardless of coachEnabled, so the
+  // overlap assertion below stays meaningful.
+  const settingsRes = await page.request.put(checkApi('/settings'), { data: { guidance: { coachEnabled: false } } });
+  expect(settingsRes.ok(), `PUT /settings -> ${settingsRes.status()}`).toBeTruthy();
+
   const res = await page.request.get(checkApi('/games'));
   expect(res.ok(), `GET /games -> ${res.status()}`).toBeTruthy();
   const games = (await res.json()).games || [];

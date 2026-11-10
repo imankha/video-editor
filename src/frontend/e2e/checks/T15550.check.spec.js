@@ -29,13 +29,71 @@ test.describe('T15550:C1 Keep marking plays returns to marking', () => {
     await openGameInAnnotate(page, target.id);
     await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 90000 });
 
-    // The auto-select-at-playhead effect selects whichever clip covers 0:00,
-    // swapping Mark play for Edit play. Jump into open video past every
-    // existing clip (30 x 5s = 150s) so nothing is selected and Mark play
-    // (what the bug report actually taps) renders.
-    const forward = page.getByTitle('Forward 5 seconds (Right arrow)');
-    for (let i = 0; i < 30; i++) {
-      await forward.click({ timeout: 5000 });
+    // T15930: the e2e-gate account has Guidance on, and a focusable coach step
+    // shades everything outside its named targets (data-testid="guide-shade",
+    // pointer-events captured by design -- see .claude/knowledge/guidance.md
+    // "modal shade is a GUARANTEE"). The Forward 5s button below isn't one of
+    // those targets, so its clicks were silently retried into this test's own
+    // 5s timeout. Turn Guidance off once via its header toggle (same pattern
+    // as e2e/guide-no-overlap.spec.js's setGuidance) so every control stays
+    // reachable for the rest of this check.
+    const guidanceToggle = page.getByTestId('guidance-toggle').first();
+    if (await guidanceToggle.count().catch(() => 0)) {
+      if ((await guidanceToggle.getAttribute('aria-checked')) !== 'false') {
+        await guidanceToggle.click();
+        await expect(guidanceToggle).toHaveAttribute('aria-checked', 'false', { timeout: 10000 });
+      }
+    }
+
+    // The auto-select-at-playhead effect selects whichever clip covers the
+    // playhead, swapping Mark play for Edit play. A fixed "jump past every
+    // clip" guess (this check used to do 30 x 5s = 150s) breaks once repeat
+    // runs on the shared e2e-gate account have covered most of a short video
+    // (observed live: an 89.3s video with clips at 0-32 and 83.3-89.3 leaves
+    // no room 150s in). Read the game's real clips/duration and land in the
+    // middle of the largest untaken gap instead, so this keeps working no
+    // matter how many clips already exist.
+    const gameRes = await page.request.get(checkApi(`/games/${target.id}`));
+    expect(gameRes.ok(), `GET /games/${target.id} -> ${gameRes.status()}`).toBeTruthy();
+    const gameDetail = await gameRes.json();
+    const duration = gameDetail.video_duration || 0;
+    const clips = (gameDetail.annotations || [])
+      .map((a) => ({ start: a.start_time, end: a.end_time }))
+      .sort((a, b) => a.start - b.start);
+
+    // Margin well above FRAME_TOLERANCE (0.15s, see regionAtTime.js) so the
+    // new play's start/end can't land inside an existing clip's boundary match.
+    const GAP_MARGIN = 1;
+    const gaps = [];
+    let cursor = 0;
+    for (const c of clips) {
+      if (c.start - cursor > GAP_MARGIN * 2) gaps.push([cursor, c.start]);
+      cursor = Math.max(cursor, c.end);
+    }
+    if (duration - cursor > GAP_MARGIN * 2) gaps.push([cursor, duration]);
+    gaps.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
+    const biggestGap = gaps[0];
+    test.skip(!biggestGap, '[T15930] no free window left in this video to mark a new play');
+    const seekTarget = (biggestGap[0] + biggestGap[1]) / 2;
+
+    // Don't assume the playhead starts at 0: openGameInAnnotate resumes
+    // last_playhead_position, which earlier runs against this same shared
+    // account can leave anywhere (observed live: resumed at 84s on an 89.3s
+    // video). Read where the <video> actually is and close the real gap with
+    // whichever transport button moves the right way.
+    await expect(async () => {
+      const readyState = await page.evaluate(() => document.querySelector('video')?.readyState ?? 0);
+      expect(readyState).toBeGreaterThanOrEqual(1);
+    }).toPass({ timeout: 30000 });
+    const currentTime = await page.evaluate(() => document.querySelector('video')?.currentTime ?? 0);
+
+    const delta = seekTarget - currentTime;
+    const button = delta >= 0
+      ? page.getByTitle('Forward 5 seconds (Right arrow)')
+      : page.getByTitle('Back 5 seconds (Left arrow)');
+    const clicksNeeded = Math.ceil(Math.abs(delta) / 5);
+    for (let i = 0; i < clicksNeeded; i++) {
+      await button.click({ timeout: 5000 });
     }
 
     const markBtn = page.getByTestId('annotate-mark-play-button');

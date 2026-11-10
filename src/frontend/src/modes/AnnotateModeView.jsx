@@ -108,6 +108,29 @@ const STAGE_UNKNOWN_DIMS_CLASS = `h-[40vh] sm:h-[60vh] ${SHORT_DESKTOP_STAGE_CLA
 // No region at the playhead means no badge; a region with no rating shows as Good.
 const annotatePlaybackRating = (region) => (region ? displayRating(region.rating) : null);
 
+// T15630: per-game, per-device dismissal of the "What sport is this?" question
+// (see the sportPromptDismissedForGame state below for the full rationale).
+const SPORT_PROMPT_DISMISSED_KEY_PREFIX = 'rb.annotate.sportPromptDismissed.';
+
+function readSportPromptDismissed(gameId) {
+  if (gameId == null) return false;
+  try {
+    return localStorage.getItem(`${SPORT_PROMPT_DISMISSED_KEY_PREFIX}${gameId}`) === '1';
+  } catch {
+    // Private-mode / storage-disabled: treat as not-yet-dismissed, never throw.
+    return false;
+  }
+}
+
+function writeSportPromptDismissed(gameId) {
+  if (gameId == null) return;
+  try {
+    localStorage.setItem(`${SPORT_PROMPT_DISMISSED_KEY_PREFIX}${gameId}`, '1');
+  } catch {
+    // Persist is best-effort; a failed write just means it reappears later.
+  }
+}
+
 export function AnnotateModeView({
   // Video control
   videoController,
@@ -409,6 +432,11 @@ export function AnnotateModeView({
   // keeps the full-bleed overlay surface (option C, the side-strip layout, is
   // the T15370 follow-up) with just the drag-peek/auto-hide fixes (option D).
   const mobileFsLandscape = mobileFs && isLandscape;
+  // T15750: portrait mobile fullscreen with the Edit/Add play editor open --
+  // the editor panel below the video must never be allowed to squeeze the
+  // video past a usable size (AC1). See the video wrapper's min-height floor
+  // and the portrait-strip editor's `shrink`/`max-h` below.
+  const mobileFsPortraitEditorOpen = mobileFs && !isLandscape && showAnnotateOverlay;
   const [isDraggingScrub, setIsDraggingScrub] = useState(false);
   // T15370: the right strip's source chip toggles this sheet. Memory-only
   // view state, not persisted; resets implicitly when fullscreen/landscape
@@ -519,7 +547,7 @@ export function AnnotateModeView({
     onSeekBackward: seekBackward,
   });
 
-  // Full-screen "What sport is this?" question, shown once per session at a
+  // Full-screen "What sport is this?" question, shown at most once PER GAME at a
   // MOBILE user's first Mark-play tap while their profile is still no_sport.
   // Desktop keeps the in-form picker (it also has the top-bar sport control),
   // so the question is mobile-only — no double prompt. The answer persists
@@ -531,19 +559,41 @@ export function AnnotateModeView({
   // on "about to create" (no region selected, editor not already open) —
   // the same tap edits an existing SELECTED clip instead, which must never
   // trigger this first-clip question.
+  // T15630: a skip must be remembered PER GAME, surviving a remount (leaving
+  // Annotate and coming back, or a reload) — an in-memory ref reset on every
+  // mount, re-asking the question on every return visit. This is a per-device
+  // UI dismissal, not user data (never synced, same narrow exception as
+  // RotateNudge's `rb.focus.rotateNudgeDismissed`, T10850/D14): localStorage,
+  // read lazily, written only by the Pick/Skip gesture itself.
   const currentProfile = useCurrentProfile();
   const currentSport = currentProfile?.sport || NO_SPORT;
   const updateProfile = useProfileStore(state => state.updateProfile);
   const [sportQuestionOpen, setSportQuestionOpen] = useState(false);
-  const sportAskedRef = useRef(false);
+  const [sportPromptDismissedForGame, setSportPromptDismissedForGame] = useState(
+    () => readSportPromptDismissed(gameId)
+  );
+  // T15630 fix round 1: `gameId` arrives asynchronously (null at first mount,
+  // then the real id once AnnotateContainer's load resolves), so the lazy
+  // initializer above only ever saw the null gameId and never re-read
+  // localStorage once the real id showed up. Adjust state during render when
+  // gameId changes (React's documented pattern for this) rather than a
+  // useEffect, per this project's localStorage-read rule.
+  const sportPromptGameIdRef = useRef(gameId);
+  if (sportPromptGameIdRef.current !== gameId) {
+    sportPromptGameIdRef.current = gameId;
+    setSportPromptDismissedForGame(readSportPromptDismissed(gameId));
+  }
   const handleAddClipWithSportPrompt = useCallback(() => {
     const aboutToCreate = !annotateSelectedRegionId && !showAnnotateOverlay;
     onAddClip();
-    if (aboutToCreate && isMobile && currentSport === NO_SPORT && !sportAskedRef.current) {
-      sportAskedRef.current = true;
+    if (aboutToCreate && isMobile && currentSport === NO_SPORT && !sportPromptDismissedForGame) {
       setSportQuestionOpen(true);
     }
-  }, [onAddClip, annotateSelectedRegionId, showAnnotateOverlay, isMobile, currentSport]);
+  }, [onAddClip, annotateSelectedRegionId, showAnnotateOverlay, isMobile, currentSport, sportPromptDismissedForGame]);
+  const dismissSportPromptForGame = useCallback(() => {
+    setSportPromptDismissedForGame(true);
+    writeSportPromptDismissed(gameId);
+  }, [gameId]);
 
   // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
   const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
@@ -879,11 +929,17 @@ export function AnnotateModeView({
               grid's center column/top row (never the whole container) -- the
               strips beside it never cost it any picture height. */}
           <div
+            data-testid="annotate-video-wrapper"
             className={`relative bg-gray-900 ${
               annotateFullscreen
                 ? mobileFsLandscape
                   ? 'col-start-2 row-start-1 min-h-0'
-                  : `flex-1 min-h-0 flex flex-col${mobileFs ? ' pt-[env(safe-area-inset-top)]' : ''}`
+                  // T15750 (AC1): the portrait Edit/Add play editor below is
+                  // `shrink` + `min-h-0` (it scrolls internally instead), so
+                  // this flex-1 video wrapper is the one that KEEPS its size --
+                  // the min-height floor (full-width 16:9) is the backstop for
+                  // when flex math alone still can't fit both.
+                  : `flex-1 flex flex-col ${mobileFsPortraitEditorOpen ? 'min-h-[56.25vw]' : 'min-h-0'}${mobileFs ? ' pt-[env(safe-area-inset-top)]' : ''}`
                 : 'rounded-lg'
             }`}
             onClick={mobileFs && !showAnnotateOverlay ? togglePlay : undefined}
@@ -1147,8 +1203,12 @@ export function AnnotateModeView({
                     </div>
                   )}
                 </div>
-                {annotateFullscreen && (
-                  <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-2 lg:px-4 py-0.5">
+                {annotateFullscreen && !mobileFsPortraitEditorOpen && (
+                  // T15750 (AC1): hidden while the portrait editor is open --
+                  // same relief the T15370 landscape cockpit already gives its
+                  // own timeline row (line ~1224 below), freeing the space for
+                  // the picture instead.
+                  <div data-testid="annotate-fullscreen-timeline" className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-2 lg:px-4 py-0.5">
                     <AnnotateMode
                       currentTime={currentTime}
                       duration={duration || annotateVideoMetadata?.duration || 0}
@@ -1323,8 +1383,12 @@ export function AnnotateModeView({
               surface the windowed mobile editor uses (`mobileInlineForm` above),
               not the fixed/absolute sheet landscape still uses. Nothing here is
               ever positioned over the picture. */}
-          {mobileFs && !isLandscape && showAnnotateOverlay && (
-            <div className="w-full shrink-0 overflow-y-auto max-h-[45vh]">
+          {mobileFsPortraitEditorOpen && (
+            // T15750 (AC1): `shrink min-h-0` (not `shrink-0`) -- the video
+            // wrapper above now claims a guaranteed min-height floor, so THIS
+            // panel is the one flexbox squeezes first; it scrolls internally
+            // (overflow-y-auto) rather than pushing the picture to near-zero.
+            <div className="w-full shrink min-h-0 overflow-y-auto max-h-[45vh]">
               <AnnotateFullscreenOverlay
                 isVisible={showAnnotateOverlay}
                 currentTime={currentTime}
@@ -1421,9 +1485,13 @@ export function AnnotateModeView({
           <SportQuestionOverlay
             onPick={(s) => {
               if (currentProfile?.id) updateProfile(currentProfile.id, { sport: s }).catch(() => {});
+              dismissSportPromptForGame();
               setSportQuestionOpen(false);
             }}
-            onSkip={() => setSportQuestionOpen(false)}
+            onSkip={() => {
+              dismissSportPromptForGame();
+              setSportQuestionOpen(false);
+            }}
           />
         )}
 

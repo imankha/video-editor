@@ -698,6 +698,27 @@ class DotaskCliTest(unittest.TestCase):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             dotask_cli.main(["resume", "g-nope"])
 
+    def test_a_fix_worker_that_ended_without_a_status_line_counts_as_an_interrupted_round(self):
+        # g-t15750-4 (2026-11-10): the worker's `git diff --stat` hung on a pager, the dispatch ended with
+        # outcome success and no status line, and resume re-verified the half-fixed tree.
+        checkout = self.tasks_root / "g-x"
+        (checkout / ".dotask-profile").mkdir(parents=True)
+        group = {"slug": "g-x", "tasks": ["T1"], "wave_id": "w", "branch": "feature/x"}
+        verdict = {"head": "a" * 40, "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}
+        (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
+        (checkout / ".dotask-profile" / "r1.json").write_text(json.dumps(
+            {"schema_version": 2, "started_at": "2026-11-10T20:00:00+00:00", "phase": "implementation",
+             "outcome_class": "success"}))
+
+        def interrupted(last):
+            (checkout / ".dotask-status").write_text(last)
+            with patch.object(dotask_cli, "git_head", lambda c: "a" * 40), \
+                    patch.object(dotask_cli, "tracked_changes", lambda c: " M src/x.js"):
+                return dotask_cli.interrupted_fix_round(checkout, group)
+        self.assertEqual(interrupted("t FIX_SKIPPED fix round 1 T1: t ENDED_WITHOUT_STATUS phase=implementation\n"
+                                     "t VERIFY_BLOCKED fix round 1 committed nothing (skipped: T1)\n"), 1)
+        self.assertIsNone(interrupted("t PUSHREADY feature/x aaa fix round 1\n"))  # a worker that finished normally
+
     def test_resume_continues_a_fix_round_that_stopped_with_uncommitted_work(self):
         # g-t15220-10, 2026-11-07: fix round 1 ran out of turns with 17 files changed. Resuming straight
         # into autoland would have verified that dirty tree from scratch and blocked.
@@ -857,6 +878,50 @@ class DotaskCliTest(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             dotask_cli.main(["status"])
         self.assertEqual(dotask_cli.task_status(dotask_cli.resolve_task_file("T1")), "STAGING")
+
+    def _status_out(self, group, checkout):
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        (self.docker_state / f"{dotask_cli.cname('g-x')}.running").touch()
+        with patch.object(dotask_cli, "merged_pr", lambda branch: None), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            dotask_cli.main(["status"])
+        return out.getvalue()
+
+    def test_status_calls_a_running_group_with_no_loop_stopped_so_a_watcher_relaunches_it(self):
+        # g-t15400-4 (PR #739, 2026-11-10): the loop crashed with no stop line; status kept printing a
+        # stale ETA and the watcher, keyed on "(stopped", never relaunched it.
+        group, checkout = self._group_for_eta("t VERIFY_PASS abc round 1\n")
+        old = time.time() - 3600
+        os.utime(checkout / ".dotask-status", (old, old))
+        self.assertIn("eta: none (stopped, no loop is running", self._status_out(group, checkout))
+
+    def test_status_leaves_a_landed_group_or_one_with_a_live_loop_alone(self):
+        group, checkout = self._group_for_eta("t VERIFY_PASS abc round 1\nt LANDED abc: PR open\n")
+        old = time.time() - 3600
+        os.utime(checkout / ".dotask-status", (old, old))
+        self.assertNotIn("no loop is running", self._status_out(group, checkout))
+        (checkout / ".dotask-status").write_text("t VERIFY_PASS abc round 1\n")
+        os.utime(checkout / ".dotask-status", (old, old))
+        (checkout / dotask_cli.RUN_LOCK).write_text(json.dumps({"pid": os.getpid(), "since": "x"}))
+        self.assertNotIn("no loop is running", self._status_out(group, checkout))
+
+    def test_status_does_not_call_a_group_dead_whose_loop_finished_before_landed_existed(self):
+        # g-t15930-3 (2026-11-10): the loop landed PR #740 and exited; its status ended on VERIFY_PASS.
+        group, checkout = self._group_for_eta("t VERIFY_PASS abc round 1\n")
+        old = time.time() - 3600
+        os.utime(checkout / ".dotask-status", (old, old))
+        log = self.tasks_root / "profiles" / "g-x" / "run.log"
+        log.write_text("evidence: x\nWAITING ON USER: PR https://github.com/o/r/pull/9 is success; evidence at y.\n")
+        self.assertNotIn("no loop is running", self._status_out(group, checkout))
+
+    def test_a_crashed_loop_writes_loop_crashed_and_reraises(self):
+        checkout = self.tasks_root / "g-x"
+        checkout.mkdir(parents=True, exist_ok=True)
+        boom = dotask_cli.locked(lambda args: (_ for _ in ()).throw(AttributeError("no splitlines")))
+        with self.assertRaises(AttributeError):
+            boom(SimpleNamespace(slug="g-x"))
+        self.assertIn("LOOP_CRASHED AttributeError: no splitlines", (checkout / ".dotask-status").read_text())
+        self.assertFalse((checkout / dotask_cli.RUN_LOCK).exists())
 
     def test_a_merged_groups_running_container_is_freed_by_status_and_start(self):
         # T15350, owner rule 2026-11-08: merged groups kept their stacks up and slowed the live ones.
@@ -1438,6 +1503,9 @@ class AutolandBase(unittest.TestCase):
     def _last(self):
         return self.status.read_text().splitlines()[-1]
 
+    def _pass_line(self):  # a clean landing ends on its own LANDED line, after VERIFY_PASS
+        return next(l for l in reversed(self.status.read_text().splitlines()) if "VERIFY_PASS" in l)
+
     def _phases(self):
         """Dispatch phases, with each verify round's run of per-criterion verifiers counted once."""
         phases = []
@@ -1509,7 +1577,7 @@ class AutolandTest(AutolandBase):
         self.assertEqual([c["id"] for c in final["criteria"]], ["T1:C1", "T1:C2"])
         self.assertEqual(final["criteria"][0]["carried_from"], first_head)
         self.assertNotIn("carried_from", final["criteria"][1])
-        self.assertIn("VERIFY_PASS", self._last())
+        self.assertIn("VERIFY_PASS", self._pass_line())
 
     def test_a_restart_after_the_fix_round_resumes_with_only_the_failed_criteria(self):
         # The process that ran round 1 and its fix was stopped; HEAD has the fix commit.
@@ -1527,7 +1595,7 @@ class AutolandTest(AutolandBase):
         self.assertIn("re-check after fix round 1", qa[0])
         final = json.loads((waves / "verify-round-2.json").read_text())
         self.assertEqual(final["criteria"][0]["carried_from"], old_head)
-        self.assertIn("VERIFY_PASS", self._last())
+        self.assertIn("VERIFY_PASS", self._pass_line())
 
     def test_a_restart_with_no_fix_since_the_verdict_verifies_everything(self):
         (self.checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(self._verdict(("pass", "fail"))))
@@ -1564,7 +1632,7 @@ class AutolandTest(AutolandBase):
         self.assertTrue(self.land.call_args.args[0].after_test)
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
         self.assertEqual(group["tested_head"], self.head)
-        self.assertIn("VERIFY_PASS", self._last())
+        self.assertIn("VERIFY_PASS", self._pass_line())
 
     def test_no_land_stops_after_a_clean_verdict(self):
         self.verdicts = [self._verdict()]
@@ -1621,6 +1689,22 @@ class AutolandTest(AutolandBase):
         self.assertEqual(calls, ["qa", "qa"])
         self.assertNotIn("VERIFY_BLOCKED", self.status.read_text())
 
+    def test_the_owner_s_skip_marker_skips_verification_and_names_why(self):
+        # PR #739 (2026-11-10): the owner skipped proof verification; Branch CI still has to pass.
+        (self.checkout / dotask_cli.SKIP_VERIFY_FILE).write_text("")
+        calls = []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None, **_kw):
+            calls.append(phase)
+            return True
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        self.assertEqual(calls, [])  # no reviewer, no checks
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C1", "T1:C2"])
+        self.assertIn("verification skipped by the owner", self.status.read_text())
+        self.assertIn("the owner skipped proof verification", dotask_cli.render_pr_body(group))
+
     def test_a_failed_or_missing_check_fails_whatever_the_reviewer_says(self):
         self.check_status = {"T1:C1": "fail", "T1:C2": "missing"}
         recheck = self._verdict()
@@ -1638,7 +1722,7 @@ class AutolandTest(AutolandBase):
         self.assertEqual([c["status"] for c in first["criteria"]], ["fail", "fail"])
         self.assertIn("check missing", first["criteria"][1]["evidence"])
         self.assertEqual(self._phases(), ["qa", "implementation", "qa"])
-        self.assertIn("VERIFY_PASS", self._last())
+        self.assertIn("VERIFY_PASS", self._pass_line())
 
     def test_a_spent_budget_lands_what_is_left_unverified(self):
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
@@ -1710,8 +1794,8 @@ class AutolandTest(AutolandBase):
         self.land.assert_called_once()
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
         self.assertEqual(group["staging_checks"], [{"id": "T1:C2", "text": "Second"}])
-        self.assertIn("VERIFY_PASS", self._last())
-        self.assertIn("check on staging after merge: T1:C2", self._last())
+        self.assertIn("VERIFY_PASS", self._pass_line())
+        self.assertIn("check on staging after merge: T1:C2", self._pass_line())
         body = dotask_cli.render_pr_body(group)
         self.assertIn("Check on staging after merge", body)
         self.assertIn("- T1:C2: Second", body)
@@ -1770,7 +1854,7 @@ class AutolandTest(AutolandBase):
         self.land.assert_called_once()
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
         self.assertEqual(group["staging_checks"], [{"id": "T1:C2", "text": "Second"}])
-        self.assertIn("check on staging after merge: T1:C2", self._last())
+        self.assertIn("check on staging after merge: T1:C2", self._pass_line())
 
     def test_unrelated_bug_is_filed_once_and_does_not_block(self):
         bug = {"scope": "unrelated", "title": "Old menu glitch", "steps": "open", "expected": "a", "actual": "b"}
@@ -1822,7 +1906,7 @@ class AutolandTest(AutolandBase):
         self.assertIn("T2's findings: bug: Subtitle missing", fixes[1][1])
         self.assertIn("## fix round 1 T2 progress", fixes[1][1])
         self.assertIn("FIX_SKIPPED fix round 1 T1: no commit", self.status.read_text())
-        self.assertIn("VERIFY_PASS", self._last())
+        self.assertIn("VERIFY_PASS", self._pass_line())
 
     def test_fix_dispatch_with_no_commit_stops(self):
         self.verdicts = [self._verdict(("fail", "pass"))]
@@ -2102,7 +2186,8 @@ class VerifierTimeCapTest(AutolandBase):
         self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C1", "T1:C2"])
         lines = self.status.read_text().splitlines()
         self.assertTrue(any("VERIFY_SKIPPED round 1 review: reviewer passed its" in line for line in lines))
-        self.assertIn("not verified: T1:C1 T1:C2", self._last())
+        self.assertTrue(any("VERIFY_PASS" in line and "not verified: T1:C1 T1:C2" in line for line in lines))
+        self.assertIn("LANDED", self._last())  # a clean landing now ends on its own line
         body = dotask_cli.render_pr_body(group)
         self.assertIn("Not verified: no check proved these", body)
         self.assertIn("- T1:C1: First", body)
@@ -2149,6 +2234,24 @@ class SkippedRecheckTest(AutolandBase):
         self.assertEqual(self.checks_run, [["T1:C1", "T1:C2"], ["T1:C1", "T1:C2"]])
         final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
         self.assertEqual([c["status"] for c in final["criteria"]], ["pass", "pass"])
+
+class CiFailureReportTest(unittest.TestCase):
+    def test_a_log_gh_could_not_decode_does_not_kill_the_loop(self):
+        # PR #739 (2026-11-10): `gh run view --log-failed` output with unicode made subprocess hand back
+        # stdout=None on Windows, and the AttributeError ended g-t15400-4's autoland.
+        def run(cmd, **kw):
+            if "--log-failed" in cmd:
+                self.assertEqual(kw.get("encoding"), "utf-8")
+                return subprocess.CompletedProcess(cmd, 0, stdout=None, stderr="")
+            if "--json" in cmd and "jobs" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(
+                    {"jobs": [{"name": "frontend-shard (3)", "conclusion": "failure"}]}), stderr="")
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(
+                [{"databaseId": 7, "headSha": "abc"}]), stderr="")
+        with patch.object(dotask_cli.subprocess, "run", run):
+            report = dotask_cli.ci_failure_report("feature/x", "abc")
+        self.assertIn("Run 7, failed jobs: frontend-shard (3)", report)
+
 
 class StagingCheckTest(AutolandBase):
     def setUp(self):

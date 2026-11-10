@@ -1,6 +1,6 @@
 # T15940: Staging check failed: T15640:C2 Mark play near 0:00 yields a play of the normal
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10

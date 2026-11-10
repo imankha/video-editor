@@ -77,11 +77,17 @@ export function UnifiedHeader({
           </div>
           {/* gap-0 below md: FramingHeaderStatus brings its own `ml-2` (CreditBalance's
               root is just `relative`, no margin), so a container gap would double the
-              spacing before the badge. At md+ gap-2 returns. */}
+              spacing before the badge. At md+ gap-2 returns. T15610: that same gap-0
+              left GuidanceToggle with no space of its OWN before it -- the badge's
+              decorative `-right-1` overhang (see FramingHeaderStatus) bled straight
+              into the switch. Give the toggle the same `ml-2` the badge already uses
+              (same contract, same double-spacing-at-md+ tradeoff already accepted for
+              the badge), instead of widening the container gap, which would also
+              double-space CreditBalance->badge. */}
           <div className="flex items-center gap-0 md:gap-2 flex-shrink-0 self-center ml-auto">
             {editorMode === 'framing' && <CreditBalance />}
             {extraControls}
-            <GuidanceToggle />
+            <div className="ml-2"><GuidanceToggle /></div>
           </div>
         </div>
         {/* Row 2: editor-step tabs */}

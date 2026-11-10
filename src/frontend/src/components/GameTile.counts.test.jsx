@@ -52,4 +52,10 @@ describe('T12950 game tile counts line', () => {
     expect(screen.getByLabelText('3 brilliant')).toBeTruthy();
     expect(screen.queryByText(/finished/)).toBeNull();
   });
+
+  it('T15700: the brilliant segment has a visible text label, not just an icon', () => {
+    renderTile(baseGame());
+    const seg = screen.getByLabelText('3 brilliant');
+    expect(seg.textContent).toContain('brilliant');
+  });
 });

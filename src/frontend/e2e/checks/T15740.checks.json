@@ -1,0 +1,6 @@
+{
+  "criteria": {
+    "T15740:C1": { "kind": "browser" },
+    "T15740:C2": { "kind": "browser" }
+  }
+}

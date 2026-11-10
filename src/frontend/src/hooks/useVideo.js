@@ -96,6 +96,16 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // frame-by-frame stepping). One-shot per seek; cancelled before the next.
   const seekFrameCallbackRef = useRef(null);
 
+  // T15750: the RAF desync-recovery loop below reads `isPlaying` from its own
+  // closure, captured when its effect last (re)ran. A frame already scheduled
+  // via requestAnimationFrame before a deliberate pause() can still fire once
+  // with that stale closure before React's cleanup cancels it, and would
+  // otherwise call videoRef.current.play() right back on -- a real race, not
+  // hypothetical (T15750: Edit play's explicit pause briefly resumed
+  // playback this way). play()/pause() update this ref SYNCHRONOUSLY so the
+  // loop can check current intent instead of its stale closure.
+  const playIntentRef = useRef(false);
+
   // Desync resume: cooldown + retry cap to avoid endless play() spam
   const lastDesyncResumeRef = useRef(0);
   const desyncRetriesRef = useRef(0);
@@ -401,6 +411,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    */
   const play = useCallback(async () => {
     if (videoRef.current && videoRef.current.src) {
+      playIntentRef.current = true;
       try {
         await videoRef.current.play();
       } catch (error) {
@@ -417,6 +428,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    */
   const pause = useCallback(() => {
     if (videoRef.current) {
+      playIntentRef.current = false;
       videoRef.current.pause();
       setIsPlaying(false);
     }
@@ -629,6 +641,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     // element that is paused again; marking it playing made the desync loop
     // call play() and the video resumed. The element is the source of truth.
     if (videoRef.current?.paused) return;
+    playIntentRef.current = true;
     setIsPlaying(true);
   };
 
@@ -636,6 +649,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     // T14350: the mirror case (double-tap while playing: tap 1 pauses, tap 2
     // plays) delivers this event to an element that is playing again.
     if (videoRef.current && !videoRef.current.paused) return;
+    playIntentRef.current = false;
     setIsPlaying(false);
     setIsWaitingForData(false);
   };
@@ -842,10 +856,22 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // playhead/tracking from advancing while video is stalled.
   useEffect(() => {
     if (!isPlaying || !videoRef.current) return;
+    // T15750: resync intent to this render's isPlaying (covers isPlaying
+    // being set by a path other than this hook's own play(), e.g. a media
+    // event handler) -- see the in-flight-frame guard below.
+    playIntentRef.current = true;
 
     let rafId;
     const updateTime = () => {
       if (videoRef.current) {
+        // T15750: a frame scheduled by THIS closure (isPlaying=true at the
+        // time this effect last ran) can still fire once after a deliberate
+        // pause() -- React's cleanup cancelAnimationFrame cancels the NEXT
+        // scheduled frame, not one already in flight. playIntentRef is
+        // updated synchronously by play()/pause() (and resynced above on
+        // every render of this effect), so it reflects the caller's CURRENT
+        // intent even when this closure is stale.
+        if (!playIntentRef.current) return;
         // Desync fix: store says playing but video element is actually paused.
         // Try play() up to DESYNC_MAX_RETRIES times. If the browser keeps
         // stalling, escalate to seek-to-self (forces decoder reinitialization).

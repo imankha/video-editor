@@ -1,6 +1,6 @@
 # T15930: Staging check failed: T15550:C1 'Keep marking plays' returns to Annotate with the playhead after
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10

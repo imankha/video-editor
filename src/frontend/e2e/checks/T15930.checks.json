@@ -1,0 +1,1 @@
+{"criteria": {"T15930:C1": {"kind": "code", "command": "bash scripts/dev-verify.sh e2e/checks/T15550.check.spec.js --reporter=line --grep T15550:C1"}}}

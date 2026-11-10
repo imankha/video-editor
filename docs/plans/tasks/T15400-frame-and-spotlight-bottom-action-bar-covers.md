@@ -1,6 +1,6 @@
 # T15400: Frame and Spotlight bottom action bar covers the video, crop box, timeline and dialog buttons
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-11-09

@@ -1,6 +1,6 @@
 # T15740: Your highlight is ready toast overlaps the action bar and the chat bubble
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-11-09
