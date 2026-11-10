@@ -66,6 +66,27 @@ async function openOverlayProject(page) {
   return candidate;
 }
 
+/** Overlay project with highlight regions (so the spotlight-loop Controls wiring
+ * renders the primary "Play spotlight (loops)" + secondary "Play highlight" pair,
+ * not the plain Play/Pause fallback used when spotlightSpan is null). */
+async function openOverlaySpotlightProject(page) {
+  const projects = await listProjects(page);
+  const candidate = projects.find((p) => p.has_overlay_edits);
+  test.skip(!candidate, '[T15400] no project with highlight regions in this account');
+  await page.goto(`/overlay/p/${candidate.id}`);
+  await page.getByTestId('overlay-video-stage').waitFor({ timeout: 90000 });
+  return candidate;
+}
+
+/** True when elementFromPoint at the locator's own centre is the element itself. */
+async function passesHitTest(locator) {
+  return locator.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !!top && (top === el || el.contains(top));
+  });
+}
+
 for (const vp of VIEWPORTS) {
   test.describe(`T15400 checks @ ${vp.label}`, () => {
     test.use({ viewport: { width: vp.width, height: vp.height } });
@@ -168,6 +189,39 @@ for (const vp of VIEWPORTS) {
         rectBelow(timelineBox, bandAfterScroll),
         `timeline (bottom ${timelineBox.y + timelineBox.height}) clipped by the action band (top ${bandAfterScroll.y}) even after scrolling`,
       ).toBe(true);
+    });
+  });
+}
+
+// C4 names exactly the desktop-ish sizes from the bug report's second repro
+// (1440x900, 1366x660) -- not the 390x664 mobile size the other criteria cover.
+const C4_VIEWPORTS = VIEWPORTS.filter((vp) => vp.label !== '390x664');
+
+for (const vp of C4_VIEWPORTS) {
+  test.describe(`T15400 checks (Spotlight transport) @ ${vp.label}`, () => {
+    test.use({ viewport: { width: vp.width, height: vp.height } });
+
+    test(`T15400:C4 - Spotlight transport buttons pass a hit test @ ${vp.label}`, async ({ context, page }) => {
+      await loginForCheck(context);
+      await openOverlaySpotlightProject(page);
+
+      // Primary "Play spotlight" button (Controls.jsx data-testid="play-button";
+      // loops when highlight regions exist, which openOverlaySpotlightProject requires).
+      const playSpotlight = page.getByTestId('play-button');
+      await expect(playSpotlight).toBeVisible();
+      expect(await passesHitTest(playSpotlight), 'Play spotlight button is covered by the action band').toBe(true);
+
+      // Secondary "Play highlight" ghost button (only rendered when spotlightSpan is set).
+      const playHighlight = page.getByTitle('Play highlight');
+      await expect(playHighlight).toBeVisible();
+      expect(await passesHitTest(playHighlight), 'Play highlight button is covered by the action band').toBe(true);
+
+      // Step forward / backward (Controls.jsx has no data-testid for these; titles are stable).
+      for (const title of ['Step backward (one frame)', 'Step forward (one frame)']) {
+        const step = page.getByTitle(title);
+        await expect(step).toBeVisible();
+        expect(await passesHitTest(step), `${title} button is covered by the action band`).toBe(true);
+      }
     });
   });
 }

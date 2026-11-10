@@ -18,6 +18,12 @@
       "kind": "browser",
       "text": "Spotlight/Overlay video and timeline are not clipped by the bar at the same sizes.",
       "test": "T15400:C3"
+    },
+    {
+      "id": "T15400:C4",
+      "kind": "browser",
+      "text": "Spotlight transport buttons (Play highlight, Play spotlight, step) pass a hit test at 1440x900 and 1366x660.",
+      "test": "T15400:C4"
     }
   ]
 }
