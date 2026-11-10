@@ -155,7 +155,7 @@ export function AnnotateControls({
   return (
     <div data-testid="annotate-controls" className={`controls-container flex flex-wrap items-center justify-between gap-y-1 px-2 lg:px-4 ${
       isFullscreen ? 'py-0.5 bg-gray-900/90' : (flushBottom ? 'py-2 bg-gray-800' : 'py-2 bg-gray-800 rounded-b-lg')
-    }`}>
+    } [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!flex-nowrap [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!py-0 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!gap-x-1`}>
       {/* Playback controls — T8960 item 9: while the strip editor is open the
           step/seek/restart buttons are hidden so the playhead can't leave the
           clip span; only play/pause remains. */}
@@ -303,7 +303,8 @@ export function AnnotateControls({
             onChange={handleVolumeChange}
             className="hidden sm:block w-16 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer
               [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-              [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+              [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full
+              [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!hidden"
           />
         </div>
 
