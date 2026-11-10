@@ -6,7 +6,7 @@ import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { parseEditorPath, dropSeekParam } from '../stores/editorStore';
-import { forwardRef, useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { forwardRef, useRef, useState, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
@@ -38,7 +38,11 @@ import { useExportJobStatus } from '../components/instructions/exportJob';
 // both states at 320px, same "size to the viewport" approach as AnnotateModeView's
 // SHORT_DESKTOP_STAGE_CLASS. Gated on `min-width:1024px` so phone/tablet layouts (which
 // never apply the `lg:` formula these override) are untouched.
-const SHORT_DESKTOP_MEDIA = '(min-width:1024px)_and_(max-height:850px)';
+// T15400: dropped the `max-height:850px` half of the gate -- it left 1440x900 (height 900)
+// on the un-floored formula, clipping the crop box there too. `max(320px, ...)` only ever
+// raises the computed value, so applying the floor at every `min-width:1024px` height is
+// strictly safe (a no-op once the un-floored formula is already >=320px).
+const SHORT_DESKTOP_MEDIA = '(min-width:1024px)';
 const SHORT_DESKTOP_BOX_HEIGHT_CLASS = `[@media${SHORT_DESKTOP_MEDIA}]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]`;
 const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = `[@media${SHORT_DESKTOP_MEDIA}]:!w-[min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]`;
 
@@ -451,6 +455,50 @@ export function FocusModeView({
   // T13580: on a phone the lane opens below the fixed action band; the Trim
   // button gesture scrolls it into view (scroll-margin keeps it clear of the band).
   const trimScopeRef = useRef(null);
+  // T15400: at a short desktop viewport (e.g. 1366x660) the header/chip content
+  // above the stage plus the sticky ActionBand leave no room for the stage to
+  // be fully visible at scrollTop=0 -- no height floor or padding can fix that,
+  // since it's a space problem, not a sizing problem (see T15400 investigation).
+  // Scroll it into view once per clip load, same scroll-margin pattern as
+  // trim-guide-scope above, so the stage (and its crop box) land above the band
+  // without the user having to find the scroll position themselves.
+  const stageRef = useRef(null);
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!videoUrl || isFullscreen || mobileFs || !stage) return undefined;
+    const scroller = stage.closest('.overflow-auto');
+    const band = document.querySelector('[data-testid="action-band"]');
+    if (!scroller || !band) {
+      console.warn('[T15400] focus stage fit: missing scroller or action band');
+      return undefined;
+    }
+    let active = true;
+    const stop = () => { active = false; };
+    const fit = () => {
+      if (!active) return;
+      const s = stage.getBoundingClientRect();
+      const b = band.getBoundingClientRect();
+      const c = scroller.getBoundingClientRect();
+      const deficit = s.bottom - b.top + 8;
+      if (deficit <= 0) return;
+      const delta = Math.min(deficit, s.top - c.top);
+      const room = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+      if (delta > room) {
+        console.warn('[T15400] focus stage fit: insufficient scroll room', { delta, room });
+      }
+      scroller.scrollTop += Math.min(delta, room);
+    };
+    const ro = new ResizeObserver(fit);
+    ro.observe(stage);
+    ro.observe(band);
+    ro.observe(scroller);
+    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+    events.forEach((evt) => scroller.addEventListener(evt, stop, { passive: true, once: true }));
+    return () => {
+      ro.disconnect();
+      events.forEach((evt) => scroller.removeEventListener(evt, stop));
+    };
+  }, [videoUrl, isFullscreen, mobileFs]);
   const handleToggleTrim = () => {
     const opening = !advancedOpen;
     setAdvancedOverride(opening);
@@ -829,6 +877,7 @@ export function FocusModeView({
               header + stage-controls height, not measured: verify it in the
               cta-consistency Focus row before trusting it. */}
           <div
+            ref={stageRef}
             data-testid="focus-video-stage"
             className={`relative bg-gray-900 ${
               (isFullscreen || mobileFs)

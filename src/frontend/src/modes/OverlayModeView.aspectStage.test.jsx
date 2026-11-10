@@ -93,15 +93,19 @@ describe('OverlayModeView aspect-fit stage (T5676)', () => {
   // video under the band (measured 54px overlap at 1280x800). A media-gated
   // `!`-important override lowers the floor to 320px ONLY in that height range,
   // leaving the T13610 tall-viewport (30rem) fix untouched.
-  it('T14850:C2 lowers the floor to 320px below 850px viewport height', () => {
+  // T15400: widened from `(min-width:1024px)_and_(max-height:850px)` -- the floor is a
+  // pure `max(320px, ...)` on the same formula, so it's safe (a no-op once already
+  // >=320px) at every `min-width:1024px` height. This closed the gap at 1440x900
+  // (height 900, previously past the 850px ceiling and still clipped under the band).
+  it('T14850/T15400:C2 lowers the floor to 320px at every min-width:1024px height', () => {
     isMobileMock.mockReturnValue(false);
     renderView({ effectiveOverlayMetadata: { width: 808, height: 1440, duration: 10 } });
     const stage = screen.getByTestId('overlay-video-stage');
     expect(stage.className).toContain(
-      '[@media(min-width:1024px)_and_(max-height:850px)]:!h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
+      '[@media(min-width:1024px)]:!h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
     );
     expect(stage.className).toContain(
-      '[@media(min-width:1024px)_and_(max-height:850px)]:!max-h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
+      '[@media(min-width:1024px)]:!max-h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
     );
   });
 

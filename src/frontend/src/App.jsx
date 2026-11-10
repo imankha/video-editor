@@ -990,7 +990,12 @@ function App() {
       {/* Main Content - For framing/overlay modes */}
       {editorMode !== EDITOR_MODES.ANNOTATE && (
       <div className="flex-1 overflow-auto">
-        <div className="mx-auto w-full max-w-[1800px] px-3 pt-4 pb-48 sm:px-4 sm:pt-8 sm:pb-8">
+        {/* T15400: the old static `pb-48 sm:pb-8` under-reserved scroll room below the
+            sticky ActionBand (--cta-bar-h, set by useCtaBarHeight) -- on a short/tall-but-
+            tight viewport (e.g. 1440x900) there wasn't enough room to scroll the timeline/
+            keyframe row above the band, so it stayed clipped under it. Reserve the band's
+            REAL measured height (plus a little breathing room) instead of a guessed constant. */}
+        <div className="mx-auto w-full max-w-[1800px] px-3 pt-4 sm:px-4 sm:pt-8 pb-[calc(var(--cta-bar-h,12rem)+1rem)]">
           {/* T1550: Unified header */}
           <UnifiedHeader
             onHomeClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
