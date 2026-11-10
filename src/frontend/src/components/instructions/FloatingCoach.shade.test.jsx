@@ -402,3 +402,21 @@ describe('shade leaves the page scroller usable', () => {
     expect(el.scrollBy).toHaveBeenCalledWith({ top: 120, left: 0 });
   });
 });
+
+describe('T15610: the cutout follows an anchor that moves without resizing or any DOM mutation', () => {
+  it('re-measures on its own -- no resize/scroll event, no childList mutation, same element, same size, just a new position', async () => {
+    const el = document.querySelector('[data-testid="tgt"]');
+    render(<Guide guide={guide()} />); await flush();
+    let [c] = cutouts();
+    expect(c.left).toBeLessThanOrEqual(200); expect(c.right).toBeGreaterThanOrEqual(300);
+    // The SAME node, SAME size, just repositioned -- e.g. a sibling's own width settling
+    // (an async swap between two mutually-exclusive render paths for the same control).
+    // Neither ResizeObserver (size only) nor the body MutationObserver (childList only)
+    // nor resize/scroll fires for this; only continuous polling catches it.
+    el.getBoundingClientRect.mockReturnValue({ left: 700, top: 300, width: 100, height: 40, right: 800, bottom: 340 });
+    await flush();
+    [c] = cutouts();
+    expect(c.left).toBeLessThanOrEqual(700); expect(c.right).toBeGreaterThanOrEqual(800);
+    expect(c.left).toBeGreaterThan(300);
+  });
+});

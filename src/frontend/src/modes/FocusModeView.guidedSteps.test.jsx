@@ -262,6 +262,19 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.keep);
   });
 
+  it('T15610: a box the PARENT drags into place this session never flips boxPrePlaced -- the step total stays 6 throughout, it does not drop to 5 mid-walk', () => {
+    const { rerender } = render(<Harness initial={{ keyframes: [] }} />);
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 1 of 6');
+    fireEvent.click(screen.getByTestId('focus-shape-option-portrait'));
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 2 of 6');
+    // The drag gesture's onCropComplete flows back up to the parent's crop-keyframe
+    // state and returns as an updated `keyframes` prop on the next render -- exactly
+    // like the real app (FocusScreen's useCrop), not a prop the view ever owns itself.
+    fireEvent.click(screen.getByTestId('crop-box'));
+    rerender(<Harness initial={{ keyframes: [kf(10)] }} />);
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 6');
+  });
+
   it('ignores trim-origin keyframes when deciding the drag step is done', () => {
     render(<Harness initial={{ keyframes: [kf(300, 'trim')] }} />);
     fireEvent.click(screen.getByTestId('focus-shape-option-portrait'));

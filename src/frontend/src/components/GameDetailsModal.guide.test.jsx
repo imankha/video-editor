@@ -68,4 +68,16 @@ describe('GameDetailsModal guide (T12250)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
     expect(screen.queryByText(GUIDE.upload.choose.title)).toBeNull();
   });
+
+  // T15610: Home's own fixed top-right cluster (ProjectManager) mounts GuidanceToggle
+  // at a fixed viewport position, independent of this modal. The modal's panel sits
+  // centered over it, and its header title ended up directly under the switch's fixed
+  // painted position -- same mechanism, and same fix, as the mobile plays drawer
+  // (AnnotateScreen.mobileToggle.test.jsx T13770:C1) and the landscape cockpit.
+  it('marks itself data-covers-header while open, and unmarks on close, like every other full-bleed surface', () => {
+    const { rerender } = render(<GameDetailsModal isOpen onClose={() => {}} onCreateGame={vi.fn()} />);
+    expect(document.querySelector('[data-covers-header]')).toBeTruthy();
+    rerender(<GameDetailsModal isOpen={false} onClose={() => {}} onCreateGame={vi.fn()} />);
+    expect(document.querySelector('[data-covers-header]')).toBeNull();
+  });
 });

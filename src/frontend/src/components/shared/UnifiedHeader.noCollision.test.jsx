@@ -34,4 +34,21 @@ describe('T12670: header does not collide with Guidance toggle', () => {
     expect(header.className).toContain('flex-wrap');
     expect(screen.getByTestId('guidance-stub').parentElement.className).toContain('flex-shrink-0');
   });
+
+  // T15610: the mobile chips row is `gap-0` (FramingHeaderStatus brings its own `ml-2`,
+  // so a container gap would double the CreditBalance->badge spacing). That leaves
+  // GuidanceToggle with ZERO space before it -- the crop badge's own documented ~4px
+  // `-right-1` decorative overhang (see FramingHeaderStatus) then bleeds straight into
+  // the switch, which QA found literally touching it at 390/810 wide.
+  it('leaves a margin before the Guidance toggle so the crop badge\'s decorative overhang does not reach it', () => {
+    const { container } = render(
+      <UnifiedHeader breadcrumbType="Clips" breadcrumbItemName="Play 1" editorMode="framing" extraControls={<span data-testid="crop-badge" />} />,
+    );
+    const toggle = screen.getByTestId('guidance-stub');
+    const badge = screen.getByTestId('crop-badge');
+    expect(container.contains(badge)).toBe(true);
+    // The wrapper immediately around the toggle (not the whole gap-0 chips row) must
+    // carry its own left margin, same pattern as the badge's own `ml-2`.
+    expect(toggle.parentElement.className).toMatch(/\bml-(1|2|3)\b/);
+  });
 });

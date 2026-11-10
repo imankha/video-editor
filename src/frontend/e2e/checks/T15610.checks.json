@@ -1,0 +1,23 @@
+{
+  "task": "T15610",
+  "criteria": [
+    {
+      "id": "T15610:C2",
+      "kind": "code",
+      "text": "Frame guide step total is constant.",
+      "command": "cd src/frontend && npx vitest run src/modes/FocusModeView.guidedSteps.test.jsx"
+    },
+    {
+      "id": "T15610:C1",
+      "kind": "code",
+      "text": "Cutout aligns with its target after load.",
+      "command": "cd src/frontend && npx vitest run src/components/instructions/FloatingCoach.shade.test.jsx"
+    },
+    {
+      "id": "T15610:C3",
+      "kind": "code",
+      "text": "The Guidance toggle overlaps no control on any screen at the three viewports.",
+      "command": "cd src/frontend && npx vitest run src/components/shared/UnifiedHeader.noCollision.test.jsx src/components/GameDetailsModal.guide.test.jsx"
+    }
+  ]
+}
