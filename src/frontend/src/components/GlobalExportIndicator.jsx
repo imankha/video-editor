@@ -37,6 +37,16 @@ export const ETA_BUST_GRACE_MS = 15000;
 // T8510: a near-done estimate is never shown while percent has been frozen this long.
 export const ETA_STALL_MS = 30000;
 
+// T15530: how long the rate-measurement anchor (frameTrackRef) is allowed to accumulate
+// before resetting to the most recent sample. Averaging forever from the FIRST frame ever
+// seen lets an unrepresentative early window (e.g. GPU warm-up) permanently skew the
+// estimate long after the real pace changed -- the task's own repro showed the shown
+// estimate overshoot the actual remaining time by ~2x once the job sped up. Resetting
+// periodically keeps the measured rate close to the current pace without reacting to
+// single-tick noise (it only fires once genuinely new frames land AND this much time
+// has passed since the current anchor was taken).
+export const FRAME_RATE_WINDOW_MS = 20000;
+
 // T14860: measured 2026-11-03 sample (encode 2.5s + upload 4.1s + detect-players 19.7s =
 // 26.3s), rounded up -- the fixed tail added after the AI-upscale frame loop ends, since
 // those phases don't report their own frame counts. Static approximation until there are
@@ -216,8 +226,9 @@ export function GlobalExportIndicator() {
   // T8510: display-only ETA-honesty bookkeeping (never persisted).
   // etaDeadlinesRef: exportId -> epoch-ms deadline the first estimate promised.
   // percentChangeRef: exportId -> { percent, changedAt } for stall detection.
-  // frameTrackRef (T14860): exportId -> the FIRST { frame, at } frame sample seen,
-  // fixed once set so calculateETA measures this job's own rate from that point on.
+  // frameTrackRef (T14860, windowed T15530): exportId -> the anchor { frame, at } sample
+  // calculateETA measures this job's rate from. Reset periodically (FRAME_RATE_WINDOW_MS)
+  // so an unrepresentative early window can't permanently skew the estimate.
   // etaMinSecondsRef (T15530): exportId -> the lowest remainingSeconds ever computed,
   // so a later rate slowdown can't make the displayed estimate climb back up.
   // nowTick re-renders once a second while exports run, so a stalled export
@@ -247,9 +258,16 @@ export function GlobalExportIndicator() {
       if (!track || track.percent !== percent) {
         tracks.set(exp.exportId, { percent, changedAt: now });
       }
-      if (!frameTracks.has(exp.exportId)) {
-        const frameProgress = parseFrameProgress(exp.progress?.message);
+      const frameProgress = parseFrameProgress(exp.progress?.message);
+      const anchor = frameTracks.get(exp.exportId);
+      if (!anchor) {
         if (frameProgress) frameTracks.set(exp.exportId, { frame: frameProgress.frame, at: now });
+      } else if (
+        frameProgress &&
+        frameProgress.frame > anchor.frame &&
+        now - anchor.at >= FRAME_RATE_WINDOW_MS
+      ) {
+        frameTracks.set(exp.exportId, { frame: frameProgress.frame, at: now });
       }
       if (!deadlines.has(exp.exportId)) {
         const eta = calculateETA(exp, frameTracks.get(exp.exportId));
