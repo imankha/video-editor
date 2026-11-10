@@ -1,6 +1,6 @@
 # T15770: Uploads that start and never record an outcome are invisible to the success rate; 4 of 12 build-7102 uploaders, all on mobile
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-09

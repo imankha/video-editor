@@ -1,6 +1,6 @@
 # T15530: Sharpen progress goes silent for the last 20-40 s and gives no time estimate
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-09

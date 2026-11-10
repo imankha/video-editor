@@ -1,6 +1,6 @@
 # T15700: Games card stats line is missing a label between the dots
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-11-09

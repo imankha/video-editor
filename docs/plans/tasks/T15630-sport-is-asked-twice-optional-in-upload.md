@@ -1,6 +1,6 @@
 # T15630: Sport is asked twice: optional in upload, then a full-screen prompt on every Mark play
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-09
