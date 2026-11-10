@@ -2150,6 +2150,24 @@ class SkippedRecheckTest(AutolandBase):
         final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
         self.assertEqual([c["status"] for c in final["criteria"]], ["pass", "pass"])
 
+class CiFailureReportTest(unittest.TestCase):
+    def test_a_log_gh_could_not_decode_does_not_kill_the_loop(self):
+        # PR #739 (2026-11-10): `gh run view --log-failed` output with unicode made subprocess hand back
+        # stdout=None on Windows, and the AttributeError ended g-t15400-4's autoland.
+        def run(cmd, **kw):
+            if "--log-failed" in cmd:
+                self.assertEqual(kw.get("encoding"), "utf-8")
+                return subprocess.CompletedProcess(cmd, 0, stdout=None, stderr="")
+            if "--json" in cmd and "jobs" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(
+                    {"jobs": [{"name": "frontend-shard (3)", "conclusion": "failure"}]}), stderr="")
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(
+                [{"databaseId": 7, "headSha": "abc"}]), stderr="")
+        with patch.object(dotask_cli.subprocess, "run", run):
+            report = dotask_cli.ci_failure_report("feature/x", "abc")
+        self.assertIn("Run 7, failed jobs: frontend-shard (3)", report)
+
+
 class StagingCheckTest(AutolandBase):
     def setUp(self):
         super().setUp()

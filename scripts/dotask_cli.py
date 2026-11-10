@@ -557,8 +557,11 @@ def ci_failure_report(branch, head, log_lines=120):
         jobs = json.loads(subprocess.run([tool("gh"), "run", "view", str(run_id), "--json", "jobs"],
                                          capture_output=True, text=True, check=True).stdout or "{}")
         failed = [j["name"] for j in jobs.get("jobs", []) if j.get("conclusion") == "failure"]
+        # CI logs carry ANSI and unicode that Windows' default code page cannot decode; text=True then
+        # returned stdout=None and the AttributeError below killed g-t15400-4's loop (PR #739, 2026-11-10).
         log = subprocess.run([tool("gh"), "run", "view", str(run_id), "--log-failed"],
-                             capture_output=True, text=True, check=False).stdout
+                             capture_output=True, text=True, encoding="utf-8", errors="replace",
+                             check=False).stdout or ""
     except (OSError, subprocess.SubprocessError, ValueError, StopIteration, KeyError) as exc:
         return f"Could not fetch the Branch CI run for {head[:9]} ({exc}); run `gh run list --branch {branch}`."
     tail = "\n".join(log.splitlines()[-log_lines:])
