@@ -1,0 +1,18 @@
+{
+  "task": "T15660",
+  "criteria": [
+    {
+      "id": "T15660:C1",
+      "kind": "code",
+      "text": "Wordmark renders on one line with the logo.",
+      "command": "cd src/frontend && npx vitest run functions/shared/share-page.test.js -t 'T15660'",
+      "test": "T15660:C1 - the edge-rendered share end-card renders a single-line 'ReelBallers' span next to the emblem, not split into a stacked 'Reel'/'Ballers' column"
+    },
+    {
+      "id": "T15660:C2",
+      "kind": "human",
+      "text": "(recorded as intended, no code change) On staging, 'Make your own highlights' points at https://www.reelballers.com/ (prod) in both the React BrandedEndCard.jsx and the edge-rendered [token].js -- the marketing landing site at reelballers.com deploys to production only (deploy-landing SKILL.md: push-to-master trigger, no staging equivalent), so there is no staging landing page to send a new signup to. 'Open ReelBallers' already stays on the serving host (T13070). See qa/proof.json T15660:C2 for the full writeup.",
+      "test": null
+    }
+  ]
+}

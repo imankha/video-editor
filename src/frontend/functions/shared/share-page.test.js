@@ -349,13 +349,22 @@ describe('renderSharePage', () => {
       expect(html).toContain('href="https://app.reelballers.com/?ref=ab12cd34&amp;sport=soccer&amp;utm_source=share_endcard');
     });
 
-    it('secondary row contains Made with + Reel + emblem + Ballers', () => {
+    it('T15660: secondary row contains Made with + emblem + a single-line ReelBallers wordmark', () => {
       const html = renderSharePage(share);
       expect(html).toContain('Made with');
-      expect(html).toContain('>Reel<');
-      expect(html).toContain('>Ballers<');
+      // One word, one span -- never split across "Reel"/"Ballers" (that stacked
+      // split rendered 'Reel' above / 'Ballers' below-right of the emblem on
+      // staging, T15660).
+      expect(html).toContain('>ReelBallers<');
+      expect(html).not.toContain('>Reel<');
+      expect(html).not.toContain('>Ballers<');
       expect(html).toContain('id="emblem"');
       expect(html).toContain('aria-label="Replay"');
+      // Lockup is a single-line row (emblem beside the wordmark), not a
+      // stacked column that splits the two halves above/below the emblem.
+      expect(html).toMatch(/\.ec-lk\{[^}]*display:flex[^}]*\}/);
+      expect(html).not.toMatch(/\.ec-lk\{[^}]*flex-direction:column/);
+      expect(html).toMatch(/\.ec-lt\{[^}]*white-space:nowrap/);
     });
 
     it('no headline and no bottom link — URL lives in CTA text only', () => {
