@@ -68,7 +68,7 @@ async def _env():
             patch(GU + "get_credit_balance", lambda u: {"balance": 10**9}),
             patch("app.analytics.record_milestone", lambda *a, **k: None),
             patch(GU + "generate_multipart_urls", _urls),
-            patch(GU + "r2_create_multipart_upload", lambda k: "up-1"),
+            patch(GU + "r2_create_multipart_upload", lambda k, error_out=None: "up-1"),
             patch(GU + "r2_abort_orphan_multipart_uploads", lambda *a, **k: 0),
             patch(GU + "r2_abort_multipart_upload", lambda *a, **k: True),
             patch(GU + "r2_is_multipart_upload_valid", lambda *a: True),
