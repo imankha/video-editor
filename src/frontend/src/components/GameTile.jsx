@@ -29,7 +29,7 @@ function GameTileCounts({ playsLabel, brilliantCount, reelCount }) {
             title={GAME_CARD.BRILLIANT_COUNT(brilliantCount)}
           >
             <Star size={10} fill={RATING_BADGE_COLORS[5]} color={RATING_BADGE_COLORS[5]} aria-hidden="true" />
-            {brilliantCount}
+            {brilliantCount} brilliant
           </span>
         </>
       )}

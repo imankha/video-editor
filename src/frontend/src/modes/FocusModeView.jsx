@@ -410,7 +410,14 @@ export function FocusModeView({
   // shows (resolveGuide swaps in the "check the box" copy for this case, see
   // `boxPrePlaced`), and completes on a drag OR on playing -- tapping Play is itself
   // confirmation the already-placed box looked right.
-  const boxPrePlaced = focusPointCount > 0;
+  // T15610: frozen at mount (lazy useState initializer), NOT recomputed every render
+  // from the live `focusPointCount`. The parent's OWN first drag adds a 'user'-origin
+  // keyframe and flows back down as an updated `keyframes` prop (FocusScreen's useCrop),
+  // which used to flip this from false to true mid-session -- dropping the step total
+  // from 6 to 5 and renumbering every later step under the parent's feet ("Step 1 of 6"
+  // then "Step 2 of 5" for the SAME step). Only whether a box existed BEFORE the parent
+  // touched anything this session may ever decide this value.
+  const [boxPrePlaced] = useState(() => focusPointCount > 0);
   // T14830 (owner ruling 2026-11-07, "Confirm once"): `dragDone` is the box's
   // "checked" state -- moved, or played while pre-placed -- passed to
   // ExportButtonSection as `boxChecked`. It gates the one-time pre-spend

@@ -248,7 +248,13 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
 
   return (
     <GuideScope guides={[uploadGuide]}>
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    {/* T15610: Home's GuidanceToggle (ProjectManager's fixed top-right cluster) is a
+        separate, always-mounted fixed anchor; this modal's own header has no slot for
+        it. Without data-covers-header the ambient switch kept painting at its Home
+        position, which sits directly over this panel's title on short/narrow
+        viewports -- same mechanism as the mobile plays drawer and the landscape
+        cockpit (see GuidanceToggle.jsx T13460/T13700). */}
+    <div data-covers-header className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop — no dismiss on click; use X button instead */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 

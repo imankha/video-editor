@@ -263,7 +263,18 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       warnedRef.current = warnKey || '';
       setPosition(old => old === next || (old && next !== 'dock' && old !== 'dock' && old.left === next.left && old.top === next.top) ? old : next);
     };
-    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
+    // T15610: an anchor can move WITHOUT resizing itself or its parent, and without any
+    // DOM node being added/removed -- a sibling's own width/position settles (an async
+    // state swap between two mutually-exclusive render paths for the same control, a
+    // banner's layout finishing) and neither ResizeObserver (size only) nor the
+    // MutationObserver (childList only) nor resize/scroll ever fires. Home's "Upload
+    // game" cutout sat ~100px off the real button through exactly this gap. Same fix as
+    // GuidanceToggle's slot tracking (T13460): `track` re-measures every frame
+    // regardless of what triggered it; every setter above already bails out when
+    // nothing moved (`old === next ? old : next`), so this costs nothing extra at rest.
+    let alive = true;
+    const track = () => { measure(); if (alive) raf = requestAnimationFrame(track); };
+    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(track); };
     const observer = typeof ResizeObserver === 'undefined' ? { observe() {}, disconnect() {} } : new ResizeObserver(schedule);
     if (ref.current) observer.observe(ref.current);
     for (const selector of [target, fallbackTarget].filter(Boolean)) {
@@ -271,12 +282,12 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       // T12800: observe the REAL box(es), not a display:contents anchor directly (see realBoxes).
       for (const box of realBoxes(anchor)) observer.observe(box);
     }
-    measure(); schedule();
+    track();
     const layerObserver = typeof MutationObserver === 'undefined' ? { observe() {}, disconnect() {} } : new MutationObserver(schedule);
     layerObserver.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
-    return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
+    return () => { alive = false; cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
   }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, shadeClearKey, guideId, reveal]);
   // T13020: the scroll pill sits bottom-centre (top-centre for "up"), where a docked card also sits. Keep it
   // centred unless the card is under it, then slide it to the right or left corner, whichever clears the card.
