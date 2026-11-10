@@ -119,7 +119,9 @@ export default function SourceBar({
   const surface = compact
     ? 'py-0.5 bg-gray-900/90'
     : 'py-1 bg-gray-800 border-t border-gray-700/60 rounded-b-lg';
-  const rowClass = `flex items-center gap-2 px-2 lg:px-4 min-h-[40px] coarse-pointer:min-h-[52px] ${surface}`;
+  // T15460 AC1: on a phone outside fullscreen (same breakpoint as AnnotateModeView's
+  // PHONE_LANDSCAPE_* compaction) the stacked layout needs this row's height back.
+  const rowClass = `flex items-center gap-2 px-2 lg:px-4 min-h-[40px] coarse-pointer:min-h-[52px] [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!min-h-[30px] [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!py-0 ${surface}`;
 
   // T13280 follow-up: reachable for ANY active video that isn't the game's own
   // original recording (virtualStart 0) -- an angle (line it up by ear) or a

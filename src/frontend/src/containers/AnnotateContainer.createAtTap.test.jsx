@@ -481,14 +481,25 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
   it('default capture window (moved from the retired captureWindow.test.jsx): clamps to [0, duration]', async () => {
     apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
 
-    // Tap near the start: the 6s "before" window must clamp to 0, not go negative.
+    // Tap near the start: the 6s "before" window clamps to 0, but the clamped
+    // amount shifts onto the "after" side so the play stays the full 8s
+    // (T15640: this used to collapse to just 1+DEFAULT_CLIP_AFTER = 3s).
     const early = renderHook(() => AnnotateContainer(baseProps({ currentTime: 1, duration: 120 })));
     act(() => { early.result.current.handleAddClipFromButton(); });
     await act(async () => { await flushMicrotasks(); });
     expect(early.result.current.clipRegions[0].startTime).toBe(0);
-    expect(early.result.current.clipRegions[0].endTime).toBe(3); // 1 + DEFAULT_CLIP_AFTER(2)
+    expect(early.result.current.clipRegions[0].endTime).toBe(8); // full DEFAULT_CLIP_DURATION
+
+    // Tap AT the very start (T15640 AC2's exact repro): still a full 8s play.
+    const atZero = renderHook(() => AnnotateContainer(baseProps({ currentTime: 0, duration: 120 })));
+    act(() => { atZero.result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+    expect(atZero.result.current.clipRegions[0].startTime).toBe(0);
+    expect(atZero.result.current.clipRegions[0].endTime).toBe(8);
 
     // Tap near the end: the 2s "after" window must clamp to duration, not exceed it.
+    // (Unlike the start side, there is no video beyond `duration` to shift into,
+    // so the play legitimately shortens here.)
     const late = renderHook(() => AnnotateContainer(baseProps({ currentTime: 119, duration: 120 })));
     act(() => { late.result.current.handleAddClipFromButton(); });
     await act(async () => { await flushMicrotasks(); });

@@ -59,23 +59,51 @@ import { Button, toast } from '../components/shared';
 // T13170: at 1024x768 the 40vh box still left Mark play below the fold, so a desktop <= 800px tall gets 28vh.
 // The two height ranges are disjoint: both rules are `!important` arbitrary media variants, so overlap would let
 // CSS source order (not the narrower range) decide.
-const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)]:!h-[34vh] [@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)]:!max-h-[34vh] [@media(min-width:1024px)_and_(max-height:800px)]:!h-[21vh] [@media(min-width:1024px)_and_(max-height:800px)]:!max-h-[21vh]';
+// T15460: every SHORT_DESKTOP_* query now also requires `(hover:hover) and (pointer:fine)` -- a real mouse,
+// the opposite of useIsMobile's `(hover:none) and (pointer:coarse)`. Without this an iPad gen 7 landscape
+// (1024x768, coarse pointer, no hover) matched the 1024x768 short-desktop range too, forcing its stage box
+// down to 21vh even though the device has plenty of height and its own mobile layout (drawer plays panel)
+// already left the width free -- that was AC2's "wastes space on iPad" bug. A touchscreen laptop keeps the
+// desktop behavior (its primary pointer is still the mouse).
+const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:!h-[34vh] [@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:!max-h-[34vh] [@media(min-width:1024px)_and_(max-height:800px)_and_(hover:hover)_and_(pointer:fine)]:!h-[21vh] [@media(min-width:1024px)_and_(max-height:800px)_and_(hover:hover)_and_(pointer:fine)]:!max-h-[21vh]';
 // T13170: on the same short desktops the action-tile row (Mark play, Review plays, Share plays, Add footage)
 // drops to short cards (descriptions screen-reader only, Mark play keeps its capture hint) and the gaps around
-// the timeline tighten, so the row fits the first viewport at 1440x900 and 1024x768.
-const SHORT_DESKTOP_TILES_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!min-h-0 [@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!p-3 [@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!gap-1.5 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-disc]]:!h-8 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-disc]]:!w-8 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-desc]]:sr-only [@media(min-width:1024px)_and_(max-height:800px)]:[&>button]:!flex-row [@media(min-width:1024px)_and_(max-height:800px)]:[&>button]:!flex-wrap [@media(min-width:1024px)_and_(max-height:800px)]:[&>button]:!gap-x-2';
-const SHORT_DESKTOP_GAP_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:!mt-3';
+// the timeline tighten, so the row fits the first viewport at 1440x900 and 1024x768. T15460: hover/pointer-fine
+// gated, see SHORT_DESKTOP_STAGE_CLASS above.
+const SHORT_DESKTOP_TILES_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:[&>button]:!min-h-0 [@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:[&>button]:!p-3 [@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:[&>button]:!gap-1.5 [@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:[&_[data-cta-disc]]:!h-8 [@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:[&_[data-cta-disc]]:!w-8 [@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:[&_[data-cta-desc]]:sr-only [@media(min-width:1024px)_and_(max-height:800px)_and_(hover:hover)_and_(pointer:fine)]:[&>button]:!flex-row [@media(min-width:1024px)_and_(max-height:800px)_and_(hover:hover)_and_(pointer:fine)]:[&>button]:!flex-wrap [@media(min-width:1024px)_and_(max-height:800px)_and_(hover:hover)_and_(pointer:fine)]:[&>button]:!gap-x-2';
+const SHORT_DESKTOP_GAP_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:!mt-3';
 // T13530: a 2-video game adds the Videos row and a Video lane, so the T13170 caps alone left the
 // tiles ~77px (1440x900) / ~127px (1024x768) below the fold. Tighten the panel padding and the
 // timeline block's vertical padding at the same short-desktop breakpoint.
-const SHORT_DESKTOP_PANEL_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:!p-3';
-const SHORT_DESKTOP_TIMELINE_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:[&_.timeline-container]:!py-1 [@media(min-width:1024px)_and_(max-height:950px)]:[&_.timeline-container]:[&>div:first-child]:!mb-0.5';
-const STAGE_ASPECT_BOX_CLASS = `mx-auto w-full max-w-full max-h-[60vh] lg:w-fit lg:h-[60vh] lg:max-h-[60vh] ${SHORT_DESKTOP_STAGE_CLASS}`;
+const SHORT_DESKTOP_PANEL_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:!p-3';
+const SHORT_DESKTOP_TIMELINE_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:[&_.timeline-container]:!py-1 [@media(min-width:1024px)_and_(max-height:950px)_and_(hover:hover)_and_(pointer:fine)]:[&_.timeline-container]:[&>div:first-child]:!mb-0.5';
+// T15460 (AC1): a phone in landscape OUTSIDE fullscreen (max-height:500px, same range
+// useIsLandscape treats as phone-cockpit, but width-capped so a short desktop window doesn't
+// also match) stacks the full desktop layout -- 60vh-capped stage, transport, zoom, timeline,
+// 2x2 CTA grid -- into ~390px of height with nothing to shrink it, pushing Mark play off
+// screen (bug: Mark play at y388 of 390 even scrolled to max). These mirror SHORT_DESKTOP_*'s
+// compaction but at this width/orientation range instead, using dvh (stable across mobile
+// browser chrome show/hide) rather than vh.
+const PHONE_LANDSCAPE_STAGE_CLASS = '[@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!h-[12dvh] [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!max-h-[12dvh]';
+// T15460 AC1: on top of the shrinks below, the CTA tiles go horizontal (icon beside title,
+// description + capture-window hint hidden) instead of stacked, so the primary CTA row doesn't
+// need its full stacked-card height on a 390px-tall viewport.
+const PHONE_LANDSCAPE_TILES_CLASS = '[@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!grid-cols-4 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&>button]:!min-h-0 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&>button]:!flex-row [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&>button]:!items-center [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&>button]:!justify-center [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&>button]:!p-1.5 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&>button]:!gap-1.5 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_[data-cta-disc]]:!h-6 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_[data-cta-disc]]:!w-6 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_[data-cta-desc]]:sr-only [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_[data-testid=annotate-capture-window-hint]]:sr-only';
+const PHONE_LANDSCAPE_GAP_CLASS = '[@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!mt-1';
+const PHONE_LANDSCAPE_PANEL_CLASS = '[@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!p-1';
+const PHONE_LANDSCAPE_TIMELINE_CLASS = '[@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_.timeline-container]:!py-0 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_.timeline-container]:[&>div:first-child]:!mb-0 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_.timeline-container]:relative [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_.timeline-container>div:first-child]:!absolute [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_.timeline-container>div:first-child]:!top-0 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_.timeline-container>div:first-child]:!right-1 [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_.timeline-container>div:first-child]:!z-10';
+// T15460 AC1: the mini-map scrollbar (TimelineBase's `mobile-scrollbar-track`, 44px min-height
+// plus mt-2/mb-3 margins) below the zoomed timeline is a nicety, not required to use Mark play;
+// hiding it via a descendant selector (no `hideScrollbar` prop threading -- CSS-only, matching
+// every other SHORT_DESKTOP_*/PHONE_LANDSCAPE_* compaction here) recovers real height on a
+// 390px viewport.
+const PHONE_LANDSCAPE_HIDE_SCROLLBAR_CLASS = '[@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:[&_[data-testid=mobile-scrollbar-track]]:!hidden';
+const STAGE_ASPECT_BOX_CLASS = `mx-auto w-full max-w-full max-h-[60vh] lg:w-fit lg:h-[60vh] lg:max-h-[60vh] ${SHORT_DESKTOP_STAGE_CLASS} ${PHONE_LANDSCAPE_STAGE_CLASS}`;
 // The ONE surviving fixed-height letterbox box — used ONLY when the video's
 // dimensions are genuinely unknown (a legacy game row with NULL video_width /
 // video_height, resolved to `stageAspect === null`). This is the explicit,
 // warned "dimensions unknown" branch, not a silent 16/9 coercion.
-const STAGE_UNKNOWN_DIMS_CLASS = `h-[40vh] sm:h-[60vh] ${SHORT_DESKTOP_STAGE_CLASS}`;
+const STAGE_UNKNOWN_DIMS_CLASS = `h-[40vh] sm:h-[60vh] ${SHORT_DESKTOP_STAGE_CLASS} ${PHONE_LANDSCAPE_STAGE_CLASS}`;
 
 // No region at the playhead means no badge; a region with no rating shows as Good.
 const annotatePlaybackRating = (region) => (region ? displayRating(region.rating) : null);
@@ -808,13 +836,14 @@ export function AnnotateModeView({
       {(!annotateFullscreen || showAnnotateOverlay) && (
         <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />
       )}
-      <div data-testid="annotate-coach-stage" className={`${annotateFullscreen ? '' : `bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20 ${SHORT_DESKTOP_PANEL_CLASS}`}`}>
+      <div data-testid="annotate-coach-stage" className={`${annotateFullscreen ? '' : `bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20 ${SHORT_DESKTOP_PANEL_CLASS} ${PHONE_LANDSCAPE_PANEL_CLASS}`}`}>
         {/* Fullscreen container - uses fixed positioning for fullscreen.
             T15370: landscape is a CSS grid (56px left strip | picture | 72px
             right strip, with an auto-height timeline row under the picture)
             instead of a full-bleed surface with controls drawn on top. */}
         <div
           ref={annotateContainerRef}
+          data-covers-header={mobileFsLandscape ? '' : undefined}
           className={`${annotateFullscreen ? (
             mobileFsLandscape
               ? 'fixed inset-x-0 top-0 h-dvh z-[100] bg-black grid grid-cols-[56px_minmax(0,1fr)_72px] grid-rows-[minmax(0,1fr)_auto] overflow-hidden'
@@ -1325,7 +1354,7 @@ export function AnnotateModeView({
 
           {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}
           {!annotateFullscreen && !underCanvasEditor && (
-            <div className={`mt-6 ${SHORT_DESKTOP_GAP_CLASS} ${SHORT_DESKTOP_TIMELINE_CLASS}`}>
+            <div className={`mt-6 ${SHORT_DESKTOP_GAP_CLASS} ${SHORT_DESKTOP_TIMELINE_CLASS} ${PHONE_LANDSCAPE_GAP_CLASS} ${PHONE_LANDSCAPE_TIMELINE_CLASS} ${PHONE_LANDSCAPE_HIDE_SCROLLBAR_CLASS}`}>
               <AnnotateMode
                 currentTime={currentTime}
                 duration={duration || annotateVideoMetadata?.duration || 0}
@@ -1418,7 +1447,7 @@ export function AnnotateModeView({
             single loudest element on the screen; Playback Annotations + Share are
             demoted to text-level prominence until the first clip exists. */}
         {!annotateFullscreen && !underCanvasEditor && !fixTiming && (
-          <div className={`mt-3 sm:mt-6 ${SHORT_DESKTOP_GAP_CLASS}`}>
+          <div className={`mt-3 sm:mt-6 ${SHORT_DESKTOP_GAP_CLASS} ${PHONE_LANDSCAPE_GAP_CLASS}`}>
             <div className="space-y-3">
               {/* PRIMARY CTA. T10310 (2026-09-18 user request): once a play is
                   selected, this splits into [Edit Play] + a Frame action —
@@ -1469,7 +1498,7 @@ export function AnnotateModeView({
                   )}
                 </div>
               ) : (
-                <div className={`grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3 ${SHORT_DESKTOP_TILES_CLASS}`}>
+                <div className={`grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3 ${SHORT_DESKTOP_TILES_CLASS} ${PHONE_LANDSCAPE_TILES_CLASS}`}>
                   <ActionCard variant="primary" icon={Plus} title={ANNOTATE.MARK_PLAY} description={ANNOTATE.MARK_PLAY_CARD}
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly || isLoadingGameData}
                     data-testid="annotate-mark-play-button"
