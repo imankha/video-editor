@@ -926,6 +926,26 @@ separate (not fixed here).
   keeps `isUploading` true until the last queued batch settles; `EmptyTabGuide` takes
   `addVideoLoading` so the empty-state Add Video button disables like the header one.
 
+**`error_text` can now come from storage, not just the client (T15780).** Before this
+task, `upload_failures.error_text` was populated only by client-reported detail
+(`hashAndAnalyzeOrBeacon`'s diagnostic above) — a server-side `sync_failed` row from
+`CreateMultipartUpload` returning `None` had no cause, only the coarse `reason` literal,
+because the exception was logged (`storage.py`) but never surfaced to the caller. Fixed
+by an optional `error_out: dict | None` out-param on `r2_create_multipart_upload`: on a
+non-transient rejection, or an ack-lost create that `_adopt_live_multipart_after_ack_loss`
+couldn't resolve, it fills `error_out["error_text"] = "<ExceptionClass>: <message>"`
+(same format client-side uses); on success it is left untouched. `prepare_upload`
+(`games_upload.py`) passes the dict and forwards `.get("error_text")` into
+`_write_upload_failure`'s existing `error_text` kwarg — no new column, no new writer (F3
+still holds: `record_upload_failure()` is the only INSERT path; this just gives one of
+its existing callers a real value instead of `None`). Also T15780: the game-upload size
+cap (`MAX_FILE_SIZE`, now in `app.constants` so `bootstrap.py` can mirror it without a
+cross-router import) gets a client pre-flight in `GameFootagePicker` mirroring the
+T10250 clip-cap pattern — an over-cap file never reaches `hashAndAnalyzeOrBeacon`, so it
+beacons `reason=size_over_cap` with no `blake3_hash` and never books
+`game_upload_attempted` (that milestone only fires deep in `prepare-upload`'s success
+path).
+
 ## Pre-cut clip upload (T8370)
 
 A user with pre-cut clips (phone footage, Veo/Trace auto-cut highlights) can upload a video file

@@ -2684,13 +2684,21 @@ def delete_local_profile_data(user_id: str, profile_id: str) -> bool:
 # R2 Multipart Upload Functions
 # ==============================================================================
 
-def r2_create_multipart_upload(key: str, content_type: str = "video/mp4") -> str | None:
+def r2_create_multipart_upload(
+    key: str, content_type: str = "video/mp4", error_out: dict | None = None
+) -> str | None:
     """
     Initiate a multipart upload to R2.
 
     Args:
         key: R2 object key
         content_type: Content type for the object
+        error_out: T15780 — optional caller-owned dict. On a None return, filled
+            with {"error_text": "<ExceptionClass>: <message>"} so the caller's
+            durable upload_failures row carries the cause instead of a bare
+            "sync_failed" with nothing to diagnose (the exception itself is only
+            ever logged, and that log is ephemeral — T12890). Left untouched on
+            success.
 
     Returns:
         Upload ID string if successful, None otherwise
@@ -2730,13 +2738,16 @@ def r2_create_multipart_upload(key: str, content_type: str = "video/mp4") -> str
         return upload_id
     except Exception as e:
         from .utils.retry import is_transient_error
+        error_text = f"{type(e).__name__}: {e}"
         if not is_transient_error(e):
             # Definitive rejection — the request was refused before R2 created
             # anything, so there is nothing to adopt. Fail fast without listing.
             logger.error(
                 f"Failed to create multipart upload (non-transient rejection, "
-                f"nothing created): {key} - {type(e).__name__}: {e}"
+                f"nothing created): {key} - {error_text}"
             )
+            if error_out is not None:
+                error_out["error_text"] = error_text
             return None
         # Ambiguous ack loss — R2 may have created the multipart. Recover it by
         # listing + adopting rather than blind-retrying the non-idempotent create.
@@ -2744,7 +2755,11 @@ def r2_create_multipart_upload(key: str, content_type: str = "video/mp4") -> str
             f"create_multipart_upload ack lost (transient {type(e).__name__}); "
             f"listing to adopt any live multipart on {key} - {e}"
         )
-        return _adopt_live_multipart_after_ack_loss(key)
+        adopted = _adopt_live_multipart_after_ack_loss(key)
+        if adopted is None and error_out is not None:
+            # Nothing materialized -- the ack-lost exception IS the cause.
+            error_out["error_text"] = error_text
+        return adopted
 
 
 def _adopt_live_multipart_after_ack_loss(key: str) -> str | None:

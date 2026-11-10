@@ -13,7 +13,7 @@ import time
 
 from fastapi import APIRouter
 
-from ..constants import MAX_CLIP_DURATION_S, MAX_CLIP_UPLOAD_BYTES
+from ..constants import MAX_CLIP_DURATION_S, MAX_CLIP_UPLOAD_BYTES, MAX_FILE_SIZE
 from ..database import get_db_connection
 from ..queries import latest_final_videos_subquery
 from ..services.credit_ledger import get_credit_balance
@@ -279,8 +279,11 @@ async def bootstrap():
         # Server stays authoritative (prepare-upload / batch probe still enforce);
         # this is the single backend number the client reads so no `500` literal
         # ever lives client-side.
+        # T15780: same pattern for the game-upload cap, so a 10GB+ file is
+        # refused before any hashing or server call, not just after.
         "upload_limits": {
             "max_clip_upload_bytes": MAX_CLIP_UPLOAD_BYTES,
             "max_clip_duration_s": MAX_CLIP_DURATION_S,
+            "max_game_upload_bytes": MAX_FILE_SIZE,
         },
     }

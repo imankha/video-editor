@@ -18,7 +18,14 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.constants import ACCOUNT_UPDATING_MESSAGE, MAX_CLIP_UPLOAD_BYTES, GameStatus, UploadKind, UploadStatus
+from app.constants import (
+    ACCOUNT_UPDATING_MESSAGE,
+    MAX_CLIP_UPLOAD_BYTES,
+    MAX_FILE_SIZE,
+    GameStatus,
+    UploadKind,
+    UploadStatus,
+)
 from app.database import column_exists, get_db_connection
 from app.middleware.db_sync import acquire_write_lock, durable_sync
 from app.services.credit_ledger import get_credit_balance
@@ -52,8 +59,9 @@ BLAKE3_PATTERN = re.compile(r'^[a-f0-9]{64}$')
 # trailing newline, and this value is written to log lines.
 FLOW_ID_PATTERN = re.compile(r'^[A-Za-z0-9-]{1,64}\Z')
 
-# Maximum file size: 10GB (R2 limit is 5TB, but practical limit for video)
-MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB
+# Maximum file size: 10GB (R2 limit is 5TB, but practical limit for video).
+# T15780: the value now lives in app.constants (imported above) so
+# bootstrap.py can mirror it to the client without a cross-router import.
 
 # Part size for multipart uploads.
 # T7480: 25MB -> 5MB (R2/S3 hard minimum for non-final parts). At 25MB a single
@@ -332,7 +340,10 @@ async def prepare_upload(request: PrepareUploadRequest):
                                      original_filename=request.original_filename)
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file size. Must be between 1 byte and {MAX_FILE_SIZE // (1024**3)}GB."
+            detail=(
+                f"This video is over our {MAX_FILE_SIZE // (1024**3)}GB limit. "
+                "Trim it or split it into shorter games, then try again."
+            ),
         )
 
     # T8370 §4.3: clip sources are permanent (never expire), so cap the size
@@ -549,12 +560,16 @@ async def prepare_upload(request: PrepareUploadRequest):
     # T7480's orphan reclaim still fires (this path is only reached after a valid
     # resume was declined, so every OTHER open multipart here is a genuine orphan —
     # e.g. an executed-but-unacked create from a prior attempt).
-    upload_id = r2_create_multipart_upload(r2_key)
+    # T15780: error_out carries the exception class/message r2_create_multipart_upload
+    # logged (that log line is ephemeral, T12890) into the durable upload_failures row.
+    create_error: dict = {}
+    upload_id = r2_create_multipart_upload(r2_key, error_out=create_error)
     if not upload_id:
         await _write_upload_failure(flow_id=flow_id, stage="preparing", reason="sync_failed", terminal=True,
                                      kind=kind, user_id=user_id, http_status=500,
                                      blake3_hash=blake3_hash, file_size=request.file_size,
-                                     original_filename=request.original_filename)
+                                     original_filename=request.original_filename,
+                                     error_text=create_error.get("error_text"))
         logger.warning("Failed to initiate multipart upload")
         raise HTTPException(
             status_code=500,

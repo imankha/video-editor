@@ -19,12 +19,16 @@ import { create } from 'zustand';
 export const useConfigStore = create((set) => ({
   maxClipUploadBytes: null,
   maxClipDurationS: null,
+  // T15780: same mirror for the game-upload cap, so GameFootagePicker can
+  // run the same pre-flight gate the clip path already runs.
+  maxGameUploadBytes: null,
 
   setFromBootstrap: (uploadLimits) => {
     if (!uploadLimits) return;
     set({
       maxClipUploadBytes: uploadLimits.max_clip_upload_bytes ?? null,
       maxClipDurationS: uploadLimits.max_clip_duration_s ?? null,
+      maxGameUploadBytes: uploadLimits.max_game_upload_bytes ?? null,
     });
   },
 }));
