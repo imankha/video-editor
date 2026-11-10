@@ -496,6 +496,7 @@ DONE rows live in [PLAN-archive.md](PLAN-archive.md).
 | T15390 | [By-sport and action-rollup reads download every analytics shard from R2 on every request (~9.5s)](tasks/T15390-get-api-admin-analytics-by-sport.md) | 5 | 3 | 1.7 | STAGING | [ ] | M-tier, backend. `load_newest_action_rollup` (T7400) LISTs and serially GETs every shard on every request, no cache; shards grow with retired Fly machines. Shared ETag-keyed shard fetcher in analytics_store (moves the Journey reader's cache), concurrent misses, partial semantics kept. |
 | T15790 | [Cold-reopen of /focus/p/<id> from a closed tab still does not load the Frame editor within 10s](tasks/T15790-cold-reopen-of-focus-p-id.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 | T15920 | [Staging check failed: T15430:C1 In landscape fullscreen Annotate at 844x390, elementFromPoint at Mark's centre](tasks/T15920-staging-check-failed-t15430-c1-in.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T15930 | [Staging check failed: T15550:C1 'Keep marking plays' returns to Annotate with the playhead after](tasks/T15930-staging-check-failed-t15550-c1-keep.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ## Environment Configuration
 
