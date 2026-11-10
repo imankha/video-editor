@@ -1,6 +1,6 @@
 # T15610: Guidance overlay bugs: offset cutout, blocks input, step count changes, floats over headers
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-09

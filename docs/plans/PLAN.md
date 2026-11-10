@@ -31,21 +31,21 @@
 | T15580 | [Impersonation banner has no Reopen their page link for some users](tasks/T15580-impersonation-banner-has-no-reopen-their-page.md) | 5 | 2 | 2.5 | TODO | [ ] | QA 2026-11-09. T14990 criterion fails for an overlay resume point. |
 | T15590 | [Concurrent upload finishes are about 3x slower than a lone finish](tasks/T15590-concurrent-upload-finishes-are-about-3x-slower.md) | 5 | 4 | 1.2 | STAGING | [ ] | QA 2026-11-09. T15150 only partly met. |
 | T15600 | [Under-44px touch targets across sign-in, Annotate, Spotlight, Gallery and the share page](tasks/T15600-under-44px-touch-targets-across-sign-in.md) | 5 | 3 | 1.7 | TODO | [ ] | QA 2026-11-09. Full list in the task file. |
-| T15610 | [Guidance overlay bugs: offset cutout, blocks input, step count changes, floats over headers](tasks/T15610-guidance-overlay-bugs-offset-cutout-blocks-input.md) | 5 | 3 | 1.7 | WIP | [ ] | QA 2026-11-09. Several guidance layout issues; step count bug touches T14760. |
+| T15610 | [Guidance overlay bugs: offset cutout, blocks input, step count changes, floats over headers](tasks/T15610-guidance-overlay-bugs-offset-cutout-blocks-input.md) | 5 | 3 | 1.7 | STAGING | [ ] | QA 2026-11-09. Several guidance layout issues; step count bug touches T14760. |
 | T15620 | [Device-wrong copy: phone wording on desktop and iPad, desktop wording on phones](tasks/T15620-device-wrong-copy-phone-wording-on-desktop.md) | 4 | 2 | 2.0 | TODO | [ ] | QA 2026-11-09. |
-| T15630 | [Sport is asked twice: optional in upload, then a full-screen prompt on every Mark play](tasks/T15630-sport-is-asked-twice-optional-in-upload.md) | 5 | 2 | 2.5 | WIP | [ ] | QA 2026-11-09. Interrupts the first-play moment. |
+| T15630 | [Sport is asked twice: optional in upload, then a full-screen prompt on every Mark play](tasks/T15630-sport-is-asked-twice-optional-in-upload.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09. Interrupts the first-play moment. |
 | T15640 | [Jump to play lands at the end of the play, and Mark play at 0:00 makes a 2 s play](tasks/T15640-jump-to-play-lands-at-the-end.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09. |
 | T15650 | [Frame preview player is tiny with a clipped time readout, and the timeline zoom pill is clipped on iPad](tasks/T15650-frame-preview-player-is-tiny-with-a.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. |
 | T15660 | [Share end card wordmark is broken and Make your own highlights links to prod from staging](tasks/T15660-share-end-card-wordmark-is-broken-and.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. |
 | T15670 | [Journey map in full screen is wider than 1440 px and cuts off the first stages](tasks/T15670-journey-map-in-full-screen-is-wider.md) | 4 | 2 | 2.0 | TODO | [ ] | QA 2026-11-09. T14730 criterion fails. |
 | T15680 | [Visit beacon POST /api/t returns 422 on some page loads](tasks/T15680-visit-beacon-post-api-t-returns-422.md) | 5 | 2 | 2.5 | TODO | [ ] | QA 2026-11-09, possible. Would undercount mobile visits. |
 | T15690 | [Admin Journey controls and map are clipped on mobile and iPad with no scroll](tasks/T15690-admin-journey-controls-and-map-are-clipped.md) | 3 | 2 | 1.5 | TODO | [ ] | QA 2026-11-09. |
-| T15700 | [Games card stats line is missing a label between the dots](tasks/T15700-games-card-stats-line-is-missing-a.md) | 3 | 1 | 3.0 | WIP | [ ] | QA 2026-11-09. |
-| T15710 | [Poster images blocked by CORS and Preflight 403 errors during load bursts](tasks/T15710-poster-images-blocked-by-cors-and-preflight.md) | 4 | 3 | 1.3 | WIP | [ ] | QA 2026-11-09, possible. Seen once each. |
+| T15700 | [Games card stats line is missing a label between the dots](tasks/T15700-games-card-stats-line-is-missing-a.md) | 3 | 1 | 3.0 | STAGING | [ ] | QA 2026-11-09. |
+| T15710 | [Poster images blocked by CORS and Preflight 403 errors during load bursts](tasks/T15710-poster-images-blocked-by-cors-and-preflight.md) | 4 | 3 | 1.3 | TODO | [ ] | QA 2026-11-09, possible. Seen once each. |
 | T15720 | [Safari may fail to load game and clip video on staging (preflight 403, credentials CORS on the R2 redirect)](tasks/T15720-safari-may-fail-to-load-game-and.md) | 9 | 3 | 3.0 | TODO | [ ] | QA 2026-11-09, possible, BLOCKER if real: WebKit video fetch fails on the API-to-R2 redirect. Check on a real iPhone first. |
 | T15730 | [Frame on a play from a game still uploading says Video format not supported and keeps Sharpen enabled](tasks/T15730-frame-on-a-play-from-a-game.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09. Misleading error text on a 409; credits-spending button stays live. |
 | T15740 | [Your highlight is ready toast overlaps the action bar and the chat bubble](tasks/T15740-your-highlight-is-ready-toast-overlaps-the.md) | 3 | 1 | 3.0 | STAGING | [ ] | QA 2026-11-09. |
-| T15750 | [Phone portrait fullscreen with Edit play open shrinks the picture to a 114x64 thumbnail](tasks/T15750-phone-portrait-fullscreen-with-edit-play-open.md) | 4 | 2 | 2.0 | WIP | [ ] | QA 2026-11-09. |
+| T15750 | [Phone portrait fullscreen with Edit play open shrinks the picture to a 114x64 thumbnail](tasks/T15750-phone-portrait-fullscreen-with-edit-play-open.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. |
 | T15760 | [Finished highlight player keeps the URL at /home, so it can't be linked or resumed](tasks/T15760-finished-highlight-player-keeps-the-url-at.md) | 3 | 2 | 1.5 | WIP | [ ] | QA 2026-11-09. |
 
 ### Payment return and campaign attribution lost on arrival (priority, owner-requested 2026-11-05, BUGS FIRST)
@@ -495,10 +495,12 @@ DONE rows live in [PLAN-archive.md](PLAN-archive.md).
 | T15320 | [test_analytics_dashboards.py has pre-existing failures against shared Postgres test state](tasks/T15320-test-analytics-dashboards-py-has-pre.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 | T15390 | [By-sport and action-rollup reads download every analytics shard from R2 on every request (~9.5s)](tasks/T15390-get-api-admin-analytics-by-sport.md) | 5 | 3 | 1.7 | STAGING | [ ] | M-tier, backend. `load_newest_action_rollup` (T7400) LISTs and serially GETs every shard on every request, no cache; shards grow with retired Fly machines. Shared ETag-keyed shard fetcher in analytics_store (moves the Journey reader's cache), concurrent misses, partial semantics kept. |
 | T15790 | [Cold-reopen of /focus/p/<id> from a closed tab still does not load the Frame editor within 10s](tasks/T15790-cold-reopen-of-focus-p-id.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
-| T15920 | [Staging check failed: T15430:C1 In landscape fullscreen Annotate at 844x390, elementFromPoint at Mark's centre](tasks/T15920-staging-check-failed-t15430-c1-in.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T15930 | [Staging check failed: T15550:C1 'Keep marking plays' returns to Annotate with the playhead after](tasks/T15930-staging-check-failed-t15550-c1-keep.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T15940 | [Staging check failed: T15640:C2 Mark play near 0:00 yields a play of the normal](tasks/T15940-staging-check-failed-t15640-c2-mark.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T15920 | [Staging check failed: T15430:C1 In landscape fullscreen Annotate at 844x390, elementFromPoint at Mark's centre](tasks/T15920-staging-check-failed-t15430-c1-in.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T15930 | [Staging check failed: T15550:C1 'Keep marking plays' returns to Annotate with the playhead after](tasks/T15930-staging-check-failed-t15550-c1-keep.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T15940 | [Staging check failed: T15640:C2 Mark play near 0:00 yields a play of the normal](tasks/T15940-staging-check-failed-t15640-c2-mark.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T15950 | [1.5x ETA accuracy half of AC3 is unaddressed and untested](tasks/T15950-1-5x-eta-accuracy-half-of.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
+| T15960 | [Staging check failed: T15750:C1 With Edit play open in portrait fullscreen, the picture is](tasks/T15960-staging-check-failed-t15750-c1-with.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T15970 | [Staging check failed: T15750:C2 Opening Edit play does not start playback.](tasks/T15970-staging-check-failed-t15750-c2-opening.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ## Environment Configuration
 

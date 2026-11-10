@@ -1,6 +1,6 @@
 # T15920: Staging check failed: T15430:C1 In landscape fullscreen Annotate at 844x390, elementFromPoint at Mark's centre
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10
