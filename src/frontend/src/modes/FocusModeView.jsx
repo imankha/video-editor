@@ -42,9 +42,25 @@ import { useExportJobStatus } from '../components/instructions/exportJob';
 // on the un-floored formula, clipping the crop box there too. `max(320px, ...)` only ever
 // raises the computed value, so applying the floor at every `min-width:1024px` height is
 // strictly safe (a no-op once the un-floored formula is already >=320px).
-const SHORT_DESKTOP_MEDIA = '(min-width:1024px)';
-const SHORT_DESKTOP_BOX_HEIGHT_CLASS = `[@media${SHORT_DESKTOP_MEDIA}]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]`;
-const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = `[@media${SHORT_DESKTOP_MEDIA}]:!w-[min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]`;
+// T15650: both classes below MUST spell out `(min-width:1024px)` as a literal (matching
+// AnnotateModeView/OverlayModeView's SHORT_DESKTOP_STAGE_CLASS convention) rather than
+// interpolating a shared `SHORT_DESKTOP_MEDIA` JS constant into the arbitrary-variant bracket
+// -- Tailwind's class scanner reads this file's RAW SOURCE TEXT looking for literal candidate
+// strings, it does not evaluate template-literal substitutions. A `${SHORT_DESKTOP_MEDIA}`
+// placeholder was scanned as those literal characters, generating a selector that can never
+// match the real (substituted) class the DOM actually renders -- so neither the box-height
+// floor below nor the T15650 width floor ever took effect in the browser; the un-floored `lg:`
+// formula silently won every time (confirmed via DOM/CSSOM inspection against the live dev
+// stack, not just reasoning about the string).
+const SHORT_DESKTOP_BOX_HEIGHT_CLASS = '[@media(min-width:1024px)]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]';
+// The 320px floor above is a HEIGHT-proxy, multiplied by `--preview-ar` to get WIDTH -- for a
+// portrait (9:16, ratio 0.5625) output that only floors width at 180px, far below a usable
+// size, once a taller ActionBand (T15400/T15470) shrinks the available-height term enough to
+// hit that floor. Add an explicit WIDTH floor (half the column) so a narrow output aspect
+// can't collapse the preview below a usable size; height still follows via the element's
+// `aspect-ratio` style and any resulting overflow is handled by the existing scroll-fit effect
+// (stageRef useLayoutEffect below), same as any other tall stage box.
+const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar))))]';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -474,12 +490,20 @@ export function FocusModeView({
     }
     let active = true;
     const stop = () => { active = false; };
+    // T15650: the timeline block (trim-guide-scope, incl. its zoom chip) renders as a
+    // SIBLING below this stage, not inside it -- the stage alone clearing the band left
+    // the timeline (and the zoom chip at its top) still sitting behind the band on load,
+    // even though plenty of scroll room existed (the `s.top - c.top` cap below is a header-
+    // room ceiling, not the actual constraint here). Measure the deficit from whichever of
+    // the stage or the timeline block sits lower, so the fit scrolls far enough to clear both.
     const fit = () => {
       if (!active) return;
       const s = stage.getBoundingClientRect();
       const b = band.getBoundingClientRect();
       const c = scroller.getBoundingClientRect();
-      const deficit = s.bottom - b.top + 8;
+      const scope = trimScopeRef.current;
+      const scopeBottom = scope ? scope.getBoundingClientRect().bottom : s.bottom;
+      const deficit = Math.max(s.bottom, scopeBottom) - b.top + 8;
       if (deficit <= 0) return;
       const delta = Math.min(deficit, s.top - c.top);
       const room = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
@@ -492,6 +516,7 @@ export function FocusModeView({
     ro.observe(stage);
     ro.observe(band);
     ro.observe(scroller);
+    if (trimScopeRef.current) ro.observe(trimScopeRef.current);
     const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
     events.forEach((evt) => scroller.addEventListener(evt, stop, { passive: true, once: true }));
     return () => {
