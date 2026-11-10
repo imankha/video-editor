@@ -1,5 +1,5 @@
 import ActionCard from '../components/shared/ActionCard';
-import { forwardRef, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { forwardRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import { parseEditorPath, dropSeekParam } from '../stores/editorStore';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { computeSpotlightReveal } from '../utils/spotlightReveal';
@@ -41,7 +41,11 @@ import {
 // the band up into the video's own flow region). Lowering the floor to 320px ONLY in
 // this media-gated override keeps the tall-viewport fix (T13610) intact while giving
 // the short-viewport case enough headroom that it never needs the 30rem floor's reach.
-const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(max-height:850px)]:!h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] [@media(min-width:1024px)_and_(max-height:850px)]:!max-h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]';
+// T15400: `max-height:850px` left 1440x900 (height 900) on the un-floored formula, which
+// clips the stage bottom under the band there too. The override is `max(320px, ...)` on
+// the SAME formula -- a pure floor that only ever raises the computed height, never
+// lowers it -- so it's safe to apply at every `min-width:1024px` height, not just <=850px.
+const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)]:!h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] [@media(min-width:1024px)]:!max-h-[max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -444,7 +448,20 @@ export function OverlayModeView({
       // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 22rem (T12440; 12rem under-reserved) for
       // header + controls is an estimate (same term as FocusModeView stage cap).
       // T13610: floor raised 20rem -> 30rem; at 1440x900 the 20rem floor won and left a ~180x320 video.
-      `relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] ${SHORT_DESKTOP_STAGE_CLASS}`
+      // T15400: below `lg:` there was NO height cap at all -- a portrait clip's
+      // aspect-ratio-derived height (from `w-full`) could run taller than the
+      // viewport minus the ActionBand, with no scroll able to recover it (the
+      // scroll-fit effect below can only move the box, not shrink it). `max-h`
+      // (not `h`) lets object-contain letterbox a landscape clip instead of
+      // forcing portrait clips taller than they need to be.
+      // T15470: the `-1rem` reserve only left room for the stage itself -- the
+      // Controls row (play/step/timeline) renders directly below it and the
+      // scroll-fit effect can only scroll the HEADER space above the stage away
+      // (scrolling further would crop the stage itself), so on a tall-portrait
+      // clip with little header above it (e.g. iPad portrait 810x1080) Controls
+      // still stuck out under the band with nowhere left to scroll. Reserve is
+      // widened to `-4rem` to leave room for the Controls row too.
+      `relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full max-h-[calc(100dvh-var(--cta-bar-h,0px)-4rem)] lg:w-fit lg:h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] ${SHORT_DESKTOP_STAGE_CLASS}`
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
@@ -540,6 +557,54 @@ export function OverlayModeView({
   // PlayerDetectionOverlay renders them in) -- no static "top 20%" guess
   // blind to the pill's actual size or to obstacles near the bottom.
   const stageRef = useRef(null);
+  // T15400: at a short desktop viewport (e.g. 1366x660) the header content above
+  // the stage plus the sticky ActionBand leave no room for the stage to be fully
+  // visible at scrollTop=0 -- no height floor or padding can fix that, since
+  // it's a space problem, not a sizing problem. Scroll it into view once per
+  // clip load (scroll-margin, set on stageBoxStyle below, keeps it clear of the
+  // band), same pattern as FocusModeView's trim-guide-scope.
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!effectiveOverlayVideoUrl || isFullscreen || mobileFs || !stage) return undefined;
+    const scroller = stage.closest('.overflow-auto');
+    const band = document.querySelector('[data-testid="action-band"]');
+    if (!scroller || !band) {
+      console.warn('[T15400] overlay stage fit: missing scroller or action band');
+      return undefined;
+    }
+    // T15470: Controls (play/step/timeline) render as the stage's NEXT SIBLING in
+    // this same column, below it -- measuring only the stage's own bottom edge let
+    // the stage clear the band while Controls still stuck out underneath it. Measure
+    // against the column (stage + Controls) instead, so Controls' height counts too.
+    const content = stage.parentElement || stage;
+    let active = true;
+    const stop = () => { active = false; };
+    const fit = () => {
+      if (!active) return;
+      const s = stage.getBoundingClientRect();
+      const contentRect = content.getBoundingClientRect();
+      const b = band.getBoundingClientRect();
+      const c = scroller.getBoundingClientRect();
+      const deficit = contentRect.bottom - b.top + 8;
+      if (deficit <= 0) return;
+      const delta = Math.min(deficit, s.top - c.top);
+      const room = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+      if (delta > room) {
+        console.warn('[T15400] overlay stage fit: insufficient scroll room', { delta, room });
+      }
+      scroller.scrollTop += Math.min(delta, room);
+    };
+    const ro = new ResizeObserver(fit);
+    ro.observe(content);
+    ro.observe(band);
+    ro.observe(scroller);
+    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+    events.forEach((evt) => scroller.addEventListener(evt, stop, { passive: true, once: true }));
+    return () => {
+      ro.disconnect();
+      events.forEach((evt) => scroller.removeEventListener(evt, stop));
+    };
+  }, [effectiveOverlayVideoUrl, isFullscreen, mobileFs]);
 
   // Per-marker picked/unpicked flags for the guide's progress dots — the SAME
   // ordering/derivation the quest store's detectionAssignProgress uses

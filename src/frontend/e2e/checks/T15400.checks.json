@@ -1,0 +1,29 @@
+{
+  "task": "T15400",
+  "criteria": [
+    {
+      "id": "T15400:C1",
+      "kind": "browser",
+      "text": "At 1366x660, 1440x900 and 390x664 the Frame video and crop box are fully visible and draggable above the action bar.",
+      "test": "T15400:C1"
+    },
+    {
+      "id": "T15400:C2",
+      "kind": "browser",
+      "text": "Every button of the 'Switch to landscape?' dialog is tappable on iPhone 14 (elementFromPoint at its centre returns the button).",
+      "test": "T15400:C2"
+    },
+    {
+      "id": "T15400:C3",
+      "kind": "browser",
+      "text": "Spotlight/Overlay video and timeline are not clipped by the bar at the same sizes.",
+      "test": "T15400:C3"
+    },
+    {
+      "id": "T15400:C4",
+      "kind": "browser",
+      "text": "Spotlight transport buttons (Play highlight, Play spotlight, step) pass a hit test at 1440x900 and 1366x660.",
+      "test": "T15400:C4"
+    }
+  ]
+}

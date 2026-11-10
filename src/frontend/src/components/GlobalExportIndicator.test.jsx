@@ -51,6 +51,7 @@ afterEach(() => {
   cleanup();
   useExportStore.getState().reset();
   vi.useRealTimers();
+  localStorage.clear();
 });
 
 describe('getExportLabel — no internal ids, ever (T8510)', () => {
@@ -519,6 +520,57 @@ describe('completion toast still fires outside the open Focus project (T11970)',
     const { EDITOR_MODES } = await import('../stores/editorStore');
     const spy = await completeWith({ selectedProjectId: 7, exportId: 'export_pos_b', editorMode: EDITOR_MODES.PROJECT_MANAGER });
     expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+});
+
+describe('GlobalExportIndicator — a dismissed completion toast stays dismissed after reload (T15740)', () => {
+  it('does not re-toast an export the user already dismissed, on a fresh mount', async () => {
+    const { toast } = await import('./shared');
+    const { rememberDismissedExportToast } = await import('../utils/dismissedExportToasts');
+    rememberDismissedExportToast('export_dismissed_1');
+    const spy = vi.spyOn(toast, 'success').mockImplementation(() => {});
+
+    render(<GlobalExportIndicator />);
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_dismissed_1: {
+            ...makeExport({ exportId: 'export_dismissed_1', projectId: 50 }),
+            status: 'complete',
+            completedAt: new Date(NOW).toISOString(),
+          },
+        },
+      });
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('passes an onDismiss that persists the export id, so a later fresh mount skips it', async () => {
+    const { toast } = await import('./shared');
+    const { readDismissedExportToastIds } = await import('../utils/dismissedExportToasts');
+    const spy = vi.spyOn(toast, 'success').mockImplementation(() => {});
+
+    render(<GlobalExportIndicator />);
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_dismissed_2: {
+            ...makeExport({ exportId: 'export_dismissed_2', projectId: 51 }),
+            status: 'complete',
+            completedAt: new Date(NOW).toISOString(),
+          },
+        },
+      });
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const options = spy.mock.calls[0][1];
+    expect(typeof options.onDismiss).toBe('function');
+    options.onDismiss();
+    expect(readDismissedExportToastIds().has('export_dismissed_2')).toBe(true);
     spy.mockRestore();
   });
 });

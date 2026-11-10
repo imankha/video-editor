@@ -122,20 +122,26 @@ describe('FocusModeView short-desktop viewport floor (T14850)', () => {
   // A media-gated `!`-important override floors both the box state (explicit height)
   // and the preview state (width, which derives height via aspect-ratio) at 320px,
   // without touching the existing lg: formula tall viewports still rely on.
-  it('T14850:C1 floors the box-state height at 320px below 850px viewport height', () => {
+  // T15400: widened from `(min-width:1024px)_and_(max-height:850px)` -- the floor is a
+  // pure `max(320px, ...)` on the same formula, so it's safe (a no-op once already
+  // >=320px) at every `min-width:1024px` height, not just short ones. This closed the
+  // gap at 1440x900 (height 900, previously past the 850px ceiling and still clipped).
+  it('T14850/T15400:C1 floors the box-state height at 320px at every min-width:1024px height', () => {
     renderView();
     const stage = screen.getByTestId('focus-video-stage');
     expect(stage.className).toContain(
-      '[@media(min-width:1024px)_and_(max-height:850px)]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
+      '[@media(min-width:1024px)]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]',
     );
   });
 
-  it('T14850:C1 floors the preview-state derived width at 320px-equivalent below 850px viewport height', () => {
+  // T15650: widened with an outer `max(50%, ...)` floor -- the plain 320px-equivalent
+  // floor still let the preview shrink to a sliver on a wide/short desktop viewport.
+  it('T14850/T15400/T15650:C1 floors the preview-state derived width at 320px-equivalent, and at 50% of the column, at every min-width:1024px height', () => {
     renderView({ globalAspectRatio: '9:16' });
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
     const stage = screen.getByTestId('focus-video-stage');
     expect(stage.className).toContain(
-      '[@media(min-width:1024px)_and_(max-height:850px)]:!w-[min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]',
+      '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar))))]',
     );
   });
 });

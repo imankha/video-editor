@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { RectangleVertical, RectangleHorizontal, ArrowLeftRight } from 'lucide-react';
 import { RATIO, RATIO_ORDER, ratioLabel } from '../../constants/aspectRatios';
 import { ANNOTATE } from '../../config/displayNames';
 import { useGuidePulse } from '../../components/instructions/GuideScope';
 import { GUIDE_PULSE } from '../../components/instructions/guideTargets';
+import { Z } from '../../constants/zLayers';
 
 const OPTION_HINT = {
   [RATIO.PORTRAIT]: ANNOTATE.SHARE_WHERE_PORTRAIT_HINT,
@@ -61,8 +63,17 @@ export default function FrameShapeChoice({ aspectRatio, hasPositions, onChange, 
           {ratioLabel(aspectRatio)}
           <ArrowLeftRight size={13} aria-hidden="true" />
         </button>
-        {pendingRatio && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        {pendingRatio && createPortal(
+          // T15400: this backdrop used to render INLINE (not portaled). Its ancestor (the
+          // Focus "Main Editor Area" wrapper) carries `backdrop-blur-lg` whenever this modal
+          // can render, and a `backdrop-filter` on an ancestor establishes the containing
+          // block for a `position:fixed` descendant (same rule as `transform`/`filter`) --
+          // so the "fixed inset-0" backdrop was clipped to that ancestor's box instead of the
+          // real viewport, leaving it short of the sticky ActionBand on a short viewport and
+          // letting taps fall through to the band underneath. Portaling to document.body
+          // (the project's standard pattern for modals, e.g. BuyCreditsModal) guarantees it
+          // always covers the real viewport regardless of any ancestor's CSS.
+          <div className={`fixed inset-0 ${Z.MODAL} flex items-center justify-center bg-black/60 backdrop-blur-sm`}>
             <div data-testid="focus-shape-switch-confirm" className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-sm mx-4 p-6">
               <h3 className="text-base font-semibold text-white">{ANNOTATE.switchShapeTitle(ratioLabel(pendingRatio))}</h3>
               <p className="text-sm text-gray-400 mt-1">{ANNOTATE.SWITCH_SHAPE_BODY}</p>
@@ -85,7 +96,8 @@ export default function FrameShapeChoice({ aspectRatio, hasPositions, onChange, 
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     );

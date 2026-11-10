@@ -90,7 +90,11 @@ export const toast = {
 function ToastItem({ toast, onDismiss }) {
   const [isExiting, setIsExiting] = useState(false);
 
+  // T15740: onDismiss fires here because handleDismiss is only ever reached via a real
+  // click/X gesture below -- the store's auto-dismiss timeout calls removeToast directly
+  // and never routes through this component, so a timed-out toast is never "remembered".
   const handleDismiss = () => {
+    toast.onDismiss?.();
     setIsExiting(true);
     setTimeout(() => onDismiss(toast.id), 200);
   };

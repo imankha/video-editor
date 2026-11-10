@@ -49,4 +49,15 @@ describe('T11950 corner stack', () => {
     render(<GuidanceToggle />);
     expect(screen.getByTestId('guidance-toggle').className).toMatch(/min-h-11/);
   });
+
+  // T15740: a static `bottom-20` cleared an ordinary action band, but Focus's short-
+  // desktop "above" row (Trim/SlowMo) can push the band well past 80px tall -- the
+  // stack must track the band's REAL published height (--cta-bar-h), not a guess.
+  // Real-browser geometry evidence: e2e/checks/T15740.check.spec.js.
+  it('offsets the corner stack by the live --cta-bar-h, not a static guess (T15740)', () => {
+    render(<CornerStack><button data-testid="report">Report</button></CornerStack>);
+    const stack = screen.getByTestId('corner-stack');
+    expect(stack.className).toContain('bottom-[calc(var(--cta-bar-h,0px)+1rem)]');
+    expect(stack.className).toContain('lg:bottom-[calc(var(--cta-bar-h,0px)+5rem)]');
+  });
 });
