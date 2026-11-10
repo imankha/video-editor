@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { SourceExpiredPanel } from './SourceExpiredPanel';
+import { SourceUploadingPanel } from './SourceUploadingPanel';
 import { useVideoStore } from '../stores/videoStore';
 import { useGuidePulse } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
@@ -62,6 +63,11 @@ export function VideoPlayer({
   // retry loop (bug 50p). Shared by Focus and Overlay.
   isSourceExpired = false,
   canExtendSource = false,
+  // T15730: when true, the source game video hasn't finished uploading yet
+  // (backend 409 `source_uploading`). Render a deliberate uploading panel
+  // instead of mounting a <video> against a dead URL -- same rationale as
+  // isSourceExpired above.
+  isSourceUploading = false,
   isUrlExpiredError = () => false,
   onRetryVideo,
   onVideoClick,
@@ -216,6 +222,10 @@ export function VideoPlayer({
       {isSourceExpired ? (
         <SourceExpiredPanel
           canExtend={canExtendSource}
+          className={isFullscreen ? 'w-full h-full' : fitToAspect ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'}
+        />
+      ) : isSourceUploading ? (
+        <SourceUploadingPanel
           className={isFullscreen ? 'w-full h-full' : fitToAspect ? 'w-full h-full' : 'h-[40vh] sm:h-[60vh]'}
         />
       ) : videoUrl ? (

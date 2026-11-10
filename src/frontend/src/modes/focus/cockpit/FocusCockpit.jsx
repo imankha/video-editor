@@ -44,6 +44,8 @@ export default function FocusCockpit({
   zoom, panOffset, onZoomByWheel, onPanChange, selectedCropKeyframeIndex,
   isLoading, isProjectLoading, isVideoElementLoading, loadingProgress,
   loadingElapsedSeconds, loadingStage, error, isSourceExpired, canExtendSource,
+  // T15730: still-uploading source game -- mirrors isSourceExpired, see FocusModeView.jsx.
+  isSourceUploading = false,
   isUrlExpiredError, onRetryVideo,
   clipTitle, clipGameName, selectedClipEffectiveDuration, globalAspectRatio,
   // Transport
@@ -275,6 +277,7 @@ export default function FocusCockpit({
             error={error}
             isSourceExpired={isSourceExpired}
             canExtendSource={canExtendSource}
+            isSourceUploading={isSourceUploading}
             isUrlExpiredError={isUrlExpiredError}
             onRetryVideo={onRetryVideo}
             loadingMessage={
