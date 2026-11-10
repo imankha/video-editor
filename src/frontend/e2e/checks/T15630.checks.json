@@ -1,0 +1,11 @@
+{
+  "task": "T15630",
+  "criteria": [
+    {
+      "id": "T15630:C1",
+      "kind": "browser",
+      "text": "The sport is asked at most once per game, and a skip is remembered for that game.",
+      "test": "T15630:C1 - sport question is not re-asked after a reload once skipped for a game"
+    }
+  ]
+}

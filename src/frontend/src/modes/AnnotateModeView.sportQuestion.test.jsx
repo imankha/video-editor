@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * T8140 — the full-screen "What sport is this?" question is wired to a MOBILE
@@ -131,5 +131,36 @@ describe('AnnotateModeView — first-tap sport question (T8140, T10610)', () => 
     renderView({ annotateSelectedRegionId: 'r1', clipRegions: [{ id: 'r1' }] });
     fireEvent.click(screen.getByTestId('stub-add-clip'));
     expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
+  });
+});
+
+describe('AnnotateModeView — sport question remembers a skip per game (T15630)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('does not re-ask after a remount (new mount of the same game) once skipped', () => {
+    const { unmount } = renderView({ gameId: 42 });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(screen.getByRole('dialog', { name: 'What sport is this?' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    unmount();
+
+    // Simulate the user leaving Annotate and coming back (new mount, e.g. after
+    // navigating away or a page reload) for the SAME game.
+    renderView({ gameId: 42 });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
+  });
+
+  it('still asks for a DIFFERENT game after being skipped on another', () => {
+    const { unmount } = renderView({ gameId: 42 });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    unmount();
+
+    renderView({ gameId: 99 });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(screen.getByRole('dialog', { name: 'What sport is this?' })).toBeTruthy();
   });
 });

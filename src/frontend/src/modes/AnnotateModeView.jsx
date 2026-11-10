@@ -108,6 +108,29 @@ const STAGE_UNKNOWN_DIMS_CLASS = `h-[40vh] sm:h-[60vh] ${SHORT_DESKTOP_STAGE_CLA
 // No region at the playhead means no badge; a region with no rating shows as Good.
 const annotatePlaybackRating = (region) => (region ? displayRating(region.rating) : null);
 
+// T15630: per-game, per-device dismissal of the "What sport is this?" question
+// (see the sportPromptDismissedForGame state below for the full rationale).
+const SPORT_PROMPT_DISMISSED_KEY_PREFIX = 'rb.annotate.sportPromptDismissed.';
+
+function readSportPromptDismissed(gameId) {
+  if (gameId == null) return false;
+  try {
+    return localStorage.getItem(`${SPORT_PROMPT_DISMISSED_KEY_PREFIX}${gameId}`) === '1';
+  } catch {
+    // Private-mode / storage-disabled: treat as not-yet-dismissed, never throw.
+    return false;
+  }
+}
+
+function writeSportPromptDismissed(gameId) {
+  if (gameId == null) return;
+  try {
+    localStorage.setItem(`${SPORT_PROMPT_DISMISSED_KEY_PREFIX}${gameId}`, '1');
+  } catch {
+    // Persist is best-effort; a failed write just means it reappears later.
+  }
+}
+
 export function AnnotateModeView({
   // Video control
   videoController,
@@ -524,7 +547,7 @@ export function AnnotateModeView({
     onSeekBackward: seekBackward,
   });
 
-  // Full-screen "What sport is this?" question, shown once per session at a
+  // Full-screen "What sport is this?" question, shown at most once PER GAME at a
   // MOBILE user's first Mark-play tap while their profile is still no_sport.
   // Desktop keeps the in-form picker (it also has the top-bar sport control),
   // so the question is mobile-only — no double prompt. The answer persists
@@ -536,19 +559,30 @@ export function AnnotateModeView({
   // on "about to create" (no region selected, editor not already open) —
   // the same tap edits an existing SELECTED clip instead, which must never
   // trigger this first-clip question.
+  // T15630: a skip must be remembered PER GAME, surviving a remount (leaving
+  // Annotate and coming back, or a reload) — an in-memory ref reset on every
+  // mount, re-asking the question on every return visit. This is a per-device
+  // UI dismissal, not user data (never synced, same narrow exception as
+  // RotateNudge's `rb.focus.rotateNudgeDismissed`, T10850/D14): localStorage,
+  // read lazily, written only by the Pick/Skip gesture itself.
   const currentProfile = useCurrentProfile();
   const currentSport = currentProfile?.sport || NO_SPORT;
   const updateProfile = useProfileStore(state => state.updateProfile);
   const [sportQuestionOpen, setSportQuestionOpen] = useState(false);
-  const sportAskedRef = useRef(false);
+  const [sportPromptDismissedForGame, setSportPromptDismissedForGame] = useState(
+    () => readSportPromptDismissed(gameId)
+  );
   const handleAddClipWithSportPrompt = useCallback(() => {
     const aboutToCreate = !annotateSelectedRegionId && !showAnnotateOverlay;
     onAddClip();
-    if (aboutToCreate && isMobile && currentSport === NO_SPORT && !sportAskedRef.current) {
-      sportAskedRef.current = true;
+    if (aboutToCreate && isMobile && currentSport === NO_SPORT && !sportPromptDismissedForGame) {
       setSportQuestionOpen(true);
     }
-  }, [onAddClip, annotateSelectedRegionId, showAnnotateOverlay, isMobile, currentSport]);
+  }, [onAddClip, annotateSelectedRegionId, showAnnotateOverlay, isMobile, currentSport, sportPromptDismissedForGame]);
+  const dismissSportPromptForGame = useCallback(() => {
+    setSportPromptDismissedForGame(true);
+    writeSportPromptDismissed(gameId);
+  }, [gameId]);
 
   // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
   const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
@@ -1440,9 +1474,13 @@ export function AnnotateModeView({
           <SportQuestionOverlay
             onPick={(s) => {
               if (currentProfile?.id) updateProfile(currentProfile.id, { sport: s }).catch(() => {});
+              dismissSportPromptForGame();
               setSportQuestionOpen(false);
             }}
-            onSkip={() => setSportQuestionOpen(false)}
+            onSkip={() => {
+              dismissSportPromptForGame();
+              setSportQuestionOpen(false);
+            }}
           />
         )}
 
