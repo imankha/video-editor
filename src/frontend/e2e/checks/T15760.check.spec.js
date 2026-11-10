@@ -7,7 +7,13 @@ import { waitForAppReady } from '../helpers/appReady.js';
  * same highlight. Bug: opening a finished reel from the Published tab (Home) never
  * touched the URL, which stayed at /home -- it could not be linked or resumed.
  */
-test.setTimeout(120000);
+// T15760 fix round 1: the cold `page.goto(playedPath)` below is a full page
+// reload -- it re-runs the entire bootstrap sequence (session init, profile
+// ready, /api/bootstrap, cache warming, etc), which this stack has been
+// observed to take 60-170s wall-clock under load (SLOW FETCH warnings on
+// nearly every request). 90s/240s matches every other check in this
+// directory that reloads the app cold (e.g. T15550, T15360, T15430, T15640).
+test.setTimeout(240000);
 
 test.describe('T15760 finished highlight player keeps a deep-linkable URL', () => {
   test('T15760:C1 Play updates the URL, Close restores it, and reopening the URL cold-loads the player', async ({ context, page }) => {
@@ -36,7 +42,7 @@ test.describe('T15760 finished highlight player keeps a deep-linkable URL', () =
     // The user can't be linked to or resume a play without copying this exact URL and
     // reopening it cold -- reproduce that directly instead of inferring it from in-app state.
     await page.goto(playedPath);
-    await expect(page.getByTestId('player-close')).toBeVisible({ timeout: 60000 });
+    await expect(page.getByTestId('player-close')).toBeVisible({ timeout: 150000 });
     await expect.poll(() => new URL(page.url()).pathname, { timeout: 15000 }).toBe(playedPath);
   });
 });
