@@ -1628,9 +1628,13 @@ def review_checks(slug, group, checkout, head, round_number, wanted, results, bu
             timed_out = True
             break
         # A transport failure (g-t15220-10, 2026-11-07: ENOTFOUND 7 minutes in) says nothing about the code.
-        if finished or "outcome=error" not in last_status(checkout) or tracked_changes(checkout):
+        # A reviewer that wrote a BLOCKED status line instead of a verdict file also gets another go:
+        # g-t15440-4 (2026-11-10) stopped the whole group that way, though the BLOCKED text itself named
+        # two real failing criteria that the next review would have recorded as a verdict.
+        retryable = "outcome=error" in last_status(checkout) or " BLOCKED " in last_status(checkout)
+        if finished or not retryable or tracked_changes(checkout):
             break
-        print(f"[dotask] reviewer dispatch errored (attempt {attempt + 1}); retrying", file=sys.stderr)
+        print(f"[dotask] reviewer dispatch errored or wrote BLOCKED (attempt {attempt + 1}); retrying", file=sys.stderr)
     ran_out = not finished and not timed_out and out_of_turns(checkout)
     noise, changed = split_tool_noise(tracked_changes(checkout))
     restore_tool_noise(checkout, noise)

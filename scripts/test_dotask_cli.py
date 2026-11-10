@@ -1604,6 +1604,23 @@ class AutolandTest(AutolandBase):
         self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C1", "T1:C2"])
         self.assertIn("VERIFY_SKIPPED round 1 review: reviewer ran out of turns", self.status.read_text())
 
+    def test_a_reviewer_that_writes_blocked_instead_of_a_verdict_is_given_another_go(self):
+        # g-t15440-4 (2026-11-10): the reviewer appended BLOCKED naming two failing criteria and wrote no
+        # verdict file, which stopped the whole group as VERIFY_BLOCKED.
+        original, calls = self._dispatch, []
+        self.verdicts = [self._verdict()]  # the one verdict this round's second reviewer attempt serves
+
+        def dispatch(slug, group, phase, instruction, task_ids=None, **_kw):
+            calls.append(phase)
+            if len(calls) == 1:
+                dotask_cli.append_status(self.checkout, "BLOCKED verify round 1 found failing criteria: T1:C1")
+                return False
+            return original(slug, group, phase, instruction)
+        with patch.object(dotask_cli, "dispatch", dispatch):
+            self.assertEqual(self._run(no_land=True), 0)
+        self.assertEqual(calls, ["qa", "qa"])
+        self.assertNotIn("VERIFY_BLOCKED", self.status.read_text())
+
     def test_a_failed_or_missing_check_fails_whatever_the_reviewer_says(self):
         self.check_status = {"T1:C1": "fail", "T1:C2": "missing"}
         recheck = self._verdict()
