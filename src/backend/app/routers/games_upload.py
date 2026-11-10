@@ -1185,7 +1185,16 @@ def list_pending_uploads():
     Used by frontend to detect and resume interrupted uploads.
     Validates each R2 session and auto-cleans stale ones.
     """
-    user_id = get_current_user_id()
+    return reap_abandoned_pending_uploads(get_current_user_id())
+
+
+def reap_abandoned_pending_uploads(user_id: str) -> dict:
+    """T15770: the reap half of list_pending_uploads, factored out so it can also
+    run from the login bootstrap path (auth.py /me), not only when the user
+    reopens the upload surface -- a user who never comes back to Add Game
+    otherwise never produces the terminal user_abandoned row (T15770 mechanism
+    1). Same per-profile JIT seam either way; the caller just supplies user_id.
+    Returns the same shape as the route ({'pending_uploads': [...]})."""
     reaped_rows = []  # T10270: one entry per reaped upload -- (kind, blake3_hash, session_id)
     with get_db_connection() as conn:
         cursor = conn.cursor()

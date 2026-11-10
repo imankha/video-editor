@@ -2675,11 +2675,13 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
         row = rows.get(ar["grp"])
         if row is None:
             continue
-        outcome = uploads.setdefault(ar["grp"], {"succeeded": 0, "failed": 0})
+        outcome = uploads.setdefault(ar["grp"], {"succeeded": 0, "failed": 0, "attempted": 0})
         if ar["action"] == "game_upload_succeeded":
             outcome["succeeded"] += ar["occurrences"]
         elif ar["action"].startswith("game_upload_failed:"):
             outcome["failed"] += ar["occurrences"]
+        elif ar["action"] == "game_upload_attempted":
+            outcome["attempted"] += ar["occurrences"]
         if ar["action"] in DIMENSION_STEPS:
             key = FLOW_EVENTS[ar["action"]]["label"].lower().replace(" ", "_") + "_pct"
             row[key] = round(ar["users"] / row["signups"] * 100, 2) if row["signups"] else 0
@@ -2691,9 +2693,16 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
             row.setdefault(count_key, 0)
         for step in DIMENSION_STEPS:
             row.setdefault(FLOW_EVENTS[step]["label"].lower().replace(" ", "_") + "_pct", 0)
-        outcome = uploads.get(grp, {"succeeded": 0, "failed": 0})
-        attempts = outcome["succeeded"] + outcome["failed"]
+        outcome = uploads.get(grp, {"succeeded": 0, "failed": 0, "attempted": 0})
+        # T15770: the denominator is every ATTEMPT (game_upload_attempted occurrences),
+        # not just the ones that got an outcome -- an attempt that stalled with no
+        # success/failure row (abandoned tab, dead client) used to count toward
+        # NEITHER side and vanish from the rate entirely (build-7102: 4 of 12
+        # uploaders). `attempted` is the honest denominator; outcome["succeeded"] +
+        # outcome["failed"] can be less than it, and that gap is the no-outcome count.
+        attempts = outcome["attempted"]
         row["upload_success_pct"] = round(outcome["succeeded"] / attempts * 100, 2) if attempts else None
+        row["upload_no_outcome"] = max(0, attempts - outcome["succeeded"] - outcome["failed"])
     return rows
 
 
@@ -3195,6 +3204,23 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_
         )
     elif user_filter == "was_invited":
         where_parts.append("s.referrer_id IS NOT NULL")
+    elif user_filter == "upload_no_outcome":
+        # T15770: attempted at least one upload (game_upload_attempted) more times
+        # than it has a recorded outcome (succeeded or any failed reason) -- the
+        # build-7102 shape (4 of 12 uploaders) that the plain success-rate denominator
+        # used to hide entirely. Per-user, correlated: no GROUP BY at the users
+        # query's grain, so this has to self-contain its own aggregation.
+        where_parts.append(f"""
+            EXISTS (
+                SELECT 1 FROM user_actions att
+                WHERE att.user_id = {user_alias}.user_id AND att.action = 'game_upload_attempted'
+                AND att.count > COALESCE((
+                    SELECT SUM(o.count) FROM user_actions o
+                    WHERE o.user_id = att.user_id
+                      AND (o.action = 'game_upload_succeeded' OR o.action LIKE 'game_upload_failed:%%')
+                ), 0)
+            )
+        """)
     return where_parts, params
 
 
