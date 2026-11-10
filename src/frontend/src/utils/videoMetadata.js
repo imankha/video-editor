@@ -488,8 +488,15 @@ export async function extractVideoMetadata(videoSource) {
 
     // Set timeout for loading - longer timeout for large blobs
     const timeoutMs = Math.max(30000, (videoSource.size || 0) / 500000 * 1000); // 30s min, +1s per 500KB
+    // T15440: a stalled mobile/iPad WebKit decode can sit at a NONZERO readyState
+    // without ever firing onloadedmetadata/onerror (never reaching HAVE_METADATA).
+    // The old `readyState === 0` guard let that case skip the timeout entirely,
+    // so the promise never settled and the caller (the Upload game modal) hung
+    // forever with no progress and no message. Reject unconditionally once the
+    // deadline passes if neither handler has already settled the promise.
+    let settled = false;
     const timeoutId = setTimeout(() => {
-      if (video.readyState === 0) {
+      if (!settled) {
         console.warn('[videoMetadata] Timeout waiting for metadata, readyState:', video.readyState, 'size:', videoSource.size);
         cleanup();
         reject(new Error('Video metadata loading timed out'));
@@ -497,6 +504,7 @@ export async function extractVideoMetadata(videoSource) {
     }, timeoutMs);
 
     video.onloadedmetadata = () => {
+      settled = true;
       clearTimeout(timeoutId);
 
       // Extract all available metadata from the video element
@@ -544,6 +552,7 @@ export async function extractVideoMetadata(videoSource) {
     };
 
     video.onerror = (e) => {
+      settled = true;
       clearTimeout(timeoutId);
       console.error('[videoMetadata] Video load error:', e);
       cleanup();

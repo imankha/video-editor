@@ -33,6 +33,7 @@ import re
 import threading
 import time
 from collections import defaultdict
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 import psycopg2
@@ -303,6 +304,25 @@ def _get_user_write_lock(user_id: str) -> asyncio.Lock:
             lock = asyncio.Lock()
             _USER_WRITE_LOCKS[user_id] = lock
         return lock
+
+
+# T15590: the hook a LAZY_WRITE_LOCK_ROUTES handler calls (via acquire_write_lock(),
+# below) to take the per-user write lock itself, right before its own brief SQLite
+# write. A plain ContextVar, not request.state: set once in dispatch() before
+# call_next() ever runs, so it's visible inside the handler's copied context
+# (Starlette's BaseHTTPMiddleware task-copy only needs to see values set BEFORE the
+# copy, never the other direction) without changing every route's signature to add
+# a Request param. None outside a request (direct unit-test calls to a route
+# function) -- acquire_write_lock() is then a no-op, matching those callers having
+# no concurrent sibling request to race anyway.
+_write_lock_hook: ContextVar[object] = ContextVar('write_lock_hook', default=None)
+
+
+async def acquire_write_lock() -> None:
+    """Called by a LAZY_WRITE_LOCK_ROUTES handler right before its own write."""
+    hook = _write_lock_hook.get()
+    if hook is not None:
+        await hook()
 
 
 @contextlib.asynccontextmanager
@@ -724,6 +744,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         'PATCH /api/games/upload/{session_id}/parts',
     })
 
+    # T15590: routes whose slow work (R2 multipart-complete/HEAD, ffprobe) does
+    # NOT touch this user's db-version, so the per-user write lock (T1531) is
+    # only needed around their brief SQLite write, not the whole handler. These
+    # routes call `await db_sync.acquire_write_lock()` themselves, right
+    # before that write, instead of having the lock taken up front like every
+    # other write route. Measured: two concurrent finishes of two DIFFERENT
+    # uploads for one user took ~2x a lone finish because both the R2 game-file
+    # calls AND the brief db write sat behind one lock held for the whole handler.
+    LAZY_WRITE_LOCK_ROUTES = frozenset({
+        'POST /api/games/finalize-upload',
+        'POST /api/games/{game_id}/activate',
+    })
+
     # T450: Routes that work WITHOUT prior user context (they establish it).
     # These get passed through even when no session cookie or X-User-ID is present.
     AUTH_ALLOWLIST_PREFIXES = (
@@ -1131,14 +1164,37 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # T15150: a durable route releases the lock before awaiting its R2 sync
             # (release_write_lock), so the hold covers the handler and the sync-attempt
             # registration, never the upload. A second aclose() is a no-op.
+            # T15590: a LAZY_WRITE_LOCK_ROUTES route defers acquiring the lock at all --
+            # it calls db_sync.acquire_write_lock() itself (via the _write_lock_hook
+            # ContextVar), right before its own brief SQLite write, so the slow
+            # R2/ffprobe work ahead of that write runs unlocked. lock_acquired stays
+            # False (and later code's release_write_lock stays a no-op) if the
+            # handler never reaches a write.
             write_lock = contextlib.AsyncExitStack()
+            write_lock_hook_token = None
             async with write_lock:
-                await write_lock.enter_async_context(
-                    _maybe_write_lock(user_id, request.method, request.url.path, req_id))
-                response = await self._sync_aware_flow(
-                    request, call_next, meta, user_id, req_id, profile_id=profile_id,
-                    release_write_lock=write_lock.aclose,
-                )
+                lock_acquired = False
+
+                async def _acquire_write_lock() -> None:
+                    nonlocal lock_acquired
+                    if lock_acquired:
+                        return
+                    await write_lock.enter_async_context(
+                        _maybe_write_lock(user_id, request.method, request.url.path, req_id))
+                    lock_acquired = True
+
+                if meta["route_label"] in self.LAZY_WRITE_LOCK_ROUTES:
+                    write_lock_hook_token = _write_lock_hook.set(_acquire_write_lock)
+                else:
+                    await _acquire_write_lock()
+                try:
+                    response = await self._sync_aware_flow(
+                        request, call_next, meta, user_id, req_id, profile_id=profile_id,
+                        release_write_lock=write_lock.aclose,
+                    )
+                finally:
+                    if write_lock_hook_token is not None:
+                        _write_lock_hook.reset(write_lock_hook_token)
                 if should_set_machine_cookie:
                     _set_machine_cookie(response)
                 return response

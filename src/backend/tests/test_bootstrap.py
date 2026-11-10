@@ -116,11 +116,13 @@ class TestBootstrapContract:
         """T10250: the client mirrors the clip-upload caps for its pre-flight size
         check. The numbers must be the single backend constants, not literals, so
         no `500` ever lives client-side."""
-        from app.constants import MAX_CLIP_UPLOAD_BYTES, MAX_CLIP_DURATION_S
+        from app.constants import MAX_CLIP_DURATION_S, MAX_CLIP_UPLOAD_BYTES, MAX_FILE_SIZE
         data = _run_bootstrap()
         assert data["upload_limits"] == {
             "max_clip_upload_bytes": MAX_CLIP_UPLOAD_BYTES,
             "max_clip_duration_s": MAX_CLIP_DURATION_S,
+            # T15780: same pattern for the game-upload cap.
+            "max_game_upload_bytes": MAX_FILE_SIZE,
         }
 
     def test_user_scoped_read_runs_in_thread_with_context(self):

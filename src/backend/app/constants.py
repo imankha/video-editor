@@ -283,6 +283,12 @@ class UploadKind(str, Enum):
 MAX_CLIP_UPLOAD_BYTES = 500 * 1024 * 1024  # 500MB
 MAX_CLIP_DURATION_S = 600  # 10 minutes — enforced at probe time (clips.py batch endpoint)
 
+# T15780: the game-upload size cap. Lives here (not games_upload.py) so
+# bootstrap.py can mirror it to the client for a pre-flight check the same
+# way it already mirrors MAX_CLIP_UPLOAD_BYTES above, without a cross-router
+# import.
+MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB
+
 
 class GameStatus(str, Enum):
     """Lifecycle status for a game record.

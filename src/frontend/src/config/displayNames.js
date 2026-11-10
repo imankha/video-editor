@@ -1429,6 +1429,11 @@ export const UPLOAD = {
   NO_VIDEO_STEPS_LINK: 'See the steps for your camera',
   NO_VIDEO_SWITCH: 'Upload a play instead',
   NO_VIDEO_OTHER_DEVICE: 'On another device? Open reelballers.com there. Your account is the same.',
+  // T15780: game-upload over-cap pre-flight (mirrors the server's
+  // configStore.maxGameUploadBytes, so no `10` literal lives here). Names the
+  // limit and a next step the parent can act on immediately.
+  fileTooLargeBody: (gb) =>
+    `This video is over our ${gb}GB limit. Trim it or split it into shorter games, then try again.`,
 };
 
 // Retention, stated as the three distinct outcomes confirmed in the T9680

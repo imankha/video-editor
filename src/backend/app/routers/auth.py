@@ -602,6 +602,14 @@ async def auth_me(request: Request):
             await asyncio.to_thread(update_session, user_id, is_pwa=is_pwa)
         except Exception:
             logger.exception(f"[Auth] /me: update_session failed for user={user_id} (ignored)")
+        try:
+            # T15770: reap this user's abandoned pending_uploads (the terminal
+            # user_abandoned row) on login, not only when they reopen Add Game --
+            # a user who never comes back otherwise leaves the attempt invisible.
+            from app.routers.games_upload import reap_abandoned_pending_uploads
+            await asyncio.to_thread(reap_abandoned_pending_uploads, user_id)
+        except Exception:
+            logger.exception(f"[Auth] /me: pending-upload reap failed for user={user_id} (ignored)")
 
     _me_task = asyncio.create_task(_background_writes(), name=f"auth-me-writes-{user_id}")
     _background_tasks.add(_me_task)

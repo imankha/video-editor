@@ -3,10 +3,12 @@ import { formatFileSize } from '../utils/fileValidation';
 import { Upload } from 'lucide-react';
 import { toast } from './shared';
 import { expandClipZips, isZipFile } from '../utils/zipClips';
-import { ZIP_CLIPS } from '../config/displayNames';
+import { UPLOAD, ZIP_CLIPS } from '../config/displayNames';
 import { useFootageIntake } from '../hooks/useFootageIntake';
 import { pairProxies, isJunkFile } from '../utils/footageIntake';
 import { FootageList } from './FootageList';
+import { useConfigStore } from '../stores/configStore';
+import { UPLOAD_KIND, sendUploadFailureBeacon } from '../services/uploadManager';
 import {
   entriesFromDataTransfer,
   hasDirectoryEntry,
@@ -77,6 +79,10 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
   // T13247: one line per zip that gave nothing / entry skipped while unzipping.
   const [zipMessages, setZipMessages] = useState([]);
   const [isUnzipping, setIsUnzipping] = useState(false);
+  // T15780: a file over the server cap never enters the hash/upload pipeline,
+  // mirroring the T10250 clip-cap pre-flight (ProjectManager.startClipUpload).
+  const [oversizeMessage, setOversizeMessage] = useState(null);
+  const maxGameUploadBytes = useConfigStore((s) => s.maxGameUploadBytes);
   // Zips are accepted only where the parent handles a Veo zip (Add footage, Upload game).
   const acceptsZip = !!onVeoZip;
   const fileInputRef = useRef(null);
@@ -129,6 +135,31 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       } else {
         setZipMessages([]);
       }
+
+      // T15780 pre-flight: a file over the server game cap never enters the
+      // hash/upload pipeline — refuse it here, before any probe or hash.
+      // Skipped while the cap is unknown (bootstrap not yet resolved) so the
+      // server stays the fallback authority, never a hardcoded number.
+      setOversizeMessage(null);
+      if (maxGameUploadBytes) {
+        const oversize = list.filter((f) => f.size > maxGameUploadBytes);
+        if (oversize.length > 0) {
+          list = list.filter((f) => f.size <= maxGameUploadBytes);
+          setOversizeMessage(UPLOAD.fileTooLargeBody(Math.floor(maxGameUploadBytes / (1024 ** 3))));
+          for (const f of oversize) {
+            sendUploadFailureBeacon({
+              phase: 'preparing',
+              reason: 'size_over_cap',
+              original_filename: f.name,
+              file_size: f.size,
+              kind: UPLOAD_KIND.GAME,
+              server_responded: false,
+            });
+          }
+          if (list.length === 0) return;
+        }
+      }
+
       const accepted = acceptedVideoCount(list);
       if (accepted === 0) {
         // Nothing uploadable (only junk/proxies) — stay on the dropzone, flash red.
@@ -147,7 +178,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
         toast.info('Already added', { message: name });
       }
     },
-    [addFiles, onFileSelected, onVeoZip, acceptsZip, veoZipRefusal]
+    [addFiles, onFileSelected, onVeoZip, acceptsZip, veoZipRefusal, maxGameUploadBytes]
   );
 
   const handleInputChange = useCallback(
@@ -220,6 +251,12 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
     <div className="mt-2 space-y-1" data-testid="footage-zip-messages">
       {zipMessages.map((m) => <p key={m} className="text-sm text-red-400">{m}</p>)}
     </div>
+  );
+
+  const oversizeNote = oversizeMessage && (
+    <p className="text-sm text-red-400 mt-2" data-testid="footage-oversize-error">
+      {oversizeMessage}
+    </p>
   );
 
   // Hidden inputs are always mounted so every state can trigger a pick.
@@ -299,6 +336,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           </div>
         </div>
         {zipNotes}
+        {oversizeNote}
       </div>
     );
   }
@@ -332,6 +370,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           />
         </div>
         {zipNotes}
+        {oversizeNote}
         {/* A junk-only "add more" selection must still surface feedback here. */}
         {error && (
           <p className="text-sm text-red-400 mt-2" data-testid="footage-error">
@@ -391,6 +430,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       </button>
 
       {zipNotes}
+      {oversizeNote}
       {error && (
         <p className="text-sm text-red-400 mt-2" data-testid="footage-error">
           {COPY.zeroAccepted}

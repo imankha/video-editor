@@ -1,0 +1,6 @@
+{"criteria": {
+  "T15770:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -k upload_success_pct -v"},
+  "T15770:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t15770_login_reap.py -v"},
+  "T15770:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -k upload_no_outcome_filter -v"},
+  "T15770:C4": {"kind": "human", "why": "Requires a real iPhone Safari device to reproduce the no-outcome upload shape; T15440 (same group) already root-caused and fixed this exact mechanism (extractVideoMetadata timeout no-op on stalled nonzero readyState) -- see .dotask-notes.md T15440 section."}
+}}

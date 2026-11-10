@@ -1,0 +1,6 @@
+{"criteria": {
+  "T15780:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/GameFootagePicker.oversize.test.jsx && cd ../backend && python3 -m pytest tests/test_t15780_oversize_and_sync_failed.py -k test_oversize_refusal_names_the_limit_and_a_next_step -v"},
+  "T15780:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t15780_oversize_and_sync_failed.py -k test_size_over_cap_beacon_books_terminal_row_with_no_hash_and_no_attempt -v"},
+  "T15780:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t15780_oversize_and_sync_failed.py -k 'test_r2_create_multipart_upload_exposes_error_text_on_non_transient_rejection or test_prepare_upload_sync_failed_row_carries_error_text' -v"},
+  "T15780:C4": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t15780_oversize_and_sync_failed.py tests/test_bootstrap.py tests/test_t14540_server_error_copy.py -v && cd ../frontend && npx vitest run src/components/GameFootagePicker.oversize.test.jsx"}
+}}

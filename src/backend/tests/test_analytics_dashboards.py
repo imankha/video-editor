@@ -30,10 +30,17 @@ def analytics_setup(pg_conn):
     # means their upload durably succeeded, so the fixture emits the outcome
     # event too (real usage: you can't clip a game that never finished uploading).
     record_milestone("user-a", "game_created")
+    # T15770: a real upload always books the attempt before its outcome; the
+    # fixture mirrors that so upload_success_pct's attempted-based denominator
+    # sees user-a's succeeded upload as attempted=1/succeeded=1 (not attempted=0).
+    record_milestone("user-a", "game_upload_attempted")
     record_milestone("user-a", "game_upload_succeeded")
     record_milestone("user-a", "clip_created")
     record_milestone("user-a", "export_completed")
     record_milestone("user-b", "game_created")
+    # T15770: user-b attempted an upload and never got an outcome (the build-7102
+    # shape this task is about) -- distinct from user-c, who never touched upload.
+    record_milestone("user-b", "game_upload_attempted")
     yield
 
 
@@ -999,6 +1006,13 @@ class TestBuildFilter:
         rows = client.get(f"/api/admin/analytics/funnel?origin={T14000_ORIGIN}&build=4813", headers=_auth()).json()["funnel"]
         assert [r["signed_up"] for r in rows] == [1]
 
+    def test_upload_no_outcome_filter_finds_attempted_users_with_no_outcome(self, client, builds_setup):
+        # T15770: user-b attempted an upload (game_upload_attempted) and got no
+        # outcome; user-a attempted once and succeeded once -- the filter must
+        # surface the former and exclude the latter.
+        data = client.get(f"/api/admin/users?origin={T14000_ORIGIN}&filter=upload_no_outcome", headers=_auth()).json()
+        assert [u["user_id"] for u in data["users"]] == ["user-b"]
+
     def test_platforms_filtered_to_build(self, client, builds_setup):
         data = client.get("/api/admin/analytics/platforms?build=4813", headers=_auth()).json()
         assert data["total_users"] == 1   # only user-b has build 4813
@@ -1024,6 +1038,8 @@ _DIMENSION_KPIS = {
     "paywall_shown", "buy_modal_opened", "payers",
     # T15290: kept segment rows of deleted accounts, counted per group
     "deleted",
+    # T15770: attempts with no recorded outcome (abandoned/invisible before this task)
+    "upload_no_outcome",
 }
 
 
@@ -1050,14 +1066,33 @@ class TestUniformDimensionKpis:
         assert (ch["uploaded_pct"], ch["clipped_pct"], ch["exported_pct"]) == (33.33, 33.33, 33.33)
         assert (ch["shared_pct"], ch["purchased_pct"]) == (0, 0)
 
-    def test_upload_success_pct_is_succeeded_over_outcomes_per_row(self, client, builds_setup):
+    def test_upload_success_pct_is_succeeded_over_attempts_per_row(self, client, builds_setup):
+        # A second, distinct attempt for user-a that failed (its own
+        # game_upload_attempted, same as the real prepare-upload flow).
+        record_milestone("user-a", "game_upload_attempted")
         record_milestone("user-a", "game_upload_failed", reason="timeout")
-        assert _channel_row(client, T14000_ORIGIN)["upload_success_pct"] == 50
+        # Channel-level groups user-a AND user-b together: 1 succeeded / 3
+        # attempted total (user-a's 2 + user-b's 1) -- user-b's lone attempt with
+        # no outcome is exactly the "invisible" build-7102 shape, now counted.
+        row = _channel_row(client, T14000_ORIGIN)
+        assert row["upload_success_pct"] == 33.33
+        assert row["upload_no_outcome"] == 1
         builds = {b["build"]: b for b in client.get(
             f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()["builds"]}
         assert builds[4812]["upload_success_pct"] == 50
-        # No upload outcome at all -> null ("--"), never a fake 0% or 100%.
-        assert builds[4813]["upload_success_pct"] is None
+        assert builds[4812]["upload_no_outcome"] == 0
+        # T15770: user-b attempted and got no outcome at all -- this USED to read as
+        # a null rate (hidden entirely); it must now count as a non-succeeding
+        # attempt, visible via the rate dropping to 0% and upload_no_outcome == 1.
+        assert builds[4813]["upload_success_pct"] == 0
+        assert builds[4813]["upload_no_outcome"] == 1
+
+    def test_upload_success_pct_is_null_with_zero_attempts(self, client, builds_setup):
+        # user-c never touched upload at all (distinct from "attempted, no outcome").
+        builds = {b["build"]: b for b in client.get(
+            f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()["builds"]}
+        assert builds["unrecorded"]["upload_success_pct"] is None
+        assert builds["unrecorded"]["upload_no_outcome"] == 0
 
 
 class TestPulsePopulationKpis:
