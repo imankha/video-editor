@@ -1,5 +1,18 @@
 ---
 domain: keyframes-framing
+updated: 2026-11-10 (T15510 — fixed a race in `FocusScreen.handleProceedToOverlayInternal`'s
+no-blob completion branch: `setOpeningHighlight(false)` ran in a `finally` tied only to
+`loadAndOfferFocusCompletion` (refresh project + resolve preview URL + open the completion
+preview), BEFORE the subsequent `await fetchProjectClips()` that lands the durable `exported_at`
+staleness signal `deriveFramingCtaState` reads (see the T10650 entry below). In that window the
+action-band CTA fell back to `mode:'generate'` ("Sharpen my highlight" + a fresh credit estimate)
+right after a successful render, matching a 2026-11-09 staging QA repro ("the only done signal is
+a toast" / Sharpen shown again). Fix: `setOpeningHighlight(false)` now runs after
+`fetchProjectClips()` resolves, unconditionally (a no-op for the `renderedVideoBlob` branch, which
+never sets it true) — the 'opening' spinner CTA now spans the WHOLE post-export refresh sequence,
+not just the preview-request half of it. Regression:
+`screens/__tests__/focusReadyHandoff.test.jsx`'s new T15510 case, which defers the clips refetch
+independently of the refresh/URL promises and asserts the CTA stays 'opening' until it resolves.)
 updated: 2026-11-09 (T15410 — `resumePointRestore.js`'s FRAMING/OVERLAY branch called
 `useProjectsStore.selectProject()` alone, which only fetches the project record and never
 populates `projectDataStore`'s clips/working video -- the data FocusScreen/OverlayScreen

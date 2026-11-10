@@ -135,6 +135,182 @@ describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS - 1000]]);
     expect(resolveEtaDisplay(exp, NOW, deadlines, new Map(), new Map())).toBeNull();
   });
+
+  it('T15530: clamps a live estimate so it never climbs back up once a lower number has shown', () => {
+    // The averaged per-frame rate is measured from the FIRST frame sample to the
+    // current one -- if the instantaneous rate slows down later in the job, the raw
+    // recomputed remaining-time can read HIGHER than an earlier call's, even though
+    // more frames have completed and less time is actually left (the task's own
+    // repro: "4, 3, 2, 3, 2 minutes (non-monotonic)"). minSecondsTracks clamps the
+    // displayed value to the lowest one ever shown for this export.
+    const frameTracks = new Map([['export_m', { frame: 10, at: Date.now() }]]);
+    const minSecondsTracks = new Map();
+
+    // 20s in, 50 frames of 200 completed since the first sample (10 -> 60) -> fast
+    // rate -> "About 2 minutes".
+    vi.advanceTimersByTime(20000);
+    const expA = makeExport({ exportId: 'export_m', percent: 30, elapsedSec: 20, message: 'AI upscaling frame 60/200' });
+    const displayA = resolveEtaDisplay(expA, Date.now(), new Map(), new Map(), frameTracks, minSecondsTracks);
+    expect(displayA.formatted).toBe('About 2 minutes');
+
+    // 60s in (40s later), only 10 more frames done (60 -> 70) -> the rate has
+    // slowed a lot -- the raw extrapolation alone would read "About 3 minutes".
+    vi.advanceTimersByTime(40000);
+    const expB = makeExport({ exportId: 'export_m', percent: 35, elapsedSec: 60, message: 'AI upscaling frame 70/200' });
+    const displayB = resolveEtaDisplay(expB, Date.now(), new Map(), new Map(), frameTracks, minSecondsTracks);
+    expect(displayB.formatted).toBe('About 2 minutes');
+  });
+});
+
+describe('GlobalExportIndicator — live estimate stays within 1.5x of actual remaining time (T15530 AC3)', () => {
+  // Reproduces the task's own repro: a slow early window (GPU warm-up) followed by a
+  // faster steady pace. Averaging the per-frame rate from the very FIRST frame ever seen
+  // (the pre-fix behavior) keeps dragging in that slow window long after the pace sped
+  // up, overshooting the actual remaining time by >1.5x. The fix resets the measurement
+  // anchor to the latest sample on every new frame count, so the estimate tracks the
+  // current pace instead of blending in a stale window.
+  it('does not overshoot the actual remaining time by more than 1.5x after a slow start speeds up', () => {
+    useExportStore.setState({
+      activeExports: {
+        export_acc: makeExport({
+          exportId: 'export_acc', percent: 20, elapsedSec: 0, message: 'AI upscaling frame 10/200',
+        }),
+      },
+    });
+    render(<GlobalExportIndicator />);
+
+    // 25s in: 10 frames done since the first sample (slow, 2.5s/frame) -- this window
+    // alone would read "About 8 minutes", which is fine; it's what happens to that
+    // measurement AFTER the pace changes that's under test.
+    act(() => {
+      vi.advanceTimersByTime(25000);
+    });
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_acc: makeExport({
+            exportId: 'export_acc', percent: 25, elapsedSec: 25, message: 'AI upscaling frame 20/200',
+          }),
+        },
+      });
+    });
+    expect(document.body.textContent).toContain('About 8 minutes remaining');
+
+    // 10s later: pace speeds up a lot (20 frames in 10s, 500ms/frame -- the true current
+    // pace). 160 frames remain * 500ms + 30s tail = 110s actual remaining ("About 2
+    // minutes", 120s rounded) -- the FIX measures from the reset anchor and lands there.
+    // The old average-from-first-sample code would still blend in the slow 2.5s/frame
+    // window and read "About 4 minutes" (240s), 2.18x the ~110s actually left.
+    act(() => {
+      vi.advanceTimersByTime(10000);
+    });
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_acc: makeExport({
+            exportId: 'export_acc', percent: 35, elapsedSec: 35, message: 'AI upscaling frame 40/200',
+          }),
+        },
+      });
+    });
+    expect(document.body.textContent).toContain('About 2 minutes remaining');
+    expect(document.body.textContent).not.toContain('About 4 minutes');
+  });
+
+  it('does not overshoot the actual remaining time by more than 1.5x WITHIN the first 20s of an anchor (T15530 AC3 fix round 2)', () => {
+    // Round 1's anchor-reset only fires once `now - anchor.at >= FRAME_RATE_WINDOW_MS`
+    // (20s) -- so a slow-then-fast transition that happens entirely INSIDE that first
+    // 20s window never triggers a reset at all, and the averaged rate still blends in
+    // the slow start. This reproduces exactly that: anchor set at t=0 (frame 2), a slow
+    // sample at t=5s (frame 4, 2 frames/5s = 2500ms/frame), then the real/fast pace
+    // (500ms/frame) holds from there -- all inside the 20s window.
+    useExportStore.setState({
+      activeExports: {
+        export_early: makeExport({
+          exportId: 'export_early', percent: 5, elapsedSec: 0, message: 'AI upscaling frame 2/200',
+        }),
+      },
+    });
+    render(<GlobalExportIndicator />);
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_early: makeExport({
+            exportId: 'export_early', percent: 8, elapsedSec: 5, message: 'AI upscaling frame 4/200',
+          }),
+        },
+      });
+    });
+
+    // 3s later, at t=8s (still well inside the 20s window): 6 more frames land at the
+    // TRUE 500ms/frame pace (4 -> 10). Actual remaining from here: (200-10)*500ms +
+    // 30s tail = 125s ("About 2 minutes" true pace). Averaging from the t=0 anchor
+    // (frame 2) instead gives (10-2)=8 frames over 8s = 1000ms/frame -> (200-10)*1000 +
+    // 30000 = 220s, rounded to 240s = "About 4 minutes" -- 1.92x the ~125s actually
+    // left, which violates the 1.5x bound despite never reaching a 20s-aged anchor.
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_early: makeExport({
+            exportId: 'export_early', percent: 15, elapsedSec: 8, message: 'AI upscaling frame 10/200',
+          }),
+        },
+      });
+    });
+    expect(document.body.textContent).not.toContain('About 4 minutes');
+    expect(document.body.textContent).toContain('About 3 minutes remaining');
+  });
+});
+
+describe('GlobalExportIndicator — progress text never goes blank, even in the reported silent window (T15530 AC1)', () => {
+  it('keeps real stage text visible through sparse/empty progress messages all the way to completion', () => {
+    useExportStore.setState({
+      activeExports: {
+        export_silent: makeExport({
+          exportId: 'export_silent', percent: 12, elapsedSec: 0, message: 'AI upscaling frame 10/160',
+        }),
+      },
+    });
+    render(<GlobalExportIndicator />);
+    expect(document.body.textContent.trim()).not.toBe('');
+
+    // The task's own repro: 90-110s with no text, phase/message both empty (the
+    // "Detecting players" / post-upscale tail that doesn't report its own phase).
+    act(() => {
+      vi.advanceTimersByTime(90000);
+    });
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_silent: makeExport({ exportId: 'export_silent', percent: 90, elapsedSec: 90, message: '' }),
+        },
+      });
+    });
+    // progressLine() must never go blank -- falls back to 'Processing...' when both
+    // phase and message are empty, never an empty/whitespace-only render.
+    expect(document.body.textContent).toContain('Processing...');
+
+    // Right up to completion (still PROCESSING, not yet COMPLETE) -- text must still
+    // be present, not blank.
+    act(() => {
+      vi.advanceTimersByTime(15000);
+    });
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_silent: makeExport({ exportId: 'export_silent', percent: 99, elapsedSec: 105, message: '' }),
+        },
+      });
+    });
+    expect(document.body.textContent).toContain('Processing...');
+  });
 });
 
 describe('etaSlotText — honest estimate slot, never blank/frozen (T9900)', () => {

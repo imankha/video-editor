@@ -15,8 +15,9 @@ const testState = vi.hoisted(() => ({
   clipMetadataCache: {},
 }));
 
-const { viewSpy, refreshMock, resolveUrlMock, openPreviewMock, toastError } = vi.hoisted(() => ({
+const { viewSpy, refreshMock, resolveUrlMock, openPreviewMock, toastError, fetchClipsMock } = vi.hoisted(() => ({
   viewSpy: vi.fn(), refreshMock: vi.fn(), resolveUrlMock: vi.fn(), openPreviewMock: vi.fn(), toastError: vi.fn(),
+  fetchClipsMock: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../../modes', () => ({ FocusModeView: (p) => { viewSpy(p); return null; } }));
 vi.mock('../../containers', () => ({
@@ -157,7 +158,7 @@ vi.mock('../../stores', () => {
   const projectDataState = {
     isLoading: false, loadingStage: null,
     get clipMetadataCache() { return testState.clipMetadataCache; },
-    setWorkingVideo: vi.fn(), setClipMetadata: vi.fn(), fetchClips: vi.fn().mockResolvedValue([]),
+    setWorkingVideo: vi.fn(), setClipMetadata: vi.fn(), fetchClips: (...a) => fetchClipsMock(...a),
     addClipFromLibrary: vi.fn(), uploadClipWithMetadata: vi.fn(), saveFramingEdits: vi.fn(),
     updateClipMetadata: vi.fn(), removeClip: vi.fn(), changeAspectRatio: vi.fn(),
   };
@@ -207,6 +208,7 @@ describe('FocusScreen highlight-ready handoff (T11970)', () => {
     testState.clips = []; testState.selectedClipId = null; testState.selectedClip = null; testState.clipMetadataCache = {};
     viewSpy.mockClear(); refreshMock.mockReset(); resolveUrlMock.mockReset();
     openPreviewMock.mockReset(); toastError.mockReset();
+    fetchClipsMock.mockReset(); fetchClipsMock.mockResolvedValue([]);
     global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -250,6 +252,31 @@ describe('FocusScreen highlight-ready handoff (T11970)', () => {
 
     expect(openPreviewMock).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(FOCUS_PREVIEW.LOAD_FAILED);
+    expect(lastView().framingCtaMode).toBe('generate');
+  });
+
+  it('T15510: the opening CTA survives the clips refetch -- it must not flash back to Sharpen my highlight before exported_at lands in memory', async () => {
+    const refresh = deferred(); const url = deferred(); const clipsRefetch = deferred();
+    refreshMock.mockReturnValue(refresh.promise);
+    resolveUrlMock.mockReturnValue(url.promise);
+    fetchClipsMock.mockReturnValue(clipsRefetch.promise);
+
+    await act(async () => { render(<FocusScreen />); });
+
+    let done;
+    await act(async () => { done = lastView().onProceedToOverlay(null, null, PROJECT_ID, 'job1'); });
+    await act(async () => { url.resolve('https://r2/w.mp4'); });
+    await act(async () => { refresh.resolve(); });
+
+    // Both GETs behind the preview (refresh + playback URL) are done, but the
+    // clips refetch (which lands the durable exported_at staleness signal
+    // deriveFramingCtaState reads, see T10650) is still pending. The CTA must
+    // stay 'opening', not fall back to 'generate' -- that fallback is exactly
+    // what showed "Sharpen my highlight" + a fresh credit estimate again right
+    // after a successful render (T15510 staging QA repro).
+    expect(lastView().framingCtaMode).toBe('opening');
+
+    await act(async () => { clipsRefetch.resolve([]); await done; });
     expect(lastView().framingCtaMode).toBe('generate');
   });
 });

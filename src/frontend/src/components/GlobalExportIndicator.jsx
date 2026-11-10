@@ -83,9 +83,10 @@ export function getExportLabel(exp) {
  * a minute remaining" on an 8s clip that actually took 131s.
  *
  * @param {Object} exp - Export object with startedAt and progress
- * @param {{ frame: number, at: number } | undefined} frameTrack - the FIRST frame
- *   sample seen for this export (fixed once set), so the rate is measured over the
- *   whole observed window rather than just the last tick.
+ * @param {{ frame: number, at: number } | undefined} frameTrack - the caller's anchor
+ *   sample for this export. The component (T15530 fix round 2) resets this to the
+ *   latest sample on every new frame count, so the measured rate tracks the current
+ *   pace instead of averaging in a stale early window.
  * @returns {{ seconds: number, formatted: string } | null}
  */
 export function calculateETA(exp, frameTrack) {
@@ -105,10 +106,13 @@ export function calculateETA(exp, frameTrack) {
   const remainingMs = remainingFrames * msPerFrame + POST_UPSCALE_TAIL_SECONDS * 1000;
   // Round up to the next 30s -- an honest estimate rounds toward "longer", never shorter.
   const remainingSeconds = Math.ceil(remainingMs / 1000 / 30) * 30;
-  const minutes = Math.max(1, Math.round(remainingSeconds / 60));
-  const formatted = `About ${minutes} minute${minutes === 1 ? '' : 's'}`;
 
-  return { seconds: remainingSeconds, formatted };
+  return { seconds: remainingSeconds, formatted: formatRemaining(remainingSeconds) };
+}
+
+function formatRemaining(seconds) {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  return `About ${minutes} minute${minutes === 1 ? '' : 's'}`;
 }
 
 /**
@@ -130,21 +134,39 @@ export function calculateETA(exp, frameTrack) {
  * only when stale=false and otherwise the honest "Time remaining varies." fallback — the
  * real stage line (`progressLine`) is rendered on its OWN line alongside it. `fallbackText`
  * (the stage copy) is retained on the return object for T8510's direct unit tests.
+ *
+ * T15530: `minSecondsTracks` (exportId -> lowest remainingSeconds ever computed for that
+ * export) clamps the displayed number so it never climbs back up. `calculateETA` measures
+ * its rate as an AVERAGE from the first frame sample to the current one, so a later slowdown
+ * can make the recomputed remaining-time read higher than an earlier, truer call did even
+ * though less time is actually left — the observed "4, 3, 2, 3, 2 minutes" bug. Optional so
+ * existing callers that don't track minimums keep their prior (unclamped) behavior.
  */
-export function resolveEtaDisplay(exp, now, deadlines, percentTracks, frameTracks) {
+export function resolveEtaDisplay(exp, now, deadlines, percentTracks, frameTracks, minSecondsTracks) {
   const eta = calculateETA(exp, frameTracks?.get(exp.exportId));
   if (!eta) return null;
+
+  let { seconds, formatted } = eta;
+  if (minSecondsTracks) {
+    const priorMin = minSecondsTracks.get(exp.exportId);
+    if (priorMin != null && priorMin < seconds) {
+      seconds = priorMin;
+      formatted = formatRemaining(seconds);
+    } else {
+      minSecondsTracks.set(exp.exportId, seconds);
+    }
+  }
 
   const deadline = deadlines.get(exp.exportId);
   const track = percentTracks.get(exp.exportId);
 
   const pastPromise = deadline != null && now > deadline + ETA_BUST_GRACE_MS;
-  const stalledUnderMinute = eta.seconds < 60 &&
+  const stalledUnderMinute = seconds < 60 &&
     track != null && (now - track.changedAt) > ETA_STALL_MS;
 
   return {
     stale: pastPromise || stalledUnderMinute,
-    formatted: eta.formatted,
+    formatted,
     // T9540: honest stage copy (not the raw engineering message) when the estimate busts.
     fallbackText: progressLine(exp),
   };
@@ -195,13 +217,21 @@ export function GlobalExportIndicator() {
   // T8510: display-only ETA-honesty bookkeeping (never persisted).
   // etaDeadlinesRef: exportId -> epoch-ms deadline the first estimate promised.
   // percentChangeRef: exportId -> { percent, changedAt } for stall detection.
-  // frameTrackRef (T14860): exportId -> the FIRST { frame, at } frame sample seen,
-  // fixed once set so calculateETA measures this job's own rate from that point on.
+  // frameTrackRef (T14860, T15530): exportId -> the anchor { frame, at } sample
+  // calculateETA measures this job's rate from. Reset to the latest sample on every
+  // new frame count (T15530 fix round 2) so an unrepresentative early window (e.g.
+  // GPU warm-up) can only skew ONE measurement, never get permanently baked into the
+  // average -- a fixed-duration reset window (the original T15530 fix) still let a
+  // slow-then-fast transition inside that window overshoot, since the reset only
+  // fired once the window had fully aged.
+  // etaMinSecondsRef (T15530): exportId -> the lowest remainingSeconds ever computed,
+  // so a later rate slowdown can't make the displayed estimate climb back up.
   // nowTick re-renders once a second while exports run, so a stalled export
   // (no store updates) still gets its frozen estimate re-evaluated.
   const etaDeadlinesRef = useRef(new Map());
   const percentChangeRef = useRef(new Map());
   const frameTrackRef = useRef(new Map());
+  const etaMinSecondsRef = useRef(new Map());
   const [nowTick, setNowTick] = useState(() => Date.now());
   const hasProcessingExports = processingExports.length > 0;
 
@@ -223,9 +253,12 @@ export function GlobalExportIndicator() {
       if (!track || track.percent !== percent) {
         tracks.set(exp.exportId, { percent, changedAt: now });
       }
-      if (!frameTracks.has(exp.exportId)) {
-        const frameProgress = parseFrameProgress(exp.progress?.message);
+      const frameProgress = parseFrameProgress(exp.progress?.message);
+      const anchor = frameTracks.get(exp.exportId);
+      if (!anchor) {
         if (frameProgress) frameTracks.set(exp.exportId, { frame: frameProgress.frame, at: now });
+      } else if (frameProgress && frameProgress.frame > anchor.frame) {
+        frameTracks.set(exp.exportId, { frame: frameProgress.frame, at: now });
       }
       if (!deadlines.has(exp.exportId)) {
         const eta = calculateETA(exp, frameTracks.get(exp.exportId));
@@ -240,6 +273,10 @@ export function GlobalExportIndicator() {
     }
     for (const id of [...tracks.keys()]) {
       if (!activeExports[id]) tracks.delete(id);
+    }
+    const minSecondsTracks = etaMinSecondsRef.current;
+    for (const id of [...minSecondsTracks.keys()]) {
+      if (!activeExports[id]) minSecondsTracks.delete(id);
     }
   }, [activeExports]);
 
@@ -330,7 +367,7 @@ export function GlobalExportIndicator() {
   // on the 1s tick, so a stalled estimate flips to stage wording without new data)
   const primaryETA = useMemo(() => {
     if (!primaryExport) return null;
-    return resolveEtaDisplay(primaryExport, nowTick, etaDeadlinesRef.current, percentChangeRef.current, frameTrackRef.current);
+    return resolveEtaDisplay(primaryExport, nowTick, etaDeadlinesRef.current, percentChangeRef.current, frameTrackRef.current, etaMinSecondsRef.current);
   }, [primaryExport, nowTick]);
 
   // T11330: the most recent over-budget-rejected export still awaiting its explanatory
@@ -509,7 +546,7 @@ export function GlobalExportIndicator() {
                     <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                       <Clock className="w-3 h-3 shrink-0" />
                       <span className="min-w-0 break-words">
-                        {etaSlotText(resolveEtaDisplay(exp, nowTick, etaDeadlinesRef.current, percentChangeRef.current, frameTrackRef.current))}
+                        {etaSlotText(resolveEtaDisplay(exp, nowTick, etaDeadlinesRef.current, percentChangeRef.current, frameTrackRef.current, etaMinSecondsRef.current))}
                       </span>
                     </div>
                   </div>
