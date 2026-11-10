@@ -670,6 +670,25 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("ran out of turns (120 requests)", notes)
         self.assertIn("RESUMED T1 dispatch 2 of 3", (self.tasks_root / "g-x" / ".dotask-status").read_text())
 
+    def test_build_loop_redispatches_a_task_whose_credentials_were_revoked(self):
+        # 2026-11-09 00:46 UTC: a host token refresh revoked every container's copied token; two groups
+        # stopped DISPATCH_FAILED auth_failed mid-task. The next drive re-seeds, so the loop retries.
+        def behavior(task, attempt):
+            if attempt == 1:
+                return "t DISPATCH_FAILED phase=implementation exit=1 outcome=auth_failed\n", "auth_failed"
+            return self._commit(task, pushready=True), "success"
+        with patch.object(dotask_cli, "AUTH_RETRY_WAIT_S", 0):
+            code, calls, _ = self._loop(behavior, tasks=("T1",))
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, ["implementation g-x T1", "implementation g-x T1 resumed"])
+        self.assertIn("RESUMED T1 auth retry 1 of 2", (self.tasks_root / "g-x" / ".dotask-status").read_text())
+
+    def test_build_loop_stops_when_auth_keeps_failing(self):
+        body = "t DISPATCH_FAILED phase=implementation exit=1 outcome=auth_failed\n"
+        with patch.object(dotask_cli, "AUTH_RETRY_WAIT_S", 0):
+            code, calls, _ = self._loop(lambda task, n: (body, "auth_failed"), tasks=("T1",))
+        self.assertEqual((code, len(calls)), (1, 3))
+
     def test_build_loop_gives_up_after_two_restarts(self):
         body = "t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
         code, calls, _ = self._loop(lambda task, n: (body, "budget_stop"), tasks=("T1",))

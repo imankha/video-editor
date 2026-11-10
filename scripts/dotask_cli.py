@@ -1037,6 +1037,14 @@ def out_of_turns(checkout):
     return latest_run(checkout).get("outcome_class") == "budget_stop"
 
 
+AUTH_RETRIES = int(os.environ.get("DOTASK_AUTH_RETRIES", "2"))
+AUTH_RETRY_WAIT_S = int(os.environ.get("DOTASK_AUTH_RETRY_WAIT", "20"))
+
+
+def auth_lost(checkout):
+    return latest_run(checkout).get("outcome_class") == "auth_failed"
+
+
 def handoff_note(checkout, label, record):
     """What a fresh conversation needs to pick up work a dispatch left uncommitted when it ran out of
     turns: the uncommitted files and a pointer to the worker's own progress checklist."""
@@ -1065,16 +1073,29 @@ def dispatch_with_restarts(slug, group, checkout, label, instruction, task_ids=N
     restart gets a handoff note and the resume hint. Returns the last dispatch's result (True only if
     it ended on PUSHREADY, as `dispatch` reports)."""
     finished = False
-    for attempt in range(BUILD_RETRIES + 1):
-        text = instruction + (RESUME_HINT if attempt else "")
+    attempt = auth_retries = 0
+    while True:
+        text = instruction + (RESUME_HINT if attempt or auth_retries else "")
         if task_ids is None:
             finished = dispatch(slug, group, "implementation", text)
         else:
             finished = dispatch(slug, group, "implementation", text, task_ids)
+        if auth_lost(checkout) and auth_retries < AUTH_RETRIES:
+            # A token refresh anywhere on the host revokes the token every container copied, mid-dispatch:
+            # g-t15400-4 and g-t15410-4 died the same second the host refreshed (2026-11-09 00:46 UTC)
+            # and their CLIs wrote back an empty credentials file. The next `task.sh drive` force-copies
+            # the host's current login, so redispatching is the whole fix.
+            auth_retries += 1
+            handoff_note(checkout, label, latest_run(checkout))
+            append_status(checkout, f"RESUMED {label} auth retry {auth_retries} of {AUTH_RETRIES}: credentials "
+                                    "revoked mid-dispatch (host token refresh); re-seeding from the host login")
+            time.sleep(AUTH_RETRY_WAIT_S)
+            continue
         if not out_of_turns(checkout) or attempt == BUILD_RETRIES:
             break
+        attempt += 1
         handoff_note(checkout, label, latest_run(checkout))
-        append_status(checkout, f"RESUMED {label} dispatch {attempt + 2} of {BUILD_RETRIES + 1}: ran out of turns, "
+        append_status(checkout, f"RESUMED {label} dispatch {attempt + 1} of {BUILD_RETRIES + 1}: ran out of turns, "
                                 "handoff written to .dotask-notes.md")
     return finished
 
