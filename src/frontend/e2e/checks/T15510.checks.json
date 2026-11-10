@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T15510:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/screens/__tests__/focusReadyHandoff.test.jsx --reporter=dot"
+    },
+    "T15510:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/ExportButtonView.test.jsx --reporter=dot"
+    }
+  }
+}

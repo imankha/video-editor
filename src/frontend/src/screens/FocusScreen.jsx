@@ -1074,8 +1074,8 @@ export function FocusScreen({
         // The completion toast is suppressed while this project is open in Focus, so a
         // missing preview URL must be announced here.
         if (!opened) toast.error(FOCUS_PREVIEW.LOAD_FAILED);
-      } finally {
-        setOpeningHighlight(false);
+      } catch (err) {
+        console.error('[FocusScreen] Failed to open completion preview (continuing):', err);
       }
 
       workingVideoSet = true;
@@ -1100,6 +1100,14 @@ export function FocusScreen({
     } catch (err) {
       console.warn('[FocusScreen] Failed to refresh clips after export (continuing):', err);
     }
+
+    // T15510: only now is it safe to leave the 'opening' CTA state -- ending it
+    // right after the preview request (previously in the try/finally above)
+    // left a window where deriveFramingCtaState still read the pre-refetch
+    // clips (stale exported_at) and fell back to 'generate', flashing "Sharpen
+    // my highlight" + a fresh credit estimate right after a successful render.
+    // A no-op for the renderedVideoBlob branch above, which never sets it true.
+    setOpeningHighlight(false);
 
     if (onProceedToOverlay) {
       try {
