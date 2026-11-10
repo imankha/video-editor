@@ -135,6 +135,31 @@ describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS - 1000]]);
     expect(resolveEtaDisplay(exp, NOW, deadlines, new Map(), new Map())).toBeNull();
   });
+
+  it('T15530: clamps a live estimate so it never climbs back up once a lower number has shown', () => {
+    // The averaged per-frame rate is measured from the FIRST frame sample to the
+    // current one -- if the instantaneous rate slows down later in the job, the raw
+    // recomputed remaining-time can read HIGHER than an earlier call's, even though
+    // more frames have completed and less time is actually left (the task's own
+    // repro: "4, 3, 2, 3, 2 minutes (non-monotonic)"). minSecondsTracks clamps the
+    // displayed value to the lowest one ever shown for this export.
+    const frameTracks = new Map([['export_m', { frame: 10, at: Date.now() }]]);
+    const minSecondsTracks = new Map();
+
+    // 20s in, 50 frames of 200 completed since the first sample (10 -> 60) -> fast
+    // rate -> "About 2 minutes".
+    vi.advanceTimersByTime(20000);
+    const expA = makeExport({ exportId: 'export_m', percent: 30, elapsedSec: 20, message: 'AI upscaling frame 60/200' });
+    const displayA = resolveEtaDisplay(expA, Date.now(), new Map(), new Map(), frameTracks, minSecondsTracks);
+    expect(displayA.formatted).toBe('About 2 minutes');
+
+    // 60s in (40s later), only 10 more frames done (60 -> 70) -> the rate has
+    // slowed a lot -- the raw extrapolation alone would read "About 3 minutes".
+    vi.advanceTimersByTime(40000);
+    const expB = makeExport({ exportId: 'export_m', percent: 35, elapsedSec: 60, message: 'AI upscaling frame 70/200' });
+    const displayB = resolveEtaDisplay(expB, Date.now(), new Map(), new Map(), frameTracks, minSecondsTracks);
+    expect(displayB.formatted).toBe('About 2 minutes');
+  });
 });
 
 describe('etaSlotText — honest estimate slot, never blank/frozen (T9900)', () => {

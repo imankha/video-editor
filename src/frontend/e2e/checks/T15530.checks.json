@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T15530:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/GlobalExportIndicator.test.jsx -t 'persistent stage' --reporter=dot"
+    },
+    "T15530:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/GlobalExportIndicator.test.jsx -t 'frame sample' --reporter=dot"
+    },
+    "T15530:C3": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/GlobalExportIndicator.test.jsx -t 'T15530' --reporter=dot"
+    }
+  }
+}
