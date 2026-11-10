@@ -1,6 +1,6 @@
 # T5656: Prep markers -> Annotate clip candidates
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-07-20

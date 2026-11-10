@@ -1,6 +1,6 @@
 # T11630: Frontend: pass celebration sheet, "Free" export price, Home banner
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-10-02

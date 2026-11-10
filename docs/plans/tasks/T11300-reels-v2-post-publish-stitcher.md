@@ -4,7 +4,7 @@
 **Impact:** 8
 **Complexity:** 8
 **Created:** 2026-09-24
-**Updated:** 2026-10-20
+**Updated:** 2026-11-09
 
 ## Problem
 
@@ -142,3 +142,7 @@ after the Video Pre-Shrink milestone. No code written.
 - [ ] AC11 Re-exporting a member highlight flips its reel tile to Changed and adds Re-export; Play and Share keep serving the previous export until Re-export completes
 - [ ] AC12 Export failure shows the amber strip with Retry and leaves the draft intact; no "Saved" copy anywhere in the flow
 - [ ] AC13 Every write in the flow traces to a named gesture (unit test asserting no effect-driven persistence) and the full build flow passes an e2e at 390 px and at desktop width
+
+## Re-scope 2026-11-09 (owner roadmap re-rank)
+
+MVP first, sequenced in Roadmap section 6 (no longer after Video Pre-Shrink): pick finished highlights, order (Best first), one title card, hard cut, export to a `final_videos` row, result on the Reels tab. Section cards, drag reorder, Changed state and Fade follow after real reels exist. The title card is the social cover and the recruiting card (T15880). Ratio: most finished highlights are portrait (14 users against 5 since 2026-10-18) while coaches watch 16:9; T14770's "Where will you share it?" routes recruiting intent to landscape before the builder sees a portrait-only set. Evidence: 18 users with 2 or more highlights, 17 of 402 returned after a week.

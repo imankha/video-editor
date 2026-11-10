@@ -1,6 +1,6 @@
 # T3290: Tune NUF for Returning Users
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Priority:** P1
 **Impact:** 8 | **Complexity:** 4
 

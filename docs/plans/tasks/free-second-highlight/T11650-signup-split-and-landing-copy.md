@@ -1,6 +1,6 @@
 # T11650: Signup 88 -> 48 + landing page copy (ships LAST)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-10-02

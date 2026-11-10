@@ -1,6 +1,6 @@
 # T3300: Build Tutorial Video for Landing Page
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Priority:** P1
 **Impact:** 8 | **Complexity:** 3
 

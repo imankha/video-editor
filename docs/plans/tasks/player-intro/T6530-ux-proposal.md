@@ -1,6 +1,6 @@
 # T6530 UX Proposal: Intro Card Discoverability
 
-**Status:** DRAFT — awaiting user approval. No application code has been touched for this task.
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Method:** Live-drove the app as a real user (Playwright + `dev-login`, account `imankh@gmail.com`)
 against a temporary worktree at `origin/master` (commit `f4b0f140`, which includes T5215 —
 attachment + resolution — merged; **T5220, the actual pre-roll playback, is still unmerged**

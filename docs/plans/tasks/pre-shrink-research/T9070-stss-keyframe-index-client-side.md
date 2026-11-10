@@ -1,6 +1,6 @@
 # T9070: Extract the `stss` keyframe index client-side (T8836 row 2)
 
-**Status:** TODO (confirmed, not vetoed)
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-08

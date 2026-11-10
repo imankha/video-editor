@@ -1,6 +1,6 @@
 # T9250: Dense tracking for feet fire + scorch footprints
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 5
 **Complexity:** 7
 **Created:** 2026-09-08

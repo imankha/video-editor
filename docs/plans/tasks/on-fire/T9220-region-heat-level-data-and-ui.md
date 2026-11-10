@@ -1,6 +1,6 @@
 # T9220: Per-region heat level: data key, action, settings UI
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-08

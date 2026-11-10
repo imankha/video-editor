@@ -1,6 +1,6 @@
 # T11530: Save cover image + honest platform guidance
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-10-01

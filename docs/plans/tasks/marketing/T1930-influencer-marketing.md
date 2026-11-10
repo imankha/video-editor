@@ -1,6 +1,6 @@
 # T1930: Influencer Marketing
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-04-27

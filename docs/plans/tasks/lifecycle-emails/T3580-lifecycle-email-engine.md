@@ -2,7 +2,7 @@
 
 # T3580: Lifecycle Email Engine
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-06-16

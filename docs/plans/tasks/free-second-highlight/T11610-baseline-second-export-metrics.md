@@ -1,6 +1,6 @@
 # T11610: Baseline: second-export rate + credits spent before first export
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-10-02

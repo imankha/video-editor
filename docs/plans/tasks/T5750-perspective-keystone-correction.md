@@ -1,6 +1,6 @@
 # T5750: Perspective / keystone correction in Framing (acquisition-corrections family)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 4
 **Complexity:** 6
 **Created:** 2026-07-22

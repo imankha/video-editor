@@ -1,6 +1,6 @@
 # T9380: Shrink time-to-activate - the handover from waiting bundle to running code
 
-**Status:** ICE
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-09

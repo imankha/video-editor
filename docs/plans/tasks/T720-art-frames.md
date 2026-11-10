@@ -1,6 +1,6 @@
 # T720: Art Frames — Pen Drawing on Clip Freeze Frames
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-03-25

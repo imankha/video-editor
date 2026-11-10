@@ -2,7 +2,7 @@
 
 # T3590: Day 7/14/30 Email Content & Personalization
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-06-16

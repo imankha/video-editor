@@ -1,6 +1,6 @@
 # T443: Background Sync (Export Survives App Close)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-04-28

@@ -4,7 +4,7 @@
 **Impact:** 9
 **Complexity:** 6
 **Created:** 2026-07-03
-**Updated:** 2026-07-03
+**Updated:** 2026-11-09
 
 ## Problem
 
@@ -64,3 +64,7 @@ Wrap FlashVSR v1.1 (primary) and SeedVR2-3B (secondary) as testbed pipelines run
 - [ ] Measured $/10s-clip and wall-clock vs the gate's <= $0.15 / <= 3x budgets
 - [ ] License review recorded for any model recommended for integration
 - [ ] Explicit go/no-go against ALL gate criteria in EPIC decision #3, with numbers
+
+## Re-scope 2026-11-09 (owner roadmap re-rank)
+
+Candidates re-pinned: FlashVSR+ and ReCaVSR (both plain Python, no sparse-attention build, about $0.01 to $0.03 per 10 s clip on Modal); FlashVSR v1.1 and SeedVR2 are reference only. Hallucination gate as in T4700.

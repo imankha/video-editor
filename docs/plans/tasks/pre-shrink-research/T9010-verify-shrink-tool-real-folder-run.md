@@ -1,6 +1,6 @@
 # T9010: Run T8840's test recipe on the real 50 GB DJI folder and a second machine (T8840's open acceptance)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-09-08

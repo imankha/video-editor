@@ -1,6 +1,6 @@
 # T5652: `VideoMode.MULTI_FILE` ("Multiple Files") + client-side Prep workspace shell
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-07-20

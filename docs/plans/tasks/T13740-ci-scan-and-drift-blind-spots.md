@@ -1,6 +1,6 @@
 # T13740: Close the known blind spots in the cross-tree scan and doc-drift check
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 3
 **Complexity:** 4
 **Created:** 2026-10-27

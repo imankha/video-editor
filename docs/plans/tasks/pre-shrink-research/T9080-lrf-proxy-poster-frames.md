@@ -1,6 +1,6 @@
 # T9080: Poster + preview frames from the `.LRF` proxy at upload time (T8836 row 3)
 
-**Status:** TODO (deferred, not vetoed)
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-08

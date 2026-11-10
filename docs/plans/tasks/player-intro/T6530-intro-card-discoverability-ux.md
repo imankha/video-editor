@@ -1,6 +1,6 @@
 # T6530: UX pass — how should the intro card feature actually be surfaced?
 
-**Status:** DECIDED 2026-08-08 — proposal approved with modifications; implementation split into
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 child tasks below. This task itself is closed (research + decision only).
 **Impact:** 7 | **Complexity:** 4
 

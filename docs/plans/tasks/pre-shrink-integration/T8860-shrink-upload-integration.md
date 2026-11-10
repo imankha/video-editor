@@ -1,6 +1,6 @@
 # T8860: Shrink upload integration + fallback
 
-**Status:** TODO
+**Status:** BLOCKED (on T15850 GO, 2026-11-09)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-05

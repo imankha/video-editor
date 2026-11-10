@@ -1,6 +1,6 @@
 # T11550: Lead the delivered file with the chosen cover (conditional)
 
-**Status:** TODO (blocked: T11540 results + explicit user approval)
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-10-01

@@ -1,6 +1,6 @@
 # T13960: Branch CI backend job selects tests by recorded coverage (pytest-testmon)
 
-**Status:** OBSOLETE (user decision 2026-10-29: not adopted as specified; hardened follow-ups T13961, T13962)
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-10-29

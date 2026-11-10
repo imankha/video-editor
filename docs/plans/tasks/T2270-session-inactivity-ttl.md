@@ -1,6 +1,6 @@
 # T2270: Session Inactivity TTL
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-05-10

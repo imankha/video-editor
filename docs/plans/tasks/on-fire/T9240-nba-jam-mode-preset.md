@@ -1,6 +1,6 @@
 # T9240: "NBA Jam mode" auto-escalation preset + goal burst
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-09-08

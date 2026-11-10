@@ -1,6 +1,6 @@
 # T2330: Curate Before/After Content
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 10
 **Complexity:** 3
 **Created:** 2026-04-30

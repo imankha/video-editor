@@ -1,6 +1,6 @@
 # T12420: Locked Review plays card needs a visible locked state (decision)
 
-**Status:** OBSOLETE
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 4
 **Complexity:** 2
 **Tier:** M

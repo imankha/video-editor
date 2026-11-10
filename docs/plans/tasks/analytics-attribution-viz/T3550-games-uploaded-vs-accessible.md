@@ -1,6 +1,6 @@
 # T3550: Games Uploaded vs Accessible
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-06-16

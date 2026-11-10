@@ -1,6 +1,6 @@
 # T445: Update Landing Page with Before/After Clips
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-04-28

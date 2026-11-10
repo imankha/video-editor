@@ -1,6 +1,6 @@
 # T445: Vehicle Window Cards — Design & Print
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-04-06

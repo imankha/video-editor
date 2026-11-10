@@ -4,7 +4,7 @@
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-10-18
-**Updated:** 2026-10-18
+**Updated:** 2026-11-09
 
 ## Problem
 
@@ -205,3 +205,7 @@ the game is deleted, its clips (and snippets) follow the existing delete cascade
 - [ ] Lock state survives reload / another device (backend-derived); a pending game opened from a direct link never shows a blank Focus player
 - [ ] No double credit charge; an abandoned upload leaves already-made highlights working (or clearly explained)
 - [ ] Guide rules `annotate.uploading.*` updated to per-play behavior; guidance.md invariant 8 rewritten
+
+## Re-scope 2026-11-09 (owner roadmap re-rank)
+
+De-gated from T8860 (Roadmap section 4): runs after T15840, independent of the shrink spike, because it removes the upload wait from the critical path for every large file.

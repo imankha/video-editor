@@ -1,6 +1,6 @@
 # T2140: Screen-Anchored Event Overlays
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-04-30

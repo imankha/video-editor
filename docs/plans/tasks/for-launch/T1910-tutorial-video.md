@@ -1,6 +1,6 @@
 # T1910: Tutorial Video
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-04-27

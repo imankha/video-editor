@@ -1,6 +1,6 @@
 # T7620: Architect design: guided-tour engine + essential-path step definitions
 
-**Status:** DECIDED (design APPROVED 2026-09-02, all rounds folded into docs/plans/tasks/T7620-design.md: GUIDANCE_MAP spine now 69 rules incl. post-publish advanced tier A1-A10 + fork F8; R3/R4 accepted and filed as T8390/T8400 blocking T7630; R1/R2 not accepted, fallbacks kept with per-rule metrics; F1 pre-cut branch targets T8380's clips-add-video backed by T8370; Q4 accepted with the annotate-during-upload e2e. Recorded order: R3, R4 -> T8360 -> T8370 -> T8380 -> T7630 -> T7640. No code from this task itself.)
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-08-24

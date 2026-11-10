@@ -1,6 +1,6 @@
 # T9210: Flame asset pipeline + heat placement spec (mirrored x3)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-08

@@ -1,6 +1,6 @@
 # T9040: Benchmark shrink-time + upload-time vs visual quality across ALL file types (with a production file-type survey)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 9
 **Complexity:** 6
 **Created:** 2026-09-08

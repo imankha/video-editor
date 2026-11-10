@@ -1,6 +1,6 @@
 # T11900: Re-run the parent journey on staging (milestone close)
 
-**Status:** OBSOLETE (folded into [T12590](../T12590-guide-coverage-and-responsive-sweep.md) on 2026-10-11)
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Updated:** 2026-10-11
 **Impact:** 7
 **Complexity:** 2

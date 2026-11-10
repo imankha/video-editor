@@ -2,7 +2,7 @@
 
 **Task:** [T7620](tutorial-redesign/T7620-guided-tour-design.md)
 **Epic:** [Tutorial Redesign](tutorial-redesign/EPIC.md)
-**Status:** **APPROVED 2026-09-02** (round 2). T7630 may start once its two blocking sibling tasks (section 17) are filed.
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Author:** Architect agent
 
 > **Round 1 revision (binding).** The first draft treated guidance as five mini-tours with a

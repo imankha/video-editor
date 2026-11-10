@@ -1,6 +1,6 @@
 # T9020: Tune auto-crop on the real DJI folder (parameter sweep + ball-in-frame check)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-08

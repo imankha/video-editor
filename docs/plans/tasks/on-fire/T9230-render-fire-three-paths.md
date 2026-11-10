@@ -1,6 +1,6 @@
 # T9230: Render the fire in all three paths (preview, backend, Modal)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 7
 **Created:** 2026-09-08

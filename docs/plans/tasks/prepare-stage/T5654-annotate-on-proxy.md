@@ -1,6 +1,6 @@
 # T5654: Annotate reads the proxy (LRF)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-07-20

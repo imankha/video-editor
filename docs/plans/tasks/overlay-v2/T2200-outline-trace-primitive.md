@@ -1,6 +1,6 @@
 # T2200: Outline Trace Primitive
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 5
 **Complexity:** 7
 **Created:** 2026-04-30

@@ -1,6 +1,6 @@
 # T3750: Redo All E2E Tests
 
-**Status:** TODO (Hold until For Alpha - Polish)
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-06-16

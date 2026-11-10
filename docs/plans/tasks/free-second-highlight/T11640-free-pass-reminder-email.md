@@ -1,6 +1,6 @@
 # T11640: Reminder email: Resend scheduled send + cancel + unsubscribe
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-02

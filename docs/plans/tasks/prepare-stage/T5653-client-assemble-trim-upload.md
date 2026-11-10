@@ -1,6 +1,6 @@
 # T5653: Client assemble/trim/concat + resumable dual-asset upload
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 7
 **Complexity:** 8
 **Created:** 2026-07-20

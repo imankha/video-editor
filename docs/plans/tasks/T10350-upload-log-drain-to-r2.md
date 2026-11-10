@@ -1,6 +1,6 @@
 # T10350: Upload/app log drain to R2 (D2 follow-up to T10270)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 3
 **Complexity:** 4
 **Created:** 2026-09-17

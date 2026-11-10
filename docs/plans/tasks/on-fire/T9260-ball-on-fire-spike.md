@@ -1,6 +1,6 @@
 # T9260: Ball on fire: recall spike, then possession + shot trail (evidence-gated)
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 4
 **Complexity:** 9
 **Created:** 2026-09-08

@@ -1,6 +1,6 @@
 # T8950: Audit the credit pricing model for high-resolution/high-fps source files
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-05

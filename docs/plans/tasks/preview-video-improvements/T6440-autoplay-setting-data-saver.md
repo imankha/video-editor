@@ -1,6 +1,6 @@
 # T6440: "Autoplay previews" setting + data-saver guardrails
 
-**Status:** TODO
+**Status:** REMOVED 2026-11-09 (see docs/plans/PLAN-removed-2026-11-09.md)
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-08-03
