@@ -1403,8 +1403,13 @@ def interrupted_fix_round(checkout, group):
     findings = [c for c in verdict.get("criteria", []) if c.get("status") == "fail"] + \
                [b for b in verdict.get("bugs", []) if b.get("scope") == "group"]
     run = latest_run(checkout)
+    # A worker that exits cleanly without a status line (ENDED_WITHOUT_STATUS) left its fix unfinished
+    # too: g-t15750-4 (2026-11-10) ran `git diff --stat` into a pager, the dispatch ended "success", and
+    # resume re-verified a tree holding the half-done fix instead of continuing it.
+    stalled = run.get("outcome_class") != "success" or any(
+        word in last_status(checkout) for word in ("ENDED_WITHOUT_STATUS", "VERIFY_BLOCKED fix round"))
     if not findings or verdict.get("head") != git_head(checkout) or not tracked_changes(checkout) \
-            or run.get("phase") != "implementation" or run.get("outcome_class") == "success":
+            or run.get("phase") != "implementation" or not stalled:
         return None
     rounds = [int(m.group(1)) for p in (TASKS_ROOT / "waves" / group["wave_id"]).glob("verify-round-*.json")
               if (m := re.fullmatch(r"verify-round-(\d+)\.json", p.name))

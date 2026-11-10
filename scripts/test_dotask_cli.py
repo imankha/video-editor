@@ -698,6 +698,27 @@ class DotaskCliTest(unittest.TestCase):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             dotask_cli.main(["resume", "g-nope"])
 
+    def test_a_fix_worker_that_ended_without_a_status_line_counts_as_an_interrupted_round(self):
+        # g-t15750-4 (2026-11-10): the worker's `git diff --stat` hung on a pager, the dispatch ended with
+        # outcome success and no status line, and resume re-verified the half-fixed tree.
+        checkout = self.tasks_root / "g-x"
+        (checkout / ".dotask-profile").mkdir(parents=True)
+        group = {"slug": "g-x", "tasks": ["T1"], "wave_id": "w", "branch": "feature/x"}
+        verdict = {"head": "a" * 40, "bugs": [], "criteria": [{"id": "T1:C1", "status": "fail", "evidence": "x"}]}
+        (checkout / dotask_cli.VERIFY_FILE).write_text(json.dumps(verdict))
+        (checkout / ".dotask-profile" / "r1.json").write_text(json.dumps(
+            {"schema_version": 2, "started_at": "2026-11-10T20:00:00+00:00", "phase": "implementation",
+             "outcome_class": "success"}))
+
+        def interrupted(last):
+            (checkout / ".dotask-status").write_text(last)
+            with patch.object(dotask_cli, "git_head", lambda c: "a" * 40), \
+                    patch.object(dotask_cli, "tracked_changes", lambda c: " M src/x.js"):
+                return dotask_cli.interrupted_fix_round(checkout, group)
+        self.assertEqual(interrupted("t FIX_SKIPPED fix round 1 T1: t ENDED_WITHOUT_STATUS phase=implementation\n"
+                                     "t VERIFY_BLOCKED fix round 1 committed nothing (skipped: T1)\n"), 1)
+        self.assertIsNone(interrupted("t PUSHREADY feature/x aaa fix round 1\n"))  # a worker that finished normally
+
     def test_resume_continues_a_fix_round_that_stopped_with_uncommitted_work(self):
         # g-t15220-10, 2026-11-07: fix round 1 ran out of turns with 17 files changed. Resuming straight
         # into autoland would have verified that dirty tree from scratch and blocked.
