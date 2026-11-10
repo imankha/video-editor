@@ -498,6 +498,7 @@ DONE rows live in [PLAN-archive.md](PLAN-archive.md).
 | T15920 | [Staging check failed: T15430:C1 In landscape fullscreen Annotate at 844x390, elementFromPoint at Mark's centre](tasks/T15920-staging-check-failed-t15430-c1-in.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T15930 | [Staging check failed: T15550:C1 'Keep marking plays' returns to Annotate with the playhead after](tasks/T15930-staging-check-failed-t15550-c1-keep.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T15940 | [Staging check failed: T15640:C2 Mark play near 0:00 yields a play of the normal](tasks/T15940-staging-check-failed-t15640-c2-mark.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T15950 | [1.5x ETA accuracy half of AC3 is unaddressed and untested](tasks/T15950-1-5x-eta-accuracy-half-of.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 
 ## Environment Configuration
 
