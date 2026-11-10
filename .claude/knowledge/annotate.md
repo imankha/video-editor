@@ -2798,6 +2798,18 @@ The full checklist for an 11th→Nth sport:
   `utils/videoMetadata.js::extractVideoMetadata`'s `cleanup()` did not and was
   fixed to match. Any NEW temporary-object-URL-for-`<video>` helper must follow
   the same order.
+- **T15440 `extractVideoMetadata` timeout no-op on a nonzero stalled `readyState`
+  (2026-11-10).** The timeout guard rejected only when `video.readyState === 0`;
+  a stalled WebKit decode (observed mobile/iPad) can sit at a nonzero readyState
+  without ever firing `onloadedmetadata`/`onerror`, so the timeout silently
+  no-op'd and the probe's promise never settled — the caller (GameDetailsModal's
+  submit, which has no catch around this await chain) hung forever: the "Upload
+  game" modal stayed open with no progress and no message. Fixed with a
+  `settled` flag set by `onloadedmetadata`/`onerror`; the timeout now rejects
+  unconditionally when not yet settled, regardless of `readyState`. Any new
+  timeout guard around a `<video>` element load must key off an explicit
+  settled flag, never `readyState`, which is not a reliable "still loading"
+  signal on every engine.
 - **T11800 stale videoStore into Annotate:** the global `videoStore` carries Focus's `clipOffset`/`clipDuration` into Annotate on any mode switch that skips `reset()` (Focus/Overlay/DraftReelPreview "Done for now" call raw `setEditorMode`). `useVideo` then reports the PLAY length as duration, the pending-selection `videoDuration > 0` gate passes early, `seek` clamps, and auto-deselect wipes the re-selected play. Fix: `useVideoStore.getState().reset()` at the top of `handleLoadGame` (game-open seam). Red-first proof: `AnnotateContainer.doneForNowReselect.test.jsx` (real `useVideo` + real store; the older `pendingSelection` test hard-codes duration/currentTime and cannot see this). The "is framed" banner is `components/FramedBanner.jsx` (memory-only `galleryStore.justFramed`, spent at mount); no-origin exits go through `utils/leaveFocusForLater.js` (Clips tab + `clipsRingTarget`/`clipsRingProjectId`, ring cleared by timer).
 - **T11810:** the "Saved" chip, `RESULT_RETENTION` and `utils/resultRetentionNote.js` are gone; older notes below that mention them are historical.
 - **Add Play CTA must gate on `isEditMode` (T8130, 2026-09-02).** Any new button that calls

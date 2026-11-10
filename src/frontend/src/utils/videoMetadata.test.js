@@ -278,3 +278,75 @@ describe('T12000 extractVideoMetadata (File/Blob) teardown order', () => {
     expect(loadIndex).toBeLessThan(revokeIndex);
   });
 });
+
+/**
+ * T15440: QA observed the mobile/iPad "Upload game" modal stuck with no progress and
+ * no message. extractVideoMetadata's timeout guard only rejects when
+ * `video.readyState === 0`; a stalled WebKit decode can sit at a NONZERO readyState
+ * (partially loaded, never reaching HAVE_METADATA) without ever firing
+ * `onloadedmetadata` or `onerror`. The guard then no-ops and the returned promise
+ * never settles -- the caller (GameDetailsModal's submit) hangs forever with no
+ * catch and no message, matching the report exactly.
+ */
+describe('T15440 extractVideoMetadata timeout on a stalled nonzero readyState', () => {
+  let fakeVideo;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    URL.createObjectURL = vi.fn(() => 'blob:mock-object-url');
+    URL.revokeObjectURL = vi.fn();
+
+    fakeVideo = {
+      preload: '',
+      muted: false,
+      videoWidth: 0,
+      videoHeight: 0,
+      duration: NaN,
+      // Stalled mid-load: not 0 (so the old readyState===0 guard skips the
+      // timeout) but never reaches HAVE_METADATA, and onloadedmetadata/onerror
+      // never fire -- this is the state a wedged mobile WebKit decode leaves.
+      readyState: 1,
+      networkState: 2,
+      audioTracks: [],
+      videoTracks: [],
+      textTracks: [],
+      defaultPlaybackRate: 1,
+      onloadedmetadata: null,
+      onerror: null,
+      removeAttribute: vi.fn(),
+      load: vi.fn(),
+      remove: vi.fn(),
+    };
+    Object.defineProperty(fakeVideo, 'src', {
+      get() { return this._src; },
+      set(url) { this._src = url; }, // never fires onloadedmetadata/onerror
+    });
+
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      if (tag === 'video') return fakeVideo;
+      return realCreate(tag);
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
+  });
+
+  it('rejects once the timeout elapses instead of hanging forever', async () => {
+    const file = new File([new Uint8Array(8)], 'stalled.mp4', { type: 'video/mp4' });
+
+    const result = extractVideoMetadata(file);
+    let settled = false;
+    result.then(() => { settled = true; }, () => { settled = true; });
+
+    // Advance well past the 30s minimum timeout.
+    await vi.advanceTimersByTimeAsync(31000);
+
+    expect(settled).toBe(true);
+    await expect(result).rejects.toThrow(/timed out/i);
+  });
+});
