@@ -12,6 +12,7 @@ SMALL_N_FLOOR = 20            # same value as journeyTargets.js SMALL_N_FLOOR
 MATURE_DAYS = 14              # a sign-up is judged only after its full 14-day window
 COHORT_DAYS = 90              # mature cohort: signed up between COHORT_DAYS + MATURE_DAYS and MATURE_DAYS ago
 RECENT_DAYS = 30              # the "last 30 d" second read of every cohort gate
+VISIT_WINDOW_DAYS = 7          # gate 1's trailing window: organic visits -> sign-ups over 7 d
 REVENUE_DAYS = 180
 REPEAT_AGE_DAYS = 180         # a payer is eligible for the repeat read once its first purchase is this old
 REPEAT_GAP_DAYS = 120         # a repeat is a purchase at least this long after the first
