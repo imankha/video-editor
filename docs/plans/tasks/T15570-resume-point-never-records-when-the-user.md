@@ -19,7 +19,8 @@ Viewports: admin desktop (data).
 
 ## Acceptance Criteria
 
-- [ ] A resume point saved on exit carries left_at and the playhead t, and admin shows both.
+- [x] A resume point saved on exit carries left_at and the playhead t, and admin shows both.
+  Already true via the T15360 exit beacon; evidence: `T15570:C1` check below.
 
 ## Ruling
 
@@ -58,6 +59,15 @@ check only covered Annotate/Overlay), or is the intent that admin should show a 
 field on the navigation write carrying the OUTGOING screen's playhead/timestamp, still a
 named gesture, not reactive)? These have different scope/risk and the acceptance criteria
 text doesn't disambiguate.
+
+**Closed per the owner's ruling above** (2026-11-10). Added
+`src/frontend/e2e/checks/T15570.check.spec.js` (`T15570:C1`): closes a real tab on a Framing
+(`/focus/p/{id}`) play and asserts `GET /api/auth/me`'s `resume_point.left_at`/`.t` are both
+set — same close-tab-then-check pattern T15360's check already used for Annotate/Overlay,
+scoped under T15570's own id. Ran against unchanged production code: passed (`qa/green-T15570-check.log`),
+confirming the acceptance criterion already holds via the existing exit beacon. No production
+code change and no red counterpart: per the Landing Policy's documentation-only clause, this is
+characterization evidence for a no-code-change closure, not a bug fix.
 
 ## Context
 
