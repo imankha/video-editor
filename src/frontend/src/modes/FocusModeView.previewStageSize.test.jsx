@@ -134,12 +134,14 @@ describe('FocusModeView short-desktop viewport floor (T14850)', () => {
     );
   });
 
-  it('T14850/T15400:C1 floors the preview-state derived width at 320px-equivalent at every min-width:1024px height', () => {
+  // T15650: widened with an outer `max(50%, ...)` floor -- the plain 320px-equivalent
+  // floor still let the preview shrink to a sliver on a wide/short desktop viewport.
+  it('T14850/T15400/T15650:C1 floors the preview-state derived width at 320px-equivalent, and at 50% of the column, at every min-width:1024px height', () => {
     renderView({ globalAspectRatio: '9:16' });
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
     const stage = screen.getByTestId('focus-video-stage');
     expect(stage.className).toContain(
-      '[@media(min-width:1024px)]:!w-[min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]',
+      '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar))))]',
     );
   });
 });
