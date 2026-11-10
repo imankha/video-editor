@@ -884,6 +884,15 @@ class DotaskCliTest(unittest.TestCase):
         (checkout / dotask_cli.RUN_LOCK).write_text(json.dumps({"pid": os.getpid(), "since": "x"}))
         self.assertNotIn("no loop is running", self._status_out(group, checkout))
 
+    def test_status_does_not_call_a_group_dead_whose_loop_finished_before_landed_existed(self):
+        # g-t15930-3 (2026-11-10): the loop landed PR #740 and exited; its status ended on VERIFY_PASS.
+        group, checkout = self._group_for_eta("t VERIFY_PASS abc round 1\n")
+        old = time.time() - 3600
+        os.utime(checkout / ".dotask-status", (old, old))
+        log = self.tasks_root / "profiles" / "g-x" / "run.log"
+        log.write_text("evidence: x\nWAITING ON USER: PR https://github.com/o/r/pull/9 is success; evidence at y.\n")
+        self.assertNotIn("no loop is running", self._status_out(group, checkout))
+
     def test_a_crashed_loop_writes_loop_crashed_and_reraises(self):
         checkout = self.tasks_root / "g-x"
         checkout.mkdir(parents=True, exist_ok=True)

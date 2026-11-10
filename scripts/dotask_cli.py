@@ -1269,6 +1269,13 @@ def loop_not_running(checkout):
             return False
     except (OSError, ValueError):
         pass
+    # A loop started before LANDED existed ends a clean landing with land's own closing line in run.log.
+    try:
+        log = (TASKS_ROOT / "profiles" / checkout.name / "run.log").read_text(encoding="utf-8", errors="replace")
+        if any("WAITING ON USER: PR " in line for line in log.splitlines()[-6:]):
+            return False
+    except OSError:
+        pass
     newest = max([p.stat().st_mtime for p in [checkout / ".dotask-status", *(checkout / ".dotask-profile").glob("*")]
                   if p.exists()] or [0])
     return time.time() - newest > LOOP_GRACE_SECONDS
