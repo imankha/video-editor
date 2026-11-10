@@ -85,6 +85,40 @@ describe('galleryStore count derivation', () => {
       expect(count).toBe(4); // total reels unchanged by watching
       expect(unwatchedCount).toBe(2); // one fewer unseen
     });
+
+    // T15480: the export-complete WS listener (useDownloads.js) and the publish
+    // success path (usePublishProject.js) each fire their OWN
+    // fetchCount({force:true}) independently -- export-complete fires first
+    // (export finishes before the publish POST even starts) but its response can
+    // still resolve AFTER the publish one if the first request is just slower.
+    // Two unordered forced fetches means whichever response lands LAST wins,
+    // even if it is the STALE one -- this is the "Highlights 0 until you
+    // navigate away and back" bug. A later-STARTED forced fetch must win over an
+    // earlier-started one regardless of resolve order.
+    it('a later-started forced fetchCount is never clobbered by an earlier one resolving after it', async () => {
+      let resolveFirst;
+      let resolveSecond;
+      const fetchMock = vi.fn()
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      // export-complete fires first (reel not yet published server-side: count 0)
+      const firstPromise = useGalleryStore.getState().fetchCount({ force: true, reason: 'export-complete' });
+      // publish success fires second (reel now published server-side: count 1)
+      const secondPromise = useGalleryStore.getState().fetchCount({ force: true, reason: 'publish' });
+
+      // The SECOND (newer) request resolves first...
+      resolveSecond({ ok: true, json: async () => ({ count: 1, unwatched_count: 1 }) });
+      await secondPromise;
+      // ...then the FIRST (stale) request resolves LAST and must not clobber it.
+      resolveFirst({ ok: true, json: async () => ({ count: 0, unwatched_count: 0 }) });
+      await firstPromise;
+
+      const { count, unwatchedCount } = useGalleryStore.getState();
+      expect(count).toBe(1);
+      expect(unwatchedCount).toBe(1);
+    });
   });
 });
 

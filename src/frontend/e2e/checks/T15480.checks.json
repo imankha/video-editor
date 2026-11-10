@@ -1,0 +1,25 @@
+{
+  "task": "T15480",
+  "criteria": [
+    {
+      "id": "T15480:C1",
+      "kind": "code",
+      "text": "After Finish, the new highlight is visible on the landing screen without re-navigation.",
+      "command": "cd src/frontend && npx vitest run src/stores/galleryStore.test.js -t 'later-started forced fetchCount'",
+      "test": "T15480:C1 - a later-started forced fetchCount is never clobbered by an earlier one resolving after it"
+    },
+    {
+      "id": "T15480:C2",
+      "kind": "human",
+      "text": "(human, needs staging repro) The Highlights tab lists each finished highlight above locked reel tiles. Static reading of collections_summary/route_collection shows correct bucketing for a single-clip reel (Mixes group when game-less); could not reproduce the staging-observed 'locked cards only, no own reel' state without a live stack. See .dotask-notes.md T15480 progress for what was ruled out.",
+      "test": null
+    },
+    {
+      "id": "T15480:C3",
+      "kind": "code",
+      "text": "Cold-loading /home/published shows published highlights.",
+      "command": "cd src/frontend && npx vitest run src/components/ProjectManager.threeTabIA.test.jsx -t 'cold /home/published load WITH published highlights'",
+      "test": "T15480:C3 - a cold /home/published load WITH published highlights lands on Published, not Games"
+    }
+  ]
+}

@@ -6,6 +6,14 @@ import { recordSync, resolveReason } from '../utils/syncTrace';
 
 // Module-level ref for fetch dedup
 let _fetchCountPromise = null;
+// T15480: bumped on every fetchCount call (forced or not). A `force:true` call
+// never dedupes against an in-flight one (see below), so TWO independent
+// fetches can be in flight at once (e.g. useDownloads' export-complete listener
+// and usePublishProject's post-publish refresh) -- without this, whichever
+// response lands LAST wins, even if it is the STALER request (started earlier,
+// read the pre-publish count). Each call captures its own `seq`; a response
+// whose seq is no longer the latest is dropped instead of applied.
+let _countSeq = 0;
 
 /**
  * Gallery Store
@@ -122,23 +130,28 @@ export const useGalleryStore = create((set, get) => ({
     const why = resolveReason(reason);
     if (_fetchCountPromise && !force) return _fetchCountPromise;
 
-    _fetchCountPromise = (async () => {
+    const seq = ++_countSeq;
+    const promise = (async () => {
       try {
         const response = await apiFetch(`${API_BASE}/api/downloads/count`);
         if (!response.ok) return 0;
         const data = await response.json();
         const count = data.count || 0;
         const unwatchedCount = data.unwatched_count || 0;
+        // A newer fetchCount call started after this one -- its response (once
+        // it lands) is authoritative; this stale response must not overwrite it.
+        if (seq !== _countSeq) return count;
         set({ count, unwatchedCount, countLoaded: true });
         recordSync({ kind: 'fetch', holder: 'galleryStore.count', reason: why, reqId: response.reqId, summary: { count, unwatchedCount } });
         return count;
       } catch {
         return 0;
       } finally {
-        _fetchCountPromise = null;
+        if (_fetchCountPromise === promise) _fetchCountPromise = null;
       }
     })();
-    return _fetchCountPromise;
+    _fetchCountPromise = promise;
+    return promise;
   },
 
   // Reset on profile switch — clears badge count, closes panel, and drops the

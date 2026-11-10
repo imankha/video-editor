@@ -492,11 +492,15 @@ function tabFromPath(pathname) {
   return Object.keys(TAB_PATHS).find((tab) => TAB_PATHS[tab] === pathname) ?? null;
 }
 
-// The tab a COLD load lands on. Published (Finished) is never a landing: a stale
-// /home/published URL left from a prior session must not open the app there. The
-// user opens it by gesture (tab click / publish completion), which uses setActiveTab.
-// Landing = Clips when there are unfinished clips, else Games; a stale /home/published
-// always lands on Games, see defaultLandingTab.
+// The tab a COLD load lands on. A stale /home/published URL left from a prior
+// session with NOTHING published must not open the app on an empty Published
+// tab -- it settles on Games/Clips here like any other unproven deep link, and
+// the user opens Published by gesture (tab click / publish completion), which
+// uses setActiveTab. T15480: that guard is about EMPTINESS, not the URL
+// itself -- the mount effect below adds a second pass, once the real
+// galleryStore count has loaded, that switches INTO Published if the account
+// actually has published highlights (so a cold reopen of a tab that legitimately
+// has content is no longer indistinguishable from a truly stale one).
 function landingTabFromPath(pathname) {
   // T14970: this screen sits under a cold editor URL while the object opens or its profile
   // is swapped. Naming a tab here keeps the default-tab settle from rewriting that URL, and
@@ -638,6 +642,9 @@ export function ProjectManager({
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   // T12100: the Finished badge is the TOTAL published count; unseen drives the dot.
   const publishedCount = useGalleryStore((s) => s.count);
+  // T15480: whether `publishedCount` reflects a real fetch yet, so the cold
+  // /home/published landing carve-out below never acts on the pre-fetch 0.
+  const publishedCountLoaded = useGalleryStore((s) => s.countLoaded);
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   // T8780: `gamesEmpty` drives whether "Add Game" renders above the list (has
   // content) or below the "No games yet" message (empty) -- same
@@ -1496,6 +1503,24 @@ export function ProjectManager({
       hasSetInitialTab.current = true;
     }
   }, [clipDrafts, highlightDrafts, loading, setActiveTab]);
+
+  // T15480: a cold /home/published load with an account that actually HAS
+  // published highlights is not the "stale URL from a prior session" case the
+  // effect above guards against -- it is a legitimate reopen. That effect
+  // settles it on Games immediately (before the real count is known, to avoid
+  // a dead-end empty Published tab); this second pass corrects course ONCE,
+  // switching INTO Published the moment the real count resolves and proves
+  // there's something to show. Captured once at mount (via the ref) so a
+  // user's own later navigation away from a legitimately-empty Published tab
+  // is never yanked back into it later by an unrelated count change.
+  const coldPublishedUrl = useRef(tabFromPath(window.location.pathname) === 'published');
+  const settledColdPublished = useRef(false);
+  useEffect(() => {
+    if (!coldPublishedUrl.current || settledColdPublished.current) return;
+    if (!publishedCountLoaded) return; // wait for the real count before deciding
+    settledColdPublished.current = true;
+    if (publishedCount > 0) setActiveTab('published');
+  }, [publishedCount, publishedCountLoaded, setActiveTab]);
 
   // T8400/T8545/T8555: "land on the published reel" (e.g. DraftTile's Publish ->
   // My Reels action) fires galleryStore.open(); T8555 split published reels onto
