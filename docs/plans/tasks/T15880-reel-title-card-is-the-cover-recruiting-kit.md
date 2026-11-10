@@ -1,4 +1,4 @@
-# T15880: The reel's title card is the social cover and the recruiting card
+# T15880: Reel title card and cover
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T15330: dotask: seven stall gaps that needed a person
+# T15330: dotask stall fixes
 
 ## In plain words
 

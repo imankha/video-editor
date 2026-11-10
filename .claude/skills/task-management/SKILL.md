@@ -70,6 +70,13 @@ because that is evidence for the fix.
 **The reader test.** Someone who only knows what the app does should be able to propose a
 different solution after reading the row. If they could not, the row is not finished.
 
+**Names (owner rule, 2026-11-09).** A task name is as short as it can be and as long as it needs
+to be to remind a reader what the task is. Two to six words, a noun phrase or a plain verb phrase,
+one idea: "Retention chart", "Upload survives a network drop", "Remove multi-clip backend". No
+sentences, no lists of parts joined with "+" or commas, no parentheses, no ids, no code names, no
+"Prototype 1:" prefixes. The owner reads the description, not the name; the name only has to
+identify the gist.
+
 **Row length.** A PLAN.md description is three to five sentences in the order above. The task
 file opens with the same text under `## In plain words`, then the detail.
 

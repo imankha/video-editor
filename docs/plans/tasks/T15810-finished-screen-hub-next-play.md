@@ -1,4 +1,4 @@
-# T15810: Finished screen is the hub: Download, Share, Add to reel, Make the next play
+# T15810: Finished screen hub
 
 ## In plain words
 

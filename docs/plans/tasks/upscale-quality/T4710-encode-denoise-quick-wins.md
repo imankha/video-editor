@@ -1,4 +1,4 @@
-# T4710: Encode + Denoise Quick Wins
+# T4710: Final encode fix
 
 ## In plain words
 

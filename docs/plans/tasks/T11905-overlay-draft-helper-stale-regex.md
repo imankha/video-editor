@@ -1,4 +1,4 @@
-# T11905: `overlayDraft.js` e2e helper permanently skips in every environment
+# T11905: Fix skipping overlay test helper
 
 ## In plain words
 

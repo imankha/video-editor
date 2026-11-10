@@ -1,4 +1,4 @@
-# T14310: Prototype 1: hosted video-search slot end to end (upload game, tap-crop query, scored moments)
+# T14310: Hosted video-search pilot
 
 ## In plain words
 

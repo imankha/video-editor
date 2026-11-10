@@ -1,4 +1,4 @@
-# T8850: Shrink UI: offer card + crop step + presets
+# T8850: Shrink offer and quality picker
 
 ## In plain words
 

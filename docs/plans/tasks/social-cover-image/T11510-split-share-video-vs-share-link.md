@@ -1,4 +1,4 @@
-# T11510: Separate "Share video" and "Share link" on mobile
+# T11510: Phone share: video or link
 
 ## In plain words
 

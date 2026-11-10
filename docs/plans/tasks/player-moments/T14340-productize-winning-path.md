@@ -1,4 +1,4 @@
-# T14340: Productize the winning path: tap a player in Annotate, get scored suggested plays
+# T14340: Player moments feature
 
 ## In plain words
 

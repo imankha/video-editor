@@ -1,4 +1,4 @@
-# T15850: Pre-shrink spike: one week, one number, go or no-go
+# T15850: Pre-shrink spike
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T9050: Cost model: when NOT to shrink, and the size-cap-driven bitrate rule
+# T9050: When-to-shrink rule
 
 ## In plain words
 

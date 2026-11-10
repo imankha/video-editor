@@ -1,4 +1,4 @@
-# T15910: Dead-code ratchet: knip for the frontend, vulture for the backend, CI fails only on new findings
+# T15910: Dead-code ratchet
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T8865: Make highlights from plays before the whole game video has uploaded
+# T8865: Highlights before upload finishes
 
 ## In plain words
 

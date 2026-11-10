@@ -1,4 +1,4 @@
-# T10640: Fix stale "Export" locator in T4880 mobile reachability spec
+# T10640: Fix stale Export test locator
 
 ## In plain words
 

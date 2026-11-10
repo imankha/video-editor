@@ -1,4 +1,4 @@
-# T3440: Cache CORS Preflight Responses
+# T3440: Cache preflight responses
 
 ## In plain words
 

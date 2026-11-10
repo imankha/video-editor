@@ -1,4 +1,4 @@
-# T4740: Production Integration + Crop-Size Routing
+# T4740: Route small crops to the new upscaler
 
 ## In plain words
 

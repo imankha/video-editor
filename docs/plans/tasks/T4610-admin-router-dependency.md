@@ -1,4 +1,4 @@
-# T4610: require_admin as Router-Level Dependency
+# T4610: Admin check at router level
 
 ## In plain words
 

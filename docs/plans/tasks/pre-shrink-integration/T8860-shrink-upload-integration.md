@@ -1,4 +1,4 @@
-# T8860: Shrink upload integration + fallback
+# T8860: Shrink during upload
 
 ## In plain words
 

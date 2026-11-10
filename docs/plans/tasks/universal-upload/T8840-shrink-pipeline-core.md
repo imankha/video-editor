@@ -1,4 +1,4 @@
-# T8840: Standalone browser shrink tool (fully working, zero app integration)
+# T8840: Standalone shrink tool
 
 ## In plain words
 

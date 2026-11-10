@@ -1,4 +1,4 @@
-# T7430: Retention curves & triangle, low-volume weeks derived from data
+# T7430: Retention chart
 
 ## In plain words
 

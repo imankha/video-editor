@@ -1,4 +1,4 @@
-# T15800: Spotlight is a step on the way to Finished, not an offer
+# T15800: Spotlight becomes a step
 
 ## In plain words
 

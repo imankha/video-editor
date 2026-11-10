@@ -1,4 +1,4 @@
-# T14320: Prototype 2: click-seeded tracking bake-off (detector slot x tracker slot) through exits and re-entries
+# T14320: Tracking bake-off
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T7410: First-party visit beacon (landing + app, aggregate-only)
+# T7410: Visit counter
 
 ## In plain words
 

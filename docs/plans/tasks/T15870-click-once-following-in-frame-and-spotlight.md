@@ -1,4 +1,4 @@
-# T15870: Click once, the box and the spotlight follow the athlete
+# T15870: Click-once following in Frame and Spotlight
 
 ## In plain words
 

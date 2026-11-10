@@ -1,4 +1,4 @@
-# T2580: Faststart Validation on Upload
+# T2580: Faststart check on upload
 
 ## In plain words
 

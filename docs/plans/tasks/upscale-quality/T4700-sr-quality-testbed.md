@@ -1,4 +1,4 @@
-# T4700: SR Quality Testbed
+# T4700: Upscale test bench
 
 ## In plain words
 

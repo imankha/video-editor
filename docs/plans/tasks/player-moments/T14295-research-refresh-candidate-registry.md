@@ -1,4 +1,4 @@
-# T14295: Research refresh: candidate registry for every slot (models as parameters, not hard-coded picks)
+# T14295: Model candidate registry
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T15820: Suggested plays proof: Gemini on 10 hand-marked games, one day, about $5
+# T15820: Suggested plays proof
 
 ## In plain words
 

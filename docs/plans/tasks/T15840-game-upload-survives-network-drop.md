@@ -1,4 +1,4 @@
-# T15840: A game upload survives a network drop without the parent doing anything
+# T15840: Upload survives a network drop
 
 ## In plain words
 

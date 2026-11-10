@@ -1,4 +1,4 @@
-# T11300: Reels v2 - stitch published highlights into a college highlight reel
+# T11300: Highlight reel, first version
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T7230: Drip Stores + Seed Copy (drip.sqlite, R2 templates doc, unsubscribe markers)
+# T7230: Email drip storage
 
 ## In plain words
 

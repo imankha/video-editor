@@ -1,4 +1,4 @@
-# T7110: Landing homepage — sell all four value stories (copy overhaul)
+# T7110: Homepage sells the reel
 
 ## In plain words
 

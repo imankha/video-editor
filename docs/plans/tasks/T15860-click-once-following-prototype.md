@@ -1,4 +1,4 @@
-# T15860: Click-once following prototype: SAM 2.1 with SAMURAI memory on 20 real clips
+# T15860: Click-once following prototype
 
 ## In plain words
 

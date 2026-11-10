@@ -1,4 +1,4 @@
-# T7400: analytics.sqlite store + on-demand cohort rollup sweep
+# T7400: Analytics summary store
 
 ## In plain words
 

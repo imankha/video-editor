@@ -1,4 +1,4 @@
-# T15350: dotask frees a merged group's container and app stack
+# T15350: dotask frees merged groups
 
 ## In plain words
 

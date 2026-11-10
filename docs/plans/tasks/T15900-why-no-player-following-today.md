@@ -1,4 +1,4 @@
-# T15900: Why does nothing follow the athlete today? Archaeology and decision note before click-once tracking
+# T15900: Player-following history note
 
 ## In plain words
 

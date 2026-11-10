@@ -1,4 +1,4 @@
-# T11260: Remove multi-clip highlight carry, clip boundaries, Spotlight gates
+# T11260: Remove multi-clip Spotlight code
 
 ## In plain words
 

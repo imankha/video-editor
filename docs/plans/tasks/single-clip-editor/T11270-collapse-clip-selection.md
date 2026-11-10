@@ -1,4 +1,4 @@
-# T11270: Collapse clip selection to "the clip" (mechanical)
+# T11270: Collapse clip selection
 
 ## In plain words
 

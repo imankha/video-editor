@@ -1,4 +1,4 @@
-# T4730: Temporal VSR Prototype (FlashVSR / SeedVR2)
+# T4730: Video upscaler trial
 
 ## In plain words
 

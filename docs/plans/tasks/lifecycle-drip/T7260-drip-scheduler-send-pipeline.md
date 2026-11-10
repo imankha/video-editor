@@ -1,4 +1,4 @@
-# T7260: Drip Scheduler + Idempotent Send Pipeline + Admin Dry-Run
+# T7260: Email drip scheduler
 
 ## In plain words
 

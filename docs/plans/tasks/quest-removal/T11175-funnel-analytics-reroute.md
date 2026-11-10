@@ -1,4 +1,4 @@
-# T11175: Reroute funnel analytics off the quest achievements endpoint
+# T11175: Move funnel events off quests
 
 ## In plain words
 

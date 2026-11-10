@@ -1,4 +1,4 @@
-# T14330: Prototype 3: video-VLM slot on the child's windows ("is this interesting, a highlight, a learning opportunity?")
+# T14330: Moment scoring prototype
 
 ## In plain words
 

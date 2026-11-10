@@ -1,4 +1,4 @@
-# T11250: Remove multi-clip backend - clip-management endpoints + export N>1 branches
+# T11250: Remove multi-clip backend
 
 ## In plain words
 

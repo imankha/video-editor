@@ -1,4 +1,4 @@
-# T8845: Port the approved standalone shrink tool into the app (worker + client API)
+# T8845: Port shrink tool into the app
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T4400: Backend-Authoritative Export (mark-exported, No Client Full-State)
+# T4400: Server-owned export state
 
 ## In plain words
 

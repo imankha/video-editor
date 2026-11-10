@@ -1,4 +1,4 @@
-# T7240: Stage Resolver + Template Selection/Render Engine
+# T7240: Email drip stage picker
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T7250: Unsubscribe Endpoint + Compliance Footer
+# T7250: Email unsubscribe and footer
 
 ## In plain words
 

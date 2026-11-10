@@ -1,4 +1,4 @@
-# T15890: Suggested reel: a model picks, orders and titles the highlights
+# T15890: Suggested reel
 
 ## In plain words
 

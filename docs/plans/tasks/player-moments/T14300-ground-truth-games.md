@@ -1,4 +1,4 @@
-# T14300: Ground truth and the Veo bar: parent-marked moments on 3 to 5 real games, Veo's precision and recall on the same games
+# T14300: Player moments ground truth
 
 ## In plain words
 

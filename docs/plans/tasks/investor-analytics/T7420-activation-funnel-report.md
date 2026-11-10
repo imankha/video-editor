@@ -1,4 +1,4 @@
-# T7420: Activation & funnel drop-off report
+# T7420: Activation report
 
 ## In plain words
 

@@ -1,4 +1,4 @@
-# T13750: Require ci-ready on master with GitHub branch protection
+# T13750: Branch protection on master
 
 ## In plain words
 

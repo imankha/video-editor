@@ -1,4 +1,4 @@
-# T15830: Suggested plays after upload: hosted model, three free games, then credits
+# T15830: Suggested plays feature
 
 ## In plain words
 
