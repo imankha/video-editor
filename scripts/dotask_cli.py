@@ -524,7 +524,10 @@ def render_pr_body(group):
         lines += ["", "Check on staging after merge (owner ruling in the task file; not verified before the push):"]
         lines += [f"- {item['id']}: {item['text']}" for item in group["staging_checks"]]
     if group.get("skipped_checks"):
-        lines += ["", "Not verified: no check proved these before the verify budget ran out (owner rule 2026-11-09):"]
+        owner = (TASKS_ROOT / sanitize(group.get("slug", "")) / SKIP_VERIFY_FILE).is_file()
+        lines += ["", "Not verified: the owner skipped proof verification for this group; Branch CI still gates the merge:"
+                  if owner else
+                  "Not verified: no check proved these before the verify budget ran out (owner rule 2026-11-09):"]
         lines += [f"- {item['id']}: {item['text']}" for item in group["skipped_checks"]]
     return "\n".join(lines)
 
@@ -808,6 +811,10 @@ VERIFY_BUDGET_MINUTES = float(os.environ.get("DOTASK_VERIFY_BUDGET_MIN", "30"))
 CHECK_COMMAND_SECONDS = 300  # one `code` check: a grep or a targeted test run
 CHECK_SPEC_SECONDS = 900  # one task's browser checks in one Playwright run
 BUDGET_SPENT = "not verified: the group's verify budget was spent (owner rule 2026-11-09)"
+# A marker file in the checkout (not a group-file key, which the running loop's save_group would overwrite):
+# the owner asked to skip proof verification for PR #739 on 2026-11-10; Branch CI still has to pass.
+SKIP_VERIFY_FILE = ".dotask-skip-verify"
+OWNER_SKIPPED = "not verified: the owner skipped proof verification for this group"
 RECHECK_NOTE = ("This is a re-check after fix round {fix_round}; criteria not named here passed on the previous "
                 "HEAD and carry forward. ")
 # A fixer that disputed a finding stopped the whole loop as VERIFY_BLOCKED, and the owner had to rule on
@@ -1235,9 +1242,36 @@ def locked(action):
     """Wrap a resume/autoland entry point so the whole run holds the group's lock (resume calls autoland
     and land inside it; those inner calls go to the unwrapped functions)."""
     def run(args):
-        with run_lock(TASKS_ROOT / sanitize(args.slug), args.slug):
-            return action(args)
+        checkout = TASKS_ROOT / sanitize(args.slug)
+        with run_lock(checkout, args.slug):
+            try:
+                return action(args)
+            except Exception as exc:  # SystemExit (die) is a reported stop, not a crash
+                # An uncaught error used to leave no stop line, so `status` kept showing the group as running
+                # with a stale ETA and nothing relaunched it (g-t15400-4, PR #739, 2026-11-10).
+                if checkout.is_dir():
+                    append_status(checkout, f"LOOP_CRASHED {type(exc).__name__}: {str(exc)[:160]}")
+                raise
     return run
+
+
+LOOP_GRACE_SECONDS = 300  # a group `start` just launched has no lock for a moment
+
+
+def loop_not_running(checkout):
+    """True when nothing drives the group: no live process holds its run lock and neither the status file
+    nor a worker profile changed in the last LOOP_GRACE_SECONDS (a loop killed by a reboot, a crash that
+    wrote no stop line before LOOP_CRASHED existed, a closed terminal)."""
+    checkout = Path(checkout)
+    try:
+        holder = json.loads((checkout / RUN_LOCK).read_text(encoding="utf-8"))
+        if pid_alive(int(holder.get("pid") or 0)):
+            return False
+    except (OSError, ValueError):
+        pass
+    newest = max([p.stat().st_mtime for p in [checkout / ".dotask-status", *(checkout / ".dotask-profile").glob("*")]
+                  if p.exists()] or [0])
+    return time.time() - newest > LOOP_GRACE_SECONDS
 
 
 def resume(args):
@@ -1666,9 +1700,13 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
     disputes = list(group.get("disputes", []))
     merged = {"head": head, "criteria": [], "bugs": [], "skipped_steps": []}
     started, left = time.time(), budget_left_minutes(group)
-    if left <= 0:
-        merged["criteria"] = [{"id": c, "status": "skipped", "evidence": BUDGET_SPENT} for c in wanted]
-        append_status(checkout, f"VERIFY_SKIPPED round {round_number}: verify budget spent; {' '.join(wanted)} not verified")
+    owner_skip = (Path(checkout) / SKIP_VERIFY_FILE).is_file()
+    if left <= 0 or owner_skip:
+        why = OWNER_SKIPPED if owner_skip else BUDGET_SPENT
+        merged["criteria"] = [{"id": c, "status": "skipped", "evidence": why} for c in wanted]
+        append_status(checkout, f"VERIFY_SKIPPED round {round_number}: "
+                                f"{'verification skipped by the owner' if owner_skip else 'verify budget spent'}; "
+                                f"{' '.join(wanted)} not verified")
     else:
         try:
             try:
@@ -1771,9 +1809,10 @@ def autoland(args):
         die(f"{slug} still has tasks without a commit line: {' '.join(unfinished)}")
     exclude_path = checkout / ".git" / "info" / "exclude"
     exclude_path.parent.mkdir(parents=True, exist_ok=True)
-    if VERIFY_FILE not in (exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""):
-        with exclude_path.open("a", encoding="utf-8") as stream:
-            stream.write(VERIFY_FILE + "\n")
+    for ignored in (VERIFY_FILE, SKIP_VERIFY_FILE):
+        if ignored not in (exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""):
+            with exclude_path.open("a", encoding="utf-8") as stream:
+                stream.write(ignored + "\n")
 
     # After a failed round: what the next verifier re-checks. A restart after a fix round resumes it.
     focus, first_round = resume_focus(checkout, group, git_head(checkout))
@@ -1835,6 +1874,8 @@ def autoland(args):
                     return 0
                 code = land(SimpleNamespace(slug=slug, after_test=True, fix_on_red=True))
                 if code != CI_RED:
+                    if code == 0:  # without this a finished group looks like a dead loop to `status`
+                        append_status(checkout, f"LANDED {head[:9]}: PR open, Branch CI green; waiting on the owner's merge")
                     return code
                 # Red Branch CI after a clean verdict waited for a person to read the logs and push a
                 # fix (PRs #720, #722, #723, 2026-11-08). It is a finding like any other.
@@ -1979,7 +2020,7 @@ def nextup(args):
 DEFAULT_MINUTES = {"implementation": 25, "qa": 35, "ci": 8}
 ETA_SHIFT_MINUTES = 15
 STOP_WORDS = ("VERIFY_BLOCKED", "VERIFY_EXHAUSTED", "VERIFY_NEEDS_USER", "BLOCKED", "CONFLICT", "DISPATCH_FAILED",
-              "ENDED_WITHOUT_STATUS", "AUTH_DEAD", "PHASE_VIOLATION")
+              "ENDED_WITHOUT_STATUS", "AUTH_DEAD", "PHASE_VIOLATION", "LOOP_CRASHED")
 
 
 def run_records(slug):
@@ -2141,6 +2182,13 @@ def status(args):
         elif running == "stopped":
             print(f"  eta: none (container stopped; `bash scripts/dotask.sh resume {slug}` continues it, "
                   f"`task.sh nuke {slug}` clears it)")
+        elif loop_not_running(group_path.parent) and not any(
+                f" {word} " in f" {last_status(group_path.parent)} " or f" {word}" in last_status(group_path.parent)
+                for word in (*STOP_WORDS, "LANDED")):
+            # Its container is up but nothing drives it: a reboot or a kill, or a crash from before
+            # LOOP_CRASHED. Worded like the other stops so a watcher keyed on "(stopped" relaunches it.
+            print(f"  eta: none (stopped, no loop is running for this group; `bash scripts/dotask.sh resume {slug}` "
+                  f"continues it: {last_status(group_path.parent)[:100]})")
         else:
             print(f"  {eta_line({**group, 'slug': slug}, group_path.parent)}")
     return 0
