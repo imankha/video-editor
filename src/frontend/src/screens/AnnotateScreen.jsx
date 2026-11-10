@@ -860,12 +860,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               layerFilter={layerFilter}
               onSetLayerFilter={setLayerFilter}
               hideLayerFilter={simplifiedControls}
-              onJumpToClip={(regionId, endTime) => {
+              onJumpToClip={(regionId, startTime) => {
                 if (playback?.isPlaybackMode) {
                   playback.seekToClip(regionId);
                 } else {
                   handleSelectAnnotateRegion(regionId);
-                  effectiveSeek(endTime);
+                  effectiveSeek(startTime);
                 }
                 setShowMobileSidebar(false);
               }}

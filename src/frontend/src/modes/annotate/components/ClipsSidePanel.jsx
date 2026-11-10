@@ -322,7 +322,7 @@ export function ClipsSidePanel({
                   onClick={() => onSelectRegion(region.id)}
                   isMobile={isMobile}
                   onViewDetails={isMobile && !isPlaybackMode ? () => handleMobileViewDetails(region.id) : undefined}
-                  onJumpToClip={isMobile && onJumpToClip ? () => onJumpToClip(region.id, region.endTime) : undefined}
+                  onJumpToClip={isMobile && onJumpToClip ? () => onJumpToClip(region.id, region.startTime) : undefined}
                 />
               ))
             )}

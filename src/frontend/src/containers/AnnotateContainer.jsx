@@ -2000,9 +2000,14 @@ export function AnnotateContainer({
         // Quest 1 step: completes "Find an Amazing Play" at the TAP, unchanged.
         useQuestStore.getState().recordAchievement('add_clip_opened');
         const t = effectiveCurrentTime;
-        const s = Math.max(0, t - DEFAULT_CLIP_BEFORE);
+        const rawStart = t - DEFAULT_CLIP_BEFORE;
+        const s = Math.max(0, rawStart);
+        // T15640: a tap near 0:00 clamps the start but must not shrink the window --
+        // push the clamped amount onto the end so the play stays DEFAULT_CLIP_DURATION
+        // long (still capped by the video's actual duration).
+        const clampedAmount = s - rawStart;
         const effectiveDur = multiVideo?.totalDuration ?? annotateVideoMetadata?.duration ?? videoDuration ?? 0;
-        const e = Math.min(t + DEFAULT_CLIP_AFTER, effectiveDur || Infinity);
+        const e = Math.min(t + DEFAULT_CLIP_AFTER + clampedAmount, effectiveDur || Infinity);
         await handleFullscreenCreateClip({
           startTime: s, // VIRTUAL time — handleFullscreenCreateClip converts (§ A.2)
           duration: e - s,
