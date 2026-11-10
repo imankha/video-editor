@@ -215,6 +215,48 @@ describe('resumeFocusCompletion (T9285)', () => {
     expect(deps.toastError).toHaveBeenCalledTimes(1);
   });
 
+  // T15420: a recovered framing completion is stale once the project has
+  // since been finished (the live completion path already ran a decision
+  // gesture, or the project was otherwise published) — reopening "Add
+  // spotlight / Finish without spotlight" here would re-run a spotlight-less
+  // publish over an already-finished highlight. Route to the finished
+  // highlight (OVERLAY mode) instead and just acknowledge the stale job.
+  it('T15420: selectProject branch — project already has_final_video routes to OVERLAY, never reopens the Framing preview', async () => {
+    const finishedProject = { id: 42, name: 'My Reel', has_final_video: true };
+    const { deps, calls } = makeDeps();
+    deps.selectProject = vi.fn(async () => { calls.push('selectProject'); return finishedProject; });
+
+    const result = await resumeFocusCompletion({ jobId: 'job-11', projectId: 42 }, deps);
+
+    expect(deps.setEditorMode).toHaveBeenCalledWith('overlay');
+    expect(deps.loadProject).toHaveBeenCalledWith(finishedProject, { mode: 'overlay' });
+    expect(deps.openPreview).not.toHaveBeenCalled();
+    expect(deps.recordAchievement).not.toHaveBeenCalled();
+    expect(deps.acknowledgeJob).toHaveBeenCalledWith('job-11');
+    expect(calls).toEqual(['selectProject', 'setEditorMode', 'loadProject', 'acknowledgeJob']);
+    expect(result).toEqual({ opened: true, navigated: true });
+  });
+
+  it('T15420: already-in-Focus branch — refreshed project has_final_video routes to OVERLAY, never reopens the Framing preview', async () => {
+    const finishedProject = { id: 42, name: 'My Reel', has_final_video: true };
+    const { deps, calls } = makeDeps({
+      getEditorMode: vi.fn(() => 'framing'),
+      getSelectedProjectId: vi.fn(() => 42),
+      refreshProject: vi.fn(async () => { calls.push('refreshProject'); return finishedProject; }),
+    });
+
+    const result = await resumeFocusCompletion({ jobId: 'job-12', projectId: 42 }, deps);
+
+    expect(deps.selectProject).not.toHaveBeenCalled();
+    expect(deps.setEditorMode).toHaveBeenCalledWith('overlay');
+    expect(deps.loadProject).toHaveBeenCalledWith(finishedProject, { mode: 'overlay' });
+    expect(deps.openPreview).not.toHaveBeenCalled();
+    expect(deps.recordAchievement).not.toHaveBeenCalled();
+    expect(deps.acknowledgeJob).toHaveBeenCalledWith('job-12');
+    expect(calls).toEqual(['refreshProject', 'setEditorMode', 'loadProject', 'acknowledgeJob']);
+    expect(result).toEqual({ opened: true, navigated: true });
+  });
+
   it('openPreview throwing is caught (defense-in-depth: no unhandled rejection reaches the caller)', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { deps } = makeDeps({ openPreview: vi.fn(() => { throw new Error('store write failed'); }) });

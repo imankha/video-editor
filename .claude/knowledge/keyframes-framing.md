@@ -1,5 +1,14 @@
 ---
 domain: keyframes-framing
+updated: 2026-11-09 (T15410 — `resumePointRestore.js`'s FRAMING/OVERLAY branch called
+`useProjectsStore.selectProject()` alone, which only fetches the project record and never
+populates `projectDataStore`'s clips/working video -- the data FocusScreen/OverlayScreen
+actually render from. The restored editor hung on "Loading..." indefinitely after a cold
+reopen from a closed tab (resume point on bare `/`). Fixed by threading App.jsx's
+`useProjectLoader().loadProject` into `restoreFromResumePoint(resumePoint, { loadProject })`
+and calling it after `selectProject` resolves -- the same gap T15220 already fixed for the
+payment-return path. Any future caller of `selectProject` alone for a FRAMING/OVERLAY open must
+also call `loadProject`, or repeat this hang.)
 updated: 2026-11-09 (T15340 — `/focus/p/{id}?t=37` and `/overlay/p/{id}?t=37` now seek the player
 to 0:37 on open, closing the gap where only Annotate's `?t=` actually moved the playhead.
 `FocusModeView`/`OverlayModeView` each own a one-shot `useEffect` gated on `duration > 0` (Overlay

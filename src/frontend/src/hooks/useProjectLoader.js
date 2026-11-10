@@ -128,7 +128,13 @@ export function useProjectLoader() {
       // locked Spotlight tab) -- ModeSwitcher already disables that tab in-app, but a URL
       // can ask for Overlay directly (e.g. /overlay/p/{id}). Focus is the step this play
       // can actually use.
-      const overlayNeedsFraming = mode === EDITOR_MODES.OVERLAY && !project.working_video_id;
+      // T15490: a FINISHED project (has_final_video) can ALSO have working_video_id null --
+      // archive_project() nulls it and deletes working_clips when the reel is published
+      // ("Move to My Reels"). That is not "never framed"; redirecting it to Framing with the
+      // "make your highlight first" toast is wrong (and Framing has no clips to show either,
+      // since archiving deleted them too). Only redirect when the project genuinely has no
+      // finished highlight.
+      const overlayNeedsFraming = mode === EDITOR_MODES.OVERLAY && !project.working_video_id && !project.has_final_video;
       const targetMode = overlayNeedsFraming
         ? EDITOR_MODES.FRAMING
         : (mode || (needsOverlay ? 'overlay' : 'framing'));

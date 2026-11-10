@@ -481,6 +481,16 @@ export function FocusScreen({
     setSourceExpired(cfg?.sourceExpired ? { canExtend: !!cfg.canExtend } : null);
   }, []);
 
+  // T15730: when the selected clip's source game is still uploading
+  // (playback-url 409 `source_uploading`), render a deliberate "still
+  // uploading" state instead of handing a dead URL to the player -- same
+  // shape as T8310's sourceExpired above, and resolved by the SAME
+  // getClipVideoConfig call so both flags clear together on a clip switch.
+  const [sourceUploading, setSourceUploading] = useState(false);
+  const applySourceUploading = useCallback((cfg) => {
+    setSourceUploading(!!cfg?.sourceUploading);
+  }, []);
+
   /**
    * Get the video URL and clip range for a clip.
    * Game clips use the game video URL with a clip offset; uploaded/extracted clips use file_url directly.
@@ -516,6 +526,14 @@ export function FocusScreen({
               canExtend = !!(body?.detail?.code === 'source_expired' && body?.detail?.can_extend);
             } catch { /* body optional */ }
             return { url: null, gameUrl: null, clipRange: null, sourceExpired: true, canExtend };
+          }
+          // T15730: the source game is still uploading (`source_uploading`, status
+          // 'pending'). Its games/{hash}.mp4 object does not exist yet -- do NOT
+          // fall back to the /stream proxy, which shares the SAME assert_clip_
+          // source_available gate and 409s identically, handing <video> a dead URL
+          // the player then mislabels "Video format not supported" (bug 50p).
+          if (res.status === 409) {
+            return { url: null, gameUrl: null, clipRange: null, sourceUploading: true };
           }
           // T10740: a 4xx is OUR endpoint rejecting the pair we sent; the proxy
           // resolves the SAME pair and fails identically (see clipVideoResolution.js).
@@ -616,6 +634,7 @@ export function FocusScreen({
       const cfg = await getClipVideoConfig(targetClip);
       const { url: clipUrl, gameUrl, clipRange } = cfg;
       applySourceExpiry(cfg);
+      applySourceUploading(cfg);
       if (!clipUrl || clipUrl.startsWith('blob:')) return;
       if (controller.signal.aborted) return;
       const meta = clipMetadataCache[targetClip.id];
@@ -670,6 +689,7 @@ export function FocusScreen({
       const cfg = await getClipVideoConfig(firstClip);
       const { url: clipUrl, gameUrl: firstGameUrl, clipRange } = cfg;
       applySourceExpiry(cfg);
+      applySourceUploading(cfg);
       if (!clipUrl) return;
       if (controller.signal.aborted) return;
 
@@ -1307,6 +1327,7 @@ export function FocusScreen({
       error={error}
       isSourceExpired={!!sourceExpired}
       canExtendSource={!!sourceExpired?.canExtend}
+      isSourceUploading={sourceUploading}
       isUrlExpiredError={isUrlExpiredError}
       onRetryVideo={handleRetryVideo}
       clipRange={currentClipRange}

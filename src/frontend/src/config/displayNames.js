@@ -1569,6 +1569,11 @@ export const STORAGE_COPY = {
   EXPIRED_NOTE: "If you already sharpened this highlight, that finished highlight is safe. You just can't edit it from the game video anymore.",
   EXPIRED_TAP: 'Game expired. Tap to extend',
   expiresTap: (days) => `Expires in ${days} day${days === 1 ? '' : 's'}. Tap to extend`,
+  // T15730: the reel editors (Focus/Overlay), shown instead of a broken player when the
+  // clip's source game hasn't finished uploading yet (backend 409 `source_uploading`).
+  GAME_VIDEO_UPLOADING: 'Game video still uploading',
+  UPLOADING_BODY: "This game's video is still uploading, so this highlight can't be edited yet.",
+  UPLOADING_NOTE: 'Keep this tab open and try again once the upload finishes.',
 };
 
 // T14640: profiles and intro cards. "athlete" is the parent's kid (glossary D4). CONSENT_LINE is

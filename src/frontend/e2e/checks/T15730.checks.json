@@ -1,0 +1,4 @@
+{"criteria": {
+  "T15730:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/screens/__tests__/focusScreenSourceUploading.test.jsx src/components/VideoPlayer.t15730.test.jsx"},
+  "T15730:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/FocusModeView.sourceUploading.test.jsx"}
+}}

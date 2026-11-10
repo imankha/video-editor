@@ -42,3 +42,7 @@ T14980, T15340, T15360 (resume point), T14970 (deep-link cold load)
 
 ### Relevant Files (REQUIRED)
 - To be found.
+
+## Ruling
+
+**Check C1 on staging** (owner, 2026-11-09). The 10 s cold-load check failed in the group's container only because its Vite dev server took 9-11 s to serve its own static index.html under host load (backend /api/health answered in 3 ms); the verifier and fixer agreed on that cause, and resumePointRestore.test.js proves the fix's mechanism. C1's browser check is marked `defer_to_staging` and runs against staging after merge; a failure there is filed as a bug.

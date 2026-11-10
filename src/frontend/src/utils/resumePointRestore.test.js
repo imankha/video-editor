@@ -46,10 +46,12 @@ describe('isFreshResumePoint', () => {
 describe('restoreFromResumePoint', () => {
   let setEditorMode;
   let selectProject;
+  let loadProject;
 
   beforeEach(() => {
     setEditorMode = vi.fn();
-    selectProject = vi.fn();
+    selectProject = vi.fn().mockResolvedValue({ id: 7 });
+    loadProject = vi.fn().mockResolvedValue({ mode: 'framing' });
     useEditorStore.setState({ setEditorMode });
     useGamesDataStore.setState({ games: [{ id: 42 }] });
     useProjectsStore.setState({ projects: [{ id: 7 }], selectProject });
@@ -60,25 +62,41 @@ describe('restoreFromResumePoint', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('does nothing for a stale point', () => {
-    restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: STALE_LEFT_AT() });
+    restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: STALE_LEFT_AT() }, { loadProject });
     expect(setEditorMode).not.toHaveBeenCalled();
   });
 
   it('opens an existing project at its mode', () => {
-    restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: FRESH_LEFT_AT() });
+    restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: FRESH_LEFT_AT() }, { loadProject });
     expect(selectProject).toHaveBeenCalledWith(7);
     expect(setEditorMode).toHaveBeenCalledWith('framing', { projectId: 7, seekTime: null });
     expect(deleteResumePoint).not.toHaveBeenCalled();
   });
 
   it('restores a Focus point at its recorded playhead (T15340)', () => {
-    restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: FRESH_LEFT_AT(), t: 37 });
+    restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: FRESH_LEFT_AT(), t: 37 }, { loadProject });
     expect(setEditorMode).toHaveBeenCalledWith('framing', { projectId: 7, seekTime: 37 });
   });
 
   it('restores an Overlay point at its recorded playhead (T15340)', () => {
-    restoreFromResumePoint({ path: '/overlay/p/7', screen: 'overlay', left_at: FRESH_LEFT_AT(), t: 12 });
+    restoreFromResumePoint({ path: '/overlay/p/7', screen: 'overlay', left_at: FRESH_LEFT_AT(), t: 12 }, { loadProject });
     expect(setEditorMode).toHaveBeenCalledWith('overlay', { projectId: 7, seekTime: 12 });
+  });
+
+  // T15410: selectProject() alone only fetches the project record -- it never populates
+  // projectDataStore's clips/working video, which is what FocusScreen/OverlayScreen actually
+  // render from. Without loadProject, the restored editor hangs on "Loading..." (same gap
+  // T15220 fixed for the payment-return path).
+  it('loads the project data, not just the record, after selecting it (T15410)', async () => {
+    restoreFromResumePoint({ path: '/focus/p/7', screen: 'framing', left_at: FRESH_LEFT_AT() }, { loadProject });
+    await vi.waitFor(() => expect(loadProject).toHaveBeenCalledWith({ id: 7 }, { mode: 'framing' }));
+  });
+
+  it('updates the mode if loadProject resolves a different one (e.g. overlay redirected to framing)', async () => {
+    loadProject.mockResolvedValue({ mode: 'framing' });
+    restoreFromResumePoint({ path: '/overlay/p/7', screen: 'overlay', left_at: FRESH_LEFT_AT() }, { loadProject });
+    await vi.waitFor(() => expect(loadProject).toHaveBeenCalledWith({ id: 7 }, { mode: 'overlay' }));
+    expect(setEditorMode).toHaveBeenCalledWith('framing', { projectId: 7 });
   });
 
   it('lands on Home and clears the point when the project is gone', () => {
@@ -117,7 +135,7 @@ describe('restoreFromResumePoint', () => {
   });
 
   it('restores a project point whose stored path carries a query string, with t read from it', () => {
-    restoreFromResumePoint({ path: '/focus/p/7?profile=9fa7378c&t=5', screen: 'framing', left_at: FRESH_LEFT_AT() });
+    restoreFromResumePoint({ path: '/focus/p/7?profile=9fa7378c&t=5', screen: 'framing', left_at: FRESH_LEFT_AT() }, { loadProject });
     expect(setEditorMode).toHaveBeenCalledWith('framing', { projectId: 7, seekTime: 5 });
   });
 });

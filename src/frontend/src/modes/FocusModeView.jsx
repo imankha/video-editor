@@ -214,6 +214,9 @@ export function FocusModeView({
   error,
   isSourceExpired = false,
   canExtendSource = false,
+  // T15730: source game upload not finished yet (playback-url/stream 409
+  // `source_uploading`). Mirrors isSourceExpired's plumbing -- see FocusScreen.jsx.
+  isSourceUploading = false,
   isUrlExpiredError = () => false,
   onRetryVideo,
   clipRange = null,
@@ -681,6 +684,7 @@ export function FocusModeView({
         loadingStage={loadingStage}
         error={error}
         isSourceExpired={isSourceExpired}
+        isSourceUploading={isSourceUploading}
         canExtendSource={canExtendSource}
         isUrlExpiredError={isUrlExpiredError}
         onRetryVideo={onRetryVideo}
@@ -888,6 +892,7 @@ export function FocusModeView({
               loadingElapsedSeconds={loadingElapsedSeconds}
               error={error}
               isSourceExpired={isSourceExpired}
+              isSourceUploading={isSourceUploading}
               canExtendSource={canExtendSource}
               isUrlExpiredError={isUrlExpiredError}
               onRetryVideo={onRetryVideo}

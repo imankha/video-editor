@@ -1,0 +1,4 @@
+{"criteria": {
+  "T15420:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/utils/resumeFocusCompletion.test.js -t T15420"},
+  "T15420:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/utils/resumeFocusCompletion.test.js -t T15420"}
+}}

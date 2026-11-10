@@ -83,9 +83,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
     // loadProject (both reset four stores under a live editor, not a cosmetic
     // cost) but still refresh the project so its derived fields reflect the
     // render that just completed.
-    if (alreadyInFocus) {
-      await refreshProject();
-    }
+    const refreshedProject = alreadyInFocus ? await refreshProject() : null;
 
     const previewUrl = await resolvePreviewUrl(projectId);
     if (!previewUrl) {
@@ -95,6 +93,22 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
     }
 
     if (alreadyInFocus) {
+      // T15420: this job's Framing decision ("Add spotlight" / "Finish
+      // without spotlight") is moot once the project has since been
+      // FINISHED — the live completion path already ran one of the four
+      // decision gestures, or the project was otherwise published. The old
+      // codepath reopened the Framing completion preview regardless, so a
+      // stale View could re-trigger "Finish without spotlight" over an
+      // already-finished highlight and drop its spotlight. Route to the
+      // finished highlight itself instead (same OVERLAY mode T15490 made
+      // safe to open for a published project) and just acknowledge the
+      // stale job — there is no decision left for the user to make here.
+      if (refreshedProject?.has_final_video) {
+        setEditorMode(EDITOR_MODES.OVERLAY);
+        await loadProject(refreshedProject, { mode: EDITOR_MODES.OVERLAY });
+        await acknowledgeJob(jobId);
+        return { opened: true, navigated: true };
+      }
       openPreview({ projectId, previewUrl, openMode: EDITOR_MODES.FRAMING, jobId });
       recordAchievement('overlay_offered');
       await acknowledgeJob(jobId);
@@ -106,6 +120,15 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
       console.error('[ResumeFocus] failed to select project', projectId);
       toastError("Couldn't open this draft", { message: 'The connection dropped. Check your network and try again.' });
       return { opened: false, navigated: false };
+    }
+
+    // T15420: same staleness check as the alreadyInFocus branch above, for
+    // the cold-recovery path (no live editor to have already acted on this).
+    if (project.has_final_video) {
+      setEditorMode(EDITOR_MODES.OVERLAY);
+      await loadProject(project, { mode: EDITOR_MODES.OVERLAY });
+      await acknowledgeJob(jobId);
+      return { opened: true, navigated: true };
     }
 
     // T11220: resuming a Focus completion re-enters Framing — refuse it for a
