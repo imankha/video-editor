@@ -1,6 +1,6 @@
 # T15780: A game file over 10 GB is refused with developer copy and no path forward; a prepare 500 row carries no cause
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-09

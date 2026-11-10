@@ -1,6 +1,6 @@
 # T15660: Share end card wordmark is broken and Make your own highlights links to prod from staging
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-09

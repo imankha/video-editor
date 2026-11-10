@@ -1,6 +1,6 @@
 # T15440: Mobile and iPad upload of a file already on the server leaves the modal stuck on Upload game
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-11-09

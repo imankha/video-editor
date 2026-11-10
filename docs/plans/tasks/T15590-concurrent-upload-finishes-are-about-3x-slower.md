@@ -1,6 +1,6 @@
 # T15590: Concurrent upload finishes are about 3x slower than a lone finish
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-11-09

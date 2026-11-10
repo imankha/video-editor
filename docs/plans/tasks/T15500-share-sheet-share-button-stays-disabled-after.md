@@ -1,6 +1,6 @@
 # T15500: Share sheet: Share button stays disabled after the link is created, oversized buttons on mobile
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-09

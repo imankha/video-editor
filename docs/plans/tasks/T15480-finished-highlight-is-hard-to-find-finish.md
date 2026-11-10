@@ -1,6 +1,6 @@
 # T15480: Finished highlight is hard to find: Finish lands on an empty screen and Highlights shows only locked reels
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-09
