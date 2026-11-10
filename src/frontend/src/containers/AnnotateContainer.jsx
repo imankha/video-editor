@@ -49,6 +49,11 @@ import { recordSync, registerHolder, unregisterHolder } from '../utils/syncTrace
 import { offersHighlightChoice } from '../modes/annotate/highlightChoice';
 import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../modes/annotate/regionAtTime';
 
+// T15550: "Keep marking plays" nudges the playhead past the marked play's end
+// by more than FRAME_TOLERANCE so it clears regionAtTime's boundary match —
+// otherwise a back-to-back adjacent play starting exactly there gets selected.
+const PAST_PLAY_END_MARGIN = FRAME_TOLERANCE + 0.1;
+
 // The /load path (annotations carry their instances); reason names the path.
 function traceLoadedInstances(annotations) {
 return recordSync({
@@ -2346,11 +2351,35 @@ export function AnnotateContainer({
         });
       }
       setHighlightChoice(null);
-      closeOverlay(); // returns to marking plays (M2)
+      // T10610 § D.3 pattern: closeOverlay() only steps EDITING -> SELECTED
+      // (which renders the "Edit play" / Highlights-from-this-play panel, not
+      // the Mark Play screen); deselectClip() then steps SELECTED -> NONE.
+      closeOverlay();
+      deselectClip();
+      // T15550: deselecting alone is not enough — the playhead-driven
+      // auto-select effect (SELECTION_STATES.NONE branch) re-selects whatever
+      // region sits under the playhead on its very next run, and the playhead
+      // is still inside the play that was just marked. Move it just past the
+      // play's end (per the acceptance criterion) so the user actually lands
+      // back on Mark Play, not re-opened into the same play's Edit panel.
+      // The nudge must clear FRAME_TOLERANCE (regionAtTime's boundary match),
+      // or landing exactly at endTime re-selects an adjacent play that starts
+      // right there (observed live: back-to-back plays in the dev preset data).
+      const region = clipRegionsRef.current.find(r => r.id === choice.regionId);
+      if (region) {
+        const sourceEndTime = region.endTime + PAST_PLAY_END_MARGIN;
+        let seekTarget = sourceEndTime;
+        if (isOverlapTimeline && region.videoSequence) {
+          seekTarget = fullTimeline.sourceTimeToVirtual(region.videoSequence, sourceEndTime);
+        } else if (fullTimeline && region.videoSequence) {
+          seekTarget += fullTimeline.getVideoOffset(region.videoSequence);
+        }
+        effectiveSeek(seekTarget);
+      }
     } finally {
       highlightChoiceInFlightRef.current = false;
     }
-  }, [highlightChoice, updateClipRegionWithSync, onOpenReelInFocus, fetchProjects, closeOverlay]);
+  }, [highlightChoice, updateClipRegionWithSync, onOpenReelInFocus, fetchProjects, closeOverlay, deselectClip, isOverlapTimeline, fullTimeline, effectiveSeek]);
 
   // T11130: Escape on the choice card — return to the editor with NOTHING
   // written (M5). Like the rate gate's dismiss, this is a gate, never a write.
