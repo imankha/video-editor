@@ -1,0 +1,19 @@
+{
+  "task": "T15520",
+  "criteria": [
+    {
+      "id": "T15520:C1",
+      "kind": "code",
+      "text": "Download shows feedback within 1 s.",
+      "command": "cd src/frontend && npx vitest run src/hooks/useDownloads.downloadFeedback.test.jsx",
+      "test": "T15520:C1 - downloadFile shows a toast synchronously, before the file-url request resolves, and dismisses it in finally"
+    },
+    {
+      "id": "T15520:C2",
+      "kind": "code",
+      "text": "file-url answers in under 3 s warm (characterization: the pre-existing T14170 cache-HIT path runs zero compose/stamp/R2-GET, which bounds warm latency to one HEAD + a local presign).",
+      "command": "cd src/backend && python3 -m pytest tests/test_t14170_download_presigned.py::test_t14170_c1_download_runs_no_ffmpeg_and_no_byte_proxy",
+      "test": "T15520:C2 - cache HIT runs no compose/stamp/R2 GET (pre-existing T14170 regression test, unchanged by this task)"
+    }
+  ]
+}

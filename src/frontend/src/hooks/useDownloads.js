@@ -7,6 +7,7 @@ import { recordWrite } from '../utils/syncTrace';
 import { useProfileStore } from '../stores/profileStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { ERROR_COPY } from '../config/displayNames';
+import { toast, useToastStore } from '../components/shared/Toast';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -171,6 +172,15 @@ export function useDownloads(isOpen = false) {
   const downloadFile = useCallback(async (downloadId) => {
     setDownloadingId(downloadId);
     setDownloadProgress({ receivedBytes: 0, totalBytes: null });
+    // T15520: a first-ever download composes + stamps server-side and can
+    // take 10s+ before any bytes move. The per-surface spinner (T7100/T14170)
+    // is easy to miss on a small, demoted button (e.g. the Finished player's
+    // Download, T8540), so show an unmissable toast too -- dismissed in the
+    // `finally` below regardless of outcome.
+    const preparingToastId = toast.info('Preparing your highlight for download...', {
+      duration: 0,
+      dedupKey: 'download-preparing',
+    });
 
     try {
       const { response, filename } = await fetchReelDownload(downloadId);
@@ -211,6 +221,7 @@ export function useDownloads(isOpen = false) {
       console.error('[useDownloads] downloadFile error:', err);
       throw err;
     } finally {
+      useToastStore.getState().removeToast(preparingToastId);
       setDownloadingId(null);
       setDownloadProgress(null);
     }
