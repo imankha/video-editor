@@ -2372,10 +2372,20 @@ export function AnnotateContainer({
       // right there (observed live: back-to-back plays in the dev preset data).
       const region = clipRegionsRef.current.find(r => r.id === choice.regionId);
       if (region) {
-        const sourceEndTime = region.endTime + PAST_PLAY_END_MARGIN;
-        let seekTarget = sourceEndTime;
+        // T15930: a play marked at the very tail of the video has no room past
+        // its end — seek() clamps the target back down to the video's own
+        // duration (Math.min(time, effectiveDuration)), which lands inside
+        // THIS clip's own tolerance window and re-selects it immediately
+        // (observed live on staging: a play ending exactly at video duration
+        // 89.322s). Clear FRAME_TOLERANCE on whichever side actually has room.
+        const effectiveDur = multiVideo?.totalDuration ?? annotateVideoMetadata?.duration ?? videoDuration ?? 0;
+        const hasRoomPastEnd = !(effectiveDur > 0) || region.endTime + PAST_PLAY_END_MARGIN <= effectiveDur;
+        const sourceTime = hasRoomPastEnd
+          ? region.endTime + PAST_PLAY_END_MARGIN
+          : Math.max(0, region.startTime - PAST_PLAY_END_MARGIN);
+        let seekTarget = sourceTime;
         if (isOverlapTimeline && region.videoSequence) {
-          seekTarget = fullTimeline.sourceTimeToVirtual(region.videoSequence, sourceEndTime);
+          seekTarget = fullTimeline.sourceTimeToVirtual(region.videoSequence, sourceTime);
         } else if (fullTimeline && region.videoSequence) {
           seekTarget += fullTimeline.getVideoOffset(region.videoSequence);
         }
@@ -2384,7 +2394,7 @@ export function AnnotateContainer({
     } finally {
       highlightChoiceInFlightRef.current = false;
     }
-  }, [highlightChoice, updateClipRegionWithSync, onOpenReelInFocus, fetchProjects, closeOverlay, deselectClip, isOverlapTimeline, fullTimeline, effectiveSeek]);
+  }, [highlightChoice, updateClipRegionWithSync, onOpenReelInFocus, fetchProjects, closeOverlay, deselectClip, isOverlapTimeline, fullTimeline, effectiveSeek, multiVideo, annotateVideoMetadata, videoDuration]);
 
   // T11130: Escape on the choice card — return to the editor with NOTHING
   // written (M5). Like the rate gate's dismiss, this is a gate, never a write.

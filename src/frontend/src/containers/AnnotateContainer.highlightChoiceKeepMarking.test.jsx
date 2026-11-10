@@ -144,4 +144,69 @@ describe('AnnotateContainer "Keep marking plays" (T15550)', () => {
     const lastSeekTarget = seek.mock.calls.at(-1)[0];
     expect(lastSeekTarget).toBeGreaterThan(endTime + 0.15);
   });
+
+  it('T15930:C1 nudges BEFORE the play when it ends at the very end of the video (no room past end)', async () => {
+    apiFetch.mockImplementation((url, opts) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1 }) });
+      }
+      if (opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        if (body.create_project) {
+          return Promise.resolve({
+            ok: true, status: 200,
+            json: async () => ({ success: true, project_created: true, project_id: 999 }),
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+
+    const seek = vi.fn();
+    // The module mock above pins annotateVideoMetadata.duration to 120 for
+    // every test in this file, so "no room past end" means ending AT 120
+    // (a real staging example had endTime === the video's own duration
+    // exactly: 89.322s / 89.322s).
+    const { result } = renderHook(() => AnnotateContainer(baseProps({ seek })));
+
+    act(() => {
+      result.current.handleAddClipFromButton();
+    });
+    await act(async () => { await flushMicrotasks(); });
+    const regionId = result.current.clipRegions[0].id;
+
+    // Move the play to the very tail of the video (endTime === duration).
+    act(() => {
+      result.current.updateClipRegion(regionId, { startTime: 110, endTime: 120 });
+    });
+    const { startTime, endTime } = result.current.clipRegions[0];
+    expect(endTime).toBe(120); // confirms this clip really does end at the video's duration
+
+    act(() => {
+      result.current.updateClipRegion(regionId, { rating: 5 });
+    });
+    await act(async () => { await flushMicrotasks(); });
+
+    act(() => {
+      result.current.handleOverlayClose();
+    });
+    expect(result.current.highlightChoice).toEqual({ regionId });
+
+    await act(async () => {
+      await result.current.handleHighlightChoiceLater();
+      await flushMicrotasks();
+    });
+
+    expect(result.current.annotateSelectedRegionId).toBeNull();
+    // THE REGRESSION ASSERTION: with no room past endTime (89.322s === the
+    // video's own duration on staging), the pre-fix code nudged to
+    // endTime + 0.25, which seek()'s Math.min(time, duration) clamps straight
+    // back to endTime -- inside FRAME_TOLERANCE of the clip it just left,
+    // so the auto-select effect immediately re-selected it (observed live:
+    // "Keep marking plays" reopened the just-made play's Edit panel instead
+    // of the Mark Play screen). The fix nudges before startTime instead.
+    const lastSeekTarget = seek.mock.calls.at(-1)[0];
+    expect(lastSeekTarget).toBeLessThan(startTime - 0.15);
+  });
 });
