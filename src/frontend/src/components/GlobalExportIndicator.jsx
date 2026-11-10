@@ -11,6 +11,7 @@ import { EXPORT_JOBS, EXPORT_PROGRESS, ERROR_COPY, SHARE_COPY } from '../config/
 import { exportProgressLabel } from '../utils/exportProgressPresentation';
 import { ExportTooLargeModal } from './ExportTooLargeModal';
 import { exportFailureCopy, userErrorMessage } from '../utils/userError';
+import { readDismissedExportToastIds, rememberDismissedExportToast } from '../utils/dismissedExportToasts';
 
 /**
  * T9540: resolve the stage vocabulary for an export by its `type` ('framing' | 'overlay').
@@ -248,6 +249,9 @@ export function GlobalExportIndicator() {
     Object.values(activeExports).forEach((exp) => {
       if (exp.status !== ExportStatus.COMPLETE && exp.status !== ExportStatus.ERROR) return;
       if (toastedExports.has(exp.exportId)) return;
+      // T15740: the user already dismissed this export's toast (persists across reload) --
+      // don't re-show it.
+      if (readDismissedExportToastIds().has(exp.exportId)) return;
 
       // Only toast for recent completions (not old ones from store hydration)
       const completedTime = new Date(exp.completedAt).getTime();
@@ -299,13 +303,18 @@ export function GlobalExportIndicator() {
           message: projectLabel,
           action: shareAction,
           duration: 8000,
+          onDismiss: () => rememberDismissedExportToast(exp.exportId),
         });
       } else if (exp.status === ExportStatus.ERROR) {
         // T11330: an over-budget preflight rejection is surfaced by the explanatory
         // ExportTooLargeModal (below), not a toast that scrolls away — skip the generic toast.
         if (exp.budgetRejection) return;
         console.error('[GlobalExportIndicator] export failed:', exp.error);
-        toast.error(exportFailureCopy(exp), { message: projectLabel, duration: 8000 });
+        toast.error(exportFailureCopy(exp), {
+          message: projectLabel,
+          duration: 8000,
+          onDismiss: () => rememberDismissedExportToast(exp.exportId),
+        });
       }
     });
   }, [activeExports]);
