@@ -1,6 +1,6 @@
 # T15470: Spotlight video is taller than the iPad portrait screen, controls hidden under the action bar
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-09
