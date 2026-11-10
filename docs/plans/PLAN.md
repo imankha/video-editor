@@ -501,6 +501,7 @@ DONE rows live in [PLAN-archive.md](PLAN-archive.md).
 | T15950 | [1.5x ETA accuracy half of AC3 is unaddressed and untested](tasks/T15950-1-5x-eta-accuracy-half-of.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 | T15960 | [Staging check failed: T15750:C1 With Edit play open in portrait fullscreen, the picture is](tasks/T15960-staging-check-failed-t15750-c1-with.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T15970 | [Staging check failed: T15750:C2 Opening Edit play does not start playback.](tasks/T15970-staging-check-failed-t15750-c2-opening.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T15980 | [Staging check failed: T15630:C1 The sport is asked at most once per game, and](tasks/T15980-staging-check-failed-t15630-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ## Environment Configuration
 
