@@ -1542,6 +1542,14 @@ def run_checks(slug, checkout, group, wanted, deadline):
             left = deadline - time.time()
             if entry["kind"] == "human":
                 results[criterion] = {"status": "human", "where": where, "detail": str(entry.get("why", ""))[:300]}
+            elif entry.get("defer_to_staging"):
+                # Owner ruling recorded in the task file: this browser check runs only after merge, on
+                # staging (`staging-check` still runs it, since its kind stays browser). T15410:C1
+                # (g-t15410-4, 2026-11-09) failed only because the container's dev server took ~10 s
+                # to serve its own index.html under host load.
+                results[criterion] = {"status": "human", "where": where,
+                                      "detail": "deferred to the staging check by owner ruling: "
+                                                + str(entry.get("defer_to_staging"))[:280]}
             elif left <= 0:
                 results[criterion] = {"status": "skipped", "where": where, "detail": BUDGET_SPENT}
             elif entry["kind"] == "code":

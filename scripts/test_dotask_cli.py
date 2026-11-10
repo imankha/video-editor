@@ -1292,6 +1292,18 @@ class RunChecksTest(unittest.TestCase):
         browser = next(c for c, _ in self.commands if "playwright" in c or "dev-verify" in c)
         self.assertIn("dev-verify.sh e2e/checks/T1.check.spec.js --reporter=json --grep 'T1:C1|T1:C4'", browser)
 
+    def test_a_browser_check_deferred_to_staging_is_not_run_before_the_push(self):
+        # g-t15410-4 (2026-11-09): T15410:C1 failed only on container load; the owner ruled it a staging check.
+        (self.checkout / dotask_cli.CHECKS_DIR / "T1.checks.json").write_text(json.dumps({"criteria": {
+            "T1:C1": {"kind": "browser", "defer_to_staging": "owner, 2026-11-09"}}}))
+        with patch.object(dotask_cli, "container_run", self._container({})):
+            results = dotask_cli.run_checks("g", self.checkout, {"tasks": ["T1"]}, ["T1:C1"], time.time() + 600)
+        self.assertEqual(results["T1:C1"]["status"], "human")
+        self.assertIn("deferred to the staging check", results["T1:C1"]["detail"])
+        self.assertEqual(self.commands, [])
+        # staging-check selects browser checks by kind, so the deferred one still runs there.
+        self.assertEqual(dotask_cli.check_manifest(self.checkout, "T1")["T1:C1"]["kind"], "browser")
+
     def test_past_the_deadline_nothing_runs_and_everything_is_skipped(self):
         with patch.object(dotask_cli, "container_run", self._container({})):
             results = dotask_cli.run_checks("g", self.checkout, {"tasks": ["T1"]}, ["T1:C1", "T1:C2"], time.time() - 1)
