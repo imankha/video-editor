@@ -454,7 +454,14 @@ export function OverlayModeView({
       // scroll-fit effect below can only move the box, not shrink it). `max-h`
       // (not `h`) lets object-contain letterbox a landscape clip instead of
       // forcing portrait clips taller than they need to be.
-      `relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full max-h-[calc(100dvh-var(--cta-bar-h,0px)-1rem)] lg:w-fit lg:h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] ${SHORT_DESKTOP_STAGE_CLASS}`
+      // T15470: the `-1rem` reserve only left room for the stage itself -- the
+      // Controls row (play/step/timeline) renders directly below it and the
+      // scroll-fit effect can only scroll the HEADER space above the stage away
+      // (scrolling further would crop the stage itself), so on a tall-portrait
+      // clip with little header above it (e.g. iPad portrait 810x1080) Controls
+      // still stuck out under the band with nowhere left to scroll. Reserve is
+      // widened to `-4rem` to leave room for the Controls row too.
+      `relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full max-h-[calc(100dvh-var(--cta-bar-h,0px)-4rem)] lg:w-fit lg:h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] ${SHORT_DESKTOP_STAGE_CLASS}`
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
@@ -565,14 +572,20 @@ export function OverlayModeView({
       console.warn('[T15400] overlay stage fit: missing scroller or action band');
       return undefined;
     }
+    // T15470: Controls (play/step/timeline) render as the stage's NEXT SIBLING in
+    // this same column, below it -- measuring only the stage's own bottom edge let
+    // the stage clear the band while Controls still stuck out underneath it. Measure
+    // against the column (stage + Controls) instead, so Controls' height counts too.
+    const content = stage.parentElement || stage;
     let active = true;
     const stop = () => { active = false; };
     const fit = () => {
       if (!active) return;
       const s = stage.getBoundingClientRect();
+      const contentRect = content.getBoundingClientRect();
       const b = band.getBoundingClientRect();
       const c = scroller.getBoundingClientRect();
-      const deficit = s.bottom - b.top + 8;
+      const deficit = contentRect.bottom - b.top + 8;
       if (deficit <= 0) return;
       const delta = Math.min(deficit, s.top - c.top);
       const room = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
@@ -582,7 +595,7 @@ export function OverlayModeView({
       scroller.scrollTop += Math.min(delta, room);
     };
     const ro = new ResizeObserver(fit);
-    ro.observe(stage);
+    ro.observe(content);
     ro.observe(band);
     ro.observe(scroller);
     const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
