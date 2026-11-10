@@ -671,7 +671,11 @@ if (window.__popstateHandler) {
   const mode = useEditorStore.getState().editorMode;
   const path = window.location.pathname;
   const hasObject = initialObject.gameId != null || initialObject.projectId != null;
-  const keepsPath = HOME_TAB_PATHS.includes(path) || hasObject;
+  // T15760: /home/published/{downloadId} names a specific highlight (set by
+  // PublishedReelsPanel's story player, read back by ProjectManager's
+  // tabFromPath) -- an exact-match HOME_TAB_PATHS lookup collapses it to bare
+  // /home before ProjectManager ever sees the id.
+  const keepsPath = HOME_TAB_PATHS.includes(path) || /^\/home\/published\/\d+$/.test(path) || hasObject;
   const coldPath = initialMalformedKind ? HOME_GAMES_PATH : (keepsPath ? path : (MODE_PATHS[mode] || '/home'));
   // T11500: DEV-only ?dev_account=<preset> login link must survive until
   // initSession() reads it (sessionInit.js), so carry just that param across.

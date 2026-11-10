@@ -488,7 +488,11 @@ const TAB_PATHS = {
 
 // Map a pathname to its tab, or null when the URL names no tab (bare /home, or a
 // retired path like /home/reels-in-progress) so callers can fall back to a default.
+// T15760: PublishedReelsPanel appends `/{downloadId}` to TAB_PATHS.published while its
+// story player is open (so the URL cold-loads back to that highlight) -- that suffixed
+// form still names the Published tab here.
 function tabFromPath(pathname) {
+  if (/^\/home\/published\/\d+$/.test(pathname)) return 'published';
   return Object.keys(TAB_PATHS).find((tab) => TAB_PATHS[tab] === pathname) ?? null;
 }
 
@@ -507,6 +511,10 @@ function landingTabFromPath(pathname) {
   // Games is where the user belongs if the object turns out to be gone.
   const { gameId, projectId } = parseEditorPath(pathname, '');
   if (gameId != null || projectId != null) return 'games';
+  // T15760: a `/home/published/{id}` URL names a SPECIFIC highlight, so unlike
+  // the bare /home/published guard above it can't be a stale empty-tab link --
+  // land straight on Published instead of deferring to the count-loaded pass.
+  if (/^\/home\/published\/\d+$/.test(pathname)) return 'published';
   const tab = tabFromPath(pathname);
   return tab === 'published' ? null : tab;
 }

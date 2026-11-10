@@ -68,6 +68,13 @@ describe('editorStore cold load of a canonical URL', () => {
     expect(nav.peekPendingGame()).toEqual({ gameId: 42, seekTime: 30, sourceClipId: 9 });
   });
 
+  it('keeps a /home/published/{id} URL (T15760): the story player names a specific highlight, not just the bare Published tab', async () => {
+    window.history.pushState({}, '', '/home/published/42');
+    const { useEditorStore, EDITOR_MODES } = await import('./editorStore');
+    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.PROJECT_MANAGER);
+    expect(window.location.pathname).toBe('/home/published/42');
+  });
+
   it.each([
     ['/focus/p/7', 'framing'],
     ['/overlay/p/7', 'overlay'],
