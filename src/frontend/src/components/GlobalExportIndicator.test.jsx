@@ -167,8 +167,8 @@ describe('GlobalExportIndicator — live estimate stays within 1.5x of actual re
   // faster steady pace. Averaging the per-frame rate from the very FIRST frame ever seen
   // (the pre-fix behavior) keeps dragging in that slow window long after the pace sped
   // up, overshooting the actual remaining time by >1.5x. The fix resets the measurement
-  // anchor once it has aged past FRAME_RATE_WINDOW_MS and new frames have landed, so the
-  // estimate tracks the current pace instead.
+  // anchor to the latest sample on every new frame count, so the estimate tracks the
+  // current pace instead of blending in a stale window.
   it('does not overshoot the actual remaining time by more than 1.5x after a slow start speeds up', () => {
     useExportStore.setState({
       activeExports: {
@@ -215,6 +215,57 @@ describe('GlobalExportIndicator — live estimate stays within 1.5x of actual re
     });
     expect(document.body.textContent).toContain('About 2 minutes remaining');
     expect(document.body.textContent).not.toContain('About 4 minutes');
+  });
+
+  it('does not overshoot the actual remaining time by more than 1.5x WITHIN the first 20s of an anchor (T15530 AC3 fix round 2)', () => {
+    // Round 1's anchor-reset only fires once `now - anchor.at >= FRAME_RATE_WINDOW_MS`
+    // (20s) -- so a slow-then-fast transition that happens entirely INSIDE that first
+    // 20s window never triggers a reset at all, and the averaged rate still blends in
+    // the slow start. This reproduces exactly that: anchor set at t=0 (frame 2), a slow
+    // sample at t=5s (frame 4, 2 frames/5s = 2500ms/frame), then the real/fast pace
+    // (500ms/frame) holds from there -- all inside the 20s window.
+    useExportStore.setState({
+      activeExports: {
+        export_early: makeExport({
+          exportId: 'export_early', percent: 5, elapsedSec: 0, message: 'AI upscaling frame 2/200',
+        }),
+      },
+    });
+    render(<GlobalExportIndicator />);
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_early: makeExport({
+            exportId: 'export_early', percent: 8, elapsedSec: 5, message: 'AI upscaling frame 4/200',
+          }),
+        },
+      });
+    });
+
+    // 3s later, at t=8s (still well inside the 20s window): 6 more frames land at the
+    // TRUE 500ms/frame pace (4 -> 10). Actual remaining from here: (200-10)*500ms +
+    // 30s tail = 125s ("About 2 minutes" true pace). Averaging from the t=0 anchor
+    // (frame 2) instead gives (10-2)=8 frames over 8s = 1000ms/frame -> (200-10)*1000 +
+    // 30000 = 220s, rounded to 240s = "About 4 minutes" -- 1.92x the ~125s actually
+    // left, which violates the 1.5x bound despite never reaching a 20s-aged anchor.
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_early: makeExport({
+            exportId: 'export_early', percent: 15, elapsedSec: 8, message: 'AI upscaling frame 10/200',
+          }),
+        },
+      });
+    });
+    expect(document.body.textContent).not.toContain('About 4 minutes');
+    expect(document.body.textContent).toContain('About 3 minutes remaining');
   });
 });
 
