@@ -100,7 +100,7 @@ def r2(monkeypatch):
     monkeypatch.setattr(f"{ROUTER}.get_credit_balance", lambda user_id: {"balance": 10**9})
     monkeypatch.setattr(f"{ROUTER}.r2_head_object_global",
                         lambda key: {"ContentLength": SIX_MB} if state["landed"] else None)
-    monkeypatch.setattr(f"{ROUTER}.r2_create_multipart_upload", lambda key: "upl_1")
+    monkeypatch.setattr(f"{ROUTER}.r2_create_multipart_upload", lambda key, error_out=None: "upl_1")
     monkeypatch.setattr(f"{ROUTER}.r2_abort_orphan_multipart_uploads", lambda key, keep_upload_id=None: 0)
     monkeypatch.setattr(f"{ROUTER}.generate_multipart_urls", lambda **kw: [
         {"part_number": 1, "presigned_url": "u1", "start_byte": 0, "end_byte": SIX_MB - 1},
