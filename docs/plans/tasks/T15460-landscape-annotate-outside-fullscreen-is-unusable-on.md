@@ -1,6 +1,6 @@
 # T15460: Landscape Annotate outside fullscreen is unusable on a phone, and wastes space on iPad
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-09

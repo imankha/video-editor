@@ -1,6 +1,6 @@
 # T15430: Landscape fullscreen Annotate: the Guidance toggle covers the Mark button
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-11-09
