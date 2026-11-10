@@ -148,3 +148,42 @@ describe('AnnotateModeView — mobile FULLSCREEN editor split by orientation (T1
     expect(screen.getByTestId('overlay-layout').closest('[class*="absolute"]')).toBeTruthy();
   });
 });
+
+// T15750 (AC1): portrait mobile fullscreen's Edit/Add play editor used to be
+// able to squeeze the video wrapper (flex-1 min-h-0, no floor) down to almost
+// nothing while the generic fullscreen timeline AND the editor panel both
+// stayed at their full/shrink-0 size. The video wrapper now gets a guaranteed
+// min-height floor and the editor panel yields (shrink, not shrink-0); the
+// timeline hides the same way the T15370 landscape cockpit already hides its
+// own timeline row while editing.
+describe('AnnotateModeView — portrait fullscreen editor never squeezes the picture below a usable size (T15750)', () => {
+  beforeEach(() => { isMobileMock = true; isLandscapeMock = false; });
+
+  it('gives the video wrapper a min-height floor while the editor is open', () => {
+    render(<AnnotateModeView {...buildProps({ annotateFullscreen: true, showAnnotateOverlay: true })} />);
+    expect(screen.getByTestId('annotate-video-wrapper').className).toMatch(/min-h-\[56\.25vw\]/);
+  });
+
+  it('does not reserve a floor when the editor is closed (nothing competes for the space)', () => {
+    render(<AnnotateModeView {...buildProps({ annotateFullscreen: true, showAnnotateOverlay: false })} />);
+    expect(screen.getByTestId('annotate-video-wrapper').className).not.toMatch(/min-h-\[56\.25vw\]/);
+  });
+
+  it('hides the generic fullscreen timeline while the portrait editor is open, freeing its space for the picture', () => {
+    render(<AnnotateModeView {...buildProps({ annotateFullscreen: true, showAnnotateOverlay: true })} />);
+    expect(screen.queryByTestId('annotate-fullscreen-timeline')).toBeNull();
+  });
+
+  it('shows the generic fullscreen timeline when the editor is closed', () => {
+    render(<AnnotateModeView {...buildProps({ annotateFullscreen: true, showAnnotateOverlay: false })} />);
+    expect(screen.queryByTestId('annotate-fullscreen-timeline')).toBeTruthy();
+  });
+
+  it('lets the editor panel shrink (not shrink-0) so the video wrapper keeps its floor', () => {
+    render(<AnnotateModeView {...buildProps({ annotateFullscreen: true, showAnnotateOverlay: true })} />);
+    const overlayPanel = screen.getByTestId('overlay-layout').closest('[class*="max-h-[45vh]"]');
+    expect(overlayPanel).toBeTruthy();
+    expect(overlayPanel.className).toMatch(/\bshrink\b/);
+    expect(overlayPanel.className).not.toMatch(/shrink-0/);
+  });
+});
