@@ -1,5 +1,10 @@
 # SEO Content & Landing Value Props
 
+## In plain words
+
+The landing site tells one story: editing is a grind and we remove it. Once reels exist it should sell the reel, the recruiting card and the season that builds itself.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 4

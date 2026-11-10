@@ -1,5 +1,10 @@
 # Single-Clip Editor: remove Reels and multi-clip editing
 
+## In plain words
+
+Code for projects with several clips still sits under the single-clip editor. Removing it is the groundwork for reels, which join finished highlights rather than raw clips.
+
+
 **Status:** TODO (all questions answered 2026-09-24)
 **Started:** 2026-09-24
 **Impact:** 8 **Complexity:** 7 **Priority:** 1.1

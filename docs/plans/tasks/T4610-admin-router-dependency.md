@@ -1,5 +1,10 @@
 # T4610: require_admin as Router-Level Dependency
 
+## In plain words
+
+About 25 admin endpoints each call the admin check by hand, and one forgotten call would be an open admin endpoint. Attach the check once at the router level.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 2

@@ -1,5 +1,10 @@
 # T15850: Pre-shrink spike: one week, one number, go or no-go
 
+## In plain words
+
+Today very large game files almost never land: of 246 successful uploads, 202 were under one gigabyte and two were over six, and the five parents who tried files over ten gigabytes were refused. A standalone tool that shrinks video in the browser before uploading exists but has never been measured on a real file over a real connection. One week: shrink three real files on two laptops over two connection speeds, compare total time against uploading the original, and judge the athlete's sharpness at 1080p. Go if shrink plus upload is at least 30% faster on a slow connection and you accept the quality; then the three integration tasks below proceed. No-go closes the milestone with the numbers.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 3
@@ -7,22 +12,20 @@
 **Updated:** 2026-11-09
 **Milestone:** Roadmap 4, Big-file upload (see PLAN.md)
 
-## Source
+## How we got here
 
-The Video Pre-Shrink milestone (research T9000 to T9080, integration T8845 to T8865) was re-judged on
-2026-11-09 against prod evidence ([funnel-evidence-2026-11-09.md](../bi/funnel-evidence-2026-11-09.md)):
-about 25 users out of 202 file-pickers failed on files over 2 GB, 23 of 199 probed users had sources
-above 4K, and big files almost never succeed. The loss is real and these are high-intent parents with
-real cameras, but it is a tenth of pickers, so the programme shrinks to a bounded spike. T9000 is
-answered by the evidence doc; T9010 (the owner's real-folder run) and T9040 (the benchmark) fold in
-here; the auto-crop research (T9020, T9030, T9060) is removed.
+Prod evidence ([funnel-evidence-2026-11-09.md](../bi/funnel-evidence-2026-11-09.md)): about 25 of
+202 parents who picked a file failed on files over 2 GB, 23 of 199 probed users had sources above 4K,
+and of 246 successful game uploads only 2 were over 6 GB. These are high-intent parents with real
+cameras, and the product loses nearly all of them. A browser tool that shrinks video before upload
+exists (`scripts/shrink-tool/`, T8840) but has never been measured on a real file over a real uplink.
 
-## Problem
+## The problem
 
 The thesis "shrink plus upload is faster than upload alone, and the player still looks right" has never
 been measured on a real file over a real uplink.
 
-## Solution
+## What we will do
 
 One week, using the merged standalone tool (`scripts/shrink-tool/`, T8840, PR #368).
 
@@ -40,18 +43,17 @@ at least 30%, and the owner accepts the 1080p athlete quality. Then T8845, T8850
 plain 1080p path (no auto-crop, no tweening). NO-GO: close the milestone with the numbers; keep T15780
 (pre-flight), T15840 (resume) and T8865 (highlights before the upload finishes) as the big-file answer.
 
-## Acceptance Criteria
+## How we will know it worked
 
 - [ ] The research note has the measurement table for 3 files x 2 machines x 2 uplinks with total wall-clock and size.
 - [ ] A GO / NO-GO against the stated rule, signed by the owner.
-- [ ] On GO, T8845's task file is updated to the plain 1080p scope and un-gated; on NO-GO, T8845 to T8860 are moved to the removed list.
+- [ ] On GO, T8845's task file is updated to the plain 1080p scope and un-gated; on NO-GO, T8845 to T8860 are closed.
 
-## Context
+## For the implementer
 
 ### Related Tasks
 T8840 (the tool), T8845, T8850, T8860 (integration, gated on GO), T8865 (de-gated 2026-11-09), T15780,
-T15840, T15770 / T14800 (make the 40 silent abandons visible first). Removed 2026-11-09: T9000, T9010,
-T9020, T9030, T9040, T9060, T9070, T9080.
+T15840, T15770 / T14800 (make the 40 silent abandons visible first).
 
 ### Relevant Files (REQUIRED)
 - `scripts/shrink-tool/README.md` (steps 1 to 7 recipe)

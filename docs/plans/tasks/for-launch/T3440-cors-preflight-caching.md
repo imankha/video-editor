@@ -1,5 +1,10 @@
 # T3440: Cache CORS Preflight Responses
 
+## In plain words
+
+Every request from the app to the server is preceded by a permission check the browser could remember but does not, because one header is missing; on a game load that costs about 0.8 seconds. Add the header. One line.
+
+
 **Epic:** For Launch - Infrastructure
 **Priority:** P2
 **Complexity:** 1

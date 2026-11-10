@@ -1,5 +1,10 @@
 # T7400: analytics.sqlite store + on-demand cohort rollup sweep
 
+## In plain words
+
+A small summary store the admin reports read, so a question like how many of September's sign-ups were still exporting in week six can be answered without reading every user's data each time. On staging.
+
+
 **Status:** STAGING
 **Impact:** 8
 **Complexity:** 5

@@ -1,5 +1,10 @@
 # T14320: Prototype 2: click-seeded tracking bake-off (detector slot x tracker slot) through exits and re-entries
 
+## In plain words
+
+Second prototype, only if the first fails: our own detector and tracker, seeded by the parent's tap.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 5

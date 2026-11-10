@@ -1,5 +1,10 @@
 # T7230: Drip Stores + Seed Copy (drip.sqlite, R2 templates doc, unsubscribe markers)
 
+## In plain words
+
+The storage for the email system: a record of what was sent, the templates, and who unsubscribed, kept outside the main database.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 2

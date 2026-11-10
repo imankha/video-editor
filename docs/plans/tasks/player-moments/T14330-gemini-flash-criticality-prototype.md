@@ -1,5 +1,10 @@
 # T14330: Prototype 3: video-VLM slot on the child's windows ("is this interesting, a highlight, a learning opportunity?")
 
+## In plain words
+
+Third prototype: a video model judges whether each moment with the child in frame is a highlight, a learning moment or just interesting.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 4

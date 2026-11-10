@@ -1,5 +1,10 @@
 # T15910: Dead-code ratchet: knip for the frontend, vulture for the backend, CI fails only on new findings
 
+## In plain words
+
+Dead code misleads the AI agents that work in this repo: they read unused files and copy from them. A first scan found 14 frontend files nothing imports and 11 backend findings. Set up two scanners, knip for the frontend and vulture for the backend, with a committed list of known findings, so CI fails only when new dead code appears and the list only shrinks. Then delete what no planned task claims.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 3
@@ -7,7 +12,7 @@
 **Updated:** 2026-11-09
 **Milestone:** Roadmap, Chores (see PLAN.md)
 
-## Source
+## How we got here
 
 Owner 2026-11-09: "AI will perform better with less false code." Agents read the tree to find the
 code path; every unimported module, unreachable branch and unused helper is a false lead they can
@@ -27,14 +32,14 @@ Those 14 line up with the plan: `Timeline.jsx` is the dead stack T4440 names, `Q
 to the quest deletion (T11180), and `uniqueName.js` is the helper T11300 says to resurrect, so the
 tool must respect planned reuse, not delete on sight.
 
-## Problem
+## The problem
 
 Dead code is found by hand, one task at a time, and a zero-callers claim is only as good as the grep
 that backs it (CLAUDE.md Refactoring Rules, rule 7: `src/`, `e2e/` and `scripts/` all count, because
 Branch CI never runs Playwright specs or shell scripts). There is no floor that stops new dead code
 landing.
 
-## Solution
+## What we will do
 
 The same ratchet pattern `scripts/check_doc_drift.py` uses: a committed baseline, CI fails only on
 findings not in the baseline, the baseline only shrinks.
@@ -59,7 +64,7 @@ findings not in the baseline, the baseline only shrinks.
 5. **Knowledge.** One paragraph in `.claude/references/coding-standards.md` (Refactoring Rules): the
    zero-callers proof is the dead-code check passing, plus the grep.
 
-## Acceptance Criteria
+## How we will know it worked
 
 - [ ] `npm run deadcode` in `src/frontend` and the vulture script in `src/backend` run from a clean checkout and list their findings in under 60 s each.
 - [ ] `scripts/check_dead_code.py` passes on master with the committed baseline, fails on a branch that adds an unimported module or an unused backend function (two tests in `scripts/test_check_dead_code.py`), and fails when the baseline names a finding that is gone.
@@ -67,7 +72,7 @@ findings not in the baseline, the baseline only shrinks.
 - [ ] The first sweep removed every unclaimed finding from the 2026-11-09 read; the baseline holds only findings owned by a named task (T4440, T11180, T11185, T11300), each annotated with that id.
 - [ ] Rule 7 in CLAUDE.md names the check as the proof of zero callers.
 
-## Context
+## For the implementer
 
 ### Related Tasks
 T4440 (dead keyframe stack), T4420 (unwired Modal copies), T11180 / T11185 (quest deletion),

@@ -1,5 +1,10 @@
 # T14340: Productize the winning path: tap a player in Annotate, get scored suggested plays
 
+## In plain words
+
+Turn the winning path into a feature: tap a player in Annotate, get scored suggested plays, under a cost cap per game.
+
+
 **Status:** TODO
 **Impact:** 9
 **Complexity:** 7

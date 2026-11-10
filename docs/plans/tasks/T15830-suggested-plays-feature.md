@@ -1,5 +1,10 @@
 # T15830: Suggested plays after upload: hosted model, three free games, then credits
 
+## In plain words
+
+If the proof passes, every uploaded game gets a list of suggested plays for the parent to review, in the same one-tap list the Veo import already uses, so there is no new screen to learn. The model runs after the upload finishes and the parent gets a suggested-plays-are-ready message. The first three games on an account are free; after that a game costs a small number of credits set from the measured cost, charged when the job starts and refunded if it fails. The model name and the price live in configuration because the hosted prices change in January. Done when a new game shows its suggestions within fifteen minutes on phone and desktop, the free-then-paid rule holds, and the Journey shows more game uploaders reaching their first play.
+
+
 **Status:** BLOCKED
 **Impact:** 9
 **Complexity:** 6
@@ -7,13 +12,13 @@
 **Updated:** 2026-11-09
 **Milestone:** Roadmap 3, Suggested plays by AI (see PLAN.md). BLOCKED on T15820 GO.
 
-## Problem
+## The problem
 
 Parents who upload a whole game then face 90 minutes of scrubbing; 193 users got footage in, 109
 marked a play, and game uploaders convert to a paid highlight at 19% against 45% for clip users. The
 Veo import proved the "suggested plays, one-tap accept" shape works but only for Veo owners.
 
-## Solution
+## What we will do
 
 Reuse the Veo import end to end; the only new piece is the generator.
 
@@ -36,7 +41,7 @@ Reuse the Veo import end to end; the only new piece is the generator.
 5. **Cost control.** Per-account daily cap, per-game size cap, and a kill switch env var; the model
    name and price are config, not code, because Gemini 3.8 Flash doubles in price on 2027-01-01.
 
-## Acceptance Criteria
+## How we will know it worked
 
 - [ ] A newly uploaded 90-minute game produces a suggestions list in Annotate within 15 minutes, with confidence order and one-tap accept, on phone and desktop.
 - [ ] The first three games on an account are free; the fourth shows the credit price before the job starts and refunds on failure (ledger tests).
@@ -44,7 +49,7 @@ Reuse the Veo import end to end; the only new piece is the generator.
 - [ ] `suggestions_ready` and `suggestion_accepted` appear in the admin Journey inspector with instrumented-at dates; the by-sport table counts them.
 - [ ] Kill switch and daily cap covered by tests; model and price read from config.
 
-## Context
+## For the implementer
 
 ### Related Tasks
 T15820 (proof), T13210, T13220, T13240 (Veo import), T7670 (upload-complete email), T14940 / T14950

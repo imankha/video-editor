@@ -1,5 +1,10 @@
 # T9050: Cost model: when NOT to shrink, and the size-cap-driven bitrate rule
 
+## In plain words
+
+A smarter rule for when shrinking is worth it, using the parent's measured connection speed instead of two fixed thresholds. On ice until the spike says go.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 5

@@ -1,5 +1,10 @@
 # T8845: Port the approved standalone shrink tool into the app (worker + client API)
 
+## In plain words
+
+Move the proven shrink code into the app behind a small internal interface, with no change in what it does. Blocked until the spike says go.
+
+
 **Status:** BLOCKED (on T15850 GO, 2026-11-09)
 **Impact:** 7
 **Complexity:** 4

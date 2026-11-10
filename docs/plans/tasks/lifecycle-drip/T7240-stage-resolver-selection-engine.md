@@ -1,5 +1,10 @@
 # T7240: Stage Resolver + Template Selection/Render Engine
 
+## In plain words
+
+The logic that looks at what a parent has done and picks which email they should get, written so it can be tested without sending anything.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 3

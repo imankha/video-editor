@@ -1,5 +1,10 @@
 # T13750: Require ci-ready on master with GitHub branch protection
 
+## In plain words
+
+Nothing stops a direct push to master from skipping CI. Turn on GitHub branch protection requiring the ci-ready check. One hour.
+
+
 **Status:** TODO (user decision)
 **Impact:** 6
 **Complexity:** 1

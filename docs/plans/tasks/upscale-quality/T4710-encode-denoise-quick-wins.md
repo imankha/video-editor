@@ -1,5 +1,10 @@
 # T4710: Encode + Denoise Quick Wins
 
+## In plain words
+
+Two cheap fixes, any time: the final export is encoded at a lower quality than the intermediate steps, throwing away detail the GPU just produced, and the colour tags are missing on one path. One day of work.
+
+
 **Status:** TODO
 **Impact:** 6
 **Complexity:** 2

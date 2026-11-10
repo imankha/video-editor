@@ -1,5 +1,10 @@
 # Investor-Grade Analytics
 
+## In plain words
+
+The admin numbers behind this roadmap. Two pieces are on staging already; the retention chart is the one we still lack.
+
+
 **Status:** TODO
 **Created:** 2026-08-20
 

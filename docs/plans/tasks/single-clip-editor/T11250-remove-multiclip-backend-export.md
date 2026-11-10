@@ -1,5 +1,10 @@
 # T11250: Remove multi-clip backend - clip-management endpoints + export N>1 branches
 
+## In plain words
+
+Delete the server endpoints and export code that only existed for projects with more than one clip. Nothing a parent sees changes.
+
+
 **Status:** TODO
 **Impact:** 6
 **Complexity:** 6

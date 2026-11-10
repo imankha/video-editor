@@ -1,5 +1,10 @@
 # T11175: Reroute funnel analytics off the quest achievements endpoint
 
+## In plain words
+
+The admin Journey counts events that still travel through the retired quest system's endpoint. Move them to the funnel's own path, keeping the same names, so the map stays accurate when quests are deleted.
+
+
 **Status:** TODO
 **Impact:** 5
 **Complexity:** 3

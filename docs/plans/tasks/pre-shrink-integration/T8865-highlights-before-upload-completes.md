@@ -1,5 +1,10 @@
 # T8865: Make highlights from plays before the whole game video has uploaded
 
+## In plain words
+
+Today a parent can mark plays while their game is still uploading, but cannot turn any play into a highlight until the whole file has arrived, which on a big game over a slow connection can be hours. We will let a play open for cropping and Spotlight as soon as the footage it covers has arrived, or by sending just that snippet ahead of the rest. It runs on its own because it removes the wait for every large file whether or not we ever shrink video. Done when a play from a still-uploading game can be made into a highlight.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 7
@@ -205,7 +210,3 @@ the game is deleted, its clips (and snippets) follow the existing delete cascade
 - [ ] Lock state survives reload / another device (backend-derived); a pending game opened from a direct link never shows a blank Focus player
 - [ ] No double credit charge; an abandoned upload leaves already-made highlights working (or clearly explained)
 - [ ] Guide rules `annotate.uploading.*` updated to per-play behavior; guidance.md invariant 8 rewritten
-
-## Re-scope 2026-11-09 (owner roadmap re-rank)
-
-De-gated from T8860 (Roadmap section 4): runs after T15840, independent of the shrink spike, because it removes the upload wait from the critical path for every large file.

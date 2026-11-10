@@ -1,5 +1,10 @@
 # T15870: Click once, the box and the spotlight follow the athlete
 
+## In plain words
+
+If the prototype passes, a parent taps their athlete once and the crop box and the Spotlight circle follow them through the play; the usual keyframe edits still work as corrections. Where the follower loses the player, the timeline shows a marker and asks for one more tap. A failure never spends credits and drops the parent into today's manual flow. Blocked until the prototype says go, and it needs a design review first.
+
+
 **Status:** BLOCKED
 **Impact:** 9
 **Complexity:** 7
@@ -7,12 +12,12 @@
 **Updated:** 2026-11-09
 **Milestone:** Roadmap 5, Click-once following (see PLAN.md). BLOCKED on T15860 GO. L-tier, design gate.
 
-## Problem
+## The problem
 
 Frame's crop box and Spotlight's ellipse are placed and corrected by hand, keyframe by keyframe. It is
 the slowest step for phones and the one most users abandon between Opened Frame and Paid.
 
-## Solution
+## What we will do
 
 1. Frame: after the parent taps their athlete once ("Tap your athlete", T14520 copy), a Modal job
    (T15860's winner) returns a smoothed box path; the crop keyframes are derived from it and shown as
@@ -30,14 +35,14 @@ the slowest step for phones and the one most users abandon between Opened Frame 
 Architect gate first: where the path is stored (project keyframes vs a derived layer), how Modal
 progress is surfaced, and the mobile gesture for re-tap.
 
-## Acceptance Criteria
+## How we will know it worked
 
 - [ ] On a phone, one tap on the athlete produces a following crop box and spotlight for a 10-second play with at most one re-tap on the T15860 clip set.
 - [ ] Manual keyframe edits still work and override the path; export output is identical whether the path came from a tap or by hand.
 - [ ] Failure of the follower never charges credits and lands the parent in today's manual flow.
 - [ ] Framing points per clip and the Opened Frame to Paid edge are read before and after on the Journey.
 
-## Context
+## For the implementer
 
 ### Related Tasks
 T15860 (prototype and GO), T15900 (history), T15800, T14830, T14520, T5600, T5610, T11000.

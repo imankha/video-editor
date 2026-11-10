@@ -1,5 +1,10 @@
 # T4740: Production Integration + Crop-Size Routing
 
+## In plain words
+
+If a model wins, send only the small far-away crops to it and keep the cheap path for everything else, behind a flag, staging first. Blocked until a winner exists.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 5

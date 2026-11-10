@@ -1,5 +1,10 @@
 # Remove the Quest System
 
+## In plain words
+
+The old quest system, guided steps that paid out credits, is already hidden from parents. One piece of it still carries the events the admin funnel reads, so that piece moves first; the deletions themselves wait in Later.
+
+
 **Status:** TODO (all questions answered 2026-09-24)
 **Started:** 2026-09-24
 **Impact:** 6 **Complexity:** 5 **Priority:** 1.2

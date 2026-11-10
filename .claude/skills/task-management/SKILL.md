@@ -30,6 +30,56 @@ When the user requests a new task, create it as a standalone file AND add it to 
 
 ---
 
+## Writing so the owner can read it (owner rule, 2026-11-09)
+
+The owner reads every PLAN.md row and task file cold, knowing only what the app does. On
+2026-11-09 they read a row full of code names, task ids and shorthand and said they did not
+understand a word of it, so they could neither verify the fix nor judge whether it was a good
+idea. Every row description and every task file follows these rules from now on.
+
+**Order of the readable part, always:**
+1. **Where things stand today.** What the parent sees or does now, in one or two sentences.
+2. **The problem and how we got here.** What goes wrong, with the number that says how much, and
+   the history in a sentence (who found it, when, what was tried).
+3. **What we will do.** The change in plain words, as the parent would experience it.
+4. **Why this and not something else.** The evidence or reasoning, and what was ruled out.
+5. **How we will know it worked.** The observable result, as a number or a sentence a tester can
+   check.
+
+Implementer details (files, functions, ids, tiers, design rulings, Modal and R2 words) come
+after that, under their own heading, never inside the readable part.
+
+**Sentences.** Full sentences, about twenty words, plain verbs. Say the thing, then put the
+pointer in parentheses: "the Share button on a phone always sends the video file (T11510)",
+never "T11510 R5". Numbers carry their meaning: "56 parents paid for a highlight and 11
+downloaded or shared it", never "56 -> 11".
+
+**Words.** Define each product noun the first time it appears in a file: a game is the uploaded
+video, a play is a marked moment in it, a highlight is a finished short clip, a reel is several
+highlights joined, Frame is the step where the parent crops around their athlete and pays to
+sharpen it, Spotlight is the step that draws the following circle, Finished is the screen after
+export. No code identifiers, no "M-tier", "R5", "D6", "incl.", "via", "per", no bold
+"Re-scoped" prefixes, no arrows, in the readable part.
+
+**Current state only (owner rule, 2026-11-09).** A task says what it is now. It never records
+what it used to say, what it replaced, what was removed to make room for it, or how it was
+renumbered. History belongs in git and in the dated removed-rows file, not in the row or the
+task file. The one exception is the problem's own history (who hit it, when, what was tried),
+because that is evidence for the fix.
+
+**The reader test.** Someone who only knows what the app does should be able to propose a
+different solution after reading the row. If they could not, the row is not finished.
+
+**Row length.** A PLAN.md description is three to five sentences in the order above. The task
+file opens with the same text under `## In plain words`, then the detail.
+
+Sources for the shape: problem before solution, with the solution labelled as a proposal the
+reader can challenge (Jason Roell, "Stop writing solutions disguised as tickets", 2026);
+Shape Up pitches (problem, appetite, solution, rabbit holes, no-gos); GitHub issue guidelines
+(problem, goal, proposed solution, acceptance criteria).
+
+---
+
 ## File Structure
 
 ```

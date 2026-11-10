@@ -1,5 +1,10 @@
 # T15860: Click-once following prototype: SAM 2.1 with SAMURAI memory on 20 real clips
 
+## In plain words
+
+Today the parent drags a crop box keyframe by keyframe in Frame and places the Spotlight circle by hand; 69 parents placed about 19 crop points each. New open models can follow one clicked object through a video for a few cents per clip, but they are weakest on exactly our case: small fast players who blur and cross each other. We will test them on twenty real highlights against the parents' own crop paths and count how often a parent would have to click again. Go if 15 of 20 clips need at most one extra click and the box stays on the athlete. The history note (T15900) tells us which failure cases to try first.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 4
@@ -7,7 +12,7 @@
 **Updated:** 2026-11-09
 **Milestone:** Roadmap 5, Click-once following (see PLAN.md). Gated on T15900.
 
-## Source
+## How we got here
 
 AI-vectors research 2026-11-09: SAM 2.1 (Apache-2) with SAMURAI or DAM4SAM memory tracks one object
 from a single click at 17 to 23 fps on an L4, about $0.004 to $0.02 per 10-second clip self-hosted
@@ -17,13 +22,13 @@ study found 50% recovery in crowded boxes and 8.7% once the player leaves frame 
 frames. Prod: 69 users placed 1,287 framing points by hand (about 19 each); Spotlight completion is the
 strongest return and payment signal we have (T15800).
 
-## Problem
+## The problem
 
 Frame asks the parent to keyframe a crop box by hand and Spotlight asks them to place and correct an
 ellipse; both steps are where phones stall. A click-once follower would make both nearly automatic,
 but nobody has measured drift, re-click rate or cost on our footage.
 
-## Solution
+## What we will do
 
 A Modal prototype, no app code.
 
@@ -39,13 +44,13 @@ A Modal prototype, no app code.
    T15870: GO if 15 of 20 clips need at most one re-click and the smoothed box IoU is at least 0.6
    against the manual path.
 
-## Acceptance Criteria
+## How we will know it worked
 
 - [ ] `scripts/prototypes/click_following/` runs one clip end to end on Modal from a clean checkout.
 - [ ] The research note has IoU, frames lost, re-clicks, cost per clip and cold start for 20 clips on two model variants and two GPUs.
 - [ ] GO / NO-GO against the stated rule, and the two failure modes T15900 named are reported explicitly.
 
-## Context
+## For the implementer
 
 ### Related Tasks
 T15900 (history, gate), T15870 (productize), T15800 (Spotlight step), T5600 (detection store),

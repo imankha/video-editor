@@ -262,7 +262,7 @@ Stage 2 creates `docs/plans/tasks/T{id}-design.md` (current state, target state,
 
 ## Task Management
 
-Use the [task-management skill](.claude/skills/task-management/SKILL.md) to create tasks (file + PLAN.md entry) and organize epics. For roadmap decisions (placement, priorities, next task), use the [Project Manager agent](.claude/agents/project-manager.md); cycles run **INFRA → FEATURES → POLISH → repeat**. Current plan: [docs/plans/PLAN.md](docs/plans/PLAN.md).
+Use the [task-management skill](.claude/skills/task-management/SKILL.md) to create tasks (file + PLAN.md entry) and organize epics. **Every row description and task file is written so the owner can read it cold** (today, the problem and its history, what we will do, why, how we will know; implementer details last): see the skill's "Writing so the owner can read it" section (owner rule 2026-11-09). For roadmap decisions (placement, priorities, next task), use the [Project Manager agent](.claude/agents/project-manager.md); cycles run **INFRA → FEATURES → POLISH → repeat**. Current plan: [docs/plans/PLAN.md](docs/plans/PLAN.md).
 
 **Epics:** tasks implemented strictly in PLAN.md order, each handed to its own agent with prior-task learnings; task files must be self-contained (reference EPIC.md, don't duplicate it). Full rules + handoff template + PLAN.md `↳` format: [epic-rules.md](.claude/references/epic-rules.md).
 

@@ -1,5 +1,10 @@
 # T11260: Remove multi-clip highlight carry, clip boundaries, Spotlight gates
 
+## In plain words
+
+Delete the Spotlight and highlight code that mapped circles across joined clips, which was also subtly wrong. Nothing a parent sees changes.
+
+
 **Status:** TODO
 **Impact:** 5
 **Complexity:** 4

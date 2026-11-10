@@ -1,5 +1,10 @@
 # T7250: Unsubscribe Endpoint + Compliance Footer
 
+## In plain words
+
+The one-click unsubscribe link and the legally required footer on every marketing email.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 3

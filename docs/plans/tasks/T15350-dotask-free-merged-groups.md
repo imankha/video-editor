@@ -1,5 +1,10 @@
 # T15350: dotask frees a merged group's container and app stack
 
+## In plain words
+
+Stop a finished group's container as soon as its PR merges so it stops using the host's cores. On staging.
+
+
 **Status:** STAGING
 **Impact:** 5
 **Complexity:** 1

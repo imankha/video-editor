@@ -1,5 +1,10 @@
 # Upscale Quality Epic
 
+## In plain words
+
+Sharpening is the paid step. We only invest in better models if the field moved, and it did this autumn; the test bench keeps the decision honest.
+
+
 **Status:** TODO
 **Started:** —
 **Created:** 2026-07-03

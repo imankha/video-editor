@@ -1,5 +1,10 @@
 # T7410: First-party visit beacon (landing + app, aggregate-only)
 
+## In plain words
+
+Count visits to the landing site and the app's sign-in pages, without cookies or user ids, so visit-to-sign-up can be measured. On staging; visits only exist from 2026-11-08.
+
+
 **Status:** STAGING
 **Impact:** 7
 **Complexity:** 3

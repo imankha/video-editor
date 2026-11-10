@@ -1,5 +1,10 @@
 # T8850: Shrink UI: offer card + crop step + presets
 
+## In plain words
+
+Show the offer to shrink before a large upload, let the parent pick a quality, and show the size saved, without adding steps to normal small uploads. Blocked until the spike says go.
+
+
 **Status:** BLOCKED (on T15850 GO, 2026-11-09)
 **Impact:** 7
 **Complexity:** 5

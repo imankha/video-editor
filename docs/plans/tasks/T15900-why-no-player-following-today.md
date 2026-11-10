@@ -1,5 +1,10 @@
 # T15900: Why does nothing follow the athlete today? Archaeology and decision note before click-once tracking
 
+## In plain words
+
+Today the app does not follow a player on its own: Spotlight finds people in a few sampled frames, and the parent places and corrects the circle and the crop box by hand. The code still carries traces of an earlier attempt, a layer called player tracking that was only a detection overlay with an on-off switch, and a tracker library that nothing uses. Before we build a click-once follower we spend half a day finding out what was tried, when, and why it was dropped, and write it down with dates. That way the new prototype starts with the cases that defeated the old one. Done when the history note exists and names the failure cases the prototype must test first.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 2
@@ -7,7 +12,7 @@
 **Updated:** 2026-11-09
 **Milestone:** Roadmap 0, Immediate (see PLAN.md)
 
-## Source
+## How we got here
 
 Owner request 2026-11-09 after the AI-vectors research: the frontend carried a "Player tracking
 disabled" string until T14520, the backend venv still holds `deep_sort_realtime`, and the On Fire
@@ -28,13 +33,13 @@ was switched off, and why. The models changed; the footage did not.
 - `deep_sort_realtime` is installed in `src/backend/.venv` but nothing under `src/backend/app` or
   `modal_functions` imports it.
 
-## Problem
+## The problem
 
 Nobody can say today whether a track-following step was ever shipped and removed, prototyped and
 rejected, or never attempted. Building T15860 without that answer risks repeating a known failure on
 the same footage (30 to 80 px athletes, static wide shot, same-kit confusion).
 
-## Solution
+## What we will do
 
 A half-day read, no product code.
 
@@ -49,18 +54,18 @@ A half-day read, no product code.
    following was never shipped or was removed, the specific footage failures seen (if any), and a
    go / no-go for T15860 with the two or three failure modes it must test first.
 
-## Acceptance Criteria
+## How we will know it worked
 
 - [ ] The history note exists with a dated timeline and cites commits or task files for every claim.
 - [ ] The note states, with evidence, whether a track-following step ever ran in production and why it does not today.
 - [ ] The note lists the footage failure modes T15860 must test first (for example same-kit crossings, athlete leaving frame, blur at 30 px), each tied to an observed case or marked as untested.
 - [ ] T15860's task file is updated with the go / no-go and the failure modes before it starts.
 
-## Context
+## For the implementer
 
 ### Related Tasks
 T15860 (click-once following prototype, gated on this), T15870 (productize), T14520 (removed the
-"tracking" copy), T58, T5570, T5600, T5610, T11000, On Fire epic audit (T9210 row, removed 2026-11-09).
+"tracking" copy), T58, T5570, T5600, T5610, T11000, the 2026-09-08 On Fire audit note.
 
 ### Relevant Files (REQUIRED)
 - `src/backend/app/modal_functions/video_processing.py` (detect_players_modal, YOLO sampling)

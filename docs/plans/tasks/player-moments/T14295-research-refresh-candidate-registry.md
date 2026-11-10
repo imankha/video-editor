@@ -1,5 +1,10 @@
 # T14295: Research refresh: candidate registry for every slot (models as parameters, not hard-coded picks)
 
+## In plain words
+
+Refresh the list of candidate models and services with current prices before any prototype, so prototypes test today's options, not October's.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 3

@@ -1,5 +1,10 @@
 # T8840: Standalone browser shrink tool (fully working, zero app integration)
 
+## In plain words
+
+The standalone shrink tool is what the spike above measures. It waits on your real-folder run, which the spike (T15850) owns.
+
+
 **Status:** WAITING ON USER (deferred)
 **Impact:** 7
 **Complexity:** 7

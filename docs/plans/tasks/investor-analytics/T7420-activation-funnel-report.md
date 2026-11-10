@@ -1,5 +1,10 @@
 # T7420: Activation & funnel drop-off report
 
+## In plain words
+
+For each month's sign-ups, how many made a highlight and how many shared one within two weeks, and where the rest dropped off.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 3

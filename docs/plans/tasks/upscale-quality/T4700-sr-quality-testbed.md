@@ -1,5 +1,10 @@
 # T4700: SR Quality Testbed
 
+## In plain words
+
+A repeatable test bench: a fixed set of real clips, each candidate model run over them, and a side-by-side report you can judge in ten minutes. Aimed at the two new models, FlashVSR+ and ReCaVSR, with a hard check that jersey numbers and faces are not invented, since an invented number ruins a recruiting reel.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 5
@@ -144,7 +149,3 @@ READ-ONLY references (replicate logic, don't import the Modal app):
 - [ ] Report has working blind A/B toggle, zoomed focus-box stills, hallucination checklist, flicker column
 - [ ] Baseline metrics JSON committed; README explains adding a clip and adding a pipeline in < 1 page each
 - [ ] Crop-interpolation unit test passes; CPU smoke-test mode works
-
-## Re-scope 2026-11-09 (owner roadmap re-rank)
-
-Two-week testbed, Roadmap section 11. Candidates: FlashVSR+ (Oct 2026, Apache-2.0, Base then Turbo) and ReCaVSR (Sep 2026); SeedVR2-3B only as a quality-ceiling reference clip; Topaz Proteus via API as the buy comparator. Hard gates before anything ships: jersey-number OCR match against the source crop and a human check of faces at 30 to 80 px, because no published evidence covers small distant athletes and the one hands-on report on distant faces with the FlashVSR family is negative. T4710 (encode fix) runs first and any time.

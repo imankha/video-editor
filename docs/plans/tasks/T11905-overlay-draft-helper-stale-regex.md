@@ -1,5 +1,10 @@
 # T11905: `overlayDraft.js` e2e helper permanently skips in every environment
 
+## In plain words
+
+A shared test helper looks for a chip labelled In Spotlight while the app says In Overlay, so nine tests silently skip. Fix the match.
+
+
 **Status:** TODO
 **Impact:** 5
 **Complexity:** 2

@@ -1,5 +1,10 @@
 # T7110: Landing homepage — sell all four value stories (copy overhaul)
 
+## In plain words
+
+Rewrite the homepage to sell the reel and the recruiting card alongside sharpening, with real before-and-after examples. Runs after the reel exists so there is something true to show.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 3
@@ -205,7 +210,3 @@ TODO. The copy embedded above predates it. Before using any of it, translate it 
 `.claude/references/copy-glossary.md`: five steps (Upload game, Mark plays, Frame, Spotlight,
 Share) instead of Educate/Elevate/Celebrate, "athlete" not "player", "play" not "clip",
 "game video" not "footage", no "--" dashes. The value-story changes themselves were not done.
-
-## Re-scope 2026-11-09 (owner roadmap re-rank)
-
-Sell the reel and the recruiting card once T11300 / T15880 exist; absorb the before/after examples from removed T2330; coordinate vocabulary with T14650. Runs in Roadmap section 8, after the reel.

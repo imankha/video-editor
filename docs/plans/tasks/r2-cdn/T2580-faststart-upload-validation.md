@@ -1,5 +1,10 @@
 # T2580: Faststart Validation on Upload
 
+## In plain words
+
+A video whose index sits at the end of the file cannot start playing until it is fully downloaded. Check for this on upload and fix or warn, so it cannot regress.
+
+
 **Status:** TODO
 **Impact:** 6
 **Complexity:** 2

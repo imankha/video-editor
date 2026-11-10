@@ -1,5 +1,10 @@
 # Lifecycle Email Drip (Activity-Aware Onboarding Emails)
 
+## In plain words
+
+Every parent we lose is gone from the app, so only email reaches them: 385 of 402 never came back after a week. Three emails keyed to the weekend game cadence: your highlight is ready, download it; it is the weekend, upload this game; your reel has N highlights, add one.
+
+
 **Status:** TODO (design gate: user approval of this EPIC before T7230 starts)
 **Started:** —
 **Filed:** 2026-08-19
@@ -222,7 +227,3 @@ string. Transactional email (OTP, share notifications) is out of scope and untou
 - [ ] Physical mailing address present in the footer (user-provided)
 - [ ] ZERO new Postgres fields/rows (user directive 2026-08-19) — grep-provable: no migration
       file, no `_SCHEMA_DDL` change; drip state lives in `drip.sqlite` + R2 objects only
-
-## Re-scope 2026-11-09 (owner roadmap re-rank)
-
-Three mails keyed to the weekend cadence of youth sports: (1) your highlight is ready, download it (took-away leak, 56 paid to 11 away); (2) it is the weekend, upload this game (385 of 402 never returned after a week); (3) your reel has N highlights, add one (after T11300). Behaviour triggers over AI-written copy. T7270 (admin template editor) removed from v1; T11640's reminder folds in. Roadmap section 7.

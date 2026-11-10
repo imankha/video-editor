@@ -1,5 +1,10 @@
 # T15820: Suggested plays proof: Gemini on 10 hand-marked games, one day, about $5
 
+## In plain words
+
+Today a parent who uploads a whole game must scrub up to ninety minutes to mark plays, and only 19 of 100 game uploaders go on to pay for a highlight, against 45 of 100 who arrive with clips already cut. Hosted video models can now watch a game at one frame per second with the audio and list likely plays with timestamps for about 16 to 41 cents a game; published tests suggest they find roughly three quarters of real plays while suggesting two to four times too many. Before building anything we spend one day and about five dollars running two such models on ten games that parents already marked by hand, and score how many marked plays were found and how many candidates came back. The bar, which you confirm first: three quarters found, sixty or fewer candidates per game. The result is a short note with a go or a no-go.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 2
@@ -7,7 +12,7 @@
 **Updated:** 2026-11-09
 **Milestone:** Roadmap 3, Suggested plays by AI (see PLAN.md)
 
-## Source
+## How we got here
 
 Owner 2026-11-09: "what users really want is for the AI to just mark all of the plays itself";
 viability must be technical and economic (the charge passes to users after 3 free games). Research
@@ -19,12 +24,12 @@ Gemini 3.5 Flash-Lite about $0.16 at low media resolution with audio, 3.8 Flash 
 2027-01-01). Prod: game uploaders reach a paid highlight at 19%, clip-only users at 45%; the 90-minute
 scrub is the structural gap.
 
-## Problem
+## The problem
 
 Nobody has measured recall and candidate count on our footage. Everything else (UI, table, accept
 gesture) already exists from the Veo import (T13210 `play_suggestions`, T13220 suggestions list).
 
-## Solution
+## What we will do
 
 A script and a scorecard, no product code.
 
@@ -45,14 +50,14 @@ GO threshold (owner to confirm before the run): recall 75% or better with 60 or 
 game on at least the soccer games. If candidate count is the only failure, note whether a cheap audio
 energy prefilter would fix it; do not build it here.
 
-## Acceptance Criteria
+## How we will know it worked
 
 - [ ] `scripts/prototypes/suggested_plays/` holds the transcode, chunk, prompt and scoring script with a README; runs end to end on one game from a clean checkout with an API key.
 - [ ] The research note has recall, precision, candidates and cost for 10 games, two models, by sport and camera.
 - [ ] A GO / NO-GO against the stated threshold, and the recommended model and settings for T15830.
 - [ ] Total API spend recorded (expected under $10).
 
-## Context
+## For the implementer
 
 ### Related Tasks
 T15830 (the feature, gated on GO), T13200 to T13240 (Veo import, the UI this lands in), T14300

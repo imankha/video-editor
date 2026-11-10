@@ -1,5 +1,10 @@
 # T8860: Shrink upload integration + fallback
 
+## In plain words
+
+Run the shrink during upload, one segment at a time, with honest progress, and fall back to uploading the original on any failure with no double charge. Blocked until the spike says go.
+
+
 **Status:** BLOCKED (on T15850 GO, 2026-11-09)
 **Impact:** 7
 **Complexity:** 5

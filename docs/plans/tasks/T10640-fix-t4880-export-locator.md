@@ -1,5 +1,10 @@
 # T10640: Fix stale "Export" locator in T4880 mobile reachability spec
 
+## In plain words
+
+A mobile test looks for a button named Export that was renamed Generate Framing, so it waits three minutes and fails for the wrong reason. Fix the name.
+
+
 **Status:** TODO
 **Impact:** 3
 **Complexity:** 1

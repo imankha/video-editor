@@ -1,5 +1,10 @@
 # Epic: Player Moments (AI-found moments for a tapped player, any sport)
 
+## In plain words
+
+The step after suggested plays: tap your child and get the moments that involve them. Which small figure is your kid is the hard half, so this waits until team-level suggestions have captured most of the gain.
+
+
 **Status:** TODO (prototype-gated: each prototype has KPIs and a kill criterion written before it runs, and the next task starts only if the decision tree says so)
 **Started:** 2026-10-31
 **Completed:** -

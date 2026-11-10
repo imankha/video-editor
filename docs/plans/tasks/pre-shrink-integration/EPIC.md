@@ -1,5 +1,10 @@
 # Pre-Shrink Integration
 
+## In plain words
+
+If the spike says go, these three tasks bring the shrink tool into the app as a plain 1080p shrink offered before large uploads, with no automatic cropping.
+
+
 **Status:** TODO
 **Started:** 2026-09-08
 **Impact:** 7 | **Complexity:** 5 (aggregate)

@@ -1,5 +1,10 @@
 # T11270: Collapse clip selection to "the clip" (mechanical)
 
+## In plain words
+
+Rename the internal selected-clip plumbing to the clip, now that a project has exactly one. A move-only change with no behaviour change.
+
+
 **Status:** TODO
 **Impact:** 3
 **Complexity:** 3

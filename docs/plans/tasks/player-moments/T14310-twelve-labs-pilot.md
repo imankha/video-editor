@@ -1,5 +1,10 @@
 # T14310: Prototype 1: hosted video-search slot end to end (upload game, tap-crop query, scored moments)
 
+## In plain words
+
+First prototype: a hosted video-search service that takes a tap on the child and returns scored moments. A one-week pilot with a kill rule.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 3

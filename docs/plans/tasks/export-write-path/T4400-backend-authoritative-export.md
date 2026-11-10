@@ -1,5 +1,10 @@
 # T4400: Backend-Authoritative Export (mark-exported, No Client Full-State)
 
+## In plain words
+
+Export still trusts the browser's copy of the clip state, so an old tab clicking Export can overwrite edits made in a newer tab. Make the server snapshot its own state at export instead.
+
+
 **Status:** TODO
 **Impact:** 9
 **Complexity:** 6

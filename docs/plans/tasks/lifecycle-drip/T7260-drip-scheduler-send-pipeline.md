@@ -1,5 +1,10 @@
 # T7260: Drip Scheduler + Idempotent Send Pipeline + Admin Dry-Run
 
+## In plain words
+
+The scheduled job that finds parents due an email and sends it at most once, with an admin dry run to inspect the plan before anything goes live.
+
+
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 5

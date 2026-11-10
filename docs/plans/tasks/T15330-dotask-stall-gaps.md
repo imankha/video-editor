@@ -1,5 +1,10 @@
 # T15330: dotask: seven stall gaps that needed a person
 
+## In plain words
+
+Seven ways the automated task runner stopped and needed a person last week, each with a tooling fix. On staging.
+
+
 **Status:** STAGING
 **Impact:** 7
 **Complexity:** 3

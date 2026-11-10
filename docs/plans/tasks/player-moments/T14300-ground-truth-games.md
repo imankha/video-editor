@@ -1,5 +1,10 @@
 # T14300: Ground truth and the Veo bar: parent-marked moments on 3 to 5 real games, Veo's precision and recall on the same games
 
+## In plain words
+
+Mark one child's moments by hand on three to five real games and score what Veo's own feature finds on the same games, so every prototype can be judged against a number. Can reuse the games from the suggested-plays proof.
+
+
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 2
