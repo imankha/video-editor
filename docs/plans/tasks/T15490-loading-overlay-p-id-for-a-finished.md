@@ -1,6 +1,6 @@
 # T15490: Loading /overlay/p/<id> for a finished project redirects to Frame and spins on Loading
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-09

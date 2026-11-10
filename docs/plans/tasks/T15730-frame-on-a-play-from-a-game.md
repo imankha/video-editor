@@ -1,6 +1,6 @@
 # T15730: Frame on a play from a game still uploading says Video format not supported and keeps Sharpen enabled
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-09
