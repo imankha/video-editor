@@ -572,6 +572,17 @@ export function AnnotateModeView({
   const [sportPromptDismissedForGame, setSportPromptDismissedForGame] = useState(
     () => readSportPromptDismissed(gameId)
   );
+  // T15630 fix round 1: `gameId` arrives asynchronously (null at first mount,
+  // then the real id once AnnotateContainer's load resolves), so the lazy
+  // initializer above only ever saw the null gameId and never re-read
+  // localStorage once the real id showed up. Adjust state during render when
+  // gameId changes (React's documented pattern for this) rather than a
+  // useEffect, per this project's localStorage-read rule.
+  const sportPromptGameIdRef = useRef(gameId);
+  if (sportPromptGameIdRef.current !== gameId) {
+    sportPromptGameIdRef.current = gameId;
+    setSportPromptDismissedForGame(readSportPromptDismissed(gameId));
+  }
   const handleAddClipWithSportPrompt = useCallback(() => {
     const aboutToCreate = !annotateSelectedRegionId && !showAnnotateOverlay;
     onAddClip();

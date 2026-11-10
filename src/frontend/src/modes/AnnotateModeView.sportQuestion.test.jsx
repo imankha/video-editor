@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
@@ -44,8 +44,8 @@ vi.mock('../stores', () => ({
 
 import { AnnotateModeView } from './AnnotateModeView';
 
-function renderView(overrides = {}) {
-  const props = {
+function buildProps(overrides = {}) {
+  return {
     videoController: { _renderRefs: { videoARef: { current: null }, videoBRef: { current: null } } },
     annotateVideoUrl: '/api/games/1/video',
     annotateVideoMetadata: { width: 1920, height: 1080, duration: 100, format: 'mp4', size: 0 },
@@ -90,7 +90,10 @@ function renderView(overrides = {}) {
     hasUnsentShares: false,
     ...overrides,
   };
-  return render(<AnnotateModeView {...props} />);
+}
+
+function renderView(overrides = {}) {
+  return render(<AnnotateModeView {...buildProps(overrides)} />);
 }
 
 describe('AnnotateModeView — first-tap sport question (T8140, T10610)', () => {
@@ -162,5 +165,20 @@ describe('AnnotateModeView — sport question remembers a skip per game (T15630)
     renderView({ gameId: 99 });
     fireEvent.click(screen.getByTestId('stub-add-clip'));
     expect(screen.getByRole('dialog', { name: 'What sport is this?' })).toBeTruthy();
+  });
+
+  // T15630 fix round 1: AnnotateContainer passes gameId as null on first
+  // render and only supplies the real id once its load resolves, within the
+  // SAME mount (no unmount in between). A fix that only reads localStorage in
+  // a lazy useState initializer never notices the id arriving afterwards.
+  it('picks up an already-remembered skip for a game whose id arrives after mount (gameId null -> real, same mount)', () => {
+    localStorage.setItem('rb.annotate.sportPromptDismissed.42', '1');
+    const props = buildProps({ gameId: null });
+    const { rerender } = render(<AnnotateModeView {...props} />);
+    act(() => {
+      rerender(<AnnotateModeView {...props} gameId={42} />);
+    });
+    fireEvent.click(screen.getByTestId('stub-add-clip'));
+    expect(screen.queryByRole('dialog', { name: 'What sport is this?' })).toBeNull();
   });
 });
