@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.analytics import record_milestone
 from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, ShareClipScope
 from app.database import column_exists, ensure_directories, get_db_connection
-from app.middleware.db_sync import durable_sync
+from app.middleware.db_sync import acquire_write_lock, durable_sync
 from app.profile_context import get_current_profile_id
 from app.queries import default_game_name, derive_clip_name
 
@@ -420,7 +420,10 @@ async def _validate_video_in_r2_or_record(blake3_hash: str, *, stage: str) -> No
     so the writer is offloaded via `run_in_context` per the T6200 cardinal rule.
     """
     try:
-        _validate_video_in_r2(blake3_hash)
+        # T15590: _validate_video_in_r2 does a synchronous R2 HEAD -- off the
+        # event loop so a concurrent activate/create/attach for a different
+        # video isn't blocked behind this one's network round-trip.
+        await asyncio.to_thread(_validate_video_in_r2, blake3_hash)
     except HTTPException as e:
         await run_in_context(record_upload_failure_from_payload, {
             "kind": "game", "stage": stage, "reason": "source_missing", "terminal": True,
@@ -1220,6 +1223,7 @@ async def activate_game(
             # writing storage refs (or crashed between). Self-heal any missing refs
             # idempotently. The connection has only read so far (no open write txn),
             # so insert_game_storage_ref's own connection can't deadlock here.
+            await acquire_write_lock()  # T15590: write, needs the lock
             healed = _ensure_game_storage_refs(
                 cursor, game_id,
                 get_current_user_id(), get_current_profile_id(),
@@ -1257,7 +1261,9 @@ async def activate_game(
             if not needs_probe:
                 continue
 
-            meta = _probe_video_metadata(row['blake3_hash'])
+            # T15590: ffprobe is a blocking subprocess -- off the event loop so a
+            # concurrent activate for another game isn't blocked behind this probe.
+            meta = await asyncio.to_thread(_probe_video_metadata, row['blake3_hash'])
             if not meta:
                 logger.warning(f"[activate] probe failed for game={game_id} hash={row['blake3_hash']}, metadata will remain incomplete")
                 continue
@@ -1295,6 +1301,13 @@ async def activate_game(
                     "UPDATE games SET video_fps = ? WHERE id = ? AND video_fps IS NULL",
                     (meta['fps'], game_id)
                 )
+
+        # T15590: everything above this point (R2 HEAD validation + ffprobe) is
+        # slow and touches no per-user db-version; everything from here down is
+        # fast SQLite bookkeeping + the credit debit, so only THIS phase needs
+        # the per-user write lock (LAZY_WRITE_LOCK_ROUTES) -- a concurrent
+        # activate for a different game no longer waits behind this probing.
+        await acquire_write_lock()
 
         # Backfill games table aggregates from game_videos
         cursor.execute("""

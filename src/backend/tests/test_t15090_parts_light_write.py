@@ -372,11 +372,10 @@ async def test_missing_session_is_a_404_that_holds_no_sqlite_lock_during_the_fai
 @pytest.mark.asyncio
 @pytest.mark.parametrize("method,path", [
     ("DELETE", "/api/games/upload/upload_x"),
-    ("POST", "/api/games/finalize-upload"),
     ("POST", "/api/games/prepare-upload"),
 ])
 async def test_other_upload_writes_still_take_the_write_lock(method, path):
-    """T15090:C2 - only the resume-state save is light; finalize stays a durable write."""
+    """T15090:C2 - only the resume-state save is light; these stay durable writes."""
     from app.middleware import db_sync
     async with _env() as env:
         await _settle(env)
@@ -387,6 +386,31 @@ async def test_other_upload_writes_still_take_the_write_lock(method, path):
         lock.release()
         assert not done, f"{method} {path} ran without the per-user write lock"
         await task
+
+
+@pytest.mark.asyncio
+async def test_finalize_still_takes_the_write_lock_for_its_own_write():
+    """T15090:C2 / T15590: finalize is LAZY_WRITE_LOCK_ROUTES now (the R2 multipart-
+    complete/HEAD calls run unlocked), but its own pending_uploads DELETE still takes
+    the per-user write lock -- it never became a light write like PATCH /parts."""
+    from app.middleware import db_sync
+    GU = "app.routers.games_upload."
+    async with _env() as env:
+        h = _hash()
+        session_id = (await _prepare(env, h))["upload_session_id"]
+        await _settle(env)
+        with patch(GU + "r2_complete_multipart_upload", lambda *a, **k: True), \
+                patch(GU + "r2_head_object_global", lambda key: {"ContentLength": FILE_SIZE}):
+            lock = db_sync._get_user_write_lock(env.user)
+            await lock.acquire()
+            task = asyncio.create_task(env.client.post("/api/games/finalize-upload", json={
+                "upload_session_id": session_id, "parts": [{"part_number": 1, "etag": "e"}],
+                "blake3_hash": h, "kind": "game"}))
+            done, _pending = await asyncio.wait({task}, timeout=0.3)
+            assert not done, "finalize's DELETE ran without the per-user write lock"
+            lock.release()
+            response = await task
+            assert response.status_code == 200, response.text
 
 
 def test_light_write_label_is_the_real_route():

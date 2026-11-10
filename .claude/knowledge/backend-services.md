@@ -1514,4 +1514,28 @@ Bug tier (TODO): T4210 (overlay decode → 500, delete orphaned PUT), T4220-T427
 - `account_clone.copy_user_objects` copies with 16 threads (CopyObject ~1.4 s each against R2).
 - `pg_conn` fixture (`_build_pg_schema`) replays only STRUCTURAL postgres migrations; row-writing ones (v025's unscoped `DELETE FROM game_storage_refs` wiped every dev user's refs before T14410) are listed in conftest `_NEVER_REPLAYED_DATA_MIGRATIONS` and only re-asserted as applied. A new data-mutating pg migration must be added there (AST audit test pins it). If dev refs were wiped earlier: `build_dev_account_templates.py --check`, restore via `_ensure_pg_refs` or `--rebuild`.
 - Upload resume-state save cadence (T15030): `uploadParts` PATCHes `/api/games/upload/{id}/parts` every `SAVE_BATCH_SIZE = 8` parts (40 MB) plus once at the end, NOT per part. Per-part PATCHes queued 14-16 s `WRITE_LOCK_WAIT`s behind a 10-clip batch (2026-11-04). A clip (<= 8 parts) costs one PATCH. Since T15090 each PATCH is a light write (no per-user lock, no R2 sync; persistence-sync.md § T15090); the cadence stays at 8. Finalize stays a durable write (T4320). Guard: `uploadManager.saveCadence.test.js`.
+- **Lazy write lock (T15590):** T1531's per-user write lock (`db_sync._maybe_write_lock`)
+  used to wrap the ENTIRE handler for every write route, acquired by middleware BEFORE
+  `call_next`. `finalize_upload` and `activate_game` call synchronous R2 (boto3
+  multipart-complete/HEAD) and ffprobe calls that touch NO per-user db-version at all
+  (global `games/{hash}.mp4` objects), so two concurrent finishes of two DIFFERENT
+  uploads for one user serialized those R2/ffprobe calls behind one lock anyway --
+  each took ~2x a lone finish (staging QA, two tabs). Fix: `LAZY_WRITE_LOCK_ROUTES`
+  (`db_sync.py`) names routes that do NOT get the lock up front; they call
+  `await db_sync.acquire_write_lock()` themselves, right before their own brief SQLite
+  write, via a `_write_lock_hook` ContextVar the middleware sets before `call_next`
+  (not `request.state` -- that would force every such route to add a `Request` param,
+  breaking direct unit-test calls to the route function). `acquire_write_lock()` is a
+  safe no-op with no request in flight (direct calls bypass the middleware entirely, so
+  there's no sibling request to race). The lock, once acquired, is held exactly like any
+  other write route from that point through the T15150 durable-release path -- only ITS
+  acquisition point moved, not anything downstream. `activate_game` acquires it once,
+  right before its fast bookkeeping/credit-debit phase (after ALL per-video R2-HEAD
+  validate + ffprobe probing is done) -- a multi-video game's later videos still probe
+  under an already-acquired lock if an earlier video's phase-2 write ran first, since
+  the lock is never released early once taken; the common one-video-per-game case is
+  unaffected. T15090's finalize-still-locked guarantee now needs a request that reaches
+  the real DELETE (not an empty/invalid body that 422s before the handler body runs) --
+  `tests/test_t15090_parts_light_write.py::test_finalize_still_takes_the_write_lock_for_its_own_write`.
+  Guards: `tests/test_t15590_concurrent_finalize.py`, `tests/test_t15590_concurrent_activate.py`.
 - Upload in-flight guard (T15040): `pending_uploads.last_part_at` (profile_db v060, UTC `datetime('now')`) is stamped on session create, on resume, and on every `PATCH /parts`. `prepare_upload` answers `{status: "in_progress", upload_session_id, progress_percent}` (no presigned URLs) when it is younger than `IN_FLIGHT_WINDOW_SECONDS = 60`; older/NULL = crash-resume as before. **Liveness signal (T15130):** the save cadence (every 8 parts / at the end) can exceed the window on a slow uplink, so the client also POSTs `/api/games/upload-heartbeat` `{session_id}` every `UPLOAD_HEARTBEAT_INTERVAL_MS = 15 s` while parts are in flight; it only stamps `last_part_at` and is in `SKIP_SYNC_PATHS` (no write lock, no R2 sync). **Rule: heartbeat interval < window / 3; never rely on save cadence for liveness.** `ensureVideoInR2` polls read-only `GET /upload-status` every 5 s on `in_progress` (copy `ALREADY_UPLOADING`), then prepares once more, so a second flow resolves `uploaded:false` via `exists`. **The wait can end on its own (T15140):** `options.signal` (from `uploadStore`, aborted by cancel and profile switch) rejects `AbortError` and books no failure, and a `progress_percent` that does not move for `IN_PROGRESS_STALL_MS = 20 min` fails with reason `in_progress_wait_stalled`. That deadline bounds silence, not total time, and must stay above one 40 MB save batch on a slow uplink (about 11 min at 0.5 Mbps). **A failed flow releases its session (T15140):** on a transfer or finalize failure the client POSTs `/api/games/upload-release`, which NULLs `last_part_at` (`SKIP_SYNC_PATHS`, like the heartbeat), so its Retry resumes at once instead of waiting on itself. Best effort: a lost release, or a crashed tab, just waits out the window. All column uses are `column_exists`-guarded (T6030 structural guard).

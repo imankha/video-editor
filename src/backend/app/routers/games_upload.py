@@ -9,6 +9,7 @@ Games are stored globally in R2 at games/{blake3_hash}.mp4 for deduplication.
 The blake3_hash is stored in the games table for lookup.
 """
 
+import asyncio
 import logging
 import re
 import sqlite3
@@ -19,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from app.constants import ACCOUNT_UPDATING_MESSAGE, MAX_CLIP_UPLOAD_BYTES, GameStatus, UploadKind, UploadStatus
 from app.database import column_exists, get_db_connection
-from app.middleware.db_sync import durable_sync
+from app.middleware.db_sync import acquire_write_lock, durable_sync
 from app.services.credit_ledger import get_credit_balance
 from app.services.storage_credits import calculate_storage_cost, calculate_upload_cost
 from app.services.upload_failures import record_upload_failure, record_upload_failure_from_payload
@@ -744,8 +745,13 @@ async def finalize_upload(
         ]
 
         # Complete multipart upload
-        completed_here = r2_complete_multipart_upload(r2_key, r2_upload_id, r2_parts)
-        head_result = r2_head_object_global(r2_key)
+        # T15590: these are synchronous boto3/network calls -- run them off the
+        # event loop (asyncio.to_thread) so a concurrent finalize for a DIFFERENT
+        # upload isn't blocked behind this one's R2 round-trip.
+        completed_here = await asyncio.to_thread(
+            r2_complete_multipart_upload, r2_key, r2_upload_id, r2_parts
+        )
+        head_result = await asyncio.to_thread(r2_head_object_global, r2_key)
         if not completed_here:
             # T15020: a concurrent flow sharing this session may have completed
             # the multipart first (R2 then refuses ours with NoSuchUpload). If the
@@ -760,7 +766,7 @@ async def finalize_upload(
                 )
             else:
                 # Attempt to abort the upload to clean up
-                r2_abort_multipart_upload(r2_key, r2_upload_id)
+                await asyncio.to_thread(r2_abort_multipart_upload, r2_key, r2_upload_id)
                 logger.error(
                     f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} flow_id={flow_id} session={session_id} "
                     f"hash={blake3_hash} upload_id={r2_upload_id} parts={len(r2_parts)} "
@@ -814,6 +820,13 @@ async def finalize_upload(
                 status_code=400,
                 detail="We couldn't finish your upload. Try again."
             )
+
+        # T15590: the R2 calls above don't touch this user's db-version at all
+        # (they complete a GLOBAL games/{hash}.mp4 object), so only the brief
+        # write below needs the per-user write lock -- acquire it NOW rather
+        # than up front, so a concurrent finalize for a DIFFERENT upload isn't
+        # blocked behind this one's R2 round-trip (LAZY_WRITE_LOCK_ROUTES).
+        await acquire_write_lock()
 
         # Delete pending upload record
         cursor.execute(
