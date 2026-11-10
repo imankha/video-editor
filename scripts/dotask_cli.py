@@ -284,11 +284,44 @@ def criteria_waiting_elsewhere(task_ids):
     return lines
 
 
+def task_files_off_base(paths):
+    """The checkout is cut from origin/<TASK_BASE or master> (task.sh), not from the main working copy, so a
+    task file that exists only locally (filed or edited but not pushed) is not what the worker reads.
+    g-t15410-4 (2026-11-09) blocked on T15730: its file was committed after the group's checkout was cut
+    and the worker found no spec. Returns (missing, differs): rel paths absent from the base, and rel
+    paths present there whose local copy differs (e.g. a ruling committed but not pushed)."""
+    base = os.environ.get("TASK_BASE") or "master"
+    fetch = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "fetch", "-q", "origin", base],
+                           capture_output=True, text=True, timeout=120, check=False)
+    if fetch.returncode:
+        print(f"WARNING: could not fetch origin/{base} ({fetch.stderr.strip()[:120]}); checking task files "
+              "against the last fetched copy", file=sys.stderr)
+    missing, differs = [], []
+    for path in paths:
+        rel = Path(path).resolve().relative_to(Path(MAIN_REPO).resolve()).as_posix()
+        shown = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "show", f"origin/{base}:{rel}"],
+                               capture_output=True, timeout=60, check=False)
+        if shown.returncode:
+            missing.append(rel)
+        elif shown.stdout.replace(b"\r\n", b"\n") != Path(path).read_bytes().replace(b"\r\n", b"\n"):
+            differs.append(rel)
+    return missing, differs
+
+
 def preflight(task_ids, allow_overlap=False):
     files_by_task = {}
     waiting = {}  # task -> the line that makes it wait on the user
-    for task_id in task_ids:
-        path = resolve_task_file(task_id)
+    paths = [resolve_task_file(task_id) for task_id in task_ids]
+    missing, differs = task_files_off_base(paths)
+    base = os.environ.get("TASK_BASE") or "master"
+    if missing:
+        die(f"these task files are not on origin/{base}, which the container checkout is cut from, so the "
+            "worker would find no spec:\n" + "\n".join(f"  {rel}" for rel in missing) +
+            f"\nPush them first (`git push origin {base}` from {MAIN_REPO}), then start.")
+    for rel in differs:
+        print(f"WARNING: {rel} differs from origin/{base}; the worker reads the origin copy. Push it first if "
+              "the local change (a ruling, criteria) matters.", file=sys.stderr)
+    for task_id, path in zip(task_ids, paths):
         status = task_status(path)
         if status not in ("TODO", "WIP"):
             die(f"{task_id} has PLAN.md status {status!r}, not TODO/WIP")

@@ -412,10 +412,36 @@ class DotaskCliTest(unittest.TestCase):
         ])
         self.assertEqual([b["tasks"] for b in dotask_cli.nextup_bundles()], [["T20"], ["T30"]])
 
+    def _push_paths(self, *paths):
+        git_c(self.main_repo, "add", *[str(p) for p in paths])
+        git_c(self.main_repo, "commit", "-qm", "file tasks")
+        git(self.main_repo, "push", "-q", "origin", "HEAD:master")
+
+    # --- base check: the checkout is cut from origin/master, not the local tree ------
+    def test_start_refuses_a_task_file_not_pushed_to_origin(self):
+        # g-t15410-4 (2026-11-09): T15730's file was committed locally after the checkout was cut
+        # from origin/master, so the worker found no spec and stopped BLOCKED.
+        path = self._write_task("T2", "Unpushed bug", "TODO", ["src/Bug.jsx"])
+        git_c(self.main_repo, "add", str(path))
+        git_c(self.main_repo, "commit", "-qm", "file T2 locally")
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err:
+            dotask_cli.preflight(["T1", "T2"])
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("T2-unpushed-bug.md", err.getvalue())
+        self.assertIn("git push origin master", err.getvalue())
+        # Once pushed it starts; a later unpushed edit only warns (start's own WIP flips are local too).
+        git(self.main_repo, "push", "-q", "origin", "HEAD:master")
+        path.write_text(path.read_text() + "\n## Ruling\n\n**A** (owner, 2026-11-09).\n")
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            files_by_task, _owned, _shared = dotask_cli.preflight(["T1", "T2"])
+        self.assertEqual(sorted(files_by_task), ["T1", "T2"])
+        self.assertIn("T2-unpushed-bug.md differs from origin/master", err.getvalue())
+
     # --- decision gate: a task that waits on the user is not headless work ----------
     def test_start_refuses_a_task_that_waits_on_a_user_ruling(self):
         path = self._write_task("T2", "Pick a name", "TODO", ["src/Name.jsx"])
         path.write_text(path.read_text() + "\n## Solution\n\nPut the options on a decision page; the user picks.\n")
+        self._push_paths(path)
         with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err:
             dotask_cli.preflight(["T1", "T2"])
         self.assertEqual(ctx.exception.code, 2)
