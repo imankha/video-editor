@@ -503,6 +503,7 @@ DONE rows live in [PLAN-archive.md](PLAN-archive.md).
 | T15970 | [Staging check failed: T15750:C2 Opening Edit play does not start playback.](tasks/T15970-staging-check-failed-t15750-c2-opening.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T15980 | [Staging check failed: T15630:C1 The sport is asked at most once per game, and](tasks/T15980-staging-check-failed-t15630-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T15990 | [Staging check failed: T15400:C2 Every button of the 'Switch to landscape?' dialog is tappable](tasks/T15990-staging-check-failed-t15400-c2-every.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T16000 | [Staging check failed: T15740:C1 The toast never overlaps the action bar or the chat](tasks/T16000-staging-check-failed-t15740-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ## Environment Configuration
 
