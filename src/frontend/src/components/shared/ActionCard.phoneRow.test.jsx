@@ -35,4 +35,16 @@ describe('ActionCard phoneRow (T12450)', () => {
     expect(screen.getByTestId('trim-slowmo-button').className).toContain('max-sm:flex-row');
     expect(screen.getByTestId('framing-preview-toggle').className).toContain('max-sm:flex-row');
   });
+
+  // T15500: share-modal footers (layout="modal") stayed min-h-[108px] on
+  // phones with no narrow-viewport collapse at all (unlike band/panel),
+  // making Share/Cancel oversized on the staging share sheet.
+  it('CtaBar modal layout also collapses to the phone row below sm', () => {
+    render(<CtaBar layout="modal" primary={{ title: 'Share', onClick() {} }} exit={{ title: 'Cancel', onClick() {} }} />);
+    const share = screen.getByRole('button', { name: 'Share' });
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    expect(share.className).toContain('max-sm:!min-h-12');
+    expect(share.className).not.toContain('max-sm:!min-h-[108px]');
+    expect(cancel.className).toContain('max-sm:!min-h-12');
+  });
 });
