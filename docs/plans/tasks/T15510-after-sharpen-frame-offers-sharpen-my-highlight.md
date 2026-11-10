@@ -1,6 +1,6 @@
 # T15510: After Sharpen, Frame offers Sharpen my highlight again with its credit cost, and spends credits with no confirm
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-09
