@@ -79,7 +79,10 @@ export default function CtaBar({ layout = 'band', primary, secondary = [], destr
 
   const cols = secondary.length + (destructive ? 1 : 0) + (exit ? 1 : 0);
   const compact = layout === 'inline' || layout === 'modal';
-  const phoneRow = tracksHeight; // T12450: band/panel collapse to short rows below sm
+  // T12450: band/panel collapse to short rows below sm. T15500: modal footers
+  // (share sheets) get the same collapse -- they stayed min-h-[108px] on
+  // phones with no narrow-viewport treatment at all.
+  const phoneRow = tracksHeight || layout === 'modal';
   return (
     <div ref={ref} data-testid="cta-bar" data-cta-layout={layout} className="w-full flex flex-col gap-2">
       {(status || cost) && <div className="flex items-center justify-between gap-3 text-xs text-gray-300">{status}{cost}</div>}

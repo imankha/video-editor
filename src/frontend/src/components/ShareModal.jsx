@@ -181,6 +181,14 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
     }
   };
 
+  // T15500: with no emails pending, the "Share (N)" primary stays disabled
+  // forever once a public link exists (it only ever fires an email share) --
+  // the link itself IS the completed action, so the footer's enabled next
+  // step becomes copying it instead of a permanently-dead button.
+  const publicToken = emails.length === 0 && isPublic && publicLink
+    ? publicLink.split('/shared/')[1]
+    : null;
+
   const activeShares = existingShares?.filter(s => !s.revoked_at) || [];
   const activeEmails = new Set(activeShares.map(s => s.recipient_email.toLowerCase()));
   const filteredContacts = contacts.filter(c => !activeEmails.has(c.toLowerCase()));
@@ -356,7 +364,12 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
         <div className="px-6 py-4 border-t border-gray-700">
           <CtaBar
             layout="modal"
-            primary={successShares ? undefined : {
+            primary={successShares ? undefined : publicToken ? {
+              icon: copiedToken === publicToken ? Check : Copy,
+              title: copiedToken === publicToken ? SHARE_COPY.COPIED : SHARE_COPY.COPY_LINK,
+              onClick: () => handleCopyLink(publicToken),
+              testId: 'share-modal-submit',
+            } : {
               icon: isSubmitting ? Loader : undefined,
               title: isSubmitting ? 'Sharing...' : `Share${emails.length > 0 ? ` (${emails.length})` : ''}`,
               onClick: handleSubmit,

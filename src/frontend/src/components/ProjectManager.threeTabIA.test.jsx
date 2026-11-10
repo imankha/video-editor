@@ -219,7 +219,7 @@ describe('T11230: legacy multi-clip drafts stay reachable in the Clips tab', () 
 describe('T11230: Published tab renders the published gallery panel', () => {
   beforeEach(() => {
     window.history.replaceState(null, '', '/home');
-    useGalleryStore.setState({ isOpen: false });
+    useGalleryStore.setState({ isOpen: false, count: 0, countLoaded: false });
   });
 
   it('clicking Published mounts the panel active with testid published-tab-panel', () => {
@@ -238,6 +238,22 @@ describe('T11230: Published tab renders the published gallery panel', () => {
       expect(window.location.pathname).toBe('/home/games');
     });
     expect(screen.getByTestId('published-tab-panel').dataset.active).toBe('false');
+  });
+
+  // T15480: a COLD /home/published load (closed-tab reopen / fresh tab) for an
+  // account that actually has published highlights must show them, not bounce
+  // to Games -- that games-first settle is only for the genuinely-empty case
+  // the test above covers. The real count loads asynchronously (galleryStore),
+  // so this starts on Games like the stale case, then corrects once count > 0
+  // resolves.
+  it('a cold /home/published load WITH published highlights lands on Published, not Games', async () => {
+    useGalleryStore.setState({ count: 3, countLoaded: true });
+    renderManager({}, '/home/published');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/home/published');
+    });
+    expect(screen.getByTestId('published-tab-panel').dataset.active).toBe('true');
   });
 
   it('publish-landing effect (galleryStore.isOpen) retargets to Published', async () => {

@@ -1,0 +1,19 @@
+{
+  "task": "T15500",
+  "criteria": [
+    {
+      "id": "T15500:C1",
+      "kind": "code",
+      "text": "After 'Anyone with the link' creates a link, a copy/share action is enabled within 3 s.",
+      "command": "cd src/frontend && npx vitest run src/components/ShareModal.linkReady.test.jsx",
+      "test": "T15500:C1 - footer primary becomes an enabled Copy link action once the public link is ready"
+    },
+    {
+      "id": "T15500:C2",
+      "kind": "code",
+      "text": "Share/Cancel buttons are normal height on mobile.",
+      "command": "cd src/frontend && npx vitest run src/components/shared/ActionCard.phoneRow.test.jsx -t 'CtaBar modal layout also collapses to the phone row below sm'",
+      "test": "T15500:C2 - CtaBar modal layout also collapses to the phone row below sm"
+    }
+  ]
+}

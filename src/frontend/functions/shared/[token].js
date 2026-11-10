@@ -288,10 +288,8 @@ video{max-width:100%;max-height:100%;width:auto;height:auto;display:block;backgr
 .ec-cta:hover{text-decoration:underline}
 .ec-mw{font-size:13px;color:#9ca3af}
 .ec-lr{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
-.ec-lk{display:flex;flex-direction:column;width:150px}
-.ec-lt{font-size:30px;font-weight:700;color:#fff;line-height:1.1}
-.ec-lk .ec-lt:first-child{text-align:left}
-.ec-lk .ec-lt:last-child{text-align:right}
+.ec-lk{display:flex;align-items:center;gap:12px}
+.ec-lt{font-size:30px;font-weight:700;color:#fff;line-height:1;white-space:nowrap}
 #emblem{background:none;border:none;cursor:pointer;padding:0;line-height:0}
 #emblem:hover svg{transform:scale(1.1)}
 #emblem svg{transition:transform .15s;display:block}
@@ -314,9 +312,8 @@ ${introCard.html}
 <div class="ec-lr">
 <span class="ec-mw">Made with</span>
 <div class="ec-lk">
-<span class="ec-lt">Reel</span>
-<button id="emblem" type="button" aria-label="Replay" style="align-self:center"><svg width="112" height="112" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="22" stroke="url(#eclg)" stroke-width="3" fill="none"/><circle cx="24" cy="4" r="2" fill="#a855f7"/><circle cx="24" cy="44" r="2" fill="#a855f7"/><circle cx="4" cy="24" r="2" fill="#a855f7"/><circle cx="44" cy="24" r="2" fill="#a855f7"/><path d="M20 16 L20 32 L34 24 Z" fill="white" opacity=".95"/><defs><linearGradient id="eclg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs></svg></button>
-<span class="ec-lt">Ballers</span>
+<button id="emblem" type="button" aria-label="Replay"><svg width="112" height="112" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="22" stroke="url(#eclg)" stroke-width="3" fill="none"/><circle cx="24" cy="4" r="2" fill="#a855f7"/><circle cx="24" cy="44" r="2" fill="#a855f7"/><circle cx="4" cy="24" r="2" fill="#a855f7"/><circle cx="44" cy="24" r="2" fill="#a855f7"/><path d="M20 16 L20 32 L34 24 Z" fill="white" opacity=".95"/><defs><linearGradient id="eclg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs></svg></button>
+<span class="ec-lt">ReelBallers</span>
 </div>
 </div>
 <a class="ec-cta" href="${escapeHtml(endcardCtaUrl("https://www.reelballers.com/", share.sharer_invite_code, share.sport))}" target="_blank" rel="noopener">Make your own highlights</a>
