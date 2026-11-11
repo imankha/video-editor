@@ -10,6 +10,7 @@
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T16030 | [A shared reel link shows guidance: the overlay's own tip, and for a signed-in viewer the Home screen's tip and shade](tasks/T16030-shared-reel-link-shows-guidance.md) | 7 | 3 | 2.3 | TODO | [ ] | Owner report 2026-11-10 (staging). The shared reel link page shows a coach tip and shade; for a signed-in viewer the Home screen's tip shows over the reel too. |
 | T15400 | [Frame and Spotlight bottom action bar covers the video, crop box, timeline and dialog buttons](tasks/T15400-frame-and-spotlight-bottom-action-bar-covers.md) | 9 | 3 | 3.0 | STAGING | [ ] | QA 2026-11-09. Fixed bar ~230 px hides the crop box at 1366x660, clips timeline at 1440x900, and makes the shape dialog's buttons untappable on iPhone. T14850 regression. |
 | T15410 | [Frame hangs on Loading when opened cold from resume, the Continue card or after export](tasks/T15410-frame-hangs-on-loading-when-opened-cold.md) | 9 | 4 | 2.2 | STAGING | [ ] | QA 2026-11-09. Resume lands on the right URL but Frame spins on 'Loading...' until a manual reload. Seen on desktop and iPad. |
 | T15420 | [Highlight ready toast opens the Frame result and offers Finish without spotlight after Spotlight was done](tasks/T15420-highlight-ready-toast-opens-the-frame-result.md) | 8 | 3 | 2.7 | STAGING | [ ] | QA 2026-11-09, possible. Stale ready toast routes to Frame result; 'Finish without spotlight' re-ran and the shared clip lacked the spotlight. |
