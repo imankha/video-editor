@@ -1157,6 +1157,13 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   `build_spend_readiness` adds `live_campaigns` (one row per campaign with spend entered: cost per sign-up,
   coverage against `platform_conversions`, GO/TEST/NO state against the shared break-even) -- empty list, and the
   frontend block hidden, until a campaign has spend.
+  **Spend-readiness gate 1 (visit -> sign-up, T15560):** the T7410 visit beacon's `visit_daily`
+  table lives in the SQLite analytics store (`analytics_store.py`, synced to R2), NEVER in
+  Postgres -- `to_regclass('visit_daily')` against the Postgres cursor always returns NULL. Gate 1
+  reads it the same way the Journey's "Visited" head node does: `load_visit_totals()` +
+  `analytics_journey._visit_matches`, summed over a trailing `C.VISIT_WINDOW_DAYS` (7) window,
+  against sign-ups in the same window (`_gate1_signups`). "not instrumented" only when no visit
+  data exists yet or the window predates `VISIT_BEACON_INSTRUMENTED_AT`.
   **Paid-ads vs referral-programme separation:** a referred sign-up inherits its referrer's origin
   (`_determine_origin`), so without exclusion a referral chain through a paid-campaign joiner would double-count
   as another paid attribution. `_direct_attributed_signups`/live_campaigns and the ladder's `_measured_platform_costs`

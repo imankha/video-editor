@@ -638,10 +638,33 @@ class TestGateReaders:
         _assert_no_task_id_in_unblock_text(data)
 
     def test_gate_1_is_grey_not_instrumented_without_visit_daily(self, pg):
-        data = _read()
+        with patch("app.services.analytics_store.load_visit_totals", return_value=({}, False)):
+            data = _read()
         g = _gate(data, "visit_to_signup")
         assert g["rag"] == "grey" and g["unblock"]["kind"] == "task"
         assert "not instrumented" in g["unblock"]["text"]
+        _assert_no_task_id_in_unblock_text(data)
+
+    def test_gate_1_is_judged_from_visit_beacon_data_when_present(self, pg):
+        """T15560: gate 1 used to say 'not instrumented' even with visit data present, because
+        it checked a Postgres `visit_daily` table that never exists -- the beacon lives in the
+        SQLite analytics store. With beacon data in the trailing window, the gate must read it
+        (same source as the Journey's Visited head node) and NOT say 'not instrumented'."""
+        for i in range(30):
+            _user(f"g1-{i}", days_ago=0)
+        totals = {
+            (TODAY.isoformat(), "direct", "landing"): 400,
+            (TODAY.isoformat(), "seo", "app"): 200,
+            ("2020-01-01", "direct", "landing"): 9999,  # long before the beacon existed
+        }
+        with patch("app.services.analytics_store.load_visit_totals", return_value=(totals, False)):
+            data = _read()
+        g = _gate(data, "visit_to_signup")
+        assert "not instrumented" not in (g["unblock"]["text"] or "")
+        assert g["n"] == 600
+        assert g["k"] == 30
+        assert g["value"] == 5.0
+        assert g["rag"] == "green"
         _assert_no_task_id_in_unblock_text(data)
 
     def test_signups_by_country_for_the_window_with_unknown(self, pg):

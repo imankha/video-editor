@@ -35,6 +35,13 @@ import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
 import { ERROR_COPY, SHARE_COPY, RANKING_COPY, INTRO_COPY } from '../config/displayNames';
 import { serverError, userErrorMessage } from '../utils/userError';
 
+// T15760: the Published tab's bare path (must match ProjectManager.jsx's
+// TAB_PATHS.published -- that module owns the tab<->path map, this one only
+// appends/strips the player's own `/{downloadId}` suffix on open/close so a
+// copied URL cold-loads back to the same highlight).
+const PUBLISHED_TAB_PATH = '/home/published';
+const publishedPlayerPath = (downloadId) => `${PUBLISHED_TAB_PATH}/${downloadId}`;
+
 /**
  * PublishedReelsPanel - the Published reels surface: renders inline as
  * ProjectManager's Published tab body (T8555; was the published half of the
@@ -98,6 +105,12 @@ export function PublishedReelsPanel({
   // introShowing SWAP is retired; intro=null passes straight through to a
   // bare CollectionPlayer-equivalent render (AC #5).
   const [storyPlayer, setStoryPlayer] = useState(null);
+  // T15760: mirrored in a ref so closeStoryPlayer (memoized with no deps) can
+  // read the CURRENT player without being recreated on every open/close --
+  // only a single-reel open (downloadId set) ever touched the URL, so only
+  // that case needs undoing on close.
+  const storyPlayerRef = useRef(null);
+  useEffect(() => { storyPlayerRef.current = storyPlayer; }, [storyPlayer]);
   const watchTimerRef = useRef(null);
   // T10010: separate timer for the activation `result_viewed` beacon (>=2s / >=50%
   // of duration), distinct from the 1s quest-achievement timer above.
@@ -138,6 +151,12 @@ export function PublishedReelsPanel({
   const closeStoryPlayer = useCallback(() => {
     clearTimeout(watchTimerRef.current);
     clearTimeout(viewedTimerRef.current);
+    // T15760: undo the URL the single-reel open set below -- collection
+    // playback never touched the URL (downloadId is single-reel-only), so
+    // there's nothing to restore for that path.
+    if (storyPlayerRef.current?.downloadId) {
+      window.history.replaceState(null, '', PUBLISHED_TAB_PATH + window.location.search);
+    }
     setStoryPlayer(null);
   }, []);
 
@@ -487,45 +506,10 @@ export function PublishedReelsPanel({
   // attempt navigator.share() — desktop skips straight to ShareModal instead.
   const { copyLink } = useWebShare();
 
-  if (!active && !storyPlayer) return null;
-
-  const handleDelete = (e, download) => {
-    e.stopPropagation();
-    setDeletingDownload(download);
-  };
-
-  const confirmDelete = async () => {
-    const download = deletingDownload;
-    setDeletingDownload(null);
-    const deleted = await deleteDownload(download.id, true);
-    // T13860: change event -- apply the delta to the Finished badge, no refetch.
-    // Only when the backend confirmed the delete (false = failed, nothing changed).
-    if (deleted) {
-      useGalleryStore.getState().applyHighlightDeleted({ wasUnwatched: !download.watched_at }, 'delete-highlight');
-      useGamesDataStore.getState().applyReelCountDelta(download, -1, 'delete-highlight'); // T13850
-    }
-    // Keep the collection member lists + aggregates honest (T3610 §0B.6):
-    // drop the card now, refetch the summary (counts/eligibility change).
-    collections.removeMember(download.id);
-    collections.fetchSummary('delete-highlight');
-  };
-
-  // T7100: downloadFile now re-throws on failure (previously swallowed into an
-  // unread `error` state -- downloads failed 100% silently). Surface it the
-  // same way onDownloadCollection does.
-  const handleDownload = async (e, download) => {
-    e.stopPropagation();
-    // Filename is controlled by backend's Content-Disposition header (single source of truth)
-    try {
-      await downloadFile(download.id);
-    } catch (err) {
-      console.error('[PublishedReelsPanel] reel download failed:', err);
-      toast.error(ERROR_COPY.DOWNLOAD_HIGHLIGHT);
-    }
-  };
-
-  const handlePlay = async (e, download) => {
-    e.stopPropagation();
+  // T15760: the body of the Play gesture, factored out of handlePlay so the
+  // cold-load effect below (no click event, a download already resolved from
+  // the URL's id) can open the exact same player the same way.
+  const openDownloadPlayer = async (download) => {
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     // Single reel = a one-reel story, played through the SAME player as collections.
     // Watched-marking happens via the player's onReelChange (handleReelWatched),
@@ -551,6 +535,12 @@ export function PublishedReelsPanel({
       downloadId: download.id,
       intro,
     });
+    // T15760: name this highlight in the address so it can be copied/bookmarked
+    // and cold-loads back to the same player (see the mount effect below).
+    // replaceState, not pushState -- mirrors every other URL-mirrors-state
+    // write in this app (setActiveTab, the /shared/:token close handlers):
+    // closing is a UI gesture (closeStoryPlayer), never the browser back button.
+    window.history.replaceState(null, '', publishedPlayerPath(download.id) + window.location.search);
     // T8545: the player renders above this panel (Z.PLAYER) regardless of the
     // Published tab's own active/inactive state -- there is no "close the
     // panel" action anymore (it was a drawer-only concept), so exiting the
@@ -593,6 +583,82 @@ export function PublishedReelsPanel({
           duration_seconds: download.duration,
         });
       }, viewedAt * 1000);
+    }
+  };
+
+  // T15760: cold-load restore. A /home/published/{id} URL (copied/bookmarked,
+  // or reopened after a refresh) must reopen the SAME player, not just the
+  // bare Published tab. Mount-once: the id in the URL only ever reflects the
+  // player this component itself opened via openDownloadPlayer, never a
+  // later navigation (those overwrite the URL themselves), so there is
+  // nothing to react to after mount. Placed BEFORE the `!active && !storyPlayer`
+  // early return below so hook call order stays constant across renders.
+  useEffect(() => {
+    const match = window.location.pathname.match(/^\/home\/published\/(\d+)$/);
+    if (!match) return;
+    const wantedId = Number(match[1]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await apiFetch(`${API_BASE}/api/downloads`);
+        if (!resp.ok) throw new Error(`GET /api/downloads -> ${resp.status}`);
+        const data = await resp.json();
+        const download = (data.downloads || []).find((d) => d.id === wantedId);
+        if (cancelled) return;
+        if (!download) {
+          toast.error(ERROR_COPY.OPEN_HIGHLIGHT_AGAIN);
+          window.history.replaceState(null, '', PUBLISHED_TAB_PATH + window.location.search);
+          return;
+        }
+        await openDownloadPlayer(download);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('[PublishedReelsPanel] cold-load player restore failed:', err);
+        window.history.replaceState(null, '', PUBLISHED_TAB_PATH + window.location.search);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!active && !storyPlayer) return null;
+
+  const handlePlay = (e, download) => {
+    e.stopPropagation();
+    openDownloadPlayer(download);
+  };
+
+  const handleDelete = (e, download) => {
+    e.stopPropagation();
+    setDeletingDownload(download);
+  };
+
+  const confirmDelete = async () => {
+    const download = deletingDownload;
+    setDeletingDownload(null);
+    const deleted = await deleteDownload(download.id, true);
+    // T13860: change event -- apply the delta to the Finished badge, no refetch.
+    // Only when the backend confirmed the delete (false = failed, nothing changed).
+    if (deleted) {
+      useGalleryStore.getState().applyHighlightDeleted({ wasUnwatched: !download.watched_at }, 'delete-highlight');
+      useGamesDataStore.getState().applyReelCountDelta(download, -1, 'delete-highlight'); // T13850
+    }
+    // Keep the collection member lists + aggregates honest (T3610 §0B.6):
+    // drop the card now, refetch the summary (counts/eligibility change).
+    collections.removeMember(download.id);
+    collections.fetchSummary('delete-highlight');
+  };
+
+  // T7100: downloadFile now re-throws on failure (previously swallowed into an
+  // unread `error` state -- downloads failed 100% silently). Surface it the
+  // same way onDownloadCollection does.
+  const handleDownload = async (e, download) => {
+    e.stopPropagation();
+    // Filename is controlled by backend's Content-Disposition header (single source of truth)
+    try {
+      await downloadFile(download.id);
+    } catch (err) {
+      console.error('[PublishedReelsPanel] reel download failed:', err);
+      toast.error(ERROR_COPY.DOWNLOAD_HIGHLIGHT);
     }
   };
 

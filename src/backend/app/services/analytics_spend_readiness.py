@@ -680,11 +680,6 @@ def _export_event_live(cur, today) -> bool:
     return int(cur.fetchone()["n"]) > 0
 
 
-def _visit_daily_exists(cur) -> bool:
-    cur.execute("SELECT to_regclass('visit_daily') IS NOT NULL AS present")
-    return bool(cur.fetchone()["present"])
-
-
 def _cohort_inputs(cur, excl, today) -> dict:
     cur.execute(f"""
         SELECT COUNT(*) AS signups,
@@ -699,6 +694,16 @@ def _cohort_inputs(cur, excl, today) -> dict:
     """, {"export_actions": list(EXPORT_ACTIONS), "d_lo": today - timedelta(days=C.COHORT_DAYS), "d_hi": today})
     r = cur.fetchone()
     return {k: int(r[k]) for k in ("signups", "exporters", "plays", "games")}
+
+
+def _gate1_signups(cur, excl, d_lo: date, d_hi: date) -> int:
+    """Sign-ups in [d_lo, d_hi], gate 1's k against its trailing-window visit count."""
+    cur.execute(f"""
+        SELECT COUNT(*) AS n FROM user_segments s
+        LEFT JOIN users u ON u.user_id = s.user_id
+        WHERE s.acquired_at BETWEEN %(d_lo)s AND %(d_hi)s {_and(excl)}
+    """, {"d_lo": d_lo, "d_hi": d_hi})
+    return int(cur.fetchone()["n"])
 
 
 def _signups_by_country(cur, excl, today) -> list[dict]:
@@ -877,14 +882,26 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
     recent_lo = C.RECENT_DAYS + C.MATURE_DAYS
     gates: list[dict] = []
 
-    # 1 visit -> sign-up
-    if _visit_daily_exists(cur):
-        logger.warning("[spend-readiness] visit_daily exists but gate 1 has no reader yet (T7410)")
-        text = "visit_daily exists but this gate has no reader yet"
+    # 1 visit -> sign-up, trailing VISIT_WINDOW_DAYS: T7410's visit beacon lives in the SQLite
+    # analytics store (never Postgres), so this reads it the same way the Journey head node
+    # does -- load_visit_totals() + _visit_matches, not a Postgres visit_daily table.
+    from ..analytics import VISIT_BEACON_INSTRUMENTED_AT
+    from .analytics_journey import _visit_matches
+    from .analytics_store import load_visit_totals
+
+    visit_totals, _visits_partial = load_visit_totals()
+    instrumented = date.fromisoformat(VISIT_BEACON_INSTRUMENTED_AT)
+    window_lo = max(today - timedelta(days=C.VISIT_WINDOW_DAYS - 1), instrumented)
+    if not visit_totals or instrumented > today:
+        gates.append(gate_row("visit_to_signup", k=0, n=0, computed_at=now, unblock={
+            "kind": "task", "text": "not instrumented: no visit beacon (visit_daily missing)",
+            "need": None}))
     else:
-        text = "not instrumented: no visit beacon (visit_daily missing)"
-    gates.append(gate_row("visit_to_signup", k=0, n=0, computed_at=now,
-                          unblock={"kind": "task", "text": text, "need": None}))
+        visits = sum(n for (day, _source, page_class), n in visit_totals.items()
+                    if window_lo.isoformat() <= day <= today.isoformat() and _visit_matches(page_class, None))
+        signups = _gate1_signups(cur, excl, window_lo, today)
+        gates.append(gate_row("visit_to_signup", k=signups, n=visits, computed_at=now,
+                              rate_per_day=visits / C.VISIT_WINDOW_DAYS, floor_unit="visits"))
 
     # 2 sign-up -> export in 14 d (mature cohort), recent = last 30 d of mature sign-ups
     rows = _gate2_rows(cur, excl, today, lo_days=mature_lo, hi_days=mature_hi)

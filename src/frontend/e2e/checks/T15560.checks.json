@@ -1,0 +1,1 @@
+{"criteria": {"T15560:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_admin_spend_readiness.py::TestGateReaders::test_gate_1_is_judged_from_visit_beacon_data_when_present tests/test_admin_spend_readiness.py::TestGateReaders::test_gate_1_is_grey_not_instrumented_without_visit_daily -q"}}}
