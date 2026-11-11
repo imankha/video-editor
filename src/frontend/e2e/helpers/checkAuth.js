@@ -1,3 +1,4 @@
+import { expect } from '@playwright/test';
 import { loginAsDevPreset, loginAsRealUser } from './realAuth';
 
 /**
@@ -26,4 +27,25 @@ export async function loginForCheck(pageOrContext) {
  */
 export function checkApi(path) {
   return `${process.env.E2E_API_BASE || '/api'}${path}`;
+}
+
+/**
+ * Turn Guidance OFF before a check drives transport controls (Forward/Back 5s, etc.)
+ * directly: the shared e2e-gate@test.local account defaults Guidance ON, and its coach
+ * guide-shade intercepts pointer events outside the active step's named cutouts
+ * (`.claude/knowledge/guidance.md` "modal shade is a GUARANTEE"), silently swallowing
+ * clicks on controls that aren't one of those cutouts until the check's own timeout
+ * (T15930/T15940 root-caused this for T15550/T15640; T15980 is the 3rd occurrence,
+ * so it's extracted here instead of re-inlined a 3rd time -- refactor rule 1).
+ * Idempotent no-op if the toggle is absent or already off.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+export async function disableGuidanceForCheck(page) {
+  const toggle = page.getByTestId('guidance-toggle').first();
+  if (!(await toggle.count().catch(() => 0))) return;
+  if ((await toggle.getAttribute('aria-checked')) !== 'false') {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'false', { timeout: 10000 });
+  }
 }
