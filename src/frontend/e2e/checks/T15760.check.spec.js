@@ -23,7 +23,10 @@ test.describe('T15760 finished highlight player keeps a deep-linkable URL', () =
     // tab gesture, not a cold hit to /home/published (a stale/empty tab there settles
     // on Games until the real count loads, see ProjectManager.jsx's T15480 guard --
     // unrelated to this task, so sidestep it instead of racing it here).
-    await page.goto('/');
+    // Open Home explicitly: '/' restores the account's resume point (T15340), so on staging, where the
+    // seeded account has left an Annotate game open, '/' lands inside Annotate and there is no
+    // Highlights tab to click (T16020).
+    await page.goto('/home');
     await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Highlights/ }), timeout: 60000 });
     await page.getByRole('button', { name: /^Highlights/ }).click();
     await expect(page.getByTestId('published-tab-panel')).toBeVisible({ timeout: 15000 });
