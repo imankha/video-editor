@@ -25,3 +25,7 @@ Found by the staging check after PR #741 merged (group g-t15750-4, 9634b6862). I
 ### Relevant Files (REQUIRED)
 
 - To be found.
+
+## Ruling
+
+**Check problem, not a product bug** (owner, 2026-11-10). The staging check failed on a dev-only login (404), and after that was fixed the check skips because headless Chromium cannot enter real phone fullscreen. T15750:C1 and C2 are now `human` checks (a real iPhone). Resolve this task from the board; nothing is left to build.

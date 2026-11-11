@@ -1,17 +1,12 @@
 {
-  "task": "T15750",
-  "criteria": [
-    {
-      "id": "T15750:C1",
-      "kind": "browser",
-      "text": "With Edit play open in portrait fullscreen, the picture is at least 50% of the screen width.",
-      "test": "T15750:C1 - picture is at least 50% of screen width with Edit play open"
+  "criteria": {
+    "T15750:C1": {
+      "kind": "human",
+      "why": "Needs real phone fullscreen: headless Chromium never enters it (document.fullscreenElement stays false), so a browser check cannot reach the state. Owner ruling 2026-11-10: check on a real iPhone."
     },
-    {
-      "id": "T15750:C2",
-      "kind": "browser",
-      "text": "Opening Edit play does not start playback.",
-      "test": "T15750:C2 - opening Edit play does not start playback"
+    "T15750:C2": {
+      "kind": "human",
+      "why": "Needs real phone fullscreen: headless Chromium never enters it (document.fullscreenElement stays false), so a browser check cannot reach the state. Owner ruling 2026-11-10: check on a real iPhone."
     }
-  ]
+  }
 }
