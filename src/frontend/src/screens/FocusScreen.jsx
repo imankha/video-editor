@@ -1302,6 +1302,36 @@ export function FocusScreen({
     useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [focusCompletionGameId, focusCompletionGameStartTime, selectedClip]);
 
+  // T16040: a project is open, nothing is loading, and no video has ever appeared
+  // -- this is the one screen that can tell "still loading" apart from "nothing
+  // will ever load" (every entry path into Frame funnels through here). Without
+  // this, a gap anywhere upstream (an entry point that never fetched clips, a
+  // clip whose URL resolves to nothing) left Frame on a plain "Loading..." spinner
+  // forever, indistinguishable from a slow but real load. 8s gives a slow fetch
+  // room to finish before this fires. Memory-only UI state, never persisted.
+  const [stuckEmpty, setStuckEmpty] = useState(false);
+  useEffect(() => {
+    if (!projectId || isProjectLoading || isLoading || videoUrl || error) {
+      setStuckEmpty(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      console.error(
+        `[Framing] stuck with no video: project=${projectId} missing=${clips.length === 0 ? 'clips' : 'videoUrl'}`
+      );
+      setStuckEmpty(true);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [projectId, isProjectLoading, isLoading, videoUrl, error, clips.length]);
+
+  const handleStuckBackToAnnotate = useCallback(() => {
+    if (focusCompletionGameId != null) {
+      handleBackToGame();
+      return;
+    }
+    useEditorStore.getState().setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
+  }, [focusCompletionGameId, handleBackToGame]);
+
   // T12270: guide 'credits' state: the Generate estimate exceeds the balance (same
   // calculator + balance ExportButtonContainer uses for its own warning).
   const guideCreditBalance = useCreditStore((state) => state.balance);
@@ -1333,6 +1363,8 @@ export function FocusScreen({
       isProjectLoading={isLoadingProjectData}
       loadingStage={loadingStage}
       error={error}
+      stuckEmpty={stuckEmpty}
+      onBackToAnnotate={handleStuckBackToAnnotate}
       isSourceExpired={!!sourceExpired}
       canExtendSource={!!sourceExpired?.canExtend}
       isSourceUploading={sourceUploading}

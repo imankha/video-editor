@@ -16,6 +16,7 @@ import { DraftReelPreview } from './components/DraftReelPreview';
 import { FocusCompletionRecovery } from './components/FocusCompletionRecovery';
 import { openFinishedReel } from './utils/finishedReelNav';
 import { allowEnterFraming } from './utils/reelReEditable';
+import { restoreAuthReturnProject } from './utils/authReturnRestore';
 import { usePublishIntentStore } from './stores/publishIntentStore';
 import { startOverlayPublishRender } from './utils/startOverlayPublishRender';
 import { handleOverlayExportCompletion } from './utils/handleOverlayExportCompletion';
@@ -294,8 +295,7 @@ function App() {
           // T10740: sessionStorage hands back a STRING; selectProject stores its
           // argument verbatim, so without this `selectedProjectId` stays a string
           // and every downstream strict id comparison silently diverges.
-          useProjectsStore.getState().selectProject(Number(authReturnProjectId));
-          useEditorStore.getState().setEditorMode(authReturnMode);
+          restoreAuthReturnProject(authReturnMode, Number(authReturnProjectId), { loadProject });
         } else {
           useEditorStore.getState().setEditorMode(authReturnMode);
         }
