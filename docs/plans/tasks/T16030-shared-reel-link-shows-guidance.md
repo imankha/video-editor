@@ -1,6 +1,6 @@
 # T16030: A shared reel link shows guidance: the overlay's own tip, and for a signed-in viewer the Home screen's tip and shade
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-10
