@@ -107,6 +107,7 @@ export function preloadEditorScreens(importers = EDITOR_SCREEN_IMPORTERS) {
  * - onStateReset - called before loading new project (App.jsx clears selection)
  * - onLoadGame - callback to navigate to annotate mode with game ID
  * - onProjectSelected - callback to sync selectedProject with App.jsx
+ * - sharedOverlayOpen - true while App.jsx has the shared-video overlay mounted on top
  *
  * @see AppJSX_REDUCTION/TASK-02-self-contained-projects-screen.md
  */
@@ -114,6 +115,7 @@ export function ProjectsScreen({
   onStateReset, // Called before loading new project
   onLoadGame: onLoadGameProp, // Callback to set pendingGameId in App.jsx
   // onProjectSelected removed — selectProject updates Zustand store directly
+  sharedOverlayOpen = false, // T16030: shared-video overlay sits on top of Home; null its guide
 }) {
   const setEditorMode = useEditorStore(state => state.setEditorMode);
 
@@ -507,6 +509,7 @@ export function ProjectsScreen({
           onCancelActiveUpload={cancelUpload}
           // Pending game IDs for blocking project cards
           pendingGameIds={pendingGameIds}
+          sharedOverlayOpen={sharedOverlayOpen}
         />
 
         {/* T1580: Insufficient credits for game upload */}

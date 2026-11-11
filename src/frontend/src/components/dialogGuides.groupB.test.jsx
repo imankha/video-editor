@@ -99,23 +99,34 @@ describe('dialog guides, group B', () => {
     expect(guideText()).toBe(GUIDE.modal.sharePlaybackError);
   });
 
-  it('shared-video: ready, sign-in, error, loading', async () => {
+  // T16030: a shared reel link is the top-of-funnel page for people who may never have used
+  // the app -- it must never show a coach tip, shade or pulse, in any state. Error/sign-in
+  // states still tell the viewer what happened via plain screen copy (errorMessage), not a
+  // guide card.
+  it('shared-video: no guide card in any state (ready, sign-in, error, loading)', async () => {
+    globalThis.apiFetchImpl = vi.fn(async () => new Promise(() => {})); // stays 'loading'
+    const loading = render(<SharedVideoOverlay shareToken="t" onClose={() => {}} />);
+    expect(screen.queryByTestId('modal-guide')).toBeNull();
+    loading.unmount();
+
     globalThis.apiFetchImpl = vi.fn(async () => ok({ video_url: '', video_name: 'v' }));
     globalThis.fetch = vi.fn(async () => ({}));
-    const a = render(<SharedVideoOverlay shareToken="t" onClose={() => {}} />);
+    const ready = render(<SharedVideoOverlay shareToken="t" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('player')).toBeTruthy());
     expect(screen.queryByTestId('modal-guide')).toBeNull();
-    await waitFor(() => expect(guideText()).toBe(GUIDE.modal.sharedVideo));
-    a.unmount();
+    ready.unmount();
 
     globalThis.apiFetchImpl = vi.fn(async () => ({ ok: false, status: 403 }));
-    const b = render(<SharedVideoOverlay shareToken="t" onClose={() => {}} />);
-    await waitFor(() => expect(guideText()).toBe(GUIDE.modal.sharedVideoSignIn));
-    expect(pulsing('shared-video-sign-in')).toContain('coach-target-pulse');
-    b.unmount();
+    const signIn = render(<SharedVideoOverlay shareToken="t" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText(/Only people it was shared with can watch/)).toBeTruthy());
+    expect(screen.queryByTestId('modal-guide')).toBeNull();
+    expect(pulsing('shared-video-sign-in')).not.toContain('coach-target-pulse');
+    signIn.unmount();
 
     globalThis.apiFetchImpl = vi.fn(async () => ({ ok: false, status: 404 }));
     render(<SharedVideoOverlay shareToken="t" onClose={() => {}} />);
-    await waitFor(() => expect(guideText()).toBe(GUIDE.modal.sharedVideoError));
+    await waitFor(() => expect(screen.getByText(/This link no longer works/)).toBeTruthy());
+    expect(screen.queryByTestId('modal-guide')).toBeNull();
   });
 
   it('tutorial-video: sentence below the caption strip', () => {

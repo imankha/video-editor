@@ -924,6 +924,7 @@ function App() {
           <ProjectsScreen
               onStateReset={clearSelection}
               onLoadGame={handleLoadGame}
+              sharedOverlayOpen={!!sharedToken}
             />
           {/* Report button — mobile only (desktop has floating global button in main.jsx) */}
           <div className="sm:hidden text-center py-4">

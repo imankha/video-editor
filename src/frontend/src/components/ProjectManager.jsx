@@ -642,6 +642,9 @@ export function ProjectManager({
   onCancelActiveUpload, // Cancel one upload by id
   // Pending game IDs - projects referencing these are blocked
   pendingGameIds = new Set(),
+  // T16030: App.jsx mounts SharedVideoOverlay as a SIBLING of Home for a signed-in
+  // viewer (same shape as reelPreviewOpen below) -- true while that overlay is open.
+  sharedOverlayOpen = false,
 }) {
   // Get downloads and export state from context
   const { unseenReelsCount: contextUnseenReelsCount, exportingProject: contextExportingProject } = useAppState();
@@ -822,7 +825,8 @@ export function ProjectManager({
   const reelPreviewOpen = useReelPreviewStore((s) => s.payload != null);
   // T12790: only the Games tab waits on the games fetch; a failed fetch has its own (Retry) guide.
   const homeTab = activeTab === 'projects' ? 'clips' : activeTab === 'published' ? 'finished' : 'games';
-  const homeGuide = showGameDetailsModal || reelPreviewOpen || (homeTab === 'games' && gamesLoading) ? null : resolveGuide(homeFacts({
+  // T16030: same null-gate as reelPreviewOpen above, for the shared-video overlay sibling.
+  const homeGuide = showGameDetailsModal || reelPreviewOpen || sharedOverlayOpen || (homeTab === 'games' && gamesLoading) ? null : resolveGuide(homeFacts({
     tab: homeTab,
     gamesError: !!gamesError,
     games: reviewableGames(games).length,
