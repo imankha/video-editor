@@ -209,13 +209,14 @@ export const ANNOTATE = {
   WATCH_HIGHLIGHT: 'Watch highlight',
   startHighlight: (orientation, ordinal) => `Start ${orientation.toLowerCase()} highlight ${ordinal}`,
   // T14770 (decision C, 2026-11-03): ONE Make highlight entry button (the shape
-  // is picked in Frame, not here) + the "Highlights from this play" list below
+  // is picked in Frame, not here) + the "Existing highlights" list below
   // it. Replaces the T11910 two-slot surface.
   MAKE_HIGHLIGHT: 'Make highlight',
+  MAKE_NEW_HIGHLIGHT: 'Make new highlight',   // the play already has a highlight
   MAKE_HIGHLIGHT_CARD: 'Turn this play into a video you can share.',
   EDIT_PLAY_CARD: 'Fix the timing, rating or tags.',
   OPENING_FRAME: 'Opening Frame...',
-  HIGHLIGHTS_FROM_PLAY: 'Highlights from this play',
+  EXISTING_HIGHLIGHTS: 'Existing highlights',
   highlightCountChip: (orientation, n) => `${n} ${orientation.toLowerCase()}`,
   SHOW_FEWER_HIGHLIGHTS: 'Show fewer',
   showAllHighlights: (n) => `Show all ${n} highlights`,

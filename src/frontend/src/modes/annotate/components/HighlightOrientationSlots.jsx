@@ -3,6 +3,7 @@ import { ChevronRight, Clapperboard, RectangleVertical, RectangleHorizontal, Spa
 import { ANNOTATE } from '../../../config/displayNames';
 import { CLIP_STAGE, SLOT_ACTION, HIGHLIGHT_STATUS, ORIENTATION } from '../clipStage';
 import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import ActionCard from '../../../components/shared/ActionCard';
 import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 // T14770: replaces the T11910 two-slot surface with ONE Make highlight entry
@@ -17,33 +18,28 @@ const ORIENTATION_LABEL = { [ORIENTATION.PORTRAIT]: ANNOTATE.PORTRAIT, [ORIENTAT
 /**
  * HighlightEntry — the single primary "Make highlight" card. Always creates a
  * NEW portrait (9:16) highlight (forceNew) and opens Frame, where the shape is
- * picked (design decision 1, Option C). Locked while the game is still
- * uploading; inert ("Opening Frame...") while a create is in flight.
+ * picked (design decision 1, Option C). Reads "Make new highlight" once the
+ * play already has one. Locked while the game is still uploading; inert ("Opening Frame...") while a create is in flight.
  */
-export function HighlightEntry({ pending, locked = false, onMake }) {
+export function HighlightEntry({ pending, locked = false, hasHighlights = false, onMake }) {
+  const label = hasHighlights ? ANNOTATE.MAKE_NEW_HIGHLIGHT : ANNOTATE.MAKE_HIGHLIGHT;
   const inert = pending || locked;
-  const pulseClass = useGuidePulse(GUIDE_PULSE.MAKE_HIGHLIGHT, { suppress: inert });
+  // 2026-11-11 user request: the same card as Edit play beside it (ActionCard), so
+  // the two match in size, icon, title and description, not just in the grid cell.
   return (
-    <button
-      type="button"
+    <ActionCard
+      variant="primary"
+      icon={Clapperboard}
+      title={locked ? ANNOTATE.HIGHLIGHT_AFTER_UPLOAD : pending ? ANNOTATE.OPENING_FRAME : label}
+      description={inert ? undefined : ANNOTATE.MAKE_HIGHLIGHT_CARD}
       onClick={() => { if (!inert) onMake('9:16'); }}
       disabled={inert}
+      guideTarget={GUIDE_PULSE.MAKE_HIGHLIGHT}
+      guideSuppress={inert}
+      className="[&_[data-cta-desc]]:font-normal"
       data-testid="annotate-make-highlight"
-      aria-label={ANNOTATE.MAKE_HIGHLIGHT}
-      className={`w-full min-h-[112px] px-4 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 text-slate-950 text-sm font-extrabold flex flex-col items-center justify-center gap-2 shadow-lg shadow-cyan-950/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulseClass}`}
-    >
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/15">
-        <Clapperboard size={20} className="shrink-0" aria-hidden="true" />
-      </span>
-      <span className="text-center leading-tight">
-        {locked ? ANNOTATE.HIGHLIGHT_AFTER_UPLOAD : pending ? ANNOTATE.OPENING_FRAME : ANNOTATE.MAKE_HIGHLIGHT}
-      </span>
-      {!locked && !pending && (
-        <span className="text-center text-xs font-medium leading-tight text-slate-950/70">
-          {ANNOTATE.MAKE_HIGHLIGHT_CARD}
-        </span>
-      )}
-    </button>
+      aria-label={label}
+    />
   );
 }
 
@@ -120,7 +116,7 @@ function HighlightRow({ instance, onOpen, pulsing }) {
 }
 
 /**
- * HighlightList — "Highlights from this play": count chips, then one row per
+ * HighlightList — "Existing highlights": count chips, then one row per
  * highlight (newest in-progress first, then finished), each opening at its
  * stage via onOpen. Hidden (returns null) when the play has none.
  * `highlightedProjectId` pulses exactly one row (the single instance the
@@ -139,7 +135,7 @@ export function HighlightList({ instances, onOpen, highlightedProjectId = null }
   return (
     <div data-testid="annotate-highlight-list" className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-bold text-white">{ANNOTATE.HIGHLIGHTS_FROM_PLAY}</h3>
+        <h3 className="text-sm font-bold text-white">{ANNOTATE.EXISTING_HIGHLIGHTS}</h3>
         {counts[ORIENTATION.PORTRAIT] > 0 && (
           <span data-testid="highlight-count-portrait" className="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-white/70">
             {ANNOTATE.highlightCountChip(ANNOTATE.PORTRAIT, counts[ORIENTATION.PORTRAIT])}
