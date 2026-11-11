@@ -40,6 +40,7 @@ import { loadAndOfferFocusCompletion } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 import { setPendingGame } from '../utils/pendingNavigation';
+import { startLoadTrace } from '../utils/loadTrace';
 
 // T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Add spotlight card.
 const FOCUS_READY_GUIDE = resolveGuide({ screen: 'focus', job: { status: 'ready' }, local: {} });
@@ -1301,6 +1302,64 @@ export function FocusScreen({
     setPendingGame(focusCompletionGameId, focusCompletionGameStartTime, sourceClipId);
     useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [focusCompletionGameId, focusCompletionGameStartTime, selectedClip]);
+
+  // T16050: name what Frame is waiting for in the console, so a stuck spinner
+  // is diagnosable without reading code (the hour T16040 cost tracing the
+  // same project through FocusScreen/useProjectLoader by hand). One trace per
+  // project open (started on the projectId transition, not every render);
+  // needs resolve as the project record (`highlight`), its plays (`clips` in
+  // this screen's vocabulary) and the working video URL each arrive, fail, or
+  // come back empty. Zero plays is settled immediately as "nothing to show"
+  // -- that IS the T16040 bug, no reason to wait out the stuck-empty timer
+  // below to say so.
+  const loadTraceRef = useRef(null);
+  const loadTraceProjectRef = useRef(null);
+  const loadTraceNeedsRef = useRef({});
+  useEffect(() => {
+    if (!projectId) {
+      loadTraceRef.current = null;
+      loadTraceProjectRef.current = null;
+      return;
+    }
+    if (loadTraceProjectRef.current !== projectId) {
+      loadTraceProjectRef.current = projectId;
+      loadTraceNeedsRef.current = {};
+      loadTraceRef.current = startLoadTrace('Frame', { projectId }, ['highlight', 'plays', 'video']);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    const trace = loadTraceRef.current;
+    if (!trace || !projectId) return;
+    const needs = loadTraceNeedsRef.current;
+
+    if (!isProjectLoading && !needs.highlight) {
+      needs.highlight = true;
+      trace.arrived('highlight');
+    }
+
+    if (!isProjectLoading && !needs.plays) {
+      needs.plays = true;
+      if (clips.length === 0) {
+        trace.empty('plays');
+        trace.settled({ emptyNeed: 'plays' });
+      } else {
+        trace.arrived('plays', { count: clips.length });
+      }
+    }
+
+    if (!needs.video) {
+      if (videoUrl) {
+        needs.video = true;
+        trace.arrived('video');
+        trace.settled();
+      } else if (error) {
+        needs.video = true;
+        trace.failed('video', error);
+        trace.settled();
+      }
+    }
+  }, [projectId, isProjectLoading, videoUrl, error, clips.length]);
 
   // T16040: a project is open, nothing is loading, and no video has ever appeared
   // -- this is the one screen that can tell "still loading" apart from "nothing
