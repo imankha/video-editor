@@ -1535,18 +1535,18 @@ export function AnnotateModeView({
                 <div className="space-y-3">
                   {/* T14770 (decision C, 2026-11-03): Edit play is the first action
                       (secondary row card); Make highlight is the one primary card
-                      -- the shape is picked in Frame, not here. Desktop (lg,
-                      1280px): Edit play in the first column, Make highlight
-                      across the other two. */}
-                  <div className="grid gap-3 sm:grid-cols-3">
+                      -- the shape is picked in Frame, not here. From sm up the two
+                      cards are the same width and height (2026-11-11 user request). */}
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <ActionCard icon={Pencil} title={ANNOTATE.EDIT_PLAY}
                       description={ANNOTATE.EDIT_PLAY_CARD}
                       tooltip={isSourceExpired ? ANNOTATE.SOURCE_EXPIRED_CANT_MARK : 'Edit the selected play'}
                       onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly}
                       data-testid="annotate-primary-cta" />
                     {selectedRegion && regionStages && (
-                      <div className="lg:col-span-2">
+                      <div>
                         <HighlightEntry
+                          hasHighlights={regionStages.instances.some((i) => i.projectId != null)}
                           pending={frameClipPending}
                           locked={isGameUploading}
                           onMake={handleMakeHighlight}
@@ -1554,7 +1554,7 @@ export function AnnotateModeView({
                       </div>
                     )}
                   </div>
-                  {/* "Highlights from this play" -- a play can get several highlights of
+                  {/* "Existing highlights" -- a play can get several highlights of
                       each shape (decision C accepted cost); each row opens where it left
                       off. Full width; its own rows go two-up from lg (design decision). */}
                   {selectedRegion && regionStages && (

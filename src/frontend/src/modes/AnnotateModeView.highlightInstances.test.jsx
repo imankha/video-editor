@@ -243,6 +243,19 @@ describe('T14770 single Make highlight entry + Highlights from this play list', 
     });
   });
 
+  it('a play with a highlight says Make new highlight and titles the list Existing highlights', () => {
+    renderView({ clipRegions: [publishedRegion], annotateSelectedRegionId: 'c1' });
+    expect(screen.getByTestId('annotate-make-highlight').textContent).toContain('Make new highlight');
+    expect(screen.getByTestId('annotate-highlight-list').textContent).toContain('Existing highlights');
+  });
+
+  it('Edit play and Make highlight share one two-column row from sm', () => {
+    renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2' });
+    const grid = screen.getByTestId('annotate-primary-cta').parentElement;
+    expect(grid.className).toContain('sm:grid-cols-2');
+    expect(screen.getByTestId('annotate-make-highlight').className).toContain('h-full');
+  });
+
   it('list shows a count chip and the row opens where it left off', () => {
     renderView({ clipRegions: [publishedRegion], annotateSelectedRegionId: 'c1' });
     expect(screen.getByTestId('annotate-highlight-list')).toBeTruthy();
