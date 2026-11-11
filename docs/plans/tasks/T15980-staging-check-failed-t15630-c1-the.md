@@ -1,6 +1,6 @@
 # T15980: Staging check failed: T15630:C1 The sport is asked at most once per game, and
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10
