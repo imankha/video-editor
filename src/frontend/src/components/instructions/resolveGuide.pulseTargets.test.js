@@ -71,7 +71,6 @@ const TODAYS_TARGETS = {
   'modal.collection-share': P.COLLECTION_SHARE_SUBMIT,
   'modal.teammates': P.TEAMMATES_SHARE_SUBMIT,
   'modal.share-playback': P.SHARE_PLAYBACK_SUBMIT,
-  'modal.shared-video.sign-in': P.SHARED_VIDEO_SIGN_IN,
   'modal.buy-credits.pay': P.CREDITS_PAY,
   'modal.insufficient-credits': P.INSUFFICIENT_BUY,
   'modal.payment-result.success': P.PAYMENT_RESULT_OK,

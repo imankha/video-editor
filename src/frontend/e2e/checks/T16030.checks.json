@@ -1,0 +1,5 @@
+{"criteria": {
+  "T16030:C1": {"kind": "browser"},
+  "T16030:C2": {"kind": "browser"},
+  "T16030:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/ProjectManager.sharedOverlayGuide.test.jsx"}
+}}

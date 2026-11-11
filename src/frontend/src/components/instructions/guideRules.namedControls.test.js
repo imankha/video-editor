@@ -41,7 +41,6 @@ const CONTROL_PHRASES = [
   { name: 'Continue', re: /\bTap Continue\b/, pulse: [P.CLIP_NOTICE_CONTINUE] },
   { name: 'Got it', re: /\bTap Got it\b/, pulse: [P.CLIP_TOO_LARGE_OK, P.EXPORT_TOO_LARGE_OK] },
   { name: 'Save Changes', re: /\btap Save Changes\b/, pulse: [P.EDIT_GAME_SAVE] },
-  { name: 'Sign in', re: /\bTap Sign in\b/, pulse: [P.SHARED_VIDEO_SIGN_IN] },
   { name: 'Pay', re: /\btap Pay\b/, pulse: [P.CREDITS_PAY] },
   { name: 'Buy credits', re: /\bTap Buy credits\b/, pulse: [P.INSUFFICIENT_BUY] },
   { name: 'OK', re: /\bTap OK\b/, pulse: [P.PAYMENT_RESULT_OK] },
