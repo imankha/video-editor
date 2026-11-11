@@ -1850,6 +1850,15 @@ class AutolandTest(AutolandBase):
             self.assertEqual(self._run(), 1)
         self.land.assert_not_called()
 
+    def test_a_criterion_the_reviewer_left_out_lands_as_skipped_and_does_not_stop_the_group(self):
+        # g-t16030-1 (2026-11-10): the verdict held C1 pass and C2 fail but no C3, and the whole group
+        # stopped VERIFY_BLOCKED with the real C2 failure unread.
+        self.verdicts = [self._verdict(("pass",))]  # T1:C2 is absent from the reviewer's file
+        self.assertEqual(self._run(no_land=True), 0)
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C2"])
+        self.assertNotIn("VERIFY_BLOCKED", self.status.read_text())
+
     def test_verifier_that_changes_the_tree_is_not_trusted(self):
         self.verdicts = [self._verdict()]
         self.dirty = " M src/thing.py"

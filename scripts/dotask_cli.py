@@ -938,7 +938,10 @@ def read_verdict(checkout, group, head, tasks=None, criteria_ids=None):
         have = {str(item.get("id", "")) for item in criteria}
         missing = [c for c in criteria_ids if c not in have]
         if missing:
-            raise UntrustedVerdict(f"re-check verdict is missing {' '.join(missing)}")
+            # Not blocking: verify_once lists a criterion the reviewer left out as skipped (its check result
+            # stands, and a failed check is a fail either way). Stopping the group here hid a real failure on
+            # g-t16030-1 (2026-11-10): the verdict held C1 pass and C2 fail but no C3, and nothing was fixed.
+            print(f"[dotask] reviewer left out {' '.join(missing)}; they land as skipped", file=sys.stderr)
         return verdict
     for task_id in tasks or group["tasks"]:
         need = max(1, acceptance_count(task_file_in(checkout, task_id)))
