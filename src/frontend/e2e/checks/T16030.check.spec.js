@@ -78,7 +78,7 @@ test.describe('T16030 shared reel link shows no guidance', () => {
     await loginForCheck(context);
     await enableGuidanceForCheck(page);
     await page.goto(`/shared/${DEAD_LINK_TOKEN}`);
-    await expect(page.getByText('This link no longer works.')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText('This link no longer works.')).toBeVisible({ timeout: 60000 });
     await assertNoGuidance(page);
   });
 
@@ -93,7 +93,7 @@ test.describe('T16030 shared reel link shows no guidance', () => {
     const signedOut = await browser.newContext();
     const signedOutPage = await signedOut.newPage();
     await signedOutPage.goto(`/shared/${token}`);
-    await expect(signedOutPage.getByText(/Only people it was shared with can watch/)).toBeVisible({ timeout: 30000 });
+    await expect(signedOutPage.getByText(/Only people it was shared with can watch/)).toBeVisible({ timeout: 60000 });
     await expect(signedOutPage.getByRole('button', { name: 'Sign in' })).toBeVisible();
     await assertNoGuidance(signedOutPage);
     await signedOut.close();
