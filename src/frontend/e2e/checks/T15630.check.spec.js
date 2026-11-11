@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginForCheck, checkApi } from '../helpers/checkAuth';
+import { loginForCheck, checkApi, disableGuidanceForCheck } from '../helpers/checkAuth';
 import { openGameInAnnotate } from '../helpers/realAuth';
 
 /**
@@ -64,6 +64,15 @@ test.describe('T15630:C1 sport question remembers a skip per game', () => {
 
     await openGameInAnnotate(page, target.id);
     await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 90000 });
+
+    // T15980: the shared e2e-gate account has Guidance on by default, and its coach
+    // guide-shade intercepts clicks on the Forward/Back 5s transport buttons below
+    // (not a named cutout target), silently swallowing them until seekTo's own
+    // timeout -- or, worse, leaving the playhead inside an EXISTING clip, which
+    // auto-selects it and makes the dialog never open (the originally-reported
+    // failure). Guidance-off persists for the profile, so one call covers both
+    // Mark-play interactions below (including the remount via openGameInAnnotate).
+    await disableGuidanceForCheck(page);
 
     await seekTo(freeSpots[0]);
     const markBtn = page.getByTestId('annotate-mark-play-button');
