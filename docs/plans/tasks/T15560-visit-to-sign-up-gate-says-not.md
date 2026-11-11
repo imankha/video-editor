@@ -1,6 +1,6 @@
 # T15560: Visit to sign-up gate says not instrumented while the Journey shows visits
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-09

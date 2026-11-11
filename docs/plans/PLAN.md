@@ -26,8 +26,8 @@
 | T15530 | [Sharpen progress goes silent for the last 20-40 s and gives no time estimate](tasks/T15530-sharpen-progress-goes-silent-for-the-last.md) | 6 | 3 | 2.0 | STAGING | [ ] | QA 2026-11-09. No progress text from ~66% to done; biggest wait in the new-user flow. |
 | T15540 | [Wrong sign-in code: boxes not cleared and a Verify tap double-submits, burning attempts](tasks/T15540-wrong-sign-in-code-boxes-not-cleared.md) | 6 | 2 | 3.0 | TODO | [ ] | QA 2026-11-09. Retry after a typo burns the 5-attempt limit. |
 | T15550 | [Keep marking plays opens the play editor instead of returning to marking](tasks/T15550-keep-marking-plays-opens-the-play-editor.md) | 6 | 2 | 3.0 | STAGING | [ ] | QA 2026-11-09. Label says keep marking; it opens the editor. |
-| T15560 | [Visit to sign-up gate says not instrumented while the Journey shows visits](tasks/T15560-visit-to-sign-up-gate-says-not.md) | 7 | 3 | 2.3 | WIP | [ ] | QA 2026-11-09. Gate reads a different source than the Journey; keeps spend gating blocked. |
-| T15570 | [Resume point never records when the user left or the playhead](tasks/T15570-resume-point-never-records-when-the-user.md) | 5 | 3 | 1.7 | WIP | [ ] | QA 2026-11-09. left_at and t are null on all resume points. |
+| T15560 | [Visit to sign-up gate says not instrumented while the Journey shows visits](tasks/T15560-visit-to-sign-up-gate-says-not.md) | 7 | 3 | 2.3 | STAGING | [ ] | QA 2026-11-09. Gate reads a different source than the Journey; keeps spend gating blocked. |
+| T15570 | [Resume point never records when the user left or the playhead](tasks/T15570-resume-point-never-records-when-the-user.md) | 5 | 3 | 1.7 | STAGING | [ ] | QA 2026-11-09. left_at and t are null on all resume points. |
 | T15580 | [Impersonation banner has no Reopen their page link for some users](tasks/T15580-impersonation-banner-has-no-reopen-their-page.md) | 5 | 2 | 2.5 | TODO | [ ] | QA 2026-11-09. T14990 criterion fails for an overlay resume point. |
 | T15590 | [Concurrent upload finishes are about 3x slower than a lone finish](tasks/T15590-concurrent-upload-finishes-are-about-3x-slower.md) | 5 | 4 | 1.2 | STAGING | [ ] | QA 2026-11-09. T15150 only partly met. |
 | T15600 | [Under-44px touch targets across sign-in, Annotate, Spotlight, Gallery and the share page](tasks/T15600-under-44px-touch-targets-across-sign-in.md) | 5 | 3 | 1.7 | TODO | [ ] | QA 2026-11-09. Full list in the task file. |
@@ -46,7 +46,7 @@
 | T15730 | [Frame on a play from a game still uploading says Video format not supported and keeps Sharpen enabled](tasks/T15730-frame-on-a-play-from-a-game.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09. Misleading error text on a 409; credits-spending button stays live. |
 | T15740 | [Your highlight is ready toast overlaps the action bar and the chat bubble](tasks/T15740-your-highlight-is-ready-toast-overlaps-the.md) | 3 | 1 | 3.0 | STAGING | [ ] | QA 2026-11-09. |
 | T15750 | [Phone portrait fullscreen with Edit play open shrinks the picture to a 114x64 thumbnail](tasks/T15750-phone-portrait-fullscreen-with-edit-play-open.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. |
-| T15760 | [Finished highlight player keeps the URL at /home, so it can't be linked or resumed](tasks/T15760-finished-highlight-player-keeps-the-url-at.md) | 3 | 2 | 1.5 | WIP | [ ] | QA 2026-11-09. |
+| T15760 | [Finished highlight player keeps the URL at /home, so it can't be linked or resumed](tasks/T15760-finished-highlight-player-keeps-the-url-at.md) | 3 | 2 | 1.5 | STAGING | [ ] | QA 2026-11-09. |
 
 ### Payment return and campaign attribution lost on arrival (priority, owner-requested 2026-11-05, BUGS FIRST)
 

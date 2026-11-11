@@ -1,6 +1,6 @@
 # T15760: Finished highlight player keeps the URL at /home, so it can't be linked or resumed
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-11-09

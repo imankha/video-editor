@@ -1,6 +1,6 @@
 # T15570: Resume point never records when the user left or the playhead
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-09
