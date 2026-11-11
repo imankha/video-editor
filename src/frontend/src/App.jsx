@@ -65,6 +65,7 @@ import { setPendingGame, hasPendingProject } from './utils/pendingNavigation';
 import { openEmailGameLink } from './utils/emailGameLink';
 import { markBootstrapSettled, settleBootstrapAfter } from './utils/deepLinkRecovery';
 import { dismissPreloader as dismissPreloaderEl } from './utils/preloader';
+import { runHomeBootstrap } from './utils/homeBootstrap';
 import './utils/syncCheck'; // T13810: installs window.__syncCheck (read-only consistency checker)
 
 /**
@@ -226,38 +227,16 @@ function App() {
 
         // T3370: Single bootstrap call replaces 9+ individual fetches
         updatePreloader(50, 'Loading data...');
-        try {
-          const res = await apiFetch(`${API_BASE}/api/bootstrap`);
-          if (res.ok) {
-            const data = await res.json();
-            useProfileStore.getState().setFromBootstrap(data.profiles);
-            useSettingsStore.getState().setFromBootstrap(data.settings);
-            useCreditStore.getState().setFromBootstrap(data.credits);
-            useProjectsStore.getState().setFromBootstrap(data.projects);
-            useGamesDataStore.getState().setFromBootstrap(data.games);
-            useQuestStore.getState().setFromBootstrap(data.quests_progress);
-            useQuestStore.getState().setPanelCollapsed(data.quest_panel_collapsed);
-            useGalleryStore.getState().setFromBootstrap(data.downloads);
-            // T10250: mirror the clip-upload caps for the "Add Video" pre-flight
-            // size check (no-op if the server predates the field).
-            useConfigStore.getState().setFromBootstrap(data.upload_limits);
-            // Publish export data for useExportRecovery to consume (avoids separate fetch)
-            if (data.exports) {
-              window.__bootstrapExports = data.exports;
-            }
-            window.__bootstrapLoaded = true;
-          }
-        } catch (err) {
-          console.error('[App] Bootstrap failed, falling back to individual fetches:', err);
-          await Promise.all([
-            useProfileStore.getState().fetchProfiles(),
-            useSettingsStore.getState().loadSettings(),
-            useProjectsStore.getState().fetchProjects({ reason: 'bootstrap' }),
-            useGamesDataStore.getState().fetchGames({ reason: 'bootstrap' }),
-            useQuestStore.getState().fetchProgress(),
-            useGalleryStore.getState().fetchCount({ reason: 'bootstrap' }),
-          ]);
-        }
+        // T16050: name what Home's bootstrap is waiting for in the console
+        // (runHomeBootstrap owns the [LOAD] trace around this call).
+        await runHomeBootstrap({
+          apiFetch,
+          API_BASE,
+          stores: {
+            useProfileStore, useSettingsStore, useCreditStore, useProjectsStore,
+            useGamesDataStore, useQuestStore, useGalleryStore, useConfigStore,
+          },
+        });
       });
 
       scheduleWarmAllUserVideos();

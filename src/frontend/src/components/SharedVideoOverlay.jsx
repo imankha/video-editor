@@ -10,6 +10,7 @@ import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
 import { shareInvite } from '../utils/inviteEmail';
 import { ERROR_COPY, SHARE_COPY, ACCOUNT_COPY } from '../config/displayNames';
+import { startLoadTrace } from '../utils/loadTrace';
 
 export function SharedVideoOverlay({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -32,6 +33,8 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
 
   useEffect(() => {
     let cancelled = false;
+    // T16050: name what the shared reel page is waiting for in the console.
+    const trace = startLoadTrace('SharedReelPage', { shareToken }, ['share']);
     async function fetchShare() {
       try {
         const resp = await apiFetch(`${API_BASE}/api/shared/${shareToken}`);
@@ -44,21 +47,28 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
           setShare(data);
           if (data.intro) setIntroShowing(true);
           setState('ready');
+          trace.arrived('share');
         } else if (resp.status === 403) {
           setState('forbidden');
           setErrorMessage(SHARE_COPY.RESTRICTED);
+          trace.failed('share', new Error('forbidden'));
         } else if (resp.status === 410) {
           setState('revoked');
           setErrorMessage(SHARE_COPY.DEAD_LINK);
+          trace.failed('share', new Error('revoked'));
         } else {
           setState('not_found');
           setErrorMessage(SHARE_COPY.DEAD_LINK);
+          trace.empty('share');
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
           setState('error');
           setErrorMessage(ERROR_COPY.LOAD_SHARED_VIDEO);
+          trace.failed('share', err);
         }
+      } finally {
+        if (!cancelled) trace.settled();
       }
     }
     fetchShare();

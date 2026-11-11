@@ -25,6 +25,7 @@ import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from 
 import { hasPendingGame, consumePendingGame, setAnnotateOrigin, clearAnnotateResume } from '../utils/pendingNavigation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { openFinishedReel } from '../utils/finishedReelNav';
+import { startLoadTrace } from '../utils/loadTrace';
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -603,6 +604,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // pendingGameId breadcrumb means the user navigated to open that game, so loading it must win;
   // an upload/resume sets no breadcrumb, so this is a no-op for those.
   // T14970: urlNavigationSeq re-runs this when back or forward lands on another game in place.
+  const annotateLoadTraceRef = useRef(null);
+  const annotateLoadTraceNeedsRef = useRef({});
   useEffect(() => {
     const pending = consumePendingGame();
     if (!pending) return;
@@ -614,9 +617,40 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // arms AnnotateContainer's single one-shot selection effect. This screen no
     // longer runs a retrying selector of its own (it could never observe its
     // own success — see that effect's comment).
+    // T16050: name what Annotate's game load is waiting for in the console.
+    // One trace per consumed pending-game breadcrumb (the gesture that starts
+    // a /games/{id}/load); needs resolve as the game record and its video
+    // each arrive, fail, or come back with nothing to show.
+    annotateLoadTraceRef.current = startLoadTrace('Annotate', { gameId: pending.gameId }, ['game', 'video']);
+    annotateLoadTraceNeedsRef.current = {};
     handleLoadGame(pending.gameId, pending.seekTime, pending.sourceClipId);
     return () => controller.abort();
   }, [handleLoadGame, urlNavigationSeq]);
+
+  useEffect(() => {
+    const trace = annotateLoadTraceRef.current;
+    if (!trace) return;
+    const needs = annotateLoadTraceNeedsRef.current;
+
+    if (!needs.game && annotateGameId != null && !isGameDataLoading) {
+      needs.game = true;
+      trace.arrived('game');
+    }
+
+    if (!needs.video) {
+      if (annotateVideoUrl) {
+        needs.video = true;
+        trace.arrived('video');
+      } else if (annotateSourceExpired) {
+        needs.video = true;
+        trace.failed('video', new Error('source expired'));
+      }
+    }
+
+    if (needs.game && needs.video) {
+      trace.settled();
+    }
+  }, [annotateGameId, isGameDataLoading, annotateVideoUrl, annotateSourceExpired]);
 
   // T3960 retry effect REMOVED by T10750. It re-issued select+seek until the
   // selection "stuck", but it could never observe its own success: selectClip
