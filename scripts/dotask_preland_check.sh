@@ -71,6 +71,18 @@ if [ -n "$frontend" ] && [ -x src/frontend/node_modules/.bin/eslint ]; then
   out=$(cd src/frontend && npx --no-install eslint $rels 2>&1) || fail "eslint:"$'\n'"$out"
 fi
 
+# 6. checks that cannot run on staging: the staging check reruns every browser check against a deployed
+# build, where the dev-accounts endpoint and /src module paths do not exist. T15750 and T15740
+# filed false bugs for exactly this (2026-11-10).
+checks=$(git diff --no-renames --diff-filter=d --name-only "origin/master...HEAD" -- 'src/frontend/e2e/checks/*.check.spec.js')
+for spec in $checks; do
+  [ -f "$spec" ] || continue
+  grep -q "loginAsDevPreset" "$spec" && fail "$spec: loginAsDevPreset is dev-only; use loginForCheck from ../helpers/checkAuth"
+  if grep -qE "import\((['\"\`])/src/" "$spec" && ! grep -q "E2E_BASE_URL" "$spec"; then
+    fail "$spec: import('/src/...') only works on the dev server; skip on a deployed target (test.skip(!!process.env.E2E_BASE_URL, ...)) or use a code/human check"
+  fi
+done
+
 # 5. CI routing
 route_out=$(mktemp)
 if ! err=$(python3 "$here/ci_policy.py" route --root "$checkout" --base "$base" --head "$head" --output "$route_out" 2>&1 >/dev/null); then

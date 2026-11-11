@@ -1549,7 +1549,12 @@ def playwright_outcomes(report):
                     message = ((result.get("error") or {}).get("message") or "").strip()
                     if message and not error:
                         error = message.splitlines()[0][:400]
-            found[spec.get("title", "")] = (bool(spec.get("ok")), error)
+            tests = spec.get("tests", [])
+            if tests and all(t.get("status") == "skipped" for t in tests):
+                # Playwright counts a skipped test as ok; calling it a pass would be a false green.
+                found[spec.get("title", "")] = (None, "skipped by the check itself")
+            else:
+                found[spec.get("title", "")] = (bool(spec.get("ok")), error)
         for child in suite.get("suites", []):
             walk(child)
     for suite in report.get("suites", []):
@@ -1592,6 +1597,10 @@ def run_browser_checks(slug, task_id, ids, timeout, staging=None):
                 if re.search(rf"(^|\W){re.escape(criterion)}(\W|$)", title)]
         if not mine:
             results[criterion] = ("missing", f"no test titled with {criterion} in {spec}")
+        elif all(ok is None for ok, _ in mine):
+            # A check that skips itself on this target (it needs the dev server) proved nothing here:
+            # T15740's dev-module imports failed on staging as a false bug (2026-11-10).
+            results[criterion] = ("skipped", mine[0][1])
         elif all(ok for ok, _ in mine):
             results[criterion] = ("pass", f"{len(mine)} test(s) passed")
         else:

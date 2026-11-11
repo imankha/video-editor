@@ -6,10 +6,10 @@
  * criterion id so a reader/CI can map pass/fail straight back to the
  * acceptance checklist in docs/plans/tasks/T15370-annotate-landscape-cockpit.md.
  *
- * Uses a dev preset account (`loginAsDevPreset(context, 'full')`), not a real
- * account via `loginAsRealUser` — a real account's R2-backed video load can
+ * Logs in with loginForCheck: on the dev stack that is a dev preset account, not a real
+ * account via `loginAsRealUser` (a real account's R2-backed video load can
  * hang in this environment; the preset's cloned game (6 clips) answers
- * reliably. See src/frontend/CLAUDE.md § Dev preset accounts.
+ * reliably. See src/frontend/CLAUDE.md § Dev preset accounts).
  *
  * Complements (does not replace) e2e/T15370-annotate-landscape-cockpit.qa.spec.js
  * (the design doc's named spec) and
@@ -26,7 +26,8 @@
  * Run: bash scripts/dev-verify.sh e2e/checks/T15370.check.spec.js --reporter=line
  */
 import { test, expect } from '@playwright/test';
-import { loginAsDevPreset, openGameInAnnotate } from '../helpers/realAuth.js';
+import { openGameInAnnotate } from '../helpers/realAuth.js';
+import { loginForCheck } from '../helpers/checkAuth';
 import { saveEvidence } from '../helpers/qa.js';
 
 const API_BASE = process.env.E2E_API_BASE || '/api';
@@ -106,7 +107,7 @@ for (const vp of VIEWPORTS) {
 
     test.beforeEach(async ({ context, page }) => {
       test.setTimeout(240_000);
-      await loginAsDevPreset(context, 'full');
+      await loginForCheck(context);
       await openActiveGame(context, page);
     });
 
@@ -185,7 +186,7 @@ test.describe('T15370 checks: strip contents, functional equivalence, double-tap
 
   test.beforeEach(async ({ context, page }) => {
     test.setTimeout(240_000);
-    await loginAsDevPreset(context, 'full');
+    await loginForCheck(context);
     await openActiveGame(context, page);
   });
 

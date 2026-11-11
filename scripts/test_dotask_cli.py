@@ -1346,6 +1346,16 @@ class RunChecksTest(unittest.TestCase):
             results = dotask_cli.run_browser_checks("g", "T1", ["T1:C1"], 60)
         self.assertEqual(results["T1:C1"], ("pass", "40 test(s) passed"))
 
+    def test_a_check_that_skips_itself_is_skipped_not_passed(self):
+        # T15740's check needs dev-server module imports and skips itself on a deployed target; Playwright
+        # reports a skipped test as ok, which read as a pass on staging (2026-11-10).
+        specs = [{"title": "T1:C1 needs the dev server", "ok": True, "tests": [{"status": "skipped", "results": []}]},
+                 {"title": "T1:C4 ran", "ok": True, "tests": [{"status": "expected", "results": []}]}]
+        with patch.object(dotask_cli, "container_run", self._container({"suites": [{"specs": specs}]})):
+            results = dotask_cli.run_browser_checks("g", "T1", ["T1:C1", "T1:C4"], 60)
+        self.assertEqual(results["T1:C1"][0], "skipped")
+        self.assertEqual(results["T1:C4"], ("pass", "1 test(s) passed"))
+
     def test_container_run_keeps_the_whole_output_when_asked(self):
         done = subprocess.CompletedProcess([], 0, stdout="a" * 5000, stderr="")
         with patch.object(dotask_cli.subprocess, "run", return_value=done):

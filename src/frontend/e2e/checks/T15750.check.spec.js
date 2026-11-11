@@ -5,15 +5,16 @@
  * fullscreen) and C2 (opening Edit play does not start playback). See
  * docs/plans/tasks/T15750-phone-portrait-fullscreen-with-edit-play-open.md.
  *
- * Uses a dev preset account (`loginAsDevPreset(context, 'full')`), not a real
- * account via `loginAsRealUser` — a real account's R2-backed video load can
+ * Logs in with loginForCheck: on the dev stack that is a dev preset account, not a real
+ * account via `loginAsRealUser` (a real account's R2-backed video load can
  * hang in this environment; the preset's cloned game answers reliably. See
- * src/frontend/CLAUDE.md § Dev preset accounts.
+ * src/frontend/CLAUDE.md § Dev preset accounts).
  *
  * Run: bash scripts/dev-verify.sh e2e/checks/T15750.check.spec.js --reporter=line
  */
 import { test, expect } from '@playwright/test';
-import { loginAsDevPreset, openGameInAnnotate } from '../helpers/realAuth.js';
+import { openGameInAnnotate } from '../helpers/realAuth.js';
+import { loginForCheck } from '../helpers/checkAuth';
 import { saveEvidence } from '../helpers/qa.js';
 
 const API_BASE = process.env.E2E_API_BASE || '/api';
@@ -44,7 +45,7 @@ test.describe('T15750 checks @ 390x844-iphone-portrait', () => {
 
   test.beforeEach(async ({ context, page }) => {
     test.setTimeout(240_000);
-    await loginAsDevPreset(context, 'full');
+    await loginForCheck(context);
     await openActiveGameInPortraitFullscreen(context, page);
   });
 

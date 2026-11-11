@@ -66,6 +66,7 @@ async function completeExportInStore(page, { exportId, projectName = 'Probe Reel
 }
 
 test('T15740:C1 - the toast never overlaps the action bar or the chat bubble', async ({ context, page }) => {
+  test.skip(!!process.env.E2E_BASE_URL, '[T15740] drives the app through dev-server module imports (/src/...); a deployed build serves no such paths');
   await page.setViewportSize({ width: 1366, height: 660 });
   await loginForCheck(context);
   await page.goto('/');
@@ -118,6 +119,7 @@ async function waitForHomeScreenReady(page) {
 }
 
 test('T15740:C2 - a dismissed toast stays dismissed after reload', async ({ context, page }) => {
+  test.skip(!!process.env.E2E_BASE_URL, '[T15740] drives the app through dev-server module imports (/src/...); a deployed build serves no such paths');
   await loginForCheck(context);
   await page.goto('/');
   await waitForHomeScreenReady(page);
