@@ -84,6 +84,7 @@ export function FocusScreen({
   // Project data store state
   const isProjectLoading = useProjectDataStore(state => state.isLoading);
   const loadingStage = useProjectDataStore(state => state.loadingStage);
+  const clipsError = useProjectDataStore(state => state.clipsError);
   const clipMetadataCache = useProjectDataStore(state => state.clipMetadataCache);
   const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
@@ -1360,6 +1361,28 @@ export function FocusScreen({
       }
     }
   }, [projectId, isProjectLoading, videoUrl, error, clips.length]);
+
+  // T16040 root cause: projectDataStore.fetchClips's catch branch sets clipsError
+  // and resolves with [] on ANY failure (network blip, a cold staging backend
+  // waking up -- see T16060) -- indistinguishable downstream from a highlight that
+  // genuinely has zero plays. Nothing retried a failed fetch, so a transient
+  // failure (which a reload or a second click usually would NOT hit again,
+  // matching the task's "3/3 non-repro" evidence) left Frame stuck on an empty
+  // clips list forever. Retry once per project after a failed fetch; the
+  // stuckEmpty effect below still catches a result that stays empty afterward.
+  const clipsRetryRef = useRef({ projectId: null, attempted: false });
+  useEffect(() => {
+    if (clipsRetryRef.current.projectId !== projectId) {
+      clipsRetryRef.current = { projectId, attempted: false };
+    }
+    if (!projectId || !clipsError || clips.length > 0 || clipsRetryRef.current.attempted) return undefined;
+    clipsRetryRef.current.attempted = true;
+    console.error(`[Framing] clips fetch failed for project=${projectId}, retrying once: ${clipsError}`);
+    const timer = setTimeout(() => {
+      useProjectDataStore.getState().invalidateClips(projectId);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [projectId, clipsError, clips.length]);
 
   // T16040: a project is open, nothing is loading, and no video has ever appeared
   // -- this is the one screen that can tell "still loading" apart from "nothing
