@@ -505,6 +505,7 @@ DONE rows live in [PLAN-archive.md](PLAN-archive.md).
 | T15990 | [Staging check failed: T15400:C2 Every button of the 'Switch to landscape?' dialog is tappable](tasks/T15990-staging-check-failed-t15400-c2-every.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T16000 | [Staging check failed: T15740:C1 The toast never overlaps the action bar or the chat](tasks/T16000-staging-check-failed-t15740-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T16010 | [Staging check failed: T15740:C2 A dismissed toast stays dismissed after reload.](tasks/T16010-staging-check-failed-t15740-c2-a.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ## Environment Configuration
 
