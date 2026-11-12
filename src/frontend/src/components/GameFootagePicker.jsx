@@ -18,9 +18,14 @@ import {
 // Approved microcopy (artifact screen A). Kept as literals next to use.
 const COPY = {
   heading: 'Drop any game video here.',
+  // T15620: a touch phone has no drag gesture, so the drop-oriented heading
+  // above hides on coarse pointers (fine-pointer:hidden / coarse-pointer:hidden
+  // in the JSX below) and this one shows instead.
+  tapHeading: 'Tap to add a game video.',
   // T8910 attachMode: the picker is scoped to an existing game, so the empty
   // state names that context instead of implying a brand-new game.
   attachHeading: 'Drop a video to add to this game.',
+  attachTapHeading: 'Tap to add a video to this game.',
   mobileSub: 'Tap to choose videos. Pick as many as you want.',
   dragOver: 'Drop everything here',
   folderLink: 'or add a whole folder',
@@ -409,8 +414,14 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       >
         <div className="text-center text-gray-400">
           <Upload size={24} className="mx-auto mb-2" />
-          <p className="font-medium text-gray-200">
+          {/* T15620: drag/drop wording doesn't apply to a touch phone (no drag
+              gesture there), so this heading hides on coarse pointers and the
+              tap-oriented heading below takes its place. */}
+          <p className="font-medium text-gray-200 coarse-pointer:hidden">
             {isDragging ? COPY.dragOver : attachMode ? COPY.attachHeading : COPY.heading}
+          </p>
+          <p className="font-medium text-gray-200 fine-pointer:hidden">
+            {attachMode ? COPY.attachTapHeading : COPY.tapHeading}
           </p>
           {/* Touch-only sub-copy — coarse pointers can't drag files. */}
           <p className="text-xs text-gray-500 mt-1 fine-pointer:hidden">{acceptsZip ? COPY.zipMobileSub : COPY.mobileSub}</p>
