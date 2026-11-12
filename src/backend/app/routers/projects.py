@@ -1431,7 +1431,10 @@ async def get_draft_poster(
     # Absent param = no check possible (defense-in-depth token, not primary guard).
     if profile_id is not None and profile_id != get_current_profile_id():
         logger.warning("Profile mismatch")
-        raise HTTPException(status_code=403, detail="This belongs to a different profile.")
+        # T15710: this endpoint is consumed by a cross-origin <img>, same as the
+        # 404 branches below -- a JSON-bodied HTTPException breaks that contract,
+        # so answer with the same image/jpeg shape (no body) instead.
+        return Response(status_code=403, media_type="image/jpeg")
 
     user_id = get_current_user_id()
 

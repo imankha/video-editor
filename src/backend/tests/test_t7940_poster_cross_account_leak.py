@@ -25,9 +25,6 @@ mocking the session profile contextvar rather than driving TestClient headers.
 import asyncio
 from unittest.mock import MagicMock, patch
 
-import pytest
-from fastapi import HTTPException
-
 from app.routers import downloads, games, projects
 
 USER_ID = "test-user-t7940"
@@ -68,13 +65,17 @@ def _tracking_db(row=None):
 
 def test_games_poster_403_on_profile_mismatch_before_db_read():
     """Authed as B, URL says profile_id=A -> 403, and the DB is NEVER read (the
-    guard is the first check, so A's row can't be resolved and served)."""
+    guard is the first check, so A's row can't be resolved and served).
+
+    T15710: the guard now RETURNS a Response (image/jpeg, same shape as this
+    endpoint's other branches) instead of raising HTTPException (JSON body,
+    which broke a cross-origin <img>'s expectations) -- status/ordering unchanged."""
     db_factory, state = _tracking_db(row={"id": ID, "recap_video_url": "x"})
     with patch.object(games, "get_db_connection", db_factory), \
-         patch.object(games, "get_current_profile_id", return_value=PROFILE_B), pytest.raises(HTTPException) as e:
-        asyncio.run(games.get_game_poster(ID, _fake_request(), profile_id=PROFILE_A))
-    assert e.value.status_code == 403
-    assert e.value.detail == "This belongs to a different profile."
+         patch.object(games, "get_current_profile_id", return_value=PROFILE_B):
+        resp = asyncio.run(games.get_game_poster(ID, _fake_request(), profile_id=PROFILE_A))
+    assert resp.status_code == 403
+    assert resp.media_type == "image/jpeg"
     assert state["entered"] is False  # refused BEFORE any DB read
 
 
@@ -108,13 +109,15 @@ def test_games_poster_absent_profile_id_proceeds_to_normal_flow():
 def test_draft_poster_403_on_profile_mismatch_before_db_read():
     """Authed as B, URL says profile_id=A -> 403 before ensure_draft_poster / any
     R2 work (get_current_profile_id is imported inside the handler from
-    app.profile_context, so patch it there)."""
+    app.profile_context, so patch it there).
+
+    T15710: returns a Response (image/jpeg) instead of raising HTTPException."""
     with patch("app.profile_context.get_current_profile_id", return_value=PROFILE_B), \
          patch("app.services.poster.ensure_draft_poster") as ensure, \
-         patch.object(projects, "get_current_user_id", return_value=USER_ID), pytest.raises(HTTPException) as e:
-        asyncio.run(projects.get_draft_poster(ID, _fake_request(), profile_id=PROFILE_A))
-    assert e.value.status_code == 403
-    assert e.value.detail == "This belongs to a different profile."
+         patch.object(projects, "get_current_user_id", return_value=USER_ID):
+        resp = asyncio.run(projects.get_draft_poster(ID, _fake_request(), profile_id=PROFILE_A))
+    assert resp.status_code == 403
+    assert resp.media_type == "image/jpeg"
     ensure.assert_not_called()  # refused BEFORE any poster resolution
 
 
@@ -140,13 +143,15 @@ def test_draft_poster_absent_profile_id_proceeds_to_normal_flow():
 # ---------------------------------------------------------------------------
 
 def test_reel_poster_403_on_profile_mismatch_before_db_read():
-    """Authed as B, URL says profile_id=A -> 403, and the DB is NEVER read."""
+    """Authed as B, URL says profile_id=A -> 403, and the DB is NEVER read.
+
+    T15710: returns a Response (image/jpeg) instead of raising HTTPException."""
     db_factory, state = _tracking_db(row={"filename": "reel.mp4"})
     with patch.object(downloads, "get_db_connection", db_factory), \
-         patch.object(downloads, "get_current_profile_id", return_value=PROFILE_B), pytest.raises(HTTPException) as e:
-        asyncio.run(downloads.get_reel_poster(ID, _fake_request(), profile_id=PROFILE_A))
-    assert e.value.status_code == 403
-    assert e.value.detail == "This belongs to a different profile."
+         patch.object(downloads, "get_current_profile_id", return_value=PROFILE_B):
+        resp = asyncio.run(downloads.get_reel_poster(ID, _fake_request(), profile_id=PROFILE_A))
+    assert resp.status_code == 403
+    assert resp.media_type == "image/jpeg"
     assert state["entered"] is False  # refused BEFORE any DB read
 
 
