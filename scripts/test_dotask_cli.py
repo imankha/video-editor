@@ -429,13 +429,18 @@ class DotaskCliTest(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
         self.assertIn("T2-unpushed-bug.md", err.getvalue())
         self.assertIn("git push origin master", err.getvalue())
-        # Once pushed it starts; a later unpushed edit only warns (start's own WIP flips are local too).
+        # Once pushed it starts, and start's own local TODO->WIP flip does not count as a difference.
         git(self.main_repo, "push", "-q", "origin", "HEAD:master")
-        path.write_text(path.read_text() + "\n## Ruling\n\n**A** (owner, 2026-11-09).\n")
-        with contextlib.redirect_stderr(io.StringIO()) as err:
+        path.write_text(path.read_text().replace("**Status:** TODO", "**Status:** WIP"))
+        with contextlib.redirect_stderr(io.StringIO()):
             files_by_task, _owned, _shared = dotask_cli.preflight(["T1", "T2"])
         self.assertEqual(sorted(files_by_task), ["T1", "T2"])
-        self.assertIn("T2-unpushed-bug.md differs from origin/master", err.getvalue())
+        # Any other unpushed edit (a finding, a ruling) refuses: g-t16040-3's worker never saw step 1.
+        path.write_text(path.read_text() + "\n## Ruling\n\n**A** (owner, 2026-11-09).\n")
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err:
+            dotask_cli.preflight(["T1", "T2"])
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("T2-unpushed-bug.md", err.getvalue())
 
     # --- decision gate: a task that waits on the user is not headless work ----------
     def test_start_refuses_a_task_that_waits_on_a_user_ruling(self):
@@ -453,6 +458,7 @@ class DotaskCliTest(unittest.TestCase):
             dotask_cli.preflight(["T2"])
         # The user's recorded ruling clears it.
         path.write_text(path.read_text() + "\n## Ruling\n\n**B** (owner, 2026-11-07). Shorter header.\n")
+        self._push_paths(path)  # an unpushed ruling refuses: the worker reads origin's copy
         files_by_task, _owned, _shared = dotask_cli.preflight(["T1", "T2"])
         self.assertEqual(sorted(files_by_task), ["T1", "T2"])
 
@@ -1954,6 +1960,14 @@ class AutolandTest(AutolandBase):
         # Once the section has a checkbox, plain items are notes, not criteria.
         path.write_text("## Acceptance Criteria\n- [ ] a\n- note under a\n1. [ ] b\n")
         self.assertEqual(dotask_cli.acceptance_items(path), ["a", "b"])
+
+    def test_acceptance_section_under_a_deeper_heading_counts_every_item(self):
+        # g-t16040-3 (2026-11-11): plain-language task files put "### Acceptance criteria" under
+        # "## Implementer details"; only "## " was matched, so 0 items -> max(1, 0) -> only C1 verified.
+        path = self.root / "t.md"
+        path.write_text("## Implementer details\n### Mechanism\n- [ ] not this\n### Acceptance criteria\n"
+                        "- [ ] C1: a\n- [ ] C2: b\n- [ ] C3: c\n### Related tasks\n- [ ] no\n## Knowledge\n- [ ] no\n")
+        self.assertEqual(dotask_cli.acceptance_count(path), 3)
 
     def test_criterion_line_is_empty_not_a_crash_past_the_last_item(self):
         tasks = self.root / "docs" / "plans" / "tasks"
