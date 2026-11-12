@@ -112,15 +112,17 @@ export function Button({
   };
 
   // Size styles.
-  // Icon-only touch targets floor at 44px on COARSE (touch) pointers only — the
+  // Touch targets floor at 44px on COARSE (touch) pointers only — the
   // Apple HIG / WCAG 2.5.5 minimum. Fine (mouse) pointers get no floor and keep
   // exactly today's compact sizing, so desktop is byte-identical. The floor keys
   // off input type (pointer media query), NOT viewport width — a tablet is wide
   // AND touch, so a width breakpoint (the old `sm:min-w-0`) wrongly stripped it.
+  // Icon-only buttons additionally floor min-width (they have no text to keep the
+  // box wide); text buttons only need the height floor.
   const sizeStyles = {
-    sm: iconOnly ? 'p-1.5 coarse-pointer:min-w-11 coarse-pointer:min-h-11' : 'px-3 py-1.5 text-sm',
-    md: iconOnly ? 'p-2 coarse-pointer:min-w-11 coarse-pointer:min-h-11'   : 'px-4 py-2 text-sm',
-    lg: iconOnly ? 'p-3 coarse-pointer:min-w-11 coarse-pointer:min-h-11'   : 'px-6 py-3 text-base',
+    sm: iconOnly ? 'p-1.5 coarse-pointer:min-w-11 coarse-pointer:min-h-11' : 'px-3 py-1.5 text-sm coarse-pointer:min-h-11',
+    md: iconOnly ? 'p-2 coarse-pointer:min-w-11 coarse-pointer:min-h-11'   : 'px-4 py-2 text-sm coarse-pointer:min-h-11',
+    lg: iconOnly ? 'p-3 coarse-pointer:min-w-11 coarse-pointer:min-h-11'   : 'px-6 py-3 text-base coarse-pointer:min-h-11',
   };
 
   // Icon sizes based on button size
