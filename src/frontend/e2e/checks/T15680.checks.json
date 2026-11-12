@@ -1,0 +1,11 @@
+{
+  "task": "T15680",
+  "criteria": [
+    {
+      "id": "T15680:C1",
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t15680_visit_beacon_422.py tests/test_visit_beacon.py -q",
+      "text": "Capture the 422 payload; every app page load's beacon returns 204."
+    }
+  ]
+}

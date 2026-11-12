@@ -22,7 +22,7 @@ import time
 from collections import defaultdict
 
 from fastapi import APIRouter, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ..services.ip_rate_limit import client_ip
 from ..user_context import get_current_impersonator_id, get_current_user_id
@@ -289,14 +289,33 @@ class VisitBeaconReport(BaseModel):
 
 
 @router.post("/api/t", status_code=204)
-async def report_visit(payload: VisitBeaconReport, request: Request) -> Response:
+async def report_visit(request: Request) -> Response:
     """Fire-and-forget anonymous visit counter. Always 204 (even when dropped by the
-    rate limiter or bot filter) -- a beacon must never surface an error to the page."""
+    rate limiter, bot filter, or an unparseable body) -- a beacon must never surface
+    an error to the page.
+
+    T15680: takes a raw `Request` instead of a FastAPI-parsed `VisitBeaconReport`
+    parameter on purpose. FastAPI decides whether to JSON-decode the body from the
+    request's Content-Type header; `navigator.sendBeacon(url, new Blob([body],
+    {type: 'application/json'}))` is a cross-origin request whose Blob type isn't
+    CORS-safelisted, and some mobile browser contexts resend it with a
+    rewritten/missing Content-Type. FastAPI then handed the raw bytes straight to
+    Pydantic, which 422'd even though the JSON itself was well-formed. Decoding with
+    `model_validate_json` ourselves is Content-Type-independent, so a well-formed
+    body always succeeds and a malformed one falls through to a logged 204 drop."""
     ua = request.headers.get("user-agent") or ""
     if _BOT_UA_RE.search(ua):
         return Response(status_code=204)
     if not _visit_rate_limiter.allow(client_ip(request)):
         return Response(status_code=204)
+
+    raw_body = await request.body()
+    try:
+        payload = VisitBeaconReport.model_validate_json(raw_body)
+    except ValidationError as exc:
+        logger.warning(f"[Telemetry] visit beacon dropped: unparseable body={raw_body!r} errors={exc.errors()!r}")
+        return Response(status_code=204)
+
     if not _PAGE_CLASS_RE.match(payload.page_class):
         logger.warning(f"[Telemetry] visit beacon dropped: invalid page_class={payload.page_class!r}")
         return Response(status_code=204)
