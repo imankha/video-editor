@@ -17,9 +17,10 @@ import { RAG_STYLES, foldedMark, journeyTransitions, transitionChipText, transit
 const X0 = 44;        // left margin
 const CW = 122;       // column width per visible item
 // Fit mode (T14730) scales the whole SVG, so past this rendered column width the 11px stage
-// labels turn unreadable: the map stops shrinking and the wrapper scrolls instead. All 14
-// stages need 1337px at this width, which fits a 1440px screen.
-const MIN_FIT_CW = 90;
+// labels turn unreadable: the map stops shrinking and the wrapper scrolls instead. T14800 grew
+// the ladder to 16 stages (file_picked, upload_started), which need 1348px at this width --
+// fits a 1440px full-screen view after padding and a scrollbar (T15670; 90 no longer fit 16).
+const MIN_FIT_CW = 80;
 const TOP = 108;      // top of the bars (band label, chip row, rate row, stage label + count above)
 const CHIP_Y = 32;    // chip row, between the band rule (y 22) and the rate row
 const RATE_Y = 60;    // rate row: one mark per transition, underlined across its span (T14900)
