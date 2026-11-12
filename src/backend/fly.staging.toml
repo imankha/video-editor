@@ -11,6 +11,11 @@ primary_region = "lax"
   CLEAR_PENDING_JOBS_ON_STARTUP = "false"
   MODAL_ENABLED = "true"
   CORS_ORIGINS = "https://reel-ballers-staging.pages.dev"
+  # T15450: staging's frontend (pages.dev) and backend (fly.dev) are cross-site, so
+  # app/utils/cookies.py needs its SameSite=None;Secure;Partitioned branch -- the
+  # SameSite=Lax default is dropped by Safari on cross-site fetch/XHR, which broke
+  # sign-in surviving a reload. Prod stays on the Lax default since it is same-site.
+  SECURE_COOKIES = "true"
   # T14380: same rootfs as prod (8.35 GB), so the same cap. See fly.production.toml.
   DB_CACHE_HIGH_WATER_BYTES = "4000000000"
 
