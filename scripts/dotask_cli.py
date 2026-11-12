@@ -303,9 +303,14 @@ def task_files_off_base(paths):
                                capture_output=True, timeout=60, check=False)
         if shown.returncode:
             missing.append(rel)
-        elif shown.stdout.replace(b"\r\n", b"\n") != Path(path).read_bytes().replace(b"\r\n", b"\n"):
+        elif _spec_body(shown.stdout) != _spec_body(Path(path).read_bytes()):
             differs.append(rel)
     return missing, differs
+
+
+def _spec_body(raw):
+    """A task file's bytes minus its `**Status:**` line (start's own TODO->WIP flip is local and harmless)."""
+    return [line for line in raw.replace(b"\r\n", b"\n").split(b"\n") if not line.startswith(b"**Status:**")]
 
 
 def preflight(task_ids, allow_overlap=False):
@@ -318,9 +323,12 @@ def preflight(task_ids, allow_overlap=False):
         die(f"these task files are not on origin/{base}, which the container checkout is cut from, so the "
             "worker would find no spec:\n" + "\n".join(f"  {rel}" for rel in missing) +
             f"\nPush them first (`git push origin {base}` from {MAIN_REPO}), then start.")
-    for rel in differs:
-        print(f"WARNING: {rel} differs from origin/{base}; the worker reads the origin copy. Push it first if "
-              "the local change (a ruling, criteria) matters.", file=sys.stderr)
+    if differs:
+        # A warning was not enough: g-t16040-3 (2026-11-11) started with T16040's step-1 finding committed
+        # but unpushed; the warning scrolled past, the worker never saw the finding and fixed another path.
+        die(f"these task files differ from origin/{base}, which the container checkout is cut from, so the "
+            "worker would read the old spec:\n" + "\n".join(f"  {rel}" for rel in differs) +
+            f"\nPush them first (`git push origin {base}` from {MAIN_REPO}), then start.")
     for task_id, path in zip(task_ids, paths):
         status = task_status(path)
         if status not in ("TODO", "WIP"):
@@ -886,12 +894,20 @@ def task_file_in(checkout, task_id):
 
 
 def acceptance_lines(task_file):
-    """The lines of a task file's `## Acceptance...` section(s)."""
-    lines, inside = [], False
+    """The lines of a task file's Acceptance section(s), at any heading level from `##` down. Plain-language
+    task files nest it as `### Acceptance criteria` under `## Implementer details`; matching only `## `
+    counted 0 items there, so a verdict covering C1 alone passed for 3- and 4-criterion tasks (g-t16040-3,
+    2026-11-11). The section ends at the next heading of the same or a higher level."""
+    lines, level = [], 0
     for line in Path(task_file).read_text(encoding="utf-8").splitlines():
-        if line.startswith("## "):
-            inside = line.lower().startswith("## acceptance")
-        elif inside:
+        heading = re.match(r"^(#{2,6})\s+(.*)", line)
+        if heading:
+            depth = len(heading.group(1))
+            if level and depth <= level:
+                level = 0
+            if not level and heading.group(2).lower().startswith("acceptance"):
+                level = depth
+        elif level:
             lines.append(line)
     return lines
 
