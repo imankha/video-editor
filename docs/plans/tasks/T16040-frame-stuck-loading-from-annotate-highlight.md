@@ -1,6 +1,6 @@
 # T16040: Frame stuck on Loading from an Annotate highlight
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-11-11

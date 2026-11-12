@@ -1,6 +1,6 @@
 # T16060: Console flags a cold staging backend
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-11

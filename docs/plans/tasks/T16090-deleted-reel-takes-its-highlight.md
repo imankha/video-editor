@@ -1,6 +1,6 @@
 # T16090: A deleted reel takes its highlight with it
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-11-11

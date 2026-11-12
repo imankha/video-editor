@@ -1,6 +1,6 @@
 # T16050: Loading screens log what they wait for
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-11
