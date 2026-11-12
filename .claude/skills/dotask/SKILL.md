@@ -175,8 +175,10 @@ listing it under "Not verified". A reviewer past its time or out of turns lands 
 A reviewer that left edits in the tree still stops the loop (`VERIFY_BLOCKED`).
 
 The loop stops at `MAX_FIX_ROUNDS` (3) with `VERIFY_EXHAUSTED`. Anything it cannot trust stops it with
-`VERIFY_BLOCKED` and never counts as a pass: a missing verdict, a verdict for another HEAD, one covering
-fewer criteria than the task file has, a reviewer that changed the tree, a fix that committed nothing.
+`VERIFY_BLOCKED` and never counts as a pass: a missing verdict, a verdict for another HEAD, a reviewer
+that changed the tree, a fix that committed nothing. A criterion the verdict leaves out (fewer criteria than
+the task file has) is not a stop: it lands as `skipped`, listed as not verified, never as a pass (g-t16030-1,
+2026-11-10: stopping there hid a real failure).
 What the reviewer's own tooling rewrites (`package-lock.json` from `npm install`, files under `qa/` from a
 landing build) is put back with `git checkout` and is not "changed the tree"; any other edit still is.
 

@@ -1636,9 +1636,15 @@ class AutolandTest(AutolandBase):
                                      "criteria": [{"id": "T1:C2", "status": "pass", "evidence": "seen"}]}
             return result
         with patch.object(dotask_cli, "dispatch", dispatch):
-            self.assertEqual(self._run(), 1)
-        self.land.assert_not_called()
-        self.assertIn("missing T1:C1", self._last())
+            self.assertEqual(self._run(), 0)
+        # Since 5645332cf (g-t16030-1, 2026-11-10) a criterion the reviewer left out is not a group stop:
+        # it lands as skipped and the PR lists it as not verified. The invariant this test guards is
+        # unchanged: the earlier fail is never carried forward or counted as a pass.
+        verdict = json.loads((self.checkout / dotask_cli.VERIFY_FILE).read_text())
+        self.assertEqual({c["id"]: c["status"] for c in verdict["criteria"]}, {"T1:C1": "skipped", "T1:C2": "pass"})
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual([c["id"] for c in group["skipped_checks"]], ["T1:C1"])
+        self.assertIn("not verified: T1:C1", self._pass_line())
 
     def test_clean_verdict_records_the_head_and_lands_it(self):
         self.verdicts = [self._verdict()]
@@ -1839,10 +1845,14 @@ class AutolandTest(AutolandBase):
         self.assertIn("VERIFY_EXHAUSTED", self._last())
 
     def test_verdict_covering_fewer_criteria_than_the_task_file_never_passes(self):
+        # The task file has two criteria; the verdict covers one. Since 5645332cf the uncovered one lands as
+        # skipped (listed as not verified), never as a pass; see also the left-out-criterion test below.
         self.verdicts = [self._verdict(("pass",))]
-        self.assertEqual(self._run(), 1)
-        self.land.assert_not_called()
-        self.assertIn("VERIFY_BLOCKED", self._last())
+        self.assertEqual(self._run(), 0)
+        verdict = json.loads((self.checkout / dotask_cli.VERIFY_FILE).read_text())
+        self.assertEqual({c["id"]: c["status"] for c in verdict["criteria"]}, {"T1:C1": "pass", "T1:C2": "skipped"})
+        self.assertIn("not verified: T1:C2", self._pass_line())
+        self.assertNotIn("VERIFY_BLOCKED", self.status.read_text())
 
     def test_verdict_for_another_head_never_passes(self):
         self.verdicts = [self._verdict(head="b" * 40)]
