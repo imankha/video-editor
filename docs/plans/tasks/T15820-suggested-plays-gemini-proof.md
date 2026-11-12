@@ -5,7 +5,7 @@
 Today a parent who uploads a whole game must scrub up to ninety minutes to mark plays, and only 19 of 100 game uploaders go on to pay for a highlight, against 45 of 100 who arrive with clips already cut. Hosted video models can now watch a game at one frame per second with the audio and list likely plays with timestamps for about 16 to 41 cents a game; published tests suggest they find roughly three quarters of real plays while suggesting two to four times too many. Before building anything we spend one day and about five dollars running two such models on ten games that parents already marked by hand, and score how many marked plays were found and how many candidates came back. The bar, which you confirm first: three quarters found, sixty or fewer candidates per game. The result is a short note with a go or a no-go.
 
 
-**Status:** TODO
+**Status:** REMOVED (2026-11-12, replaced by the Mark plays with AI epic, tasks/mark-plays-with-ai/EPIC.md)
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-11-09

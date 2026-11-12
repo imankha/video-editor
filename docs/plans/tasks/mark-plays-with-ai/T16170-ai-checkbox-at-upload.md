@@ -4,14 +4,14 @@
 
 Today the upload dialog asks for a few details about the game (the full match video), shows a small storage cost in credits, and uploads. After that the parent marks every play (a moment worth keeping) by hand. We will add one checkbox, "Mark plays with AI", sold as a coach's eye on every play. Ticking it shows the exact extra cost for this video before anything is uploaded, and if the parent is short of credits they can buy more on the spot and the upload carries on, or continue without the AI. Once the upload finishes, the game's tile and its page say truthfully what is happening, for example "11 of 18 sections watched", and an email arrives when the plays are ready, so the parent can leave. Done when a parent can tick the box, pay, leave, come back and find the analysis ready, and every state shown matches what the server is doing.
 
-**Status:** WAITING ON USER (design review: https://claude.ai/artifact/AfoPPibjtfSS3HKx5ktoh9)
+**Status:** TODO
 **Impact:** 9
 **Complexity:** 5
 **Tier:** L (upload dialog, activation hook, progress surfaces, email; 6+ files across two layers)
 **Created:** 2026-11-12
 **Updated:** 2026-11-12
 
-Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 5 of 8.
+Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 4 of 7.
 
 ## Problem
 
@@ -21,7 +21,7 @@ The engine (T16150) and the charge (T16160) exist but a parent cannot reach them
 
 Build exactly what [UX-FEEDBACK.md](UX-FEEDBACK.md) defines in sections 1 ("The offer at upload"), 2 ("Not enough credits") and 3 ("Honest progress"). Do not invent copy; lift strings from its section 8 table. In outline:
 
-1. **The offer.** A checkbox with the pitch, the honesty line (it marks plays for the team; it does not know which player is theirs; it can miss plays) and one line saying the video is sent to Google's Gemini service.
+1. **The offer.** A checkbox, unticked by default, with the pitch, the honesty line (it marks plays for the team; it does not know which player is theirs; it can miss plays) and one line saying the video is sent to Google's Gemini service.
 2. **The price.** Before a file is picked, the rate. After, an itemised cost: storage, AI analysis for N minutes, total, balance, balance after. If this video already has a stored analysis, say it will be ready right after upload.
 3. **Sport.** If the athlete's profile has no sport, the dialog's sport field becomes required once the box is ticked, using the chooser from T16130. A sport that is not supported yet gets a plain "soccer only for now" and the upload continues without AI.
 4. **Short of credits.** Name the shortfall and the smallest pack that covers it; buying resumes the upload with the box still ticked; "Upload without AI" is always offered.
@@ -69,4 +69,6 @@ Offering the analysis only after upload was ruled out by the owner: the cost mus
 - [ ] A failed analysis shows that no credits were taken, and the balance confirms it.
 - [ ] Exactly one email is sent when the plays are ready, and none to a user who opted out.
 - [ ] A video with a stored analysis says so before upload and is ready within seconds of activation.
+- [ ] The box is unticked when the dialog opens.
+- [ ] The terms page says that a game sent for AI play marking is analysed by Google's Gemini service.
 - [ ] Works at 390 px and on desktop; with the flag off the dialog is unchanged.

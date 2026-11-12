@@ -39,7 +39,7 @@ Flash-Lite.
 ## For the implementer
 
 ### Related Tasks
-T11300, T15880, T15830 (shares the model config), T3600 to T3640 (collections ranking).
+T11300, T15880, T16150 (shares the model config), T3600 to T3640 (collections ranking).
 
 ### Relevant Files (REQUIRED)
 - `src/backend/app/routers/reels.py` (new in T11300)

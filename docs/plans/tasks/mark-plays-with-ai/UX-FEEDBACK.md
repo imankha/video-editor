@@ -1,13 +1,13 @@
 # Mark plays with AI: user feedback spec
 
-Status: DRAFT, waiting for owner approval. Nothing here is built yet.
+Status: APPROVED by the owner on 2026-11-12, with the rulings in section 9. Nothing here is built yet.
 
 This file defines everything the parent sees and can do around the new paid option: the offer, the price, the shortfall, the waiting, the team choice, what lands in the game, and the pass where they say which plays are their athlete's. Each section is written in plain sentences first. Component and file pointers are in a short "For the implementer" list at the end of each section. Every visible string is repeated once in the table in section 8, which is the source to copy from.
 
 Three things hold everywhere in this file:
 
 1. Phone first. Every layout is designed at 390 px wide, then widened for desktop. Every tap target is at least 44 px tall.
-2. Words follow the copy glossary: the parent's kid is "your athlete" (or the profile name, written `{athlete}` below), other kids are "teammates", a marked moment is a "play", the two groups of plays are "{athlete}'s plays" and "team plays". The task brief said "My player" and "Team line"; the app and the glossary say "My athlete" and "team plays", so this spec uses those (see open question 3).
+2. Words follow the copy glossary: the parent's kid is "your athlete" (or the profile name, written `{athlete}` below), other kids are "teammates", a marked moment is a "play", the two groups of plays are "{athlete}'s plays" and "team plays". The task brief said "My player" and "Team line"; the app and the glossary say "My athlete" and "team plays", so this spec uses those (see ruling 3 in section 9: lane names stay exactly as the app shows them today).
 3. We only show numbers that are real. No smooth fake percentage, no countdown we cannot keep.
 
 Running example used throughout: a 90-minute game, 3 credits of storage, 135 credits of AI analysis.
@@ -20,7 +20,7 @@ Running example used throughout: a 90-minute game, 3 credits of storage, 135 cre
 
 The upload dialog keeps its order: the one-line explanation, the cost row, the video picker, the optional details. A new card, "Mark plays with AI", sits directly under the video picker, because the price depends on the video and the parent has just dealt with the video.
 
-The card is a single large checkbox row. It is not ticked by default (see open question 1). Unticked, it is compact: three lines and a link. Ticked, it opens to show the full pitch, the honesty line and the disclosure, so nobody pays without having had those two lines on screen.
+The card is a single large checkbox row. It is not ticked by default (see section 9). Unticked, it is compact: three lines and a link. Ticked, it opens to show the full pitch, the honesty line and the disclosure, so nobody pays without having had those two lines on screen.
 
 Phone, unticked, video already picked:
 
@@ -168,7 +168,7 @@ The 18 boxes are the 18 five-minute sections of the game, in game order. A box f
 | # | State | What is true | Game tile | Status card in Annotate | What the parent can do |
 |---|---|---|---|---|---|
 | A | Uploading, AI next | The browser is uploading. The analysis has not started. No credits are set aside yet. | Existing uploading tile, unchanged, plus a second chip "AI next". | Title "AI play marking starts after the upload". Line "Keep this tab open until the upload finishes. After that you can leave." The three steps are listed, all not started. | Mark plays by hand while waiting. Cancel the AI option ("Cancel AI play marking", no charge). |
-| B | Getting the video ready | The video is being sent to the analysis service and prepared. We have no finer measure than "started". Credits are set aside. | Chip "AI: getting ready". Line "Getting the video ready". | Title "AI is marking plays". Step 1 is current, with a spinner and "Started 3 min ago. Usually 5 to 10 minutes for a game this long. This is an estimate." No bar. | Leave. Mark plays by hand. No cancel from here on (see open question 6). |
+| B | Getting the video ready | The video is being sent to the analysis service and prepared. We have no finer measure than "started". Credits are set aside. | Chip "AI: getting ready". Line "Getting the video ready". | Title "AI is marking plays". Step 1 is current, with a spinner and "Started 3 min ago. Usually 5 to 10 minutes for a game this long. This is an estimate." No bar. | Leave. Mark plays by hand. No cancel from here on (see section 9). |
 | C | Watching the game | Sections are being watched in parallel. We know the exact number finished. | Chip "AI: watching". Line "11 of 18 sections watched". A thin strip of 18 cells along the bottom edge of the tile. | Step 2 is current. "11 of 18 sections watched", the 18 boxes, and "Usually 2 to 4 minutes for this step. This is an estimate." | Leave. Mark plays by hand. |
 | D | Taking a second look | Some sections stopped early and are being watched again. They were never counted as watched, so the count never goes backwards. | Same as C. | Same as C plus one line: "Taking a second look at 2 sections." Those boxes show a dashed outline. | Same as C. |
 | E | Putting the plays together | All sections are watched. Results are being merged. Seconds. | Chip "AI: finishing". Line "18 of 18 sections watched". | Step 3 is current: "Putting the plays together. A few seconds." | Wait or leave. |
@@ -189,7 +189,7 @@ Reason lines for state K (exactly one is shown):
 - Not a game or too short: "The AI did not find a game it could mark plays in. This works on full soccer games filmed from the sideline."
 - Storage expired during the run: "This game's video is no longer stored, so the AI could not watch it."
 
-If the analysis finishes but finds only a handful of plays, that is not a failure screen. The ready state says the real number ("The AI found 4 plays for both teams.") and section 5 shows the real count per team. Whether we charge for a near-empty result is open question 2.
+If the analysis finishes but finds only a handful of plays, that is not a failure screen. The ready state says the real number ("The AI found 4 plays for both teams.") and section 5 shows the real count per team. A finished analysis is charged whatever the count (section 9, ruling 2).
 
 ### Toasts and email
 
@@ -735,14 +735,17 @@ Implementer note: the strings go in `src/frontend/src/config/displayNames.js` as
 
 ---
 
-## 9. Open questions for the owner
+## 9. Owner rulings (2026-11-12)
 
-1. Should the box start ticked or unticked? Recommendation: unticked. A new account has 88 credits and a full game costs about 138 with the box ticked, so a ticked box would put a payment screen in front of every first upload, which is the step we most need new parents to finish. The card is still the most prominent thing under the video picker.
-2. Do we charge when the AI finishes but finds almost nothing? Recommendation: if it finds fewer than 5 plays in total, treat it as "did not find a game", return all credits and say so. Above that, charge and show the real count. This keeps "you only pay for a result" true without inviting abuse.
-3. Wording: the brief said "My player" and "Team line"; the app and the copy glossary say "My athlete" and "team plays" (owner decision of 2026-11-03). Recommendation: keep the glossary words, as this spec does.
-4. Teammate names are removed when a play becomes the athlete's play (today's rule). In the tag pass this means a goal by Maya cannot also record that Ava assisted. Recommendation: keep the rule for launch, as designed in section 7, and revisit only if parents ask, because changing it touches sharing.
-5. Position memory ("right winger = Maya") lasts for one game only. Recommendation: keep it per game. Kids change positions between games, and a wrong suggestion on every play is worse than one extra tap per game. Jersey numbers, when the AI reads one, could later be remembered across games.
-6. Can the parent cancel once the analysis has started? Recommendation: no cancel after the upload finishes. The cost to us is spent within minutes, other parents may have joined the same run, and "set aside, then taken only on success" already protects them. Before the upload finishes, cancelling is free.
+All screens in this file were approved by the owner on 2026-11-12. Where a ruling below differs from text earlier in the file, the ruling wins and the implementer follows it.
+
+1. The box starts unticked.
+2. An analysis that finishes is always charged, even when it finds few plays. The ready state still says the real number found. There is no automatic return of credits for a small result; credits come back only when the analysis does not finish.
+3. Lane names do not change. Use the labels the app shows today ("My athlete" and "Team", and the existing headings for each list of plays). This feature adds no new name for a lane.
+4. Moving a play between My athlete and Team, and editing a play, work exactly as they do today. "This is {athlete}" on a chip is the existing switch and nothing more: the play keeps the tags, rating and note it arrived with, and the parent edits them if they want to. The existing rule that the athlete's own plays carry no teammate names stays.
+5. Position memory is a suggestion for this game only, and the parent can always change the answer.
+6. Free cancel until the upload finishes; no cancel after the analysis starts.
+7. Tagging a teammate from a chip is the app's existing teammate tagging: the parent enters the player's name and email address, and that family gets the game and the plays in the Team lane, as today. That flow is not changed. This feature only makes it one tap away from each chip ("Right winger", "Player 10"): the chip opens the existing name entry with names already used in this game offered first, and the existing step that collects the email address and shares.
 
 ---
 

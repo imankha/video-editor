@@ -5,7 +5,7 @@
 If the proof passes, every uploaded game gets a list of suggested plays for the parent to review, in the same one-tap list the Veo import already uses, so there is no new screen to learn. The model runs after the upload finishes and the parent gets a suggested-plays-are-ready message. The first three games on an account are free; after that a game costs a small number of credits set from the measured cost, charged when the job starts and refunded if it fails. The model name and the price live in configuration because the hosted prices change in January. Done when a new game shows its suggestions within fifteen minutes on phone and desktop, the free-then-paid rule holds, and the Journey shows more game uploaders reaching their first play.
 
 
-**Status:** BLOCKED
+**Status:** REMOVED (2026-11-12, replaced by the Mark plays with AI epic, tasks/mark-plays-with-ai/EPIC.md)
 **Impact:** 9
 **Complexity:** 6
 **Created:** 2026-11-09

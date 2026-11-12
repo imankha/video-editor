@@ -4,14 +4,14 @@
 
 After the upload checkbox exists, a parent who did not tick it, or whose games (full match videos) were uploaded before the feature shipped, has no way to get their plays marked by the AI. We will offer the same thing from the game itself: an entry in the game tile's menu, a card next to Mark play on the game's page, and a line in the empty play list. Each opens one sheet with the pitch, the exact price for that game and the parent's balance, and starts the analysis on confirm. Parents with a backlog of unmarked games are the people most likely to want this, and the owner asked for it. Done when a parent can start and pay for an analysis on any stored game from a phone or desktop, and a game that already has one never offers to sell it again.
 
-**Status:** WAITING ON USER (design review: https://claude.ai/artifact/AfoPPibjtfSS3HKx5ktoh9)
+**Status:** TODO
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M (frontend entry points and one sheet; reuses T16160's endpoints and T16170's progress)
 **Created:** 2026-11-12
 **Updated:** 2026-11-12
 
-Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 6 of 8.
+Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 5 of 7.
 
 ## Problem
 

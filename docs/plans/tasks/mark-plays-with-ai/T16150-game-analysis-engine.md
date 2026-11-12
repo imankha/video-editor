@@ -4,14 +4,14 @@
 
 Today the app has no way to send a game (the uploaded match video) to a video model; the analysis only exists as a prototype script on the owner's machine. This task builds the part nobody sees: a server job that sends a stored game to the model in five-minute pieces, all at once, checks that every piece was fully watched, joins the answers into one list of plays for both teams, and keeps it. The result is stored against the video itself, not against the parent, so when a second parent uploads the same game the stored result is used and nothing is computed again. The job records real progress, such as 11 of 18 sections watched, so the screens built later can tell the truth. Done when a 90-minute game on staging produces a complete stored analysis, a second request for the same video makes no new model calls, and a job interrupted by a server restart picks up where it stopped.
 
-**Status:** WAITING ON USER (design review: https://claude.ai/artifact/AfoPPibjtfSS3HKx5ktoh9)
+**Status:** TODO
 **Impact:** 9
 **Complexity:** 7
 **Tier:** L (new service, shared-database tables, external API; Architect design gate; Migration agent)
 **Created:** 2026-11-12
 **Updated:** 2026-11-12
 
-Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 3 of 8. See EPIC.md for the owner decisions and the measured numbers.
+Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 2 of 7. See EPIC.md for the owner decisions and the measured numbers.
 
 ## Problem
 
@@ -38,7 +38,7 @@ Storing results per parent was ruled out by the owner (analyse once). Cutting th
 
 ## For the implementer
 
-Read `gemini_analysis_test/HANDOFF_PROMPT.md` (API facts, prompt, schema) and T16140's note and runner first; lift the runner's coverage, colour, overlap and retry logic rather than rewriting it.
+Read `gemini_analysis_test/HANDOFF_PROMPT.md` (API facts, prompt, schema, and the list of problems the prototype did not solve) first, and start from `run_interactions.py`, the closest thing to production code. The owner ruled on 2026-11-12 that no separate recall check runs before building, so this task is the first time a full game is analysed: the coverage check, the fixed team colours, the window overlap and the retry rules in steps 3 to 5 are new work, not lifted code, and the first staging run's cost and timings must be written into the task's progress log and EPIC.md.
 
 ### Proposed tables (Postgres, shared; Architect confirms)
 
@@ -79,12 +79,13 @@ Unique on (blake3_hash, sport, prompt_version).
 - Design gate questions: where the 2 to 3 GB transfer from R2 to Gemini runs (a Modal function that streams and returns the file URI is the proposal; the 18 light API calls can run in the backend), and how progress reaches the browser (status endpoint plus the existing WebSocket pattern, see frontend CLAUDE.md "WebSockets over polling").
 - The fingerprint is a sampled hash (five 1 MB samples plus file size). Also compare duration before reusing a stored result.
 - A game can hold several videos; each video is its own analysis.
-- Secrets: `GEMINI_API_KEY` as a Fly secret on a paid Google project. Model name and token prices in config.
+- `gemini_analysis_test/` is untracked today: commit its code and `HANDOFF_PROMPT.md` with this task, keeping `.env`, `videos/` and large `outputs/` out of git.
+- Secrets: `GEMINI_API_KEY` as a Fly secret on a paid Google project (the prototype key is free tier: 20 requests a day and 2 GB per file, which cannot take a full game). Model name and token prices in config.
 - The tag enum in the schema must equal the sport's stored tag names exactly (`soccerTags.js`; the app displays `Save` as "Keeper Save"). Add a cross-language guard test like the one for curated combos.
 - Postgres track migrates only by `POST /api/admin/migrate-postgres` after deploy.
 
 ### Related Tasks
-- Depends on: T16140 (runner behaviours and GO). Blocks: T16160, T16170, T16190.
+- Depends on: nothing in the epic; needs a paid Gemini key (owner). Blocks: T16160, T16170, T16190.
 
 ## Acceptance Criteria
 
@@ -93,5 +94,6 @@ Unique on (blake3_hash, sport, prompt_version).
 - [ ] Two requests arriving together produce one job; the second joins it.
 - [ ] A window that returns a short or empty answer is requested again; a job that cannot be completed ends as failed with a reason.
 - [ ] Killing the backend mid-job and restarting completes the job without re-running finished windows.
+- [ ] The first full-game staging run's measured dollars, upload time, preparation time and analysis time are recorded in the progress log and in EPIC.md beside the prototype's estimates.
 - [ ] Windows done out of total, tokens and dollars are stored and match the fake client's totals in tests.
 - [ ] Kill switch, daily spend cap, maximum length and sport allow-list each refuse with a distinct reason, covered by tests.
