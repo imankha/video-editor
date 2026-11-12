@@ -160,6 +160,20 @@ def test_migration_deletes_only_orphaned_archived_projects():
             "UPDATE raw_clips SET auto_project_id = ? WHERE id = ?",
             (kept_project_id, kept_clip_id),
         )
+
+        # Kept: archived, projects.final_video_id lost, but its reel still points back
+        # (final_videos.project_id) -- the v018 "lost publish" shape. Its reel exists, so
+        # deleting it would delete a live reel's highlight.
+        cursor.execute(
+            "INSERT INTO projects (name, aspect_ratio, archived_at) "
+            "VALUES ('Half-linked highlight', '9:16', CURRENT_TIMESTAMP)"
+        )
+        half_project_id = cursor.lastrowid
+        cursor.execute(
+            "INSERT INTO final_videos (project_id, filename, version, published_at) "
+            "VALUES (?, 'half_final.mp4', 1, CURRENT_TIMESTAMP)",
+            (half_project_id,),
+        )
         conn.commit()
 
         with patch("app.storage.R2_ENABLED", True), \
@@ -182,6 +196,9 @@ def test_migration_deletes_only_orphaned_archived_projects():
 
         cursor.execute("SELECT id FROM projects WHERE id = ?", (kept_project_id,))
         assert cursor.fetchone() is not None, "archived project with a reel must survive"
+
+        cursor.execute("SELECT id FROM projects WHERE id = ?", (half_project_id,))
+        assert cursor.fetchone() is not None, "a project its reel still points to must survive"
 
         cursor.execute(
             "SELECT auto_project_id FROM raw_clips WHERE id = ?", (kept_clip_id,)

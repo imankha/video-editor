@@ -53,8 +53,12 @@ class V061DeleteOrphanArchivedProjects(BaseMigration):
             logger.info("[v061] archived_at/final_video_id missing; nothing to clean up")
             return
 
+        # Both links must be gone: a reel can still point at its project through
+        # final_videos.project_id after projects.final_video_id was lost (the v018
+        # "lost publish" shape), and deleting that project would orphan a live reel.
         cursor.execute(
-            "SELECT id FROM projects WHERE archived_at IS NOT NULL AND final_video_id IS NULL"
+            "SELECT p.id FROM projects p WHERE p.archived_at IS NOT NULL AND p.final_video_id IS NULL "
+            "AND NOT EXISTS (SELECT 1 FROM final_videos fv WHERE fv.project_id = p.id)"
         )
         orphan_ids = [row[0] for row in cursor.fetchall()]
         if not orphan_ids:
