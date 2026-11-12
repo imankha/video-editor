@@ -11,21 +11,23 @@ import { serverError, userErrorMessage } from '../../utils/userError';
  * OtpCodeInput — 6-digit code entry with auto-advance and paste support.
  * Internal helper for OtpAuthForm.
  */
-function OtpCodeInput({ value, onChange, disabled, autoFocusFirst }) {
+function OtpCodeInput({ value, onChange, disabled, autoFocusFirst, focusResetToken }) {
   const inputRefs = useRef([]);
   // onChange and onInput fire from the same native event against the same stale
   // `value` prop; track the code synchronously so the second handler is a no-op.
   const latestRef = useRef(value);
   latestRef.current = value;
 
-  // Auto-focus the first input when the code step appears
+  // Auto-focus the first input when the code step appears, and again whenever
+  // the parent bumps focusResetToken (e.g. after an invalid-code error clears
+  // the boxes -- the retry must start from box 0, not wherever focus landed).
   useEffect(() => {
     if (autoFocusFirst && inputRefs.current[0] && !disabled) {
       // Small delay to ensure the DOM is ready (fixes focus issues in some browsers)
       const timer = setTimeout(() => inputRefs.current[0]?.focus(), 50);
       return () => clearTimeout(timer);
     }
-  }, [autoFocusFirst, disabled]);
+  }, [autoFocusFirst, disabled, focusResetToken]);
 
   const processDigit = (index, rawValue) => {
     const digit = rawValue.replace(/\D/g, '').slice(-1);
@@ -129,9 +131,22 @@ export function OtpAuthForm({ resetKey = null }) {
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [focusResetToken, setFocusResetToken] = useState(0);
 
   const verifyingRef = useRef(false);
+  // Tracks whether `code` was already fully filled before the most recent edit, so a
+  // single-digit edit of a leftover (wrong) code doesn't immediately re-submit a code
+  // that's still mostly the old wrong digits -- only a fresh transition into "complete"
+  // auto-submits.
+  const codeWasCompleteRef = useRef(false);
   const lastResetKey = useRef(resetKey);
+
+  const resetCode = useCallback(() => {
+    setCode(['', '', '', '', '', '']);
+    codeWasCompleteRef.current = false;
+    setFocusResetToken((t) => t + 1);
+  }, []);
+
   useEffect(() => {
     // Caller-driven reset (e.g. AuthGateModal closed → next open starts clean).
     // Not on mount: a remount must keep the restored code step.
@@ -140,10 +155,10 @@ export function OtpAuthForm({ resetKey = null }) {
     writePendingEmail('');
     setStep('email');
     setEmail('');
-    setCode(['', '', '', '', '', '']);
+    resetCode();
     setLoading(false);
     setError(null);
-  }, [resetKey]);
+  }, [resetKey, resetCode]);
 
   const handleSendCode = useCallback(async (targetEmail) => {
     const target = (targetEmail || email).trim();
@@ -164,7 +179,7 @@ export function OtpAuthForm({ resetKey = null }) {
       setEmail(target);
       writePendingEmail(target);
       setStep('code');
-      setCode(['', '', '', '', '', '']);
+      resetCode();
     } catch (err) {
       const msg = err.name === 'TypeError'
         ? ERROR_COPY.CONNECTION
@@ -174,7 +189,7 @@ export function OtpAuthForm({ resetKey = null }) {
     } finally {
       setLoading(false);
     }
-  }, [email]);
+  }, [email, resetCode]);
 
   const handleVerifyCode = useCallback(async (codeArr) => {
     const joined = (codeArr || code).join('');
@@ -222,23 +237,29 @@ export function OtpAuthForm({ resetKey = null }) {
         : userErrorMessage(err, ERROR_COPY.CHECK_CODE);
       setError(msg);
       console.error(`[Auth:OTP] verify-otp failed: email=${email.trim()}, error=${err.message}, browser=${navigator.userAgent}`);
+      // A failed verify (wrong code, expired code, ...) must not leave the boxes holding
+      // the rejected digits -- the retry needs fresh, empty boxes focused at box 0, or a
+      // single corrected digit silently re-submits a code still made of old wrong digits.
+      resetCode();
     } finally {
       verifyingRef.current = false;
       setLoading(false);
     }
-  }, [email, code, onAuthSuccess]);
+  }, [email, code, onAuthSuccess, resetCode]);
 
   const handleCodeChange = useCallback((newCode) => {
     setCode(newCode);
-    if (newCode.every(d => d !== '')) handleVerifyCode(newCode);
+    const isComplete = newCode.every(d => d !== '');
+    if (isComplete && !codeWasCompleteRef.current) handleVerifyCode(newCode);
+    codeWasCompleteRef.current = isComplete;
   }, [handleVerifyCode]);
 
   const handleChangeEmail = useCallback(() => {
     writePendingEmail('');
     setStep('email');
-    setCode(['', '', '', '', '', '']);
+    resetCode();
     setError(null);
-  }, []);
+  }, [resetCode]);
 
   if (step === 'email') {
     return (
@@ -282,7 +303,7 @@ export function OtpAuthForm({ resetKey = null }) {
       <p className="text-sm text-gray-400 text-center">
         Enter the 6-digit code sent to <span className="text-white">{email}</span>
       </p>
-      <OtpCodeInput value={code} onChange={handleCodeChange} disabled={loading} autoFocusFirst />
+      <OtpCodeInput value={code} onChange={handleCodeChange} disabled={loading} autoFocusFirst focusResetToken={focusResetToken} />
       {error && (
         <div className="px-3 py-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
           {error}
