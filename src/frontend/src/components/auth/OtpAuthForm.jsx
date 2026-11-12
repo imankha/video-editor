@@ -277,7 +277,7 @@ export function OtpAuthForm({ resetKey = null }) {
           value={email}
           onChange={e => setEmail(e.target.value)}
           disabled={loading}
-          className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+          className="w-full px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-900 border border-gray-600 rounded text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
           autoComplete="email"
         />
         {error && (
@@ -323,16 +323,16 @@ export function OtpAuthForm({ resetKey = null }) {
           type="button"
           onClick={() => handleSendCode(email)}
           disabled={loading}
-          className="text-blue-400 hover:text-blue-300 disabled:opacity-50"
+          className="flex items-center justify-center coarse-pointer:min-h-[44px] text-blue-400 hover:text-blue-300 disabled:opacity-50"
         >
           {ACCOUNT_COPY.RESEND_CODE}
         </button>
-        <span className="text-gray-600">|</span>
+        <span className="text-gray-600 self-center">|</span>
         <button
           type="button"
           onClick={handleChangeEmail}
           disabled={loading}
-          className="text-gray-400 hover:text-gray-300 disabled:opacity-50"
+          className="flex items-center justify-center coarse-pointer:min-h-[44px] text-gray-400 hover:text-gray-300 disabled:opacity-50"
         >
           {ACCOUNT_COPY.USE_DIFFERENT_EMAIL}
         </button>

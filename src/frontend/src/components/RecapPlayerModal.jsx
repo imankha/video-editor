@@ -621,7 +621,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                     title={showOverlay ? 'Hide plays' : 'Show plays'}
                     aria-label={showOverlay ? 'Hide plays' : 'Show plays'}
                     aria-pressed={showOverlay}
-                    className="absolute top-2 right-2 z-[60] p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70 transition-colors"
+                    className="absolute top-2 right-2 z-[60] p-1.5 rounded-lg coarse-pointer:min-w-11 coarse-pointer:min-h-11 bg-black/50 text-white hover:bg-black/70 transition-colors"
                   >
                     {showOverlay ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
