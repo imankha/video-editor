@@ -51,7 +51,12 @@ from app.services.materialization import (
     ensure_profile_db_local,
 )
 from app.services.poster import poster_basename, poster_rel_path
-from app.services.project_archive import archive_project, is_project_archived, restore_project
+from app.services.project_archive import (
+    archive_project,
+    delete_archived_project,
+    is_project_archived,
+    restore_project,
+)
 from app.services.state_log import log_state
 from app.services.user_db import get_intro_consent
 from app.storage import (
@@ -1519,6 +1524,12 @@ async def delete_download(
             DELETE FROM final_videos WHERE id = ?
         """, (download_id,))
 
+        # T16090: a deleted reel takes its highlight with it -- the project it
+        # was published from is gone (row + R2 archive), not left dangling with
+        # no reel. The raw clip (the play) stays; its link clears via FK.
+        if row["project_id"] is not None:
+            delete_archived_project(cursor, row["project_id"])
+
         # T5810: deleting the last reel that attributed to a moved-in game reference
         # orphans that reference -> clean it up (gesture-driven, references only,
         # real games never touched).
@@ -1991,12 +2002,19 @@ def _delete_moved_source_rows(cursor, video_ids: list[int]) -> int:
     what makes /finish idempotent). Caller commits."""
     deleted = 0
     for vid in video_ids:
+        # T16090: the source project this reel was published from leaves with
+        # it too (same rule as delete_download) -- otherwise the move leaves a
+        # dead highlight with no reel behind in the source profile.
+        cursor.execute("SELECT id FROM projects WHERE final_video_id = ?", (vid,))
+        project_row = cursor.fetchone()
         cursor.execute(
             "UPDATE projects SET final_video_id = NULL WHERE final_video_id = ?", (vid,)
         )
         cursor.execute("DELETE FROM final_videos WHERE id = ?", (vid,))
         if cursor.rowcount and cursor.rowcount > 0:
             deleted += cursor.rowcount
+        if project_row is not None:
+            delete_archived_project(cursor, project_row["id"])
     _delete_orphan_reference_games(cursor)
     return deleted
 

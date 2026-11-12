@@ -1190,6 +1190,24 @@ graph LR
   account has a pre-existing orphan). The tutorial-capture spec also deletes the auto-reel it creates
   (was leaking orphans onto the live imankh account). Tests: `test_t4800_orphan_drafts.py`.
 
+- **T16090 — a deleted reel takes its highlight with it (2026-11-11, owner ruling):** deleting a reel
+  (`delete_download`, `downloads.py:~1524`) used to only clear `projects.final_video_id` and delete
+  the `final_videos` row, leaving the ARCHIVED project (and its R2 archive) behind with no reel —
+  Annotate kept listing it as an in-progress highlight that opens Frame on zero plays (the
+  endless-"Loading" root cause behind T16040). Now `delete_download` and `_delete_moved_source_rows`
+  (the move-to-profile source cleanup, same bug there) both call
+  `project_archive.delete_archived_project(cursor, project_id)` right after clearing the reel: deletes
+  the R2 archive (best-effort, logs+continues on failure, mirrors `archive_project`'s own
+  best-effort direction) then `DELETE FROM projects`; `raw_clips.auto_project_id` clears via the
+  ON DELETE SET NULL FK (caller's connection has `foreign_keys=ON`). The play (raw clip) itself is
+  never touched — the owner's ruling was explicitly "delete the highlight, not the option to make a
+  new one." **"Archived, no reel" is now a transient/cleanup-only state, never a steady one** —
+  migration v061 (`profile_db`) one-time-deletes any project already stuck there
+  (`archived_at IS NOT NULL AND final_video_id IS NULL`) from before this fix; inside a migration the
+  connection does NOT run `foreign_keys=ON` (see `migrate_local_profile_db_at_seam`), so the migration
+  clears `raw_clips.auto_project_id` explicitly rather than relying on the FK. Tests:
+  `test_t16090_delete_reel_takes_highlight.py`.
+
 - **T4140 — recap as full-quality re-edit source (2026-07-09):** the recap is now a re-edit master, not a
   480p review proxy. `auto_export._generate_recap` encodes each segment at its **NATIVE resolution**
   (dropped `.filter("scale",854,480)`) at master-grade quality (`RECAP_CRF=18`, `RECAP_PRESET="fast"`,

@@ -23,6 +23,7 @@ from app.queries import latest_working_clips_subquery
 from app.storage import (
     R2_BUCKET,
     R2_ENABLED,
+    delete_from_r2,
     get_r2_client,
     r2_key,
     upload_bytes_to_r2,
@@ -145,6 +146,40 @@ def archive_project(project_id: int, user_id: str | None = None) -> bool:
             f"{type(e).__name__}: {e}", exc_info=True,
         )
         return False
+
+
+def delete_archived_project(cursor, project_id: int, user_id: str | None = None) -> bool:
+    """
+    Delete a project's R2 archive and its database row entirely (T16090).
+
+    Used when the project's only reel is deleted (publish archives the project
+    but keeps it around for "Open Reel as Draft"; once the reel is gone there
+    is nothing left to restore, so the owner ruled the project leaves with it).
+    `raw_clips.auto_project_id` clears via its ON DELETE SET NULL FK (the
+    caller's connection has foreign_keys=ON); the raw clip itself is untouched.
+
+    Args:
+        cursor: an open cursor on the project's profile DB; caller commits.
+        project_id: ID of the project to delete
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        True if a project row was deleted, False otherwise
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    if R2_ENABLED and not delete_from_r2(user_id, _get_archive_r2_key(project_id)):
+        logger.error(
+            f"Failed to delete R2 archive for project {project_id} "
+            f"(user={user_id}); deleting the DB row anyway"
+        )
+
+    cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+    deleted = cursor.rowcount > 0
+    if deleted:
+        logger.info(f"Deleted project {project_id} and its archive (user={user_id})")
+    return deleted
 
 
 def load_archive(project_id: int, user_id: str | None = None) -> dict[str, Any] | None:
