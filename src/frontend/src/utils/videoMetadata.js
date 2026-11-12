@@ -1,3 +1,5 @@
+import { isSameOrigin } from './sameOrigin';
+
 /**
  * Scan a byte range for the MP4 `moov` atom marker.
  * Returns true if `moov` is found, false otherwise.
@@ -41,10 +43,7 @@ export async function probeVideoStructure(url) {
     acceptRanges: null,
     errors: [],
   };
-  const isSameOrigin =
-    url.startsWith('/') ||
-    (typeof window !== 'undefined' && url.startsWith(window.location.origin));
-  const fetchOpts = isSameOrigin ? { credentials: 'include' } : {};
+  const fetchOpts = isSameOrigin(url) ? { credentials: 'include' } : {};
 
   try {
     const headResp = await fetch(url, { method: 'HEAD', ...fetchOpts });
@@ -268,10 +267,7 @@ export class VideoAssetMissingError extends Error {
  * @returns {Promise<Object>} Video metadata { width, height, duration, aspectRatio, fileName, format, framerate }
  */
 export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
-  const isSameOrigin =
-    url.startsWith('/') ||
-    (typeof window !== 'undefined' && url.startsWith(window.location.origin));
-  const fetchOpts = isSameOrigin ? { credentials: 'include' } : {};
+  const fetchOpts = isSameOrigin(url) ? { credentials: 'include' } : {};
 
   const __diagStart = performance.now();
   let __diagWarmState = null;

@@ -63,4 +63,18 @@ describe('GameTile — poster URL (T5890 split-host)', () => {
     expect(src.startsWith(API_HOST)).toBe(true);
     expect(src.startsWith('/api/')).toBe(false);
   });
+
+  // T15710: the QA report's "poster.jpg blocked by CORS" / "Preflight 403" console
+  // errors can only originate from a CORS preflight, and a plain <img> never issues
+  // one for a GET -- UNLESS it sets crossOrigin, which upgrades the request to a
+  // CORS-mode fetch the browser preflights and can then block/report on. Locking in
+  // that this element never sets it is what rules the poster <img> itself out as the
+  // source (the backend-CORS-headers half of the rule-out lives in
+  // test_t15710_poster_mismatch_cors_headers.py).
+  it('never sets crossOrigin on the poster <img> (would enable a CORS preflight)', () => {
+    render(<GameTile game={baseGame} {...handlers()} />);
+    const img = document.querySelector('img');
+    expect(img).toBeTruthy();
+    expect(img.getAttribute('crossorigin')).toBeNull();
+  });
 });

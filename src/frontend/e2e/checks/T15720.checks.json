@@ -1,0 +1,17 @@
+{
+  "task": "T15720",
+  "criteria": [
+    {
+      "id": "T15720:C1",
+      "kind": "human",
+      "why": "Needs a real iPhone running Safari against staging; Playwright WebKit on Windows cannot reproduce Safari's real CORS/credentials preflight behavior.",
+      "text": "On a real iPhone (Safari) against staging, Annotate, Frame, Spotlight and the Finished player all play video."
+    },
+    {
+      "id": "T15720:C2",
+      "kind": "code",
+      "command": "bash -c 'U=$(grep -c \"^\\s*credentials: .include.,\\s*$\" src/frontend/src/hooks/useVideo.js || true); G=$(grep -c \"isSameOrigin(.*) ? { credentials: .include. }\" src/frontend/src/hooks/useVideo.js || true); [ \"$U\" -eq 0 ] && [ \"$G\" -eq 4 ]'",
+      "text": "If it reproduces: the R2 redirect target answers the preflight with the right CORS headers, or the request is made without credentials."
+    }
+  ]
+}

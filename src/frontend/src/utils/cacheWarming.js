@@ -20,13 +20,9 @@
 
 import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
+import { isSameOrigin } from './sameOrigin';
 
 // ── Fetch mode ──────────────────────────────────────────────────────────────
-
-function isSameOrigin(url) {
-  return url.startsWith('/') ||
-    (typeof window !== 'undefined' && url.startsWith(window.location.origin));
-}
 
 // R2 presigned URLs don't serve CORS headers — no-cors + credentials:omit.
 // Same-origin proxy /stream URLs need the session cookie.

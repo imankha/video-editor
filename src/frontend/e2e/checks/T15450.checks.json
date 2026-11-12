@@ -1,0 +1,17 @@
+{
+  "task": "T15450",
+  "criteria": [
+    {
+      "id": "T15450:C1",
+      "kind": "human",
+      "why": "Needs a real iPhone running Safari against staging after deploy; Playwright WebKit on Windows cannot reproduce Safari's real cross-site cookie enforcement.",
+      "text": "On a real iPhone against staging: sign in, close Safari, reopen, still signed in."
+    },
+    {
+      "id": "T15450:C2",
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t15450_staging_secure_cookies.py -q",
+      "text": "Staging's fly.staging.toml sets SECURE_COOKIES=true so the rb_session cookie uses the cross-site-safe SameSite=None;Secure;Partitioned branch instead of SameSite=Lax (which Safari drops on cross-site fetches), documenting the fix for the staging-only cross-site workaround."
+    }
+  ]
+}

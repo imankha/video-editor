@@ -13,6 +13,7 @@ import { chooseLoadRoute, isDirectForced, ROUTE } from '../utils/videoLoadRoute'
 import { track } from '../utils/analytics';
 import { ERROR_COPY } from '../config/displayNames';
 import { userErrorMessage } from '../utils/userError';
+import { isSameOrigin } from '../utils/sameOrigin';
 
 // T1400: watchdog delay before checking buffered vs clip duration.
 const RANGE_FALLBACK_WATCHDOG_MS = 5000;
@@ -1159,7 +1160,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         const resp = await fetch(video.src, {
           method: 'GET',
           headers: { Range: 'bytes=0-0' },
-          credentials: 'include',
+          ...(isSameOrigin(video.src) ? { credentials: 'include' } : {}),
         });
         probeStatus = resp.status;
         resp.body?.cancel?.();
@@ -1241,7 +1242,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         fetch(probeUrl, {
           method: 'GET',
           headers: { Range: 'bytes=0-0' },
-          credentials: 'include',
+          ...(isSameOrigin(probeUrl) ? { credentials: 'include' } : {}),
         })
           .then((resp) => {
             // 206 (partial) or 200 (range ignored) both mean the URL works;
@@ -1271,7 +1272,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         fetch(diagUrl, {
           method: 'GET',
           headers: { Range: 'bytes=0-0' },
-          credentials: 'include',
+          ...(isSameOrigin(diagUrl) ? { credentials: 'include' } : {}),
         })
           .then(async (resp) => {
             const ct = resp.headers.get('content-type') || 'unknown';
@@ -1382,7 +1383,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         fetch(diagUrl, {
           method: 'GET',
           headers: { Range: 'bytes=0-0' },
-          credentials: 'include',
+          ...(isSameOrigin(diagUrl) ? { credentials: 'include' } : {}),
         })
           .then(async (resp) => {
             const ct = resp.headers.get('content-type') || 'unknown';

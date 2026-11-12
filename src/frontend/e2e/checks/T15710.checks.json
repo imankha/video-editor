@@ -1,0 +1,11 @@
+{
+  "task": "T15710",
+  "criteria": [
+    {
+      "id": "T15710:C1",
+      "kind": "code",
+      "command": "bash -c 'cd src/backend && python3 -m pytest tests/test_t15710_poster_mismatch_content_type.py tests/test_t15710_poster_mismatch_cors_headers.py tests/test_t7940_poster_cross_account_leak.py -q && cd ../frontend && npx vitest run src/components/__tests__/GameTile.posterUrl.test.jsx'",
+      "text": "Reproduce or rule out; posters load without CORS errors on a cold Home load."
+    }
+  ]
+}
