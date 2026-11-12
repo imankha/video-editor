@@ -1,0 +1,3 @@
+{"criteria": {
+  "T15670:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/admin/JourneyTab.test.jsx -t '16 stages'"}
+}}

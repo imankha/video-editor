@@ -422,17 +422,21 @@ describe('Journey map fit mode (T14730)', () => {
     expect(svg().style.minWidth).toBe('');
   });
 
-  it('scales to the container in fit mode, and stops shrinking at 90px per column', () => {
+  it('scales to the container in fit mode, and stops shrinking at 80px per column', () => {
     chart(ALL_OPEN, { fit: true });
     expect(svg().getAttribute('width')).toBe('100%');
     // No fixed height: a fixed one would letterbox the scaled map instead of following it.
     expect(svg().getAttribute('height')).toBeNull();
     expect(svg().getAttribute('viewBox')).toMatch(/^0 0 836 /);
-    expect(svg().style.minWidth).toBe(`${Math.round((836 * 90) / 122)}px`);
+    expect(svg().style.minWidth).toBe(`${Math.round((836 * 80) / 122)}px`);
   });
 
-  it('14 stages fit a 1440px screen: the minimum width leaves room for padding and a scrollbar', () => {
-    const nodes = LADDER_KEYS.map((key, i) => node(key, `Stage ${i}`, 'get', { major: true, reached: 14 - i }));
+  it('16 stages (T14800 ladder) fit a 1440px screen: the minimum width leaves room for padding and a scrollbar', () => {
+    // T15670: the real ladder is 16 stages since T14800 added file_picked/upload_started.
+    const FULL_LADDER_KEYS = ['signed_up', 'started', 'add_footage', 'file_picked', 'upload_started',
+      'footage_landed', 'clipped', 'frame_opened', 'framed', 'export_pressed', 'exported',
+      'spotlight_opened', 'spotlight_added', 'finished', 'watched', 'took_away'];
+    const nodes = FULL_LADDER_KEYS.map((key, i) => node(key, `Stage ${i}`, 'get', { major: true, reached: FULL_LADDER_KEYS.length - i }));
     render(<JourneyFlowChart nodes={nodes} edges={[]} bands={DATA.bands} fit />);
     expect(parseInt(svg().style.minWidth, 10)).toBeLessThanOrEqual(1440 - 2 * 24 - 17);
   });

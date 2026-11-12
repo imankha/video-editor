@@ -38,7 +38,7 @@ const SPORT_OPTIONS = [
 // Segmented pill group, same look as the T13990 dimension pills: one pressed button.
 function PillGroup({ label, options, value, onChange }) {
   return (
-    <div role="group" aria-label={label} className="flex items-center gap-1">
+    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-1">
       <span className="text-gray-500 text-xs mr-1">{label}</span>
       {options.map(o => (
         <button
@@ -355,7 +355,7 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
       data-testid="journey-root"
       className={`journey-fullscreen ${isFullscreen ? 'overflow-auto p-6 bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900' : ''}`}
     >
-      <div className="flex items-start justify-between gap-4 mb-4">
+      <div data-testid="journey-controls" className="flex items-start justify-between gap-4 mb-4">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <PillGroup label="Conversion window" options={DAY_OPTIONS} value={windowDays} onChange={changeControl(setWindowDays, windowDays)} />
           <PillGroup label="Inactive after" options={DAY_OPTIONS} value={inactiveDays} onChange={changeControl(setInactiveDays, inactiveDays)} />
