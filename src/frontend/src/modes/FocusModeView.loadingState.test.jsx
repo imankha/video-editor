@@ -15,7 +15,9 @@ vi.mock('../containers/ExportButtonContainer', () => ({
   EXPORT_CONFIG: {},
 }));
 vi.mock('../components/shared', () => ({
-  Button: ({ children }) => <button>{children}</button>,
+  Button: ({ children, onClick, 'data-testid': testId }) => (
+    <button onClick={onClick} data-testid={testId}>{children}</button>
+  ),
   Toggle: ({ checked, onChange }) => (
     <button role="switch" aria-checked={checked} onClick={() => onChange?.(!checked)} />
   ),
@@ -70,5 +72,34 @@ describe('FocusModeView loading state (T13580)', () => {
   it('is not loading once the video URL is present', () => {
     renderView({ videoUrl: 'blob:video', isLoading: false, isProjectLoading: false });
     expect(lastVideoPlayerProps.isLoading).toBe(false);
+  });
+});
+
+// T16040: a project open with no video and nothing in flight must never sit on the
+// plain "Loading..." spinner forever -- it looks identical whether the load will
+// finish in a second or never.
+describe('FocusModeView stuck-empty state (T16040)', () => {
+  it('stops telling VideoPlayer it is loading once stuckEmpty fires', () => {
+    const { getByTestId } = renderView({
+      videoUrl: '', isLoading: false, isProjectLoading: false, error: null, stuckEmpty: true,
+    });
+    expect(lastVideoPlayerProps.isLoading).toBe(false);
+    expect(getByTestId('focus-stuck-empty')).toBeTruthy();
+  });
+
+  it('offers a way back when stuck, via the passed-in handler', () => {
+    const onBackToAnnotate = vi.fn();
+    const { getByTestId } = renderView({
+      videoUrl: '', isLoading: false, isProjectLoading: false, error: null, stuckEmpty: true, onBackToAnnotate,
+    });
+    getByTestId('focus-stuck-back-to-annotate').click();
+    expect(onBackToAnnotate).toHaveBeenCalled();
+  });
+
+  it('does not show the stuck message while a real error is already shown', () => {
+    const { queryByTestId } = renderView({
+      videoUrl: '', isLoading: false, isProjectLoading: false, error: 'boom', stuckEmpty: true,
+    });
+    expect(queryByTestId('focus-stuck-empty')).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordHealthCheck } from '../utils/coldBackendTracker';
 import { ERROR_COPY } from '../config/displayNames';
 
 // Grace period: stay in friendly "Connecting..." state for this many failed attempts
@@ -37,8 +38,10 @@ export function ConnectionStatus() {
 
   const checkConnection = useCallback(async () => {
     setIsChecking(true);
-    const timeout = isFirstCheckRef.current ? INITIAL_TIMEOUT : NORMAL_TIMEOUT;
+    const isFirstCheck = isFirstCheckRef.current;
+    const timeout = isFirstCheck ? INITIAL_TIMEOUT : NORMAL_TIMEOUT;
     isFirstCheckRef.current = false;
+    const startedAt = Date.now();
 
     try {
       const controller = new AbortController();
@@ -49,6 +52,10 @@ export function ConnectionStatus() {
         headers: { 'Cache-Control': 'no-cache' }
       });
       clearTimeout(timeoutId);
+      // T16060: feeds the cold-backend tracker apiFetch reads for every other
+      // request's failure/slow note -- this check is the one place that knows
+      // when staging's backend actually became healthy.
+      recordHealthCheck({ isFirstCheck, ok: response.ok, elapsedMs: Date.now() - startedAt });
 
       if (response.ok) {
         setIsConnected(true);
@@ -68,6 +75,7 @@ export function ConnectionStatus() {
         setIsConnected(false);
       }
     } catch (err) {
+      recordHealthCheck({ isFirstCheck, ok: false, elapsedMs: Date.now() - startedAt });
       failCountRef.current++;
       setIsConnected(false);
       console.error('[ConnectionStatus] health check failed:', err);

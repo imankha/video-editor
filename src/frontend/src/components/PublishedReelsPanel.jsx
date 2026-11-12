@@ -34,6 +34,7 @@ import { formatGameClock, formatLength, PRECISION } from '../utils/timeFormat';
 import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
 import { ERROR_COPY, SHARE_COPY, RANKING_COPY, INTRO_COPY } from '../config/displayNames';
 import { serverError, userErrorMessage } from '../utils/userError';
+import { startLoadTrace } from '../utils/loadTrace';
 
 // T15760: the Published tab's bare path (must match ProjectManager.jsx's
 // TAB_PATHS.published -- that module owns the tab<->path map, this one only
@@ -515,6 +516,11 @@ export function PublishedReelsPanel({
     // Watched-marking happens via the player's onReelChange (handleReelWatched),
     // the single source for both the single-reel and collection paths (T3900).
     watchedThisSessionRef.current.clear();
+    // T16050: name what the finished-highlight player is waiting for in the
+    // console. The video itself is already resolved (download.file_url, from
+    // the gallery data this panel already loaded) -- the only wait here is the
+    // intro-playback fetch below.
+    const playerTrace = startLoadTrace('FinishedHighlightPlayer', { downloadId: download.id }, ['intro']);
     // T6700: resolve the reel's OWN intro-playback payload on the Play gesture
     // (a READ, never a useEffect). Fetch failure is non-fatal -- Play must never
     // hang or break on the intro fetch (design R3): treat any failure as
@@ -525,10 +531,19 @@ export function PublishedReelsPanel({
       if (resp.ok) {
         const data = await resp.json();
         intro = data.intro ?? null;
+        if (intro) {
+          playerTrace.arrived('intro');
+        } else {
+          playerTrace.empty('intro');
+        }
+      } else {
+        playerTrace.empty('intro');
       }
     } catch (err) {
       console.error('[PublishedReelsPanel] failed to fetch intro-playback:', err);
+      playerTrace.failed('intro', err);
     }
+    playerTrace.settled();
     setStoryPlayer({
       reels: [toPlayerReel(download)],
       title: download.project_name,

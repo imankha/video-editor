@@ -232,6 +232,11 @@ export function FocusModeView({
   isProjectLoading = false,
   loadingStage = null,
   error,
+  // T16040: a project is open, nothing is loading, and no video ever appeared --
+  // see FocusScreen.jsx's stuck-detection effect. Replaces the endless "Loading..."
+  // with an explicit message and a way back, instead of showing it forever.
+  stuckEmpty = false,
+  onBackToAnnotate,
   isSourceExpired = false,
   canExtendSource = false,
   // T15730: source game upload not finished yet (playback-url/stream 409
@@ -829,6 +834,27 @@ export function FocusModeView({
         </div>
       )}
 
+      {/* T16040: nothing loading, no video ever appeared -- never leave this on
+          the plain "Loading..." spinner, which looks identical whether it will
+          finish in a second or never. */}
+      {stuckEmpty && !error && (
+        <div data-testid="focus-stuck-empty" className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
+          <p className="text-red-200 font-semibold mb-1">{FRAME_COPY.STUCK_EMPTY_TITLE}</p>
+          <p className="text-red-300 text-sm">{FRAME_COPY.STUCK_EMPTY_BODY}</p>
+          {onBackToAnnotate && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onBackToAnnotate}
+              data-testid="focus-stuck-back-to-annotate"
+              className="mt-3"
+            >
+              {FRAME_COPY.STUCK_EMPTY_BACK}
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Game name now lives in the breadcrumb above (Clips > Game > Clip,
           clickable to jump to Annotate for that game) — see UnifiedHeader /
           Breadcrumb. No separate desktop bar needed here anymore. */}
@@ -967,7 +993,8 @@ export function FocusModeView({
               onPanChange={onPanChange}
               isFullscreen={isFullscreen}
               // T13580: in Frame an absent URL (no error/expiry, both render first) is a pending load, never "No video loaded".
-              isLoading={isLoading || isProjectLoading || !videoUrl}
+              // T16040: stuckEmpty means that pending load is never going to finish -- the message above says so, this stops spinning.
+              isLoading={!stuckEmpty && (isLoading || isProjectLoading || !videoUrl)}
               isVideoElementLoading={isVideoElementLoading}
               loadingProgress={loadingProgress}
               loadingElapsedSeconds={loadingElapsedSeconds}

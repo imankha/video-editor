@@ -40,6 +40,7 @@ import { loadAndOfferFocusCompletion } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 import { setPendingGame } from '../utils/pendingNavigation';
+import { startLoadTrace } from '../utils/loadTrace';
 
 // T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Add spotlight card.
 const FOCUS_READY_GUIDE = resolveGuide({ screen: 'focus', job: { status: 'ready' }, local: {} });
@@ -83,6 +84,7 @@ export function FocusScreen({
   // Project data store state
   const isProjectLoading = useProjectDataStore(state => state.isLoading);
   const loadingStage = useProjectDataStore(state => state.loadingStage);
+  const clipsError = useProjectDataStore(state => state.clipsError);
   const clipMetadataCache = useProjectDataStore(state => state.clipMetadataCache);
   const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
@@ -1302,6 +1304,116 @@ export function FocusScreen({
     useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [focusCompletionGameId, focusCompletionGameStartTime, selectedClip]);
 
+  // T16050: name what Frame is waiting for in the console, so a stuck spinner
+  // is diagnosable without reading code (the hour T16040 cost tracing the
+  // same project through FocusScreen/useProjectLoader by hand). One trace per
+  // project open (started on the projectId transition, not every render);
+  // needs resolve as the project record (`highlight`), its plays (`clips` in
+  // this screen's vocabulary) and the working video URL each arrive, fail, or
+  // come back empty. Zero plays is settled immediately as "nothing to show"
+  // -- that IS the T16040 bug, no reason to wait out the stuck-empty timer
+  // below to say so.
+  const loadTraceRef = useRef(null);
+  const loadTraceProjectRef = useRef(null);
+  const loadTraceNeedsRef = useRef({});
+  useEffect(() => {
+    if (!projectId) {
+      loadTraceRef.current = null;
+      loadTraceProjectRef.current = null;
+      return;
+    }
+    if (loadTraceProjectRef.current !== projectId) {
+      loadTraceProjectRef.current = projectId;
+      loadTraceNeedsRef.current = {};
+      loadTraceRef.current = startLoadTrace('Frame', { projectId }, ['highlight', 'plays', 'video']);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    const trace = loadTraceRef.current;
+    if (!trace || !projectId) return;
+    const needs = loadTraceNeedsRef.current;
+
+    if (!isProjectLoading && !needs.highlight) {
+      needs.highlight = true;
+      trace.arrived('highlight');
+    }
+
+    if (!isProjectLoading && !needs.plays) {
+      needs.plays = true;
+      if (clips.length === 0) {
+        trace.empty('plays');
+        trace.settled({ emptyNeed: 'plays' });
+      } else {
+        trace.arrived('plays', { count: clips.length });
+      }
+    }
+
+    if (!needs.video) {
+      if (videoUrl) {
+        needs.video = true;
+        trace.arrived('video');
+        trace.settled();
+      } else if (error) {
+        needs.video = true;
+        trace.failed('video', error);
+        trace.settled();
+      }
+    }
+  }, [projectId, isProjectLoading, videoUrl, error, clips.length]);
+
+  // T16040 root cause: projectDataStore.fetchClips's catch branch sets clipsError
+  // and resolves with [] on ANY failure (network blip, a cold staging backend
+  // waking up -- see T16060) -- indistinguishable downstream from a highlight that
+  // genuinely has zero plays. Nothing retried a failed fetch, so a transient
+  // failure (which a reload or a second click usually would NOT hit again,
+  // matching the task's "3/3 non-repro" evidence) left Frame stuck on an empty
+  // clips list forever. Retry once per project after a failed fetch; the
+  // stuckEmpty effect below still catches a result that stays empty afterward.
+  const clipsRetryRef = useRef({ projectId: null, attempted: false });
+  useEffect(() => {
+    if (clipsRetryRef.current.projectId !== projectId) {
+      clipsRetryRef.current = { projectId, attempted: false };
+    }
+    if (!projectId || !clipsError || clips.length > 0 || clipsRetryRef.current.attempted) return undefined;
+    clipsRetryRef.current.attempted = true;
+    console.error(`[Framing] clips fetch failed for project=${projectId}, retrying once: ${clipsError}`);
+    const timer = setTimeout(() => {
+      useProjectDataStore.getState().invalidateClips(projectId);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [projectId, clipsError, clips.length]);
+
+  // T16040: a project is open, nothing is loading, and no video has ever appeared
+  // -- this is the one screen that can tell "still loading" apart from "nothing
+  // will ever load" (every entry path into Frame funnels through here). Without
+  // this, a gap anywhere upstream (an entry point that never fetched clips, a
+  // clip whose URL resolves to nothing) left Frame on a plain "Loading..." spinner
+  // forever, indistinguishable from a slow but real load. 8s gives a slow fetch
+  // room to finish before this fires. Memory-only UI state, never persisted.
+  const [stuckEmpty, setStuckEmpty] = useState(false);
+  useEffect(() => {
+    if (!projectId || isProjectLoading || isLoading || videoUrl || error) {
+      setStuckEmpty(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      console.error(
+        `[Framing] stuck with no video: project=${projectId} missing=${clips.length === 0 ? 'clips' : 'videoUrl'}`
+      );
+      setStuckEmpty(true);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [projectId, isProjectLoading, isLoading, videoUrl, error, clips.length]);
+
+  const handleStuckBackToAnnotate = useCallback(() => {
+    if (focusCompletionGameId != null) {
+      handleBackToGame();
+      return;
+    }
+    useEditorStore.getState().setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
+  }, [focusCompletionGameId, handleBackToGame]);
+
   // T12270: guide 'credits' state: the Generate estimate exceeds the balance (same
   // calculator + balance ExportButtonContainer uses for its own warning).
   const guideCreditBalance = useCreditStore((state) => state.balance);
@@ -1333,6 +1445,8 @@ export function FocusScreen({
       isProjectLoading={isLoadingProjectData}
       loadingStage={loadingStage}
       error={error}
+      stuckEmpty={stuckEmpty}
+      onBackToAnnotate={handleStuckBackToAnnotate}
       isSourceExpired={!!sourceExpired}
       canExtendSource={!!sourceExpired?.canExtend}
       isSourceUploading={sourceUploading}

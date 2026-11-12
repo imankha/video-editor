@@ -28,6 +28,7 @@ import { useProjectDataStore } from '../stores/projectDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useFocusStore } from '../stores/focusStore';
 import { useExportStore } from '../stores/exportStore';
+import { startLoadTrace } from '../utils/loadTrace';
 import { useQuestStore } from '../stores/questStore';
 import * as overlayActions from '../api/overlayActions';
 import { dispatchOverlayAction, useOverlayActionStore } from '../stores/overlayActionStore';
@@ -374,6 +375,54 @@ export function OverlayScreen({
     isUrlExpiredError,
     handlers,
   } = useVideo(null, null); // No segment functions in overlay mode
+
+  // T16050: name what Spotlight is waiting for in the console (same gap
+  // T16040 exposed on Frame). One trace per project open; needs resolve as
+  // the working video URL and the overlay data (highlight regions, text,
+  // effect settings) each arrive, fail, or come back with nothing to show.
+  const spotlightLoadTraceRef = useRef(null);
+  const spotlightLoadTraceProjectRef = useRef(null);
+  const spotlightLoadTraceNeedsRef = useRef({});
+  useEffect(() => {
+    if (!projectId) {
+      spotlightLoadTraceRef.current = null;
+      spotlightLoadTraceProjectRef.current = null;
+      return;
+    }
+    if (spotlightLoadTraceProjectRef.current !== projectId) {
+      spotlightLoadTraceProjectRef.current = projectId;
+      spotlightLoadTraceNeedsRef.current = {};
+      spotlightLoadTraceRef.current = startLoadTrace('Spotlight', { projectId }, ['video', 'overlayData']);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    const trace = spotlightLoadTraceRef.current;
+    if (!trace || !projectId) return;
+    const needs = spotlightLoadTraceNeedsRef.current;
+
+    if (!needs.video) {
+      if (effectiveOverlayVideoUrl) {
+        needs.video = true;
+        trace.arrived('video');
+      } else if (error) {
+        needs.video = true;
+        trace.failed('video', error);
+      } else if (project && !isLoadingWorkingVideo && !shouldWaitForWorkingVideo) {
+        needs.video = true;
+        trace.empty('video');
+      }
+    }
+
+    if (!needs.overlayData && overlayLoadedProjectId === projectId && overlaySyncState === 'ready') {
+      needs.overlayData = true;
+      trace.arrived('overlayData');
+    }
+
+    if (needs.video && needs.overlayData) {
+      trace.settled();
+    }
+  }, [projectId, effectiveOverlayVideoUrl, error, project, isLoadingWorkingVideo, shouldWaitForWorkingVideo, overlayLoadedProjectId, overlaySyncState]);
 
   // =========================================
   // HIGHLIGHT REGIONS HOOK - OWNED BY THIS SCREEN
