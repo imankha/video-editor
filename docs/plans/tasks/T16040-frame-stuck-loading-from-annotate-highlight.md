@@ -1,6 +1,6 @@
 # T16040: Frame stuck on Loading from an Annotate highlight
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-11-11
@@ -31,6 +31,12 @@
 - So the fix for C1 is about the archived-project-without-a-reel state: either deleting a reel restores (or deletes) its archived project, or opening an archived project in Frame restores it first (`restore_project`, `src/backend/app/services/project_archive.py:193`). It also needs a repair for accounts already in this state (project 4 here). Pick the one that keeps a single owner of the data (CLAUDE.md "Correct data, not workarounds": a migration makes existing data correct). A regression test: publish a project, delete its reel, then open the highlight from Annotate, and Frame gets its plays.
 - Non-repro on imankh@gmail.com: game 2, project 71 (in-progress landscape, one working clip). Annotate, then the highlight row, then Frame loaded clips, project and playback URL in about 1.4 s, three times, including via Mark Plays and back. Script: `C:\Users\imank\AppData\Local\Temp\claude\1ca763295c075470\1978523e-bc3a-4474-88f7-5eff8c282168\scratchpad\repro\repro.mjs` (args: gameId projectId outDir).
 
+## Ruling
+
+**A deleted reel takes its highlight with it** (owner, 2026-11-11): "if it's deleted then the option to go there shouldn't exist." Deleting a reel deletes the project it came from (database row and its `archive/<id>.msgpack` on R2), so Annotate no longer lists that highlight and no route can open Frame on it. The play itself (the raw clip) stays, and its link to the deleted project is cleared, so the parent can make a new highlight from it. Projects already in this state (archived, no reel; e.g. hello@ staging project 4) are removed by a profile_db migration. Restoring the plays into Frame is not the fix.
+
+The first round of this group (PR #746) fixed two other real gaps (a clips fetch that failed and never retried, and a reload path) plus Frame's stuck-empty message; keep those. They did not address this cause, because this task file's finding was committed but not pushed when the group started.
+
 ## Implementer details
 
 ### Mechanism
@@ -46,7 +52,7 @@
 3. An entry where App's `editorMode` closure is not ANNOTATE when `onModeChange` fires, so neither prefetch nor invalidate runs.
 
 ### Acceptance criteria
-- [ ] C1: The cause of the owner's "Play 5" hang is identified and fixed, with a regression test that fails before the fix.
+- [ ] C1: Deleting a reel deletes its project (row and R2 archive) and clears the play's link to it, so the highlight is gone from Annotate; a migration removes projects already archived with no reel. A regression test that fails before the fix publishes a highlight, deletes its reel, and shows the highlight no longer listed in Annotate.
 - [ ] C2: Frame with a selected project, no load in flight and no video URL (empty clips, or a clip whose URL resolves to nothing) shows an explicit message with a way back to Annotate, and logs `console.error` naming the project id and which input is missing. It never shows the plain "Loading..." in that state.
 - [ ] C3: Opening an in-progress highlight from Annotate's highlight list opens Frame with the video within 10 s (browser check against staging).
 
