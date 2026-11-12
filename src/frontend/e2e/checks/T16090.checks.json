@@ -1,0 +1,5 @@
+{"criteria": {
+  "T16090:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16090_delete_reel_takes_highlight.py::test_delete_reel_deletes_its_project -q"},
+  "T16090:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16090_delete_reel_takes_highlight.py::test_migration_deletes_only_orphaned_archived_projects -q"},
+  "T16090:C3": {"kind": "browser"}
+}}
