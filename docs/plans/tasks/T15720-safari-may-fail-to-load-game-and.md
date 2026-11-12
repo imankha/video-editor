@@ -1,6 +1,6 @@
 # T15720: Safari may fail to load game and clip video on staging (preflight 403, credentials CORS on the R2 redirect)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-11-09

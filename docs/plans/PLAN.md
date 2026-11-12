@@ -10,16 +10,16 @@
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T15450 | [Staging sign-in does not survive a reload in Safari-class browsers (cross-site session cookie)](tasks/T15450-staging-sign-in-does-not-survive-a.md) | 7 | 4 | 1.8 | TODO | [ ] | QA 2026-11-09, possible. WebKit drops the pages.dev->fly.dev session cookie; check on a real iPhone. Likely staging-only. |
+| T15450 | [Staging sign-in does not survive a reload in Safari-class browsers (cross-site session cookie)](tasks/T15450-staging-sign-in-does-not-survive-a.md) | 7 | 4 | 1.8 | STAGING | [ ] | QA 2026-11-09, possible. WebKit drops the pages.dev->fly.dev session cookie; check on a real iPhone. Likely staging-only. |
 | T15540 | [Wrong sign-in code: boxes not cleared and a Verify tap double-submits, burning attempts](tasks/T15540-wrong-sign-in-code-boxes-not-cleared.md) | 6 | 2 | 3.0 | TODO | [ ] | QA 2026-11-09. Retry after a typo burns the 5-attempt limit. |
 | T15580 | [Impersonation banner has no Reopen their page link for some users](tasks/T15580-impersonation-banner-has-no-reopen-their-page.md) | 5 | 2 | 2.5 | TODO | [ ] | QA 2026-11-09. T14990 criterion fails for an overlay resume point. |
 | T15600 | [Under-44px touch targets across sign-in, Annotate, Spotlight, Gallery and the share page](tasks/T15600-under-44px-touch-targets-across-sign-in.md) | 5 | 3 | 1.7 | TODO | [ ] | QA 2026-11-09. Full list in the task file. |
 | T15620 | [Device-wrong copy: phone wording on desktop and iPad, desktop wording on phones](tasks/T15620-device-wrong-copy-phone-wording-on-desktop.md) | 4 | 2 | 2.0 | TODO | [ ] | QA 2026-11-09. |
-| T15670 | [Journey map in full screen is wider than 1440 px and cuts off the first stages](tasks/T15670-journey-map-in-full-screen-is-wider.md) | 4 | 2 | 2.0 | TODO | [ ] | QA 2026-11-09. T14730 criterion fails. |
-| T15680 | [Visit beacon POST /api/t returns 422 on some page loads](tasks/T15680-visit-beacon-post-api-t-returns-422.md) | 5 | 2 | 2.5 | TODO | [ ] | QA 2026-11-09, possible. Would undercount mobile visits. |
-| T15690 | [Admin Journey controls and map are clipped on mobile and iPad with no scroll](tasks/T15690-admin-journey-controls-and-map-are-clipped.md) | 3 | 2 | 1.5 | TODO | [ ] | QA 2026-11-09. |
-| T15710 | [Poster images blocked by CORS and Preflight 403 errors during load bursts](tasks/T15710-poster-images-blocked-by-cors-and-preflight.md) | 4 | 3 | 1.3 | TODO | [ ] | QA 2026-11-09, possible. Seen once each. |
-| T15720 | [Safari may fail to load game and clip video on staging (preflight 403, credentials CORS on the R2 redirect)](tasks/T15720-safari-may-fail-to-load-game-and.md) | 9 | 3 | 3.0 | TODO | [ ] | QA 2026-11-09, possible, BLOCKER if real: WebKit video fetch fails on the API-to-R2 redirect. Check on a real iPhone first. |
+| T15670 | [Journey map in full screen is wider than 1440 px and cuts off the first stages](tasks/T15670-journey-map-in-full-screen-is-wider.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. T14730 criterion fails. |
+| T15680 | [Visit beacon POST /api/t returns 422 on some page loads](tasks/T15680-visit-beacon-post-api-t-returns-422.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09, possible. Would undercount mobile visits. |
+| T15690 | [Admin Journey controls and map are clipped on mobile and iPad with no scroll](tasks/T15690-admin-journey-controls-and-map-are-clipped.md) | 3 | 2 | 1.5 | STAGING | [ ] | QA 2026-11-09. |
+| T15710 | [Poster images blocked by CORS and Preflight 403 errors during load bursts](tasks/T15710-poster-images-blocked-by-cors-and-preflight.md) | 4 | 3 | 1.3 | STAGING | [ ] | QA 2026-11-09, possible. Seen once each. |
+| T15720 | [Safari may fail to load game and clip video on staging (preflight 403, credentials CORS on the R2 redirect)](tasks/T15720-safari-may-fail-to-load-game-and.md) | 9 | 3 | 3.0 | STAGING | [ ] | QA 2026-11-09, possible, BLOCKER if real: WebKit video fetch fails on the API-to-R2 redirect. Check on a real iPhone first. |
 
 ### Payment return and campaign attribution lost on arrival (priority, owner-requested 2026-11-05, BUGS FIRST)
 

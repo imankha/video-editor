@@ -1,6 +1,6 @@
 # T15670: Journey map in full screen is wider than 1440 px and cuts off the first stages
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-09

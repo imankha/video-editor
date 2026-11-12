@@ -1,6 +1,6 @@
 # T15680: Visit beacon POST /api/t returns 422 on some page loads
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-09

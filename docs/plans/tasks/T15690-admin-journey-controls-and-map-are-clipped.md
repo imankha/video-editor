@@ -1,6 +1,6 @@
 # T15690: Admin Journey controls and map are clipped on mobile and iPad with no scroll
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-11-09

@@ -1,6 +1,6 @@
 # T15450: Staging sign-in does not survive a reload in Safari-class browsers (cross-site session cookie)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-11-09

@@ -1,6 +1,6 @@
 # T15710: Poster images blocked by CORS and Preflight 403 errors during load bursts
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-11-09
