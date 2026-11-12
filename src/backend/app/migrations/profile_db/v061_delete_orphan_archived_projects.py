@@ -36,6 +36,23 @@ class V061DeleteOrphanArchivedProjects(BaseMigration):
 
     def up(self, conn) -> None:
         cursor = conn.cursor()
+
+        # Guard: a below-head DB mid-sweep (or a test fixture at an earlier
+        # version) may not have projects/raw_clips yet, or may predate the
+        # archived_at/final_video_id columns -- mirrors v020's table guard.
+        tables = {
+            r[0] for r in cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "projects" not in tables or "raw_clips" not in tables:
+            logger.info("[v061] projects/raw_clips missing; nothing to clean up")
+            return
+        project_cols = {r[1] for r in cursor.execute("PRAGMA table_info(projects)").fetchall()}
+        if "archived_at" not in project_cols or "final_video_id" not in project_cols:
+            logger.info("[v061] archived_at/final_video_id missing; nothing to clean up")
+            return
+
         cursor.execute(
             "SELECT id FROM projects WHERE archived_at IS NOT NULL AND final_video_id IS NULL"
         )

@@ -187,3 +187,30 @@ def test_migration_deletes_only_orphaned_archived_projects():
             "SELECT auto_project_id FROM raw_clips WHERE id = ?", (kept_clip_id,)
         )
         assert cursor.fetchone()["auto_project_id"] == kept_project_id
+
+
+def test_migration_is_a_noop_on_a_db_missing_projects_or_raw_clips():
+    """A below-head DB mid-sweep (or a test fixture at an earlier version,
+    per the runner-sweep convention test_t4890/test_t5410/test_t6850 rely on)
+    may not have the projects/raw_clips tables, or the archived_at/
+    final_video_id columns, yet. v061 must not raise sqlite3.OperationalError
+    in that case -- it has nothing to clean up on such a DB."""
+    import sqlite3
+
+    from app.migrations.profile_db.v061_delete_orphan_archived_projects import (
+        V061DeleteOrphanArchivedProjects,
+    )
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE user_settings (id INTEGER PRIMARY KEY)")
+    conn.commit()
+
+    V061DeleteOrphanArchivedProjects().up(conn)  # must not raise
+
+    conn.execute(
+        "CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT, aspect_ratio TEXT)"
+    )
+    conn.commit()
+
+    V061DeleteOrphanArchivedProjects().up(conn)  # still missing raw_clips/columns; must not raise
+    conn.close()
