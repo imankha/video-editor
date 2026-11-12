@@ -1,0 +1,23 @@
+[
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "bytes": 47989792,
+    "upload_seconds": 17.5,
+    "processing_seconds": 8.4,
+    "model": "upload"
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "bytes": 172687705,
+    "upload_seconds": 39.2,
+    "processing_seconds": 16.9,
+    "model": "upload"
+  },
+  {
+    "video": "breakers-20min.mp4",
+    "bytes": 701640394,
+    "upload_seconds": 159.2,
+    "processing_seconds": 48.1,
+    "model": "upload"
+  }
+]

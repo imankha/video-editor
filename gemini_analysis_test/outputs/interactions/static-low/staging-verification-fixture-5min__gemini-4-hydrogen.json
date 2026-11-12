@@ -1,0 +1,481 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "Navy blue"
+    },
+    "team_1": {
+      "color": "White"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "00:06",
+      "summary": "Navy blue builds up from the back on the left flank and plays a long ball upfield.",
+      "team_0": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Look for a shorter midfield option before clearing long under moderate pressure."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "00:06",
+      "end": "00:16",
+      "summary": "Navy blue controls the ball in midfield, dribbles past pressure, and plays a forward pass that White intercepts.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Good composure to beat the first press, but weight the final pass slightly softer into space."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Virgil van Dijk, reading the through ball early to step in and cut out the attack."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:16",
+      "end": "00:28",
+      "summary": "White wins possession near midfield and switches play to the far touchline to advance.",
+      "team_0": {
+        "relevance": 1,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Toni Kroos, calmly switching the point of attack away from pressure."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:28",
+      "end": "00:40",
+      "summary": "White attacks down the far touchline before Navy blue defends well and wins possession back.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Tackle",
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Kyle Walker, staying patient on the touchline and timing the challenge to win the ball."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Use a quick give-and-go with the overlapping full-back instead of dribbling into a double team."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:40",
+      "end": "00:59",
+      "summary": "Navy blue transitions forward down the far flank toward the box, where White makes a clean defensive clearance.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Chance Creation"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Release the ball a half-second earlier before the defender closes down the angle."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Ruben Dias, tracking the runner all the way and executing a clean, decisive clearance."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:59",
+      "end": "01:30",
+      "summary": "Play pauses for a Navy blue throw-in deep on the far side, which White heads clear.",
+      "team_0": {
+        "relevance": 1,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "01:30",
+      "end": "01:37",
+      "summary": "The ball bounces to the near touchline and goes out of play for a Navy blue throw-in.",
+      "team_0": {
+        "relevance": 1,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "01:37",
+      "end": "01:58",
+      "summary": "Navy blue takes the throw-in on the near side, recycles possession across the backline, and advances into midfield.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like John Stones, showing composure to recycle possession and find a forward lane."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "01:58",
+      "end": "02:11",
+      "summary": "Navy blue attacks down the far side and plays a through ball that White intercepts.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Check the runner's timing before playing the through ball so it is not easily cut out."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like William Saliba, positioning well to intercept the pass and immediately start the counter."
+          }
+        ]
+      }
+    },
+    {
+      "start": "02:11",
+      "end": "02:29",
+      "summary": "White builds up from the back on the far side and advances toward the Navy blue penalty area before losing possession.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Good positioning to step in and regain possession near the box."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Keep the ball moving quicker in the final third to prevent the defense from setting."
+          }
+        ]
+      }
+    },
+    {
+      "start": "02:29",
+      "end": "02:58",
+      "summary": "Navy blue builds up patiently from their own box, switches across the backline, and plays into midfield.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Good patience to draw the press and play into the open midfielder."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "02:58",
+      "end": "03:08",
+      "summary": "Navy blue's midfielder turns in midfield, dribbles past two defenders, and threads a pass forward.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Like Frenkie de Jong, gliding past two markers in central midfield to break the lines."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 2,
+            "execution_score": 1,
+            "note": "Do not dive in when isolated; delay the dribbler until cover arrives."
+          }
+        ]
+      }
+    },
+    {
+      "start": "03:08",
+      "end": "03:35",
+      "summary": "White regains possession and builds up down the far side into Navy blue's half.",
+      "team_0": {
+        "relevance": 1,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Solid progression down the touchline to advance the team."
+          }
+        ]
+      }
+    },
+    {
+      "start": "03:35",
+      "end": "03:54",
+      "summary": "White attacks down the far flank and plays a ball into the box that Navy blue clears out of bounds.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Thiago Silva, staying composed in the box to clear the danger."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Good initiative to attack the box; look for the cutback to the penalty spot."
+          }
+        ]
+      }
+    },
+    {
+      "start": "03:54",
+      "end": "04:09",
+      "summary": "White takes a throw-in deep on the far side and delivers into the box, but Navy blue clears it to midfield.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "First to the ball in the box to clear the threat."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": []
+      }
+    },
+    {
+      "start": "04:09",
+      "end": "04:22",
+      "summary": "Navy blue wins the second ball in midfield and plays forward before the referee blows for a foul.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Quick reaction to win the second ball and draw the foul."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": []
+      }
+    },
+    {
+      "start": "04:22",
+      "end": "05:00",
+      "summary": "Play is stopped for a Navy blue free kick near midfield as players reset.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    }
+  ]
+}

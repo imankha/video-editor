@@ -1,0 +1,102 @@
+[
+  {
+    "video": "breakers-20min.mp4",
+    "model": "gemini-4-hydrogen",
+    "processing": "agentic",
+    "thinking_level": "default",
+    "label": "agentic-default",
+    "ok": true,
+    "status": "completed",
+    "seconds": 312.7,
+    "attempts": 1,
+    "interaction_id": "v1_Chd4eVQyYXVMVkFZN1V6N0lQcDhUY3FRZxIXeHlUMmF1TFZBWTdVejdJUHA4VGNxUWc",
+    "usage": {
+      "input_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 3323
+        }
+      ],
+      "output_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 12812
+        }
+      ],
+      "tool_use_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 68393
+        },
+        {
+          "modality": "video",
+          "tokens": 845400
+        }
+      ],
+      "total_cached_tokens": 0,
+      "total_input_tokens": 3323,
+      "total_output_tokens": 12812,
+      "total_thought_tokens": 16211,
+      "total_tokens": 946139,
+      "total_tool_use_tokens": 913793
+    },
+    "step_types": {
+      "model_output": 1,
+      "processing_call": 24,
+      "processing_result": 24,
+      "thought": 1,
+      "user_input": 1
+    },
+    "plays": 75
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-4-hydrogen",
+    "processing": "agentic",
+    "thinking_level": "default",
+    "label": "agentic-default",
+    "ok": true,
+    "status": "completed",
+    "seconds": 234.8,
+    "attempts": 1,
+    "interaction_id": "v1_ChdwU2YyYXZuSkJwUHJ6N0lQeE5fTDBRcxIXcFNmMmF2bkpCcFByejdJUHhOX0wwUXM",
+    "usage": {
+      "input_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 3322
+        }
+      ],
+      "output_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 5325
+        }
+      ],
+      "tool_use_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 41518
+        },
+        {
+          "modality": "video",
+          "tokens": 329680
+        }
+      ],
+      "total_cached_tokens": 0,
+      "total_input_tokens": 3322,
+      "total_output_tokens": 5325,
+      "total_thought_tokens": 19822,
+      "total_tokens": 399667,
+      "total_tool_use_tokens": 371198
+    },
+    "step_types": {
+      "model_output": 1,
+      "processing_call": 15,
+      "processing_result": 15,
+      "thought": 1,
+      "user_input": 1
+    },
+    "plays": 27
+  }
+]

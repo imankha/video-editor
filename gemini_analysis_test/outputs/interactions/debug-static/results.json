@@ -1,0 +1,38 @@
+[
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.5-flash-lite",
+    "processing": "static",
+    "thinking_level": "default",
+    "label": "debug-static",
+    "ok": true,
+    "status": "completed",
+    "seconds": 62.1,
+    "attempts": 1,
+    "interaction_id": "v1_Chc2eUwyYXNyZUJzLUd6N0lQN1B6R2tBaxIXNnlMMmFzcmVCcy1HejdJUDdQekdrQWs",
+    "usage": {
+      "initial_input_tokens": 7007,
+      "input_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 1133
+        },
+        {
+          "modality": "video",
+          "tokens": 5874
+        }
+      ],
+      "total_cached_tokens": 0,
+      "total_input_tokens": 7007,
+      "total_output_tokens": 2110,
+      "total_thought_tokens": 0,
+      "total_tokens": 9117,
+      "total_tool_use_tokens": 0
+    },
+    "step_types": {
+      "model_output": 1,
+      "thought": 1
+    },
+    "plays": 8
+  }
+]

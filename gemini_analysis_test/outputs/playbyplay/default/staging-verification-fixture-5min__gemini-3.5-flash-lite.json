@@ -1,0 +1,193 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "blue"
+    },
+    "team_1": {
+      "color": "white"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "00:16",
+      "summary": "Team 1 attempts a build-up from the back, but Team 0's defense presses effectively and clears the danger.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Great defensive positioning to intercept the pass, reminiscent of Virgil van Dijk."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Next time, scan the field earlier to avoid getting trapped by the opponent's press."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:16",
+      "end": "01:31",
+      "summary": "Team 0 builds an attack down the left flank, but solid defending from Team 1 stops the progression.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Next time, look for an overlapping run from your fullback before attempting the dribble."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Excellent 1v1 defending, channeling the attacker wide."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:31",
+      "end": "01:56",
+      "summary": "Team 1 wins possession and tries to launch a counter-attack, but Team 0 intercepts in midfield.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defensive midfielder",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Crucial interception in transition, like N'Golo Kante."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "attacking midfielder",
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Next time, shield the ball or release it quicker under pressure."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:56",
+      "end": "03:00",
+      "summary": "Team 0 switches play and advances into the final third, creating a shooting opportunity that goes wide.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Brilliant diagonal switch of play, reminiscent of Kevin De Bruyne."
+          },
+          {
+            "jersey_number": null,
+            "position": "forward",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Next time, keep your head down over the ball when striking from distance to keep it on target."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Next time, maintain a tighter defensive line to prevent the opponent from finding space between the lines."
+          }
+        ]
+      }
+    },
+    {
+      "start": "03:00",
+      "end": "04:05",
+      "summary": "Team 1 organizes an attack through the center, but Team 0 closes down the space and regains possession.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Strong aerial clearance to reset the defense."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Next time, use quick one-touch passing to bypass the congested midfield block."
+          }
+        ]
+      }
+    },
+    {
+      "start": "04:05",
+      "end": "05:00",
+      "summary": "Both teams battle for possession in midfield with quick transitions leading to a final defensive clearance.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": 11,
+            "position": "winger",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Good tracking back to support the defense."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "forward",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Next time, make a more decisive run behind the defender to receive the through ball."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,236 @@
+[
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3.1-flash-lite",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 22.6,
+    "attempts": 1,
+    "model_version": "gemini-3.1-flash-lite",
+    "prompt_tokens": 27428,
+    "prompt_by_modality": {
+      "TEXT": 41,
+      "VIDEO": 27387
+    },
+    "output_tokens": 340,
+    "thinking_tokens": 0,
+    "total_tokens": 27768,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3.5-flash-lite",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 32.9,
+    "attempts": 1,
+    "model_version": "gemini-3.5-flash-lite",
+    "prompt_tokens": 27428,
+    "prompt_by_modality": {
+      "TEXT": 41,
+      "VIDEO": 27387
+    },
+    "output_tokens": 204,
+    "thinking_tokens": 0,
+    "total_tokens": 27632,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3-flash-preview",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 13.5,
+    "attempts": 1,
+    "model_version": "gemini-3-flash-preview",
+    "prompt_tokens": 27428,
+    "prompt_by_modality": {
+      "VIDEO": 27387,
+      "TEXT": 41
+    },
+    "output_tokens": 413,
+    "thinking_tokens": 1557,
+    "total_tokens": 29398,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3.6-flash",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 29.8,
+    "attempts": 1,
+    "model_version": "gemini-3.6-flash",
+    "prompt_tokens": 27428,
+    "prompt_by_modality": {
+      "VIDEO": 27387,
+      "TEXT": 41
+    },
+    "output_tokens": 603,
+    "thinking_tokens": 1199,
+    "total_tokens": 29230,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-4-hydrogen",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 47.1,
+    "attempts": 1,
+    "model_version": "gemini-4-hydrogen",
+    "prompt_tokens": 31673,
+    "prompt_by_modality": {
+      "TEXT": 1275,
+      "VIDEO": 30398
+    },
+    "output_tokens": 956,
+    "thinking_tokens": 3223,
+    "total_tokens": 35852,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3.8-flash",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.8-flash, description: Generate content requests per day limit exceeded on Fr",
+    "attempts": 1
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-4-argon",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-4-argon, description: Generate content requests per day limit exceeded on Free ",
+    "attempts": 1
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-4-carbon",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-4-carbon, description: Generate content input tokens per minute limit ",
+    "attempts": 1
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3.1-pro-preview",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-3.1-pro, description: Generate content input tokens per day limit exce",
+    "attempts": 1
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.1-flash-lite",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 3.7,
+    "attempts": 3,
+    "model_version": "gemini-3.1-flash-lite",
+    "prompt_tokens": 5915,
+    "prompt_by_modality": {
+      "TEXT": 41,
+      "VIDEO": 5874
+    },
+    "output_tokens": 457,
+    "thinking_tokens": 0,
+    "total_tokens": 6372,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.5-flash-lite",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 5.2,
+    "attempts": 3,
+    "model_version": "gemini-3.5-flash-lite",
+    "prompt_tokens": 5915,
+    "prompt_by_modality": {
+      "TEXT": 41,
+      "VIDEO": 5874
+    },
+    "output_tokens": 377,
+    "thinking_tokens": 0,
+    "total_tokens": 6292,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3-flash-preview",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3-flash, description: Generate content requests per day limit exceeded on Free",
+    "attempts": 3
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.6-flash",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 183.7,
+    "attempts": 1,
+    "model_version": "gemini-3.6-flash",
+    "prompt_tokens": 5915,
+    "prompt_by_modality": {
+      "TEXT": 41,
+      "VIDEO": 5874
+    },
+    "output_tokens": 591,
+    "thinking_tokens": 1022,
+    "total_tokens": 7528,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-4-hydrogen",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 26.1,
+    "attempts": 1,
+    "model_version": "gemini-4-hydrogen",
+    "prompt_tokens": 6568,
+    "prompt_by_modality": {
+      "TEXT": 249,
+      "VIDEO": 6319
+    },
+    "output_tokens": 1088,
+    "thinking_tokens": 2410,
+    "total_tokens": 10066,
+    "finish_reason": "STOP"
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.8-flash",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.8-flash, description: Generate content requests per day limit exceeded on Fr",
+    "attempts": 1
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-4-argon",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-4-argon, description: Generate content input tokens per day limit exce",
+    "attempts": 1
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-4-carbon",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-4-carbon, description: Generate content input tokens per day limit exc",
+    "attempts": 1
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.1-pro-preview",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-3.1-pro, description: Generate content input tokens per day limit exce",
+    "attempts": 1
+  }
+]

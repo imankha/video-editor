@@ -1,0 +1,16 @@
+prompt,video,model,quality_1_to_5,notes,output_file,analysis_seconds,seconds_per_video_second,read_cost_usd,write_cost_usd,cost_per_video_second_usd
+highlights,staging-verification-fixture-5min,gemini-4-hydrogen,,,highlights/default/staging-verification-fixture-5min__gemini-4-hydrogen.md,47.1,0.157,0.04751,0.03134,0.0002621
+highlights,staging-verification-fixture-5min,gemini-3.6-flash,,,highlights/default/staging-verification-fixture-5min__gemini-3.6-flash.md,29.8,0.099,0.02057,0.00676,9.08e-05
+highlights,staging-verification-fixture-5min,gemini-3.5-flash-lite,,,highlights/default/staging-verification-fixture-5min__gemini-3.5-flash-lite.md,32.9,0.109,0.00823,0.00051,2.9e-05
+highlights,staging-verification-fixture-5min,gemini-3-flash-preview,,,highlights/default/staging-verification-fixture-5min__gemini-3-flash-preview.md,13.5,0.045,0.01371,0.00591,6.52e-05
+highlights,staging-verification-fixture-5min,gemini-3.1-flash-lite,,,highlights/default/staging-verification-fixture-5min__gemini-3.1-flash-lite.md,22.6,0.075,0.00686,0.00051,2.45e-05
+highlights,wcfc-carlsbad-trimmed,gemini-4-hydrogen,,,highlights/default/wcfc-carlsbad-trimmed__gemini-4-hydrogen.md,26.1,0.292,0.00985,0.02624,0.000404
+highlights,wcfc-carlsbad-trimmed,gemini-3.6-flash,,,highlights/default/wcfc-carlsbad-trimmed__gemini-3.6-flash.md,183.7,2.057,0.00444,0.00605,0.0001174
+highlights,wcfc-carlsbad-trimmed,gemini-3.5-flash-lite,,,highlights/default/wcfc-carlsbad-trimmed__gemini-3.5-flash-lite.md,5.2,0.058,0.00177,0.00094,3.04e-05
+highlights,wcfc-carlsbad-trimmed,gemini-3.1-flash-lite,,,highlights/default/wcfc-carlsbad-trimmed__gemini-3.1-flash-lite.md,3.7,0.041,0.00148,0.00069,2.42e-05
+playbyplay,staging-verification-fixture-5min,gemini-4-hydrogen,,,playbyplay/default/staging-verification-fixture-5min__gemini-4-hydrogen.json,67.1,0.223,0.05056,0.07001,0.0004008
+playbyplay,staging-verification-fixture-5min,gemini-3.5-flash-lite,,,playbyplay/default/staging-verification-fixture-5min__gemini-3.5-flash-lite.json,30.9,0.103,0.00837,0.00399,4.11e-05
+playbyplay,staging-verification-fixture-5min,gemini-3.1-flash-lite,,,playbyplay/default/staging-verification-fixture-5min__gemini-3.1-flash-lite.json,25.1,0.083,0.00698,0.00182,2.92e-05
+playbyplay,wcfc-carlsbad-trimmed,gemini-4-hydrogen,,,playbyplay/default/wcfc-carlsbad-trimmed__gemini-4-hydrogen.json,105.2,1.178,0.0129,0.15606,0.0018916
+playbyplay,wcfc-carlsbad-trimmed,gemini-3.5-flash-lite,,,playbyplay/default/wcfc-carlsbad-trimmed__gemini-3.5-flash-lite.json,7.6,0.085,0.00192,0.00211,4.5e-05
+playbyplay,wcfc-carlsbad-trimmed,gemini-3.1-flash-lite,,,playbyplay/default/wcfc-carlsbad-trimmed__gemini-3.1-flash-lite.json,7.8,0.087,0.0016,0.0022,4.26e-05

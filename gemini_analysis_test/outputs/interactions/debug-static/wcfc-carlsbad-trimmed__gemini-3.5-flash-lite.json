@@ -1,0 +1,289 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "dark blue"
+    },
+    "team_1": {
+      "color": "white"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "00:05",
+      "summary": "Team 0 passes out from the defense in the early phase of the match.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Look to scan the pitch earlier before receiving to speed up distribution."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "00:05",
+      "end": "00:11",
+      "summary": "Team 1 presses forward and attempts to build an attack down the wing.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defender",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Maintain body shape to prevent the attacker from cutting inside."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "winger",
+            "tags": [
+              "Dribble",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Reminiscent of Bukayo Saka with quick acceleration down the flank."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:11",
+      "end": "00:20",
+      "summary": "Team 0 transitions from defense to attack with a midfield buildup.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "tags": [
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Kevin De Bruyne finding space between the lines."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Try to step into the passing lane quicker to intercept cleanly."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:20",
+      "end": "00:41",
+      "summary": "Play slows down with a midfield deadlock and some defensive shifting.",
+      "team_0": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defender",
+            "tags": [
+              "Control"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Stay vocal to organize the defensive line."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Recycle possession safely when under pressure."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:41",
+      "end": "00:54",
+      "summary": "Team 1 pushes up the field on a counter-attack sequence.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "full-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 4,
+            "note": "Good recovery run to slow down the attacker's momentum."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "winger",
+            "tags": [
+              "Dribble",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Reminiscent of Vinicius Junior using pace to beat the defender."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:54",
+      "end": "01:07",
+      "summary": "Team 0 regains possession and attempts to construct an offensive play.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Clean first touch under pressure."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Watch out for fouls when committing to a challenge from behind."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:07",
+      "end": "01:17",
+      "summary": "Team 1 launches a fast attack down the right flank.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defender",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Hold your position to avoid getting caught out of shape."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "winger",
+            "tags": [
+              "Dribble",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Great driving run forward."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:17",
+      "end": "01:28",
+      "summary": "Team 0 sets up a defensive block near their penalty box to defend the final attack.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": 28,
+            "position": "defender",
+            "tags": [
+              "Control",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Calm composure in the defensive third, similar to Virgil van Dijk."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "forward",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Look for a quick shot opportunity when space opens up at the edge of the box."
+          }
+        ]
+      }
+    }
+  ]
+}

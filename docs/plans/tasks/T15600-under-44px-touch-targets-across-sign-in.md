@@ -1,6 +1,6 @@
 # T15600: Under-44px touch targets across sign-in, Annotate, Spotlight, Gallery and the share page
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-09

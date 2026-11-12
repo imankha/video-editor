@@ -1,0 +1,46 @@
+[
+  {
+    "video": "breakers-20min.mp4",
+    "model": "gemini-4-hydrogen",
+    "processing": "static",
+    "thinking_level": "default",
+    "label": "static-default-600-900",
+    "start": 600,
+    "end": 900,
+    "ok": true,
+    "status": "completed",
+    "seconds": 94.9,
+    "attempts": 1,
+    "interaction_id": "v1_Chc5aW4yYXNxMUxwZUhxdHNQbmZXMnFBZxIXOWluMmFzcTFMcGVIcXRzUG5mVzJxQWc",
+    "usage": {
+      "initial_input_tokens": 34463,
+      "input_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 4156
+        },
+        {
+          "modality": "video",
+          "tokens": 30307
+        }
+      ],
+      "output_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 3312
+        }
+      ],
+      "total_cached_tokens": 0,
+      "total_input_tokens": 34463,
+      "total_output_tokens": 3312,
+      "total_thought_tokens": 11516,
+      "total_tokens": 49291,
+      "total_tool_use_tokens": 0
+    },
+    "step_types": {
+      "model_output": 1,
+      "thought": 1
+    },
+    "plays": 19
+  }
+]

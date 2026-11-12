@@ -1,0 +1,44 @@
+[
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-4-hydrogen",
+    "processing": "static",
+    "thinking_level": "low",
+    "label": "static-low",
+    "ok": true,
+    "status": "completed",
+    "seconds": 44.0,
+    "attempts": 1,
+    "interaction_id": "v1_Chd5aWoyYXFTZkZaVERxdHNQa09IZXVRZxIXeWlqMmFxU2ZGWlREcXRzUGtPSGV1UWc",
+    "usage": {
+      "initial_input_tokens": 34556,
+      "input_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 4158
+        },
+        {
+          "modality": "video",
+          "tokens": 30398
+        }
+      ],
+      "output_tokens_by_modality": [
+        {
+          "modality": "text",
+          "tokens": 3582
+        }
+      ],
+      "total_cached_tokens": 0,
+      "total_input_tokens": 34556,
+      "total_output_tokens": 3582,
+      "total_thought_tokens": 1680,
+      "total_tokens": 39818,
+      "total_tool_use_tokens": 0
+    },
+    "step_types": {
+      "model_output": 1,
+      "thought": 1
+    },
+    "plays": 17
+  }
+]

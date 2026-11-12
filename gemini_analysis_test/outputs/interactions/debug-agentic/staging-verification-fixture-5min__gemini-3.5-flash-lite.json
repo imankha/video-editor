@@ -1,0 +1,49 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "white"
+    },
+    "team_1": {
+      "color": "dark blue"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "01:00",
+      "summary": "Team 1 builds up from the back while Team 0 defends solidly and clears the ball away.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defender",
+            "tags": [
+              "Tackle",
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 5,
+            "note": "Solid defensive positioning reminiscent of Virgil van Dijk."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Keep scanning the field earlier before receiving under pressure."
+          }
+        ]
+      }
+    }
+  ]
+}

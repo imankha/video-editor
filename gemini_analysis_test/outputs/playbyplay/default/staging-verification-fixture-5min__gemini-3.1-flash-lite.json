@@ -1,0 +1,155 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "blue"
+    },
+    "team_1": {
+      "color": "white"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "00:54",
+      "summary": "Team 1 passes around the midfield, unsuccessfully attempting a breakthrough.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "solid defensive positioning throughout this sequence"
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "keep the pass moving faster to break down the defensive line"
+          },
+          {
+            "jersey_number": null,
+            "position": "forward",
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "create more space in the channel before demanding the ball"
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:54",
+      "end": "01:54",
+      "summary": "Team 0 breaks down the wing, followed by a series of aerial challenges.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "winger",
+            "decision_score": 4,
+            "execution_score": 5,
+            "note": "excellent dribbling technique, akin to Bernardo Silva in tight spaces"
+          },
+          {
+            "jersey_number": 11,
+            "position": "midfielder",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "well-timed support run into the open area"
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "full-back",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "maintain tighter gap between you and the winger"
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:54",
+      "end": "03:13",
+      "summary": "Team 1 tries to launch a direct attack, but team 0 wins the duel in midfield.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defensive midfielder",
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "decisive interception similar to Rodri's ability to read the game"
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "avoid holding the ball too long when surrounded"
+          }
+        ]
+      }
+    },
+    {
+      "start": "03:13",
+      "end": "04:09",
+      "summary": "Team 0 maintains possession, working the ball effectively across the midfield.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center midfielder",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "good vision, keep scanning the field before receiving"
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "04:09",
+      "end": "05:00",
+      "summary": "The play ends with team 0 cycling the ball to reset their attacking structure.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": 11,
+            "position": "center midfielder",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "composure in possession is key, well done"
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    }
+  ]
+}

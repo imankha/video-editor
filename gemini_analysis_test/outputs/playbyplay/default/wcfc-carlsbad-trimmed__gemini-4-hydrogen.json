@@ -1,0 +1,415 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "white"
+    },
+    "team_1": {
+      "color": "dark blue"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "00:05",
+      "summary": "A high aerial ball drops into central midfield where white and dark blue contest the second ball before white gains control.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Controlled a bouncing ball in traffic and recycled possession calmly like Sergio Busquets."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Anticipate the drop of the aerial ball earlier and get body position inside to win the second ball."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:05",
+      "end": "00:10",
+      "summary": "White advances down the far left flank and works the ball inside to central midfield.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Carried the ball up the touchline before cutting a pass inside to midfield like Jack Grealish."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Control"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Close the ball carrier down quicker on the touchline to cut off the inside passing lane."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:10",
+      "end": "00:19",
+      "summary": "White's central midfielder drives forward and threads a through ball for the striker, whose effort inside the box is forced behind for a corner by dark blue's defender and goalkeeper.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Threaded a line-breaking pass into space with the vision and weight of Kevin De Bruyne."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Timed the diagonal run behind the back line and attacked the penalty area like Jamie Vardy."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Tracked the striker's run and recovered well to apply pressure like Virgil van Dijk."
+          },
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Narrowed the angle quickly to help shut down the chance like Alisson Becker."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:19",
+      "end": "00:34",
+      "summary": "Play pauses as white sets up to take a corner kick from the far right corner and both teams organize in the penalty area.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:34",
+      "end": "00:43",
+      "summary": "White delivers the corner kick into the box, where dark blue clears the aerial danger and begins transitioning out.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Deliver the corner with more pace toward the six-yard box so attackers can meet it before defenders clear."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Attacked the incoming set piece decisively in the air to clear danger like Giorgio Chiellini."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:43",
+      "end": "00:53",
+      "summary": "Dark blue wins possession on the far side and launches a counter-attack as their midfielder dribbles across midfield into white's half.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Drop and delay the ball carrier earlier instead of allowing a straight dribble through the central channel."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Build-Up"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Drove through midfield at pace on the transition like Mateo Kovacic."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:53",
+      "end": "01:00",
+      "summary": "Dark blue tries to push forward in the shaded left-wing area before white crowds them out, wins possession, and turns play upfield.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Tackle",
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Stepped in cleanly on the touchline to win the ball and spark the transition like Kyle Walker."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Control"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Look to release the ball earlier before getting trapped against the touchline by multiple defenders."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:00",
+      "end": "01:08",
+      "summary": "White counter-attacks down the far touchline moving right before their inside pass is cut out in midfield by dark blue.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Check inside options carefully and play a firmer pass so it is not cut out in midfield."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Read the inside pass and stepped into midfield to cut it out like N'Golo Kante."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:07",
+      "end": "01:13",
+      "summary": "Dark blue number 20 wins the ball in midfield, shows composure under pressure, and plays a crisp pass out to the right flank.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Angle the press to block the wide passing lane rather than letting the midfielder turn comfortably."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": 20,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Control",
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Controlled the turnover calmly and switched play cleanly under pressure like Toni Kroos."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:11",
+      "end": "01:20",
+      "summary": "White presses dark blue's right-back into a turnover near the touchline and attacks into the penalty box, resulting in a shot dealt with by dark blue for a goal kick.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Tackle",
+              "Interception",
+              "Dribble",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Pressed aggressively on the touchline to force the turnover and drive into the box like Bukayo Saka."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Get a cleaner first touch inside the box to set up a decisive finish before defenders close."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Control",
+              "Dribble"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Play a simple back pass or clear down the line when pressed tightly near your own corner."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Closed down the danger inside the penalty area to protect the goal like Ruben Dias."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:20",
+      "end": "01:28",
+      "summary": "Play stops as the dark blue goalkeeper retrieves the ball and sets up for a goal kick while both teams reset.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+[
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3.1-flash-lite",
+    "prompt": "playbyplay",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 25.1,
+    "attempts": 1,
+    "model_version": "gemini-3.1-flash-lite",
+    "prompt_tokens": 27900,
+    "prompt_by_modality": {
+      "VIDEO": 27387,
+      "TEXT": 513
+    },
+    "output_tokens": 1213,
+    "thinking_tokens": 0,
+    "total_tokens": 29113,
+    "finish_reason": "STOP",
+    "plays": 5
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3.5-flash-lite",
+    "prompt": "playbyplay",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 30.9,
+    "attempts": 1,
+    "model_version": "gemini-3.5-flash-lite",
+    "prompt_tokens": 27900,
+    "prompt_by_modality": {
+      "VIDEO": 27387,
+      "TEXT": 513
+    },
+    "output_tokens": 1598,
+    "thinking_tokens": 0,
+    "total_tokens": 29498,
+    "finish_reason": "STOP",
+    "plays": 6
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.1-flash-lite",
+    "prompt": "playbyplay",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 7.8,
+    "attempts": 1,
+    "model_version": "gemini-3.1-flash-lite",
+    "prompt_tokens": 6387,
+    "prompt_by_modality": {
+      "TEXT": 513,
+      "VIDEO": 5874
+    },
+    "output_tokens": 1470,
+    "thinking_tokens": 0,
+    "total_tokens": 7857,
+    "finish_reason": "STOP",
+    "plays": 6
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.5-flash-lite",
+    "prompt": "playbyplay",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 7.6,
+    "attempts": 1,
+    "model_version": "gemini-3.5-flash-lite",
+    "prompt_tokens": 6387,
+    "prompt_by_modality": {
+      "TEXT": 513,
+      "VIDEO": 5874
+    },
+    "output_tokens": 843,
+    "thinking_tokens": 0,
+    "total_tokens": 7230,
+    "finish_reason": "STOP",
+    "plays": 3
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-3.6-flash",
+    "prompt": "playbyplay",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash, description: Generate content requests per day limit exceeded on Fr",
+    "attempts": 1,
+    "counted_prompt_tokens": 31516
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-3.6-flash",
+    "prompt": "playbyplay",
+    "resolution": "default",
+    "ok": false,
+    "error": "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://aistudio.google.com/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash, description: Generate content requests per day limit exceeded on Fr",
+    "attempts": 2,
+    "counted_prompt_tokens": 6832
+  },
+  {
+    "video": "staging-verification-fixture-5min.mp4",
+    "model": "gemini-4-hydrogen",
+    "prompt": "playbyplay",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 67.1,
+    "attempts": 1,
+    "model_version": "gemini-4-hydrogen",
+    "prompt_tokens": 33707,
+    "prompt_by_modality": {
+      "TEXT": 3309,
+      "VIDEO": 30398
+    },
+    "output_tokens": 3769,
+    "thinking_tokens": 5565,
+    "total_tokens": 43041,
+    "finish_reason": "STOP",
+    "plays": 22
+  },
+  {
+    "video": "wcfc-carlsbad-trimmed.mp4",
+    "model": "gemini-4-hydrogen",
+    "prompt": "playbyplay",
+    "resolution": "default",
+    "ok": true,
+    "seconds": 105.2,
+    "attempts": 1,
+    "model_version": "gemini-4-hydrogen",
+    "prompt_tokens": 8602,
+    "prompt_by_modality": {
+      "TEXT": 2283,
+      "VIDEO": 6319
+    },
+    "output_tokens": 1895,
+    "thinking_tokens": 18913,
+    "total_tokens": 29410,
+    "finish_reason": "STOP",
+    "plays": 11
+  }
+]

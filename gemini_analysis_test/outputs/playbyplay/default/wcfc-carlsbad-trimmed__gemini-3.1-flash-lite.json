@@ -1,0 +1,186 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "white"
+    },
+    "team_1": {
+      "color": "dark blue"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "00:05",
+      "summary": "Team 1 attempts an attack from their defensive half, pushing the ball forward along the right side.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Stay compact and prepare to press the incoming ball carrier."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Maintain pace and look for a diagonal pass into the space behind the defense."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:06",
+      "end": "00:13",
+      "summary": "Team 1 progresses into the final third, shifting play towards the center before Team 0 regains possession.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defender",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Excellent tracking of the runner; stay disciplined to prevent the through ball."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "attacker",
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Hold the ball briefly to allow teammates to join the attack."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:14",
+      "end": "00:23",
+      "summary": "Team 0 transitions out of defense, moving the ball back to midfield to reset their formation.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left back",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Good vision to recycle possession under pressure."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "forward",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Close down the passing lanes more aggressively."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:24",
+      "end": "00:46",
+      "summary": "A period of stagnant play in the midfield with both teams exchanging short passes.",
+      "team_0": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Look for a vertical pass instead of playing laterally."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Increase the tempo of play."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:47",
+      "end": "01:05",
+      "summary": "Team 0 breaks down the left flank, delivering a cross that is intercepted by the defense.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Good overlap, but look to cross earlier next time."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "center-back",
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Strong positioning, mirroring Virgil van Dijk's composure in the box."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:06",
+      "end": "01:28",
+      "summary": "Team 1 attempts a counter-attack but is stopped by Team 0's solid defensive block near the center circle.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defensive midfielder",
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Perfect anticipation of the pass."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "The pass was too predictable; check your shoulder for pressure."
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "white"
+    },
+    "team_1": {
+      "color": "blue"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "00:23",
+      "summary": "Team 1 attacks down the right side, leading to a cross towards the box that is cleared by the white defense.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Solid clearance reminiscent of Virgil van Dijk managing pressure in the box."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Work on early delivery into the box under defensive pressure."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:23",
+      "end": "00:46",
+      "summary": "Play transitions into midfield with both teams battling for possession during a throw-in sequence.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Look for quicker shoulder checks before receiving the throw-in."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Stay tight to your marker to prevent clean turns in midfield."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:46",
+      "end": "01:28",
+      "summary": "Team 0 builds up an attack from the midfield, moving the ball towards the attacking third and finishing with a shot attempt.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Brilliant progressive pass resembling Kevin De Bruyne finding space between the lines."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Keep composure when striking first-time under defensive pressure."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": 28,
+            "position": "defender",
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Close down the shooter quicker to block shooting lanes."
+          }
+        ]
+      }
+    }
+  ]
+}

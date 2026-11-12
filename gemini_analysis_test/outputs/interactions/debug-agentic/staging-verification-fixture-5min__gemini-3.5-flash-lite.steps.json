@@ -1,0 +1,50 @@
+[
+  {
+    "content": [
+      {
+        "mime_type": "video/mp4",
+        "processing": "agentic",
+        "type": "video",
+        "uri": "https://generativelanguage.googleapis.com/v1beta/files/4bpb0fvs8b6s"
+      },
+      {
+        "text": "Analyze this game video and write a complete play-by-play of the whole video, from the first second to the last, in order, with no gaps.\n\nA play is one continuous passage of the game: a possession, an attack, a set piece, a restart, a transition, or a defensive stand. Start a new play when possession changes or the ball goes dead.\n\nThe most important job is to catch every individual player highlight. Players use these clips for college recruiting reels and social media, so a missed highlight is the worst mistake you can make here. A player highlight is any moment where one player does something worth showing: a goal, an assist, a shot on target, a key pass or through ball, a dribble that beats a defender, a skill move, a cross that creates a chance, a save, a tackle, an interception, a block, a header won, a recovery run that stops an attack, a strong piece of hold-up play. Rules for highlights:\n- Look for them on both teams and in every position. Defenders and goalkeepers need highlights as much as attackers do.\n- Give each highlight its own play entry; never bury it inside a longer passage. Set start a few seconds before the player's action begins and end just after its outcome is clear, so the clip can be cut straight from those timestamps.\n- Give that player's team a relevance of 4 or 5 for the play.\n- When you are unsure whether a moment is good enough, include it. An extra clip costs nothing; a missing one cannot be recovered.\n- Before you finish, go back through the video once more looking only for player highlights you may have skipped, especially away from the main attacking moves.\n\nFirst define the two teams by kit colour: team_0 and team_1. Use those same two teams for the whole answer.\n\nFor each play give the start and end timestamps as MM:SS, a one-sentence summary, and then a section for each team (team_0 and team_1). In each team's section give:\n\n- relevance: 0 to 5, how much this play is worth that team reviewing, either as a highlight or as a lesson (0 = nothing to show or learn, 1 = routine, 2 = minor interest, 3 = worth a look, 4 = strong highlight or a clear lesson, 5 = must-see highlight or a key lesson). Score each team on its own; one play can be a 5 for both.\n- players: every player of that team who meaningfully takes part in the play, in order. An empty list is fine when the team has no meaningful part. For each player:\n  - jersey_number: see the rule below\n  - position: the player's position or role in this play (for example \"right winger\", \"goalkeeper\", \"left centre-back\"). Always fill this in; it is how the player is identified when there is no number.\n  - tags: every tag from the list below that describes what this player did in this play. Tag every player in every play, not only the highlights. Use the exact tag names. A player can earn more than one tag in a play, and any player can earn any tag (a defender who scores gets \"Goal\"). Tag what the player attempted even when it did not come off; the execution score records how well it went. Use an empty list only when nothing on the list fits.\n    - \"Goal\": all types of finishes in scoring situations, including shots that do not go in.\n    - \"Assist\": the final pass that leads directly to a goal.\n    - \"Dribble\": beating defenders in individual attacking duels.\n    - \"Pass\": short, long, and line-breaking passes to advance play.\n    - \"Chance Creation\": key passes that set up opportunities for teammates.\n    - \"Control\": quick turnover play and composure under pressure.\n    - \"Tackle\": defensive challenges that win the ball.\n    - \"Interception\": reading and winning possession before the opponent.\n    - \"Build-Up\": passes from the back that start attacks.\n    - \"Save\": all goalkeeper shot-stopping and 1v1 saves.\n    - \"Distribution\": goalkeeper throws and kicks that start attacks.\n  - decision_score: 1 to 5, was it the right idea in that moment (1 = poor choice, 2 = questionable, 3 = reasonable, 4 = good, 5 = the best option available)\n  - execution_score: 1 to 5, how well the player carried it out (1 = failed, 2 = poor, 3 = adequate, 4 = good, 5 = clean)\n  - note: if this was a learning opportunity, the note is the lesson: say what the player should do next time. If this was a great play there is no lesson; use the note to compare the action to a famous player known for exactly that kind of play.\n\nJersey number rule: give a jersey number only when you can read the digits clearly on screen and have high confidence in them. In every other case set jersey_number to null and rely on position. Never guess, never infer a number from position or from an earlier play, and never invent one. A null is correct; a wrong number is a serious error.",
+        "type": "text"
+      }
+    ],
+    "type": "user_input"
+  },
+  {
+    "id": "call_3885515338885614609",
+    "signature": "CAIS4wMBaRR9E1ugJXVusH/c0YIWIBdYJ6fH/9KoAOo76y/VdV2caLUF/zIHEwstZeFZmwU7rzAQGYkWvlOP6wVmIOileNtjMne9w5+7sIwFlmBBqji9fDXrNpsBDklUHUWr20L9I9yLtmOwCUUGGlcMDhB47bIkVX7YDz+APucSPAKWkdIr5m3Ou9UtNMFRM/qe6x60xDIBZKGf5zk4+XSdGb+wlqg1x3iqJV3urmfi3Hn0T01UW/++TBxjAWu4V8b6CDDt1K7AIzutmOD7Pd4ZtQSVGScY/vUxfyiIvYSgsfo4samI3VvbMGx6mx4U7fAOQMmX9QxJFov/o47zyrfbceiwKES2vMnKCL4muTcaUHLyvjck98NpIOuKC/FmIwMJysHfNYe6/RJkkRj4TE2ZwXhdJEO5UEeIoFrTu8Pwl8px2v9Tr9/Y0YhgH0hxP1N7FTq1f0cA/tLVxP0Jp05bwjdCQ5iiGCEoYc0d+7MqyUsd8OhjocKdkcLlIVATTIuaz0B2mRQ8Pa6+9FxTxfqFXyLE+gK2BlD6ibz7uKlCaNs/wDLholwkFVnuey522ib+t+0LBa8FkZDjHjKlKJv+sl82p9CLc5uH0w+XUZOH5kjR0LFAd/wUooCu+/dGk0sU0cXdWd8=",
+    "type": "processing_call"
+  },
+  {
+    "call_id": "call_3885515338885614609",
+    "signature": "CAISwAMBaRR9E3o/JwDYE4Gjg9bZVz3Kjz1WJgKaAFGCglzuG3AVCI/tNpNiYIZHbD5T0IHjQBlY+WWM8ID2S28adVJA+eDjJ9XohGFfv+OPWjzE7RcxzDef1BLbhnfWq8nPWvxM2yeBw200VlhcMf8KsFCVYgSUEXj7YEbEjYhqDt5qUc6bXEfw3imwY5wdCi30k3bfwQsytzjbjoen1xgS8Lvf9NSazPf2XZq9mMHttsDt8LdkGaNAL7j1R7dYNB9gBLTFdopWpZ9icgIKC8Brm9FfOnwC4am9p1+m4djEY2zx2l6IdlJBJaKuHA5IL7NJ4aHxehjsJP7w/J9ZmDn+EpSnbI2bBpMN87PwfUro25tHsmrK763S3DP21sWacRQbivqTZ4LDxOhJZuQGseJxJDCqXWMeOOQ2IWuhuLDDxzTIcSaz/HRbPc9P3g84VoA4tWlj2jaqH5ATbX9JERiToR1IxJKn+ftx/IlKD4sE/Uf3z4xGe3a9QcdAHcPoC7nd2T2QrRp++Az2u9/rVXyDntxY07ITx32uYs8TMde5gHUpw4ZZ/CA0FGhEjWLUsjJzLPYIzH1i+0pG+JQzv29TYRDZ",
+    "type": "processing_result"
+  },
+  {
+    "id": "call_5381908082451210667",
+    "signature": "CAIShwQBaRR9EwnC+lJnMT5u11/InKDu6NGftYVsavPHPWcLTtk8bwv54GPn36Xru/rKKJA6FhsFC737lptoRmurPsQcpUTeQ7FMUK27yj+mObWbZnK1K2fwugQTmFvdyapGB4vH1JeoK51hZbSOoEiwmTMAi4HE31wBpPURYOV21msqhER0FNyOC+uoU5upjUCYhAfaLeM5yuYvLDcMUeZmjf3fbZnEDHF3l+91OncLQB+9nKkSN6izi357xNmkncs2d/Cyri0hmGspqu2FFZNysrUJzAy5TNMra6A1QHsUiWhwZrxlZPGRIz0YlqYk+uSA7hixUUwGYzDWtZ/r+ws/00ag0HharqmZUdMqAOPXExx8ZqBid6w7BSt+chijM+6+Ly4PsO0An9HIcCnsfWS1Z1z2s8jnfS/i1n+psYtLvQMAR4+1klWMOGATtqYGirJDUwpWclwKIBs2JKuQ95hiYGk8beu6jGFShrnPMO7LbxpMFjMZ7JxHf/8kOtRtpOpFu7pCpP9llGskzAmWj9J0uDKHTToBvW6RUkk1E0Nl+eok0jYiAemsu1LZOxQ3n7lO7P/OdpL3+aC630/PbV0Rx6BTmJW0iS3xJFdvwpHcpz9Z8ldwRiNBUv5tHuazSxZ5+79HS0Sn+egugfxmcn3981BGBULGVPteUYr+c5rS5Undp91pX6J3yR0=",
+    "type": "processing_call"
+  },
+  {
+    "call_id": "call_5381908082451210667",
+    "signature": "CAIStQMBaRR9E6pw+9tqGp9aPKqGUXarmFX3GB6JUPp99fNPe4VSZ91+JJF40ZM4+uzK0kast3VhYXC6Tld4XidRxtrv/7bChj/9tCW5gqThfixi96AKNhOyshgoylNnwPswtEUhYj8fZaM0NIr17pK++orvht6NJ3VumAMpqmjKxOiZ79q8cX9vq1JoU5XVe7EsZfG6qsn1EnkHW4jiyA7jWKCXh2NHfk8tcgmX7sCcVJ+2LTvaD08jiClCgbasRvQUvHJEO8j07pIWv1tLNyuzzzKNPhEV2wTbNAHWsL0BKx2RyBH0XTjLQCxbFqYYodCSNP6Lm9zGcJdlv1NkcRhZsqiXRI2tj05y7BbpiKe1YPvdlLKBlpF2lVftro8uLNE5RGCU5emgTeZYrSe7ZsjFi8mMcpvVr6uRzRiwMVNedHYkBpOr8abvhC6bGSVGj6pk9OvZJvNeuajNku6SUoBsrrEQNfUTc8xlliQOVphZ5tShyOFnLVt49ca+oh66had74CzCSyXvcjCTOVgdz22+sINXnwTS3YUyjaOT39qwQkAqqwf8mNSxUZUSPzJqJHAmMDZPda2L4Q==",
+    "type": "processing_result"
+  },
+  {
+    "signature": "EmsKaQFpFH0TDTBweSybAh+Jjt/Uzp9koidoSQWAT6A1gHGPwbxzlFFd97uV0oP537lGeMOO67QK3S2JMD44acHWuIBSsqq5o/BibIYAZGHclQd69ROdiCC4oxZzg4uQMpqCgIP7nTYH0u7/AQ==",
+    "type": "thought"
+  },
+  {
+    "content": [
+      {
+        "text": "{\n  \"teams\": {\n    \"team_0\": {\n      \"color\": \"white\"\n    },\n    \"team_1\": {\n      \"color\": \"dark blue\"\n    }\n  },\n  \"plays\": [\n    {\n      \"start\": \"00:00\",\n      \"end\": \"01:00\",\n      \"summary\": \"Team 1 builds up from the back while Team 0 defends solidly and clears the ball away.\",\n      \"team_0\": {\n        \"relevance\": 4,\n        \"players\": [\n          {\n            \"jersey_number\": null,\n            \"position\": \"defender\",\n            \"tags\": [\n              \"Tackle\",\n              \"Interception\"\n            ],\n            \"decision_score\": 4,\n            \"execution_score\": 5,\n            \"note\": \"Solid defensive positioning reminiscent of Virgil van Dijk.\"\n          }\n        ]\n      },\n      \"team_1\": {\n        \"relevance\": 3,\n        \"players\": [\n          {\n            \"jersey_number\": null,\n            \"position\": \"midfielder\",\n            \"tags\": [\n              \"Build-Up\",\n              \"Pass\"\n            ],\n            \"decision_score\": 3,\n            \"execution_score\": 3,\n            \"note\": \"Keep scanning the field earlier before receiving under pressure.\"\n          }\n        ]\n      }\n    }\n  ]\n}",
+        "type": "text"
+      }
+    ],
+    "type": "model_output"
+  }
+]
