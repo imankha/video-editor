@@ -294,6 +294,7 @@ There is no retention chart. T7430 is the cohort triangle; T7420 is the shrunk a
 |------|------|------|------|------|------|------|------|
 |  | **[Investor-Grade Analytics](tasks/investor-analytics/EPIC.md)** | 8 | 5 | 1.6 |  |  | The admin numbers behind this roadmap. Two pieces are on staging already; the retention chart is the one we still lack. |
 | T16350 | [Sport as a dashboard dimension, replacing the By Sport table](tasks/T16350-sport-dimension-in-admin.md) | 5 | 4 | 1.3 | TODO | [ ] | Owner request 2026-11-13. The admin dashboard slices by Campaigns, Cohorts and Builds, while sport sits apart in a By Sport table of raw action counts that filters nothing. Add Sport as a fourth Dimension pill with the same columns and row filtering, and remove the By Sport table. Needs a short design first: a user's sport lives per game, not in the tables the dimensions read. |
+| T16360 | [Activation and the other admin views follow the Dimension pill](tasks/T16360-admin-views-follow-the-dimension.md) | 5 | 4 | 1.3 | TODO | [ ] | Owner request 2026-11-13. The Dimension pills (Campaigns, Cohorts, Builds) only change the top table; Activation always groups by sign-up month and the other views have fixed groupings. Make the pill set the grouping of Activation, then Journey, Platform Breakdown, Pack Mix and Upload Failures where it makes sense. Runs after g-t16070-3 lands. |
 
 ### 10. Per-player moments (stage: footage landed to first play, after Suggested plays)
 
