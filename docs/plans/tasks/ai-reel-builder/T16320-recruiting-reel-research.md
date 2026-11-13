@@ -4,7 +4,7 @@
 
 A reel is several highlights (finished short clips of an athlete) joined into one video for a college coach. Today everything we plan for reels rests on guesses: what a coach wants to see, what goes on the title card, how long a reel should be. Three pieces of planned work depend on the answers: the AI that marks plays in a game has to write down what each play demonstrates, the reel builder has to know what its cards should hold, and the AI reel builder has to know how a good reel is put together. This task does the research once, from what college coaches and recruiting services publish and from reels that worked, and writes down the answers with their sources. It builds no screens and no code. Done when the owner has read the findings, the list of qualities a soccer play can demonstrate is fixed, and each open question below has an answer or is marked as genuinely disputed.
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (research and documents only; no application code)
@@ -53,12 +53,28 @@ Letting the model rely on its own general knowledge was ruled out by the owner: 
 ## How we will know it worked
 
 - [ ] The findings document answers every question above, each with at least two sources and an evidence strength.
-- [ ] At least fifteen real recruiting reels were looked at, across at least three positions, and what they do is tabulated: length, number of highlights, title card contents, where contact details appear, how the athlete is pointed out.
-- [ ] The soccer quality list is written with a meaning for each entry and is marked general or soccer-only.
-- [ ] The signs of a social-worthy moment are written with at least two sources and soccer examples.
+- [x] At least fifteen real recruiting reels were looked at, across at least three positions, and what they do is tabulated: length, number of highlights, title card contents, where contact details appear, how the athlete is pointed out.
+- [x] The soccer quality list is written with a meaning for each entry and is marked general or soccer-only.
+- [x] The signs of a social-worthy moment are written with at least two sources and soccer examples.
 - [ ] Every quality has its visible signs and a routine example that does not count, and the owner, watching five plays from a real game, can say from the signs alone which qualities each one shows.
 - [ ] The owner has read the findings and ruled on the recommendations; the rulings are recorded in this file under `## Ruling`.
 - [ ] The quality list is stored with the sport, beside its tags, where both the app and the server can read it.
+
+## Progress
+
+**2026-11-13: research done, waiting for the owner's rulings.**
+
+- Findings are in [recruiting-reel-research-2026-11.md](../../research/recruiting-reel-research-2026-11.md): every question answered with its sources and an evidence strength, twenty real reels tabulated (5 goalkeepers, 6 defenders, 3 midfielders, 6 forwards and wide players), a proposed list of 18 soccer qualities with visible signs and a routine example for each, six signs of a social-worthy moment, what differs across the eleven sports, and sixteen one-line recommendations to T15880, T16300, T16330 and T16150.
+- The owner's decision page, with ten choices and a recommendation for each: https://claude.ai/artifact/GdJTUGsZhBzSkj3dZ29uvZ
+- Not every question has two sources. Nothing published covers how to show several positions, whether coaches watch on a phone, or what a routine play looks like in a coach's words; the findings mark these "No evidence" and say the answer is our judgment. The first criterion stays unticked for that reason.
+- The evidence on what is shared on social media is thin: one general study and a handful of reported cases. The findings say so.
+- The quality list is not yet stored with the sport. Its names become fixed identifiers once a game is analyzed, so it is stored after the owner rules on decision 1.
+- Found while researching: the app's default shape for a highlight is portrait, and every source and all twenty reels say a recruiting reel is landscape. This is decision 8.
+- Another task was filed the same day under this number ("Admin choice in the dev sign-in presets"). This is decision 10.
+
+## Waiting on the owner
+
+Ten rulings, listed on the decision page: the quality list, the social-worthy signs, reel length, order and sections, title card contents, where contact details go, highlights with no spotlight, portrait highlights, which sports, and the duplicate task number. After the rulings: record them here under `## Ruling`, store the quality list in `soccerTags.js`, and carry the accepted recommendations into T15880, T16300 and T16330.
 
 ## For the implementer
 
