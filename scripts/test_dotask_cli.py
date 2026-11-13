@@ -1280,6 +1280,14 @@ class PrelandCheckTest(unittest.TestCase):
             git_c(self.repo, "rm", "-q", relpath)
             git_c(self.repo, "commit", "-qm", "T1: untrack")
 
+    def test_browser_check_calling_a_test_seam_fails_naming_the_path(self):
+        # T16100: /api/test/ routes 404 on staging, so T16090:C3 failed its staging check at setup
+        spec = "src/frontend/e2e/checks/T1.check.spec.js"
+        self._commit(spec, "await page.request.post(checkApi('/test/seed-published-highlight'), {});\n")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"{spec}: calls an /api/test/ route", out)
+
     def test_untracking_proof_json_passes(self):
         git(self.repo, "checkout", "-q", "-B", "base", "origin/master")
         self._commit("qa/proof.json", "{}\n")

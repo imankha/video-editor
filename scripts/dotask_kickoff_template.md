@@ -89,10 +89,10 @@ __TASK_LIST__
     `src/frontend/e2e/checks/T<id>.check.spec.js`. Log in with `loginForCheck(page)` and call the
     API through `checkApi('/path')` (both from `../helpers/checkAuth`): the same file runs on your
     stack and on staging, against different accounts, so read every id from the API, never
-    hard-code one. Never call `loginAsDevPreset` (a deployed target has no dev-accounts endpoint) and
-    never `import('/src/...')` inside `page.evaluate` (a deployed build serves no source paths); the
-    pre-PUSHREADY check refuses both, and each once filed a false bug from the staging check
-    (T15750, T15740, 2026-11-10). If a criterion truly needs the dev server, make it a `code` or
+    hard-code one. Never call `loginAsDevPreset` (a deployed target has no dev-accounts endpoint),
+    never `import('/src/...')` inside `page.evaluate` (a deployed build serves no source paths), and
+    never an `/api/test/` seam (it 404s on staging); the pre-PUSHREADY check refuses all three, and
+    each once filed a false bug from the staging check (T15750, T15740, 2026-11-10; T16090). If a criterion truly needs the dev server, make it a `code` or
     `human` check. Drive the app the way the criterion says a user does: if the text says the app
     writes something on leaving a page, navigate and close the page; never set that state with an
     API POST. Assert what the text says. Allow a slow dev stack: wait for the state with
