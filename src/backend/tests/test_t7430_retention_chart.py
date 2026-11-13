@@ -38,14 +38,22 @@ def _add_daily(user_id: str, day: date, seconds: int = 60):
         )
 
 
-def _triangle(today, weeks=8, exclude_test=True):
+def _triangle(today, weeks=8, exclude_test=True, group_expr=None):
     from app.routers.admin import _test_exclusion
     from app.services.analytics_retention_chart import compute_retention_triangle
     from app.services.pg import get_pg
 
     with get_pg() as conn:
         cur = conn.cursor()
-        return compute_retention_triangle(cur, _test_exclusion(exclude_test), today, weeks)
+        return compute_retention_triangle(cur, _test_exclusion(exclude_test), today, weeks, group_expr=group_expr)
+
+
+def _own_row(today, user_id, weeks):
+    """The triangle row of one seeded user alone (grouped by user id): the dev/test
+    Postgres also holds real users in the same signup weeks, so a weekly-cohort row is
+    not this test's to assert on (fix round 2, T7430:C3)."""
+    result = _triangle(today, weeks=weeks, group_expr="s.user_id")
+    return next(c for c in result["cohorts"] if c["group"] == user_id)
 
 
 class TestTriangleClassicVsUnbounded:
@@ -65,9 +73,7 @@ class TestTriangleClassicVsUnbounded:
         _add_daily("t7430-a", cohort_week, 10)
         _add_daily("t7430-a", cohort_week + timedelta(weeks=3), 10)
 
-        result = _triangle(today, weeks=4)
-        cohort = next(c for c in result["cohorts"] if c["cohort_week"] == str(cohort_week))
-        week1 = cohort["weeks"]["1"]
+        week1 = _own_row(today, "t7430-a", weeks=4)["weeks"]["1"]
         assert week1["classic"] == {"pct": 0.0, "hit": 0, "aged": 1}
         assert week1["unbounded"] == {"pct": 100.0, "hit": 1, "aged": 1}
 
@@ -97,8 +103,7 @@ class TestTriangleMaturityAndSmallN:
             cohort_week = cur.fetchone()["d"]
         _seed_user("t7430-c", cohort_week)
 
-        result = _triangle(today, weeks=1)
-        cohort = next(c for c in result["cohorts"] if c["cohort_week"] == str(cohort_week))
+        cohort = _own_row(today, "t7430-c", weeks=1)
         assert cohort["small_n"] is True
         assert cohort["signups"] == 1
 
@@ -120,6 +125,80 @@ class TestLowVolumeDetection:
         assert flags[12] is False
 
 
+class TestLowVolumeDormantUser:
+    """C2: a user dormant through a DETECTED low-volume period still reads as retained
+    in the unbounded view. 2014 dates: before any real usage row, so the WAU series'
+    first weeks (and their trailing windows) are this test's own."""
+
+    def test_user_dormant_through_flagged_weeks_is_not_churned_in_unbounded(self, pg_conn):
+        from app.routers.admin import _test_exclusion
+        from app.services.analytics_retention_chart import compute_wau_series, detect_low_volume_weeks
+        from app.services.pg import get_pg
+
+        start = date(2014, 1, 6)  # Monday
+        steady = [f"t7430-lv{i}" for i in range(6)]
+        register_test_user_ids(*steady, "t7430-dorm")
+        for uid in steady:
+            _seed_user(uid, start)
+            for week in range(16):
+                if week < 12 or week == 15 or uid == steady[0]:
+                    _add_daily(uid, start + timedelta(weeks=week), 60)
+        signup = start + timedelta(weeks=11)
+        _seed_user("t7430-dorm", signup)
+        _add_daily("t7430-dorm", signup, 60)  # week 0
+        _add_daily("t7430-dorm", signup + timedelta(weeks=4), 60)  # back after weeks 1-3
+        today = date(2014, 6, 1)
+
+        with get_pg() as conn:
+            wau = compute_wau_series(conn.cursor(), _test_exclusion(True), today)
+        flags = dict(zip((r["week"] for r in wau), detect_low_volume_weeks(wau)))
+        dormant_weeks = [str(signup + timedelta(weeks=w)) for w in (1, 2, 3)]
+        assert [flags[w] for w in dormant_weeks] == [True, True, True]
+        assert flags[str(signup)] is False and flags[str(signup + timedelta(weeks=4))] is False
+
+        row = _own_row(today, "t7430-dorm", weeks=5)
+        for w in ("1", "2", "3"):
+            assert row["weeks"][w]["unbounded"] == {"pct": 100.0, "hit": 1, "aged": 1}
+            assert row["weeks"][w]["classic"] == {"pct": 0.0, "hit": 0, "aged": 1}
+
+
+class TestReturnAfterGap:
+    """C3: % of a month's active users active again 120+ days after that month ends,
+    with the month's cohort size; a month not yet 120 days past its end reports no rate.
+    2013 dates: no real usage row is that old."""
+
+    def _gap(self, today):
+        from app.routers.admin import _test_exclusion
+        from app.services.analytics_retention_chart import compute_return_after_gap
+        from app.services.pg import get_pg
+
+        with get_pg() as conn:
+            rows = compute_return_after_gap(conn.cursor(), _test_exclusion(True), today)
+        return next(r for r in rows if r["month"] == "2013-02-01")
+
+    def _seed(self):
+        register_test_user_ids("t7430-r1", "t7430-r2", "t7430-r3")
+        for uid in ("t7430-r1", "t7430-r2", "t7430-r3"):
+            _seed_user(uid, date(2013, 2, 4))
+        _add_daily("t7430-r1", date(2013, 2, 10))
+        _add_daily("t7430-r1", date(2013, 7, 15))  # 120+ days after Feb ends (2013-06-29)
+        _add_daily("t7430-r2", date(2013, 2, 12))
+        _add_daily("t7430-r2", date(2013, 6, 20))  # back, but under 120 days later
+        _add_daily("t7430-r3", date(2013, 2, 14))  # never back
+
+    def test_rate_counts_only_returns_120_plus_days_later_with_cohort_size(self, pg_conn):
+        self._seed()
+        assert self._gap(date(2013, 9, 1)) == {
+            "month": "2013-02-01", "cohort_size": 3, "pct": 33.33, "hit": 1, "aged": 3,
+        }
+
+    def test_month_not_yet_120_days_past_its_end_has_no_rate(self, pg_conn):
+        self._seed()
+        assert self._gap(date(2013, 6, 1)) == {
+            "month": "2013-02-01", "cohort_size": 3, "pct": None, "hit": None, "aged": None,
+        }
+
+
 class TestActionRetention:
     def test_empty_rollup_rows_return_no_cohorts(self):
         from app.services.analytics_retention_chart import compute_action_retention
@@ -138,6 +217,32 @@ class TestActionRetention:
         cohort = result["cohorts"][0]
         assert cohort["base"] == 10
         assert cohort["weeks"]["1"] == {"pct": 40.0, "hit": 4, "aged": 10}
+
+    def test_endpoint_serves_a_clip_library_action_curve_from_the_rollup(self, pg_conn, monkeypatch):
+        """C4: the admin endpoint reads T7400's rollup_action_weekly for the requested
+        action (a T7450 clip-library event here) and returns its cohorts for the chart."""
+        import app.routers.admin as admin
+        import app.services.analytics_rollup as rollup
+
+        monkeypatch.setattr(admin, "_require_admin", lambda: None)
+        rows = [
+            ("2026-06-01", "basketball", "collection_viewed", 0, 6),
+            ("2026-06-01", "soccer", "collection_viewed", 0, 4),
+            ("2026-06-01", "basketball", "collection_viewed", 2, 5),
+            ("2026-06-01", "basketball", "export_completed", 0, 9),
+        ]
+        monkeypatch.setattr(
+            rollup, "load_newest_action_rollup",
+            lambda tables=None: ({"meta": {"computed_at": "2026-06-30T00:00:00"}, "rollup_action_weekly": rows}, False),
+        )
+
+        result = admin.analytics_retention_chart(group="cohorts", action="collection_viewed")
+
+        assert result["action"]["available"] is True
+        assert result["action"]["cohorts"] == [{
+            "cohort_week": "2026-06-01", "base": 10,
+            "weeks": {"0": {"pct": 100.0, "hit": 10, "aged": 10}, "2": {"pct": 50.0, "hit": 5, "aged": 10}},
+        }]
 
 
 def _set_segment(user_id: str, **cols):
