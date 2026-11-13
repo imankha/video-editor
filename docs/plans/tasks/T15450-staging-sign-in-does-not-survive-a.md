@@ -17,6 +17,10 @@ Viewports: iPhone 14 and iPad (Playwright WebKit); real devices not checked.
 
 **Actual:** Back on the sign-in screen; /auth/me and /me/resume-point return 401 and the context has no rb_session cookie. The app is on pages.dev and the API on fly.dev, so the cookie is cross-site and WebKit blocks it. Prod uses api.reelballers.com (same-site) and is probably fine.
 
+## Ruling
+
+**Owner, 2026-11-13: staging-only, no further fix in this task.** The owner has no iPhone, so staging was run in WebKit (Safari's engine) with iPhone 14 emulation. Sign-in returned 200, but WebKit stored no session cookie and `/auth/me` answered 401 after a reload and after closing and reopening; the same run in Chromium kept the cookie (`SameSite=None; Secure`, expiring 2026-12-13). Cause: staging's app (`pages.dev`) and API (`fly.dev`) are different sites, so the cookie is third-party and Safari blocks it whatever its settings. Production's API is `api.reelballers.com`, the same site as its app, so the cookie is first-party there (inferred from the domains; not tested in WebKit, since production has no test sign-in). Workaround: use Chrome on staging. The real fix is T16370 (staging on reelballers.com).
+
 ## Acceptance Criteria
 
 - [ ] On a real iPhone against staging: sign in, close Safari, reopen, still signed in (or the task records that this is staging-only and documents the workaround).
