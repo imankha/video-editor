@@ -1479,6 +1479,9 @@ class ContainerDefaultsTest(unittest.TestCase):
     def test_the_stack_watches_the_bind_mount_by_polling(self):
         stack = (dotask_cli.REPO_ROOT / ".devcontainer" / "container-stack.sh").read_text(encoding="utf-8")
         self.assertIn("export CHOKIDAR_USEPOLLING=true", stack)
+        # 100 ms polling starved Node's disk threads: pages took 11-40 s (2026-11-13)
+        self.assertIn("export CHOKIDAR_INTERVAL=1000", stack)
+        self.assertIn("export UV_THREADPOOL_SIZE=16", stack)
 
 
 class AutolandBase(unittest.TestCase):

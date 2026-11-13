@@ -109,6 +109,13 @@ echo "  pid $!"
 # Vite's watcher misses edits over this bind mount and serves stale code. A worker spent all 120
 # turns on that (g-t15220-10, 2026-11-06).
 export CHOKIDAR_USEPOLLING=true
+# Poll once a second, not chokidar's default 100 ms. Each poll stats every watched file over the
+# Windows bind mount on Node's disk threads (4 by default), and at 100 ms all four sat blocked, so
+# index.html, public files and every proxied /api call queued 11-40 s behind them while the backend
+# itself answered in 10 ms (four task containers, 2026-11-13). More threads keep requests clear of
+# the polling. Every verify restarts the stack on HEAD, so a 1 s lag on picking up an edit is harmless.
+export CHOKIDAR_INTERVAL=1000
+export UV_THREADPOOL_SIZE=16
 
 # Gate on the deps install task.sh kicked off in the background (`npm ci` writes
 # node_modules/.ready when done) -- starting vite mid-install crashes confusingly.
