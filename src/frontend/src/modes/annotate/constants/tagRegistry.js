@@ -1,4 +1,4 @@
-import { soccerTags, positions as soccerPositions } from './soccerTags';
+import { soccerTags, positions as soccerPositions, sportStrings as soccerStrings } from './soccerTags';
 import { flagFootballTags, positions as flagFootballPositions } from './flagFootballTags';
 import { footballTags, positions as footballPositions } from './footballTags';
 import { basketballTags, positions as basketballPositions } from './basketballTags';
@@ -9,9 +9,10 @@ import { hockeyTags, positions as hockeyPositions } from './hockeyTags';
 import { tennisTags, positions as tennisPositions } from './tennisTags';
 import { baseballTags, positions as baseballPositions } from './baseballTags';
 import { softballTags, positions as softballPositions } from './softballTags';
+import { generalQualities, QUALITY_SCOPE } from './generalQualities';
 
 const TAG_SETS = {
-  soccer: { positions: soccerPositions, tags: soccerTags },
+  soccer: { positions: soccerPositions, tags: soccerTags, strings: soccerStrings },
   flag_football: { positions: flagFootballPositions, tags: flagFootballTags },
   american_football: { positions: footballPositions, tags: footballTags },
   basketball: { positions: basketballPositions, tags: basketballTags },
@@ -130,6 +131,36 @@ export function getAllSupportedTagNames() {
     }
   }
   return names;
+}
+
+// --- Qualities and per-sport prompt strings (T16320) ------------------------
+// General first, sport second (owner ruling 2026-11-13): the general qualities
+// apply to every sport; a sport adds its own qualities and its own wording
+// through `strings` in TAG_SETS. A sport with no strings, and a custom sport
+// with no tag set at all, runs on the general part alone. That is the design,
+// not a fallback: switching on a sport means writing its strings.
+
+// The sport's own prompt strings, or null when it has none yet.
+export function getSportStrings(sport) {
+  return getTagSet(sport)?.strings || null;
+}
+
+// Every quality a play in this sport can demonstrate: the general ones the
+// sport uses (each with the sport's own example line when it has one), then
+// the sport's own.
+export function getQualities(sport) {
+  const strings = getSportStrings(sport);
+  const used = strings?.generalQualities ? new Set(strings.generalQualities) : null;
+  const examples = strings?.generalQualityExamples || {};
+  const general = generalQualities
+    .filter(q => !used || used.has(q.name))
+    .map(q => ({ ...q, scope: QUALITY_SCOPE.GENERAL, example: examples[q.name] || null }));
+  const own = (strings?.qualities || []).map(q => ({ ...q, scope: QUALITY_SCOPE.SPORT }));
+  return [...general, ...own];
+}
+
+export function getQualityNames(sport) {
+  return new Set(getQualities(sport).map(q => q.name));
 }
 
 export { DEFAULT_SPORT };
