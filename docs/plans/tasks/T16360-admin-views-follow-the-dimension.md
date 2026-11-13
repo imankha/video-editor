@@ -12,7 +12,7 @@
 
 **The problem and how we got here.** On 2026-11-13 the owner tested the new retention and activation screens and ruled that the Retention chart should compare whatever the Dimension pill selects (T7430's ruling): builds when Builds is selected, sign-up cohorts when Cohorts is selected. They asked for Activation and the other relevant views to follow the same rule. Then one pill answers "how does this build, campaign, cohort or sport compare" across the whole dashboard, instead of each view answering a different question.
 
-**What we will do.** Make the pill set the grouping, the chart's X axis or rows, of every view where comparing groups makes sense. Activation does this first: its export-within-14-days and share-within-14-days rates per campaign, cohort, build or sport. Then Journey (the step-by-step funnel per group), Platform Breakdown, Pack Mix and Upload Failures each either follow the pill or get one line in this file saying why they should not. Views that are not about groups of users (the Users list, Stripe revenue reconciliation, R2 usage) are left alone.
+**What we will do.** Make the pill set the grouping, the chart's X axis or rows, of every view where comparing groups makes sense. Activation already does this: the owner moved it into T7420 on 2026-11-13, so it lands with g-t16070-3. This task covers Journey (the step-by-step funnel per group), Platform Breakdown, Pack Mix and Upload Failures each either follow the pill or get one line in this file saying why they should not. Views that are not about groups of users (the Users list, Stripe revenue reconciliation, R2 usage) are left alone.
 
 **Why.** The owner reads releases and campaigns by picking a pill. A view that ignores it shows a number for a different slice than the one they are looking at.
 
@@ -30,6 +30,5 @@ Runs after g-t16070-3 lands (T7420's Activation report and T7430's dimension-dri
 
 ## Acceptance Criteria
 
-- [ ] With each of Campaigns, Cohorts and Builds selected, the Activation report groups by that dimension (one entry per campaign, cohort or build), proven by a browser check that switches the pill.
 - [ ] Journey, Platform Breakdown, Pack Mix and Upload Failures each either follow the pill the same way (proven by a browser check) or are listed in this file with the reason they do not.
 - [ ] The Users list, Revenue Reconciliation and R2 Usage are unchanged.

@@ -57,9 +57,14 @@ Per monthly cohort:
 3. [ ] CSV branch
 4. [ ] Tests: activation window edges (day 13/14/15), maturing-cohort exclusion, min-across-platforms, stall bucketing
 
+## Ruling
+
+**Owner, 2026-11-13** (after testing g-t16070-3; same rule as T7430's ruling): the Activation report compares whatever the dashboard's top-level **Dimension** pill selects, campaigns, sign-up cohorts or sign-up builds, instead of always grouping by sign-up month. Changing the pill changes the report. A group still counts only once every member has had 14 days (a younger group is labelled maturing, not averaged in).
+
 ## Acceptance Criteria
 
 - [ ] Admin panel answers, on demand: "what % of June sign-ups shared a reel within 14 days, and where did the rest stop?"
 - [ ] Maturing cohorts visibly labeled, not averaged in
 - [ ] CSV export works
 - [ ] No new stored data anywhere (pure read)
+- [ ] With each of Campaigns, Cohorts and Builds selected, the Activation report groups by that dimension, one entry per campaign, cohort or build (ruling 2026-11-13)
