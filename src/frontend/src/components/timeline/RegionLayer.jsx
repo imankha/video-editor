@@ -316,17 +316,22 @@ export default function RegionLayer({
   const renderHighlightControls = (region) => {
     return (
       <button
-        // T5430: intentionally NOT enlarged on coarse pointers. This is a
-        // destructive control (deletes the highlight region); keeping it small on
-        // mobile avoids accidental fat-finger deletion. (Swatches + detection
-        // markers still get the 44px floor.)
-        className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
+        // T5430 kept this visually small on purpose to avoid fat-finger deletion;
+        // Tbug48p (after T5430) added the Cancel/Delete ConfirmationDialog below,
+        // which already absorbs a mistaken tap, so T15600 adds the 44px
+        // coarse-pointer floor via a transparent hit-pad (DetectionMarkerLayer's
+        // pattern) instead of enlarging the visible red chip.
+        className="relative p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
         onClick={(e) => {
           e.stopPropagation();
           setPendingDeleteRegionId(region.id);
         }}
         title={SPOTLIGHT_COPY.DELETE}
       >
+        <span
+          aria-hidden="true"
+          className="hidden coarse-pointer:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11"
+        />
         <Trash2 size={12} />
       </button>
     );

@@ -19,7 +19,7 @@ Viewports: iPhone 14, Pixel 5, iPad.
 
 ## Acceptance Criteria
 
-- [ ] All listed controls are at least 44x44 px on iPhone 14 and iPad.
+- [ ] These ten controls are at least 44x44 px on iPhone 14 and iPad: the five sign-in controls (email field, Send code, Verify, Send a new code, Use a different email), the shared-highlight page's Share and Download this highlight buttons, the REEL BALLERS link, the shared-annotation page's logo link, and Annotate's 1x speed chip. The other listed controls move to a follow-up task.
 
 ## Context
 
@@ -41,3 +41,7 @@ none
 
 ### Relevant Files (REQUIRED)
 - To be found.
+
+## Ruling
+
+**A** (owner, 2026-11-12): fix rounds ran out because the check proves ten of about twenty listed controls. Narrow C1 to those ten and land; the other eleven (Annotate play-count chip, time labels, Mark play; Plays-list View details, Jump to play, Hide plays; Frame Portrait chip; Spotlight number chips, Delete spotlight, toast View/Dismiss; Gallery header; Open ReelBallers; Tap to unmute) are a follow-up task. Verify budget raised to 75 min for this group.

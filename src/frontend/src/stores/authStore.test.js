@@ -178,6 +178,21 @@ describe('authStore.startImpersonation (T14990)', () => {
     expect(JSON.parse(sessionStorage.getItem('rb_impersonation_landing_point')).path).toBe('/focus/p/8124');
   });
 
+  it('T15580: still snapshots a resume point whose profile did not resolve, so the banner can offer the link', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ok: true, target_user_id: 'u1', target_email: 'u1@test.local', ttl_minutes: 60,
+        resume_point: { path: '/overlay/p/2', profile_id: null, profile_name: null },
+      }),
+    });
+
+    await useAuthStore.getState().startImpersonation('u1');
+
+    expect(window.location.href).toBe('/');
+    expect(JSON.parse(sessionStorage.getItem('rb_impersonation_landing_point')).path).toBe('/overlay/p/2');
+  });
+
   it('lands on / and stores no snapshot when the target has no resume point', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
