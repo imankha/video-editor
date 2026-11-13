@@ -94,3 +94,40 @@ test('T15540:C2 - a single fresh digit over a leftover wrong code does not re-su
   await page.waitForTimeout(1000);
   expect(verifyCalls).toBe(1);
 });
+
+test('T15540:C2 - a Verify tap racing an in-flight auto-submit for the same code does not double-submit', async ({ page }) => {
+  let verifyCalls = 0;
+  await page.route('**/api/auth/verify-otp', async (route) => {
+    verifyCalls += 1;
+    // Hold the response open so the real-world race window (a Verify tap landing
+    // while the auto-submit for the just-completed code is still in flight) is
+    // wide enough to force deterministically, instead of depending on a sub-ms
+    // timing race a real device hits but a test can't land reliably.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: 'Invalid code. 3 attempts remaining.' }),
+    });
+  });
+
+  await reachCodeStep(page);
+  await typeCode(page, '123456'); // completes the code -> auto-submits, verify-otp now in flight
+
+  // Force a tap on the real Verify button while that request is still pending --
+  // this reproduces the bug report's "a Verify tap submits again" after the
+  // auto-submit already fired for the same code. Bypassing the `disabled`
+  // attribute is deliberate: the thing under test is OtpAuthForm's verifyingRef
+  // dedup guard (handleVerifyCode bails if a submit for this code is already in
+  // flight), not whether the DOM blocks a click on a disabled button.
+  await page.evaluate(() => {
+    const button = Array.from(document.querySelectorAll('button'))
+      .find((b) => b.textContent.trim() === 'Verify');
+    button.removeAttribute('disabled');
+    button.click();
+  });
+
+  await expect(page.getByText(/invalid code/i)).toBeVisible({ timeout: 30000 });
+  await page.waitForTimeout(300);
+  expect(verifyCalls).toBe(1);
+});
