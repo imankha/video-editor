@@ -66,7 +66,9 @@ With one transition for the whole reel, the list needs no button at each join; t
 
 T11300 ships on its own and is useful alone. It needs two clean-up tasks to land first (T11250 and T11260, which remove old code for projects with several clips). T16280 to T16300 build on it in order. T16310 starts with a search for a music bank and builds nothing unless one qualifies and the owner approves it. T15880 can follow T11300 at any point.
 
-After this epic: [Suggested reel](../T15890-llm-reel-assembly.md) (T15890), where a model proposes the picks, the order and the card text.
+What goes on the title card and the end card, and where contact details belong, is being researched from what college coaches publish and from reels that worked ([T16320](../ai-reel-builder/T16320-recruiting-reel-research.md)). The card tasks (T16300, T15880) read the owner's rulings on that research before they are designed.
+
+After this epic: the [AI reel builder](../ai-reel-builder/EPIC.md), where a language model reads the notes and ratings on an athlete's highlights and proposes the picks, the order and the section cards.
 
 ## Out of scope
 

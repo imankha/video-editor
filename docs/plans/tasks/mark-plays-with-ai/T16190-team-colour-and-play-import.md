@@ -26,8 +26,8 @@ Build sections 5 ("Pick your team colour") and 6 ("What arrives in Annotate") of
    - **Start and end** from the analysis, on the right video of a multi-video game.
    - **Tags**: every tag the model gave to players of the chosen team in that play, without repeats.
    - **Rating**: 1 "Needs work: decision" if any of the team's players has a decision score of 2 or lower; otherwise 2 "Needs work: skill" if any has an execution score of 2 or lower; otherwise 5 "Brilliant" if relevance is 5 and all scores are 4 or higher; otherwise 4 "Good" if the average score is 3.5 or higher; otherwise 3 "Interesting".
-   - **Note**: the play's one-sentence summary, then the players' notes, cut to the 280-character limit. The full text stays in the play's AI detail.
-   - **AI detail**: the model's player mentions for the chosen team (position, jersey number when read, tags, scores, note), kept with the play for the tagging screen (T16200).
+   - **Note**: the play's one-sentence summary, then for each player what the action demonstrates and the player's note, cut to the 280-character limit. What is demonstrated comes before the lesson, so it survives the cut. The full text stays in the play's AI detail.
+   - **AI detail**: the model's player mentions for the chosen team (position, jersey number when read, tags, qualities, the sentence saying what the action shows, scores, note), kept with the play for the tagging screen (T16200) and for the AI reel builder's one read of highlight facts (T16205).
 3. **Do no harm.** A play the parent already marked wins: an AI play overlapping it by half or more is not imported. Importing twice adds nothing. Imported plays do not start any automatic highlight creation or any charge.
 4. **Summary.** "46 plays added to the Team lane", then the call to action into tagging (T16200).
    The parent can change any of these afterwards with the play editor, exactly as for a play they marked themselves.
@@ -49,7 +49,7 @@ Putting AI plays in the existing suggestions list (the Veo import's rate-to-keep
 | `games` | `ai_analysis_id` | INTEGER NULL | `game_analyses.id` of the purchased analysis (first video; per-video ids in `game_videos` if the Architect prefers) |
 | `games` | `ai_team_key` | TEXT NULL | `team_0` or `team_1`; NULL until chosen |
 | `games` | `ai_team_color` | TEXT NULL | the colour string shown to the parent |
-| `raw_clips` | `ai_source` | BLOB NULL (msgpack, like `tags`) | `{analysis_id, play_index, team_key, relevance, touched, mentions:[{position, jersey_number, tags, decision_score, execution_score, note, assigned}]}`; NULL for plays the parent made |
+| `raw_clips` | `ai_source` | BLOB NULL (msgpack, like `tags`) | `{analysis_id, play_index, team_key, relevance, touched, mentions:[{position, jersey_number, tags, qualities, shows, decision_score, execution_score, note, assigned}]}`; NULL for plays the parent made |
 
 Import inserts through the existing clip save path with `my_athlete=0` and empty `tagged_teammates`. `touched` flips to true on any edit gesture on that play (rating, tags, notes, range, lane, teammate tags). Copies made by sharing drop `ai_source` (materialization copies named columns only; confirm).
 
@@ -78,6 +78,7 @@ Import inserts through the existing clip save path with `my_athlete=0` and empty
 
 - [ ] A ready analysis shows the two kit colours; nothing is imported before a choice.
 - [ ] After choosing, only plays at or above the threshold for that team are on the Team lane, each with tags, a note of at most 280 characters and a rating that follows the rule (table-driven test).
+- [ ] Each imported play's AI detail keeps every player's qualities and sentence exactly as the analysis stored them, and the note states what is demonstrated before any lesson (table-driven test).
 - [ ] No imported play is on the My athlete lane.
 - [ ] A hand-marked play overlapping an AI play by half or more is kept and the AI play is not imported.
 - [ ] Importing twice adds no plays.

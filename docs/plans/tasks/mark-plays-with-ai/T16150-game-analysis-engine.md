@@ -28,7 +28,8 @@ A backend analysis service with no user interface and no credits (T16160 adds th
 5. **Merge.** Join the windows in time order, merge plays that overlap by half or more across a boundary, convert MM:SS to seconds, and store one result with one colour name per team, taken from the first window. A team is identified by its slot (team_0 or team_1) everywhere; the colour text in later answers is ignored because it drifts ("white", "white and black").
 6. **Record truth.** Per window: status, attempts, tokens. Per analysis: stage, windows done out of total, tokens, dollars, timings, failure reason. These feed the progress screens (T16170) and the margin read-out (T16160).
 7. **Survive.** A job is resumable from its window rows after a restart; finished windows are not paid for twice.
-8. **Guard.** Kill switch, daily spend cap, maximum video length, sport allow-list (soccer only at launch). The prompt takes its tag list from the sport.
+8. **Say what each action demonstrates.** For every player's part in a play the model also returns one to three qualities from the sport's fixed list and one plain sentence saying what the action shows about the player, written for a college coach. A quality is what the play shows about the athlete (pace, vision, composure); a tag is what happened (Goal, Tackle). Routine actions get an empty list and an empty sentence. The AI reel builder planned after the reel builder reads these, and they must be in the first prompt version: a result is stored once per video, so adding them later would mean paying to analyse every stored game again.
+9. **Guard.** Kill switch, daily spend cap, maximum video length, sport allow-list (soccer only at launch). The prompt takes its tag list from the sport.
 
 The complete analysis either finishes or fails; there is no partial result offered to parents.
 
@@ -93,10 +94,11 @@ Unique on (blake3_hash, sport, prompt_version).
 - `gemini_analysis_test/` is untracked today: commit its code and `HANDOFF_PROMPT.md` with this task, keeping `.env`, `videos/` and large `outputs/` out of git.
 - Secrets: `GEMINI_API_KEY` as a Fly secret on a paid Google project (the prototype key is free tier: 20 requests a day and 2 GB per file, which cannot take a full game). Model name and token prices in config.
 - The tag enum in the schema must equal the sport's stored tag names exactly (`soccerTags.js`; the app displays `Save` as "Keeper Save"). Add a cross-language guard test like the one for curated combos.
+- Qualities (owner, 2026-11-13; design in [ai-reel-builder/EPIC.md](../ai-reel-builder/EPIC.md)): each player object in the schema gains `qualities` (array, 0 to 3, enum of the sport's stored quality names) and `shows` (string, one sentence, may be empty). The existing `note` keeps its meaning (the lesson, or the famous-player comparison). The quality list comes from T16320 and is stored beside the sport's tags (`soccerTags.js` export `qualities`); the prompt builds its quality list from the sport exactly as it builds the tag list, with the same cross-language guard test. The added output tokens are part of the first staging run's measured cost; if they move the cost of a 90-minute game above $3.27, stop and report before changing the price.
 - Postgres track migrates only by `POST /api/admin/migrate-postgres` after deploy.
 
 ### Related Tasks
-- Depends on: nothing in the epic; needs a paid Gemini key (owner). Blocks: T16160, T16170, T16190.
+- Depends on: nothing in the epic; needs a paid Gemini key (owner) and the soccer quality list from T16320. Blocks: T16160, T16170, T16190.
 
 ## Acceptance Criteria
 
@@ -107,6 +109,7 @@ Unique on (blake3_hash, sport, prompt_version).
 - [ ] Killing the backend mid-job and restarting completes the job without re-running finished windows.
 - [ ] No play in the stored result has a time outside its window; a fake answer that counts from zero in a later window is shifted to the video's clock (test).
 - [ ] Every window after the first reports the same two teams in the same slots as the first window; the stored colour names come from the first window only.
+- [ ] In the stored result, every quality is a name from the sport's list (guard test), and on the staging game at least nine in ten player entries in plays rated 4 or 5 carry at least one quality and a sentence.
 - [ ] Human check on the staging game, recorded in the progress log: for six windows spread across the game, a person compares the answer with the video and counts plays credited to the wrong team and goals that did not happen. The feature flag stays off until the owner has seen these counts.
 - [ ] The first full-game staging run's measured dollars, upload time, preparation time and analysis time are recorded in the progress log and in EPIC.md beside the prototype's estimates.
 - [ ] Windows done out of total, tokens and dollars are stored and match the fake client's totals in tests.

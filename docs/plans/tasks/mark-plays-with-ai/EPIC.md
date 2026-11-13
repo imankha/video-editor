@@ -49,6 +49,11 @@ From the design review:
 25. **The older Suggested plays rows are removed** (T15820, T15830); this epic replaces them.
 26. **Both teams, always.** The analysis covers both teams and the parent picks their colour afterwards. Analysing one team only was tested on 2026-11-12 and dropped. There is no per-player analysis.
 
+For the AI reel builder (owner, 2026-11-13):
+
+27. **Each strong action says what it demonstrates.** For every player's part in a play, the model also records one to three qualities from a fixed list for the sport and one plain sentence saying what the action shows about the player. A quality is what the play shows about the athlete (pace, vision, composure); a tag is what happened (Goal, Tackle). This is in the first version of the prompt, because an analysis is stored once per video and adding it later would mean analysing every stored game again. The list comes from the recruiting reel research (T16320), which runs before the engine.
+28. **Everything the reel builder needs in one read.** The [AI reel builder](../ai-reel-builder/EPIC.md), planned after the reel builder, reads text only. This epic ends by proving that one call returns every fact it needs about an athlete's highlights (T16205).
+
 ## What the prototype already measured
 
 The working prototype is in `gemini_analysis_test/` at the repo root. Read `gemini_analysis_test/HANDOFF_PROMPT.md` before any code: it holds the API facts, the prompt, the JSON Schema, the cost model and the list of problems the prototype did not solve. The numbers this epic is built on:
@@ -96,8 +101,9 @@ The upper cost of $3.27 allows 15% for windows that have to be watched again. At
 | T16180 | [AI marking for uploaded games](T16180-ai-marking-for-uploaded-games.md) | TODO |
 | T16190 | [Team colour and play import](T16190-team-colour-and-play-import.md) | TODO |
 | T16200 | [Tag players in AI plays](T16200-tag-players-in-ai-plays.md) | TODO |
+| T16205 | [Highlight facts in one read](T16205-highlight-facts-in-one-read.md) | TODO |
 
-T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind one feature flag and are switched on together.
+T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind one feature flag and are switched on together. T16150 waits for the quality list from the recruiting reel research ([T16320](../ai-reel-builder/T16320-recruiting-reel-research.md)).
 
 ## Needed from the owner
 
@@ -114,4 +120,5 @@ T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind on
 - [ ] The admin read-out shows credits charged against model cost per analysis, and the total is positive.
 - [ ] Imported plays carry tags, note and rating, sit in the Team lane, and can be moved to My athlete or have a teammate tagged by name and email from the tagging screen on a phone.
 - [ ] A teammate tagged from the tagging screen receives the game and its Team plays exactly as they would today.
+- [ ] A play marked by the AI, assigned to the parent's athlete and made into a highlight, returns its qualities and its sentence in the one read of highlight facts.
 - [ ] The Journey shows how many game uploaders bought an analysis and how many of them reached a first highlight.
