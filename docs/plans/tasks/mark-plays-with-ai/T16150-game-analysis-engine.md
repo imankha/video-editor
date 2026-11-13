@@ -23,9 +23,9 @@ A backend analysis service with no user interface and no credits (T16160 adds th
 
 1. **One analysis per video.** Keyed on the video's fingerprint, the sport and the prompt version. Asking for one that is ready returns it. Asking for one that is running joins it. Otherwise a new job starts.
 2. **Send the video.** Stream the stored file to Gemini's Files API and wait until it is ready. Files expire there after 48 hours, which is fine: the result is ours.
-3. **Watch in windows.** First window alone, to fix the two kit colours; then all remaining 5-minute windows in parallel with those colours named in the prompt. Windows overlap by 10 seconds.
-4. **Trust nothing.** After each window: valid against the schema, not empty, and the last play ends near the window's end; otherwise request the uncovered remainder, up to a retry limit. Timeouts on every call. Retry 503 and 403 SERVICE_DISABLED with backoff; never retry 429.
-5. **Merge.** Join the windows in time order, merge plays that overlap by half or more across a boundary, convert MM:SS to seconds, and store one result with the two team colours.
+3. **Watch in windows.** First window alone, to learn the two kit colours; then all remaining 5-minute windows in parallel, each told in words "team_0 is X, team_1 is Y". Windows overlap by 10 seconds. The prompt also says that every timestamp is on the whole video's clock, not counted from the start of the window. The job always analyses both teams.
+4. **Trust nothing.** After each window: valid against the schema, not empty, timestamps on the video's clock (an answer that counts from zero in a later window is detected and shifted), and the last play ends near the window's end; otherwise request the uncovered remainder, up to a retry limit. Timeouts on every call. Retry 503 and 403 SERVICE_DISABLED with backoff; never retry 429.
+5. **Merge.** Join the windows in time order, merge plays that overlap by half or more across a boundary, convert MM:SS to seconds, and store one result with one colour name per team, taken from the first window. A team is identified by its slot (team_0 or team_1) everywhere; the colour text in later answers is ignored because it drifts ("white", "white and black").
 6. **Record truth.** Per window: status, attempts, tokens. Per analysis: stage, windows done out of total, tokens, dollars, timings, failure reason. These feed the progress screens (T16170) and the margin read-out (T16160).
 7. **Survive.** A job is resumable from its window rows after a restart; finished windows are not paid for twice.
 8. **Guard.** Kill switch, daily spend cap, maximum video length, sport allow-list (soccer only at launch). The prompt takes its tag list from the sport.
@@ -36,9 +36,20 @@ The complete analysis either finishes or fails; there is no partial result offer
 
 Storing results per parent was ruled out by the owner (analyse once). Cutting the file into pieces ourselves was ruled out by the prototype: offsets on one uploaded file are billed only for the window and keep the file's own clock. Longer windows would be cheaper but the prototype showed a call silently stops after about five minutes of video.
 
+Asking the model for one team only, fixed by a picture of its kit that the parent taps before the analysis, was tested on 2026-11-12 with ten calls and ruled out. A 90-minute game would cost about $2.48 instead of $2.84, of which only about 22 cents is a reliable saving. The model wrote 9 or 10 plays a window instead of 19, and the requested team got no more strong plays than before. It would also mean a second analysis, paid again, for the other team's parents and for anyone who picked the wrong team. Both teams in one stored result stays.
+
 ## For the implementer
 
 Read `gemini_analysis_test/HANDOFF_PROMPT.md` (API facts, prompt, schema, and the list of problems the prototype did not solve) first, and start from `run_interactions.py`, the closest thing to production code. The owner ruled on 2026-11-12 that no separate recall check runs before building, so this task is the first time a full game is analysed: the coverage check, the fixed team colours, the window overlap and the retry rules in steps 3 to 5 are new work, not lifted code, and the first staging run's cost and timings must be written into the task's progress log and EPIC.md.
+
+Also read `gemini_analysis_test/TEAM_ONLY_RESULTS.md` (2026-11-12). Besides ruling out one-team analysis, its ten calls found four things this task must handle:
+
+- **Timestamp clock.** 8 of 10 answers counted MM:SS from the start of the window instead of the file's clock. Every one of those calls had a picture attached; the one earlier call without a picture used the file's clock. The prompt sentence in step 3 is untested, so the code check in step 4 is required, not optional.
+- **Teams swapped inside an answer.** In 1 of 3 both-teams calls the team label was right but one team was credited with the other's corners and attacks. A correct label does not prove correct attribution.
+- **Goals that did not happen.** 3 of 10 answers reported a goal the frames do not show, and repeat runs of the same window disagreed.
+- **Scores move between repeats.** The same window gave 4 strong plays in one run and 7 in another.
+
+Naming the two colours in words to later windows (step 3) is the handoff's proposal and has not been run. A kit picture did pin the team in 10 of 10 calls and is the fallback for games where both kits would be described the same way; it adds about 1,140 input tokens a call. Do not build the fallback unless the staging run shows words are not enough.
 
 ### Proposed tables (Postgres, shared; Architect confirms)
 
@@ -94,6 +105,9 @@ Unique on (blake3_hash, sport, prompt_version).
 - [ ] Two requests arriving together produce one job; the second joins it.
 - [ ] A window that returns a short or empty answer is requested again; a job that cannot be completed ends as failed with a reason.
 - [ ] Killing the backend mid-job and restarting completes the job without re-running finished windows.
+- [ ] No play in the stored result has a time outside its window; a fake answer that counts from zero in a later window is shifted to the video's clock (test).
+- [ ] Every window after the first reports the same two teams in the same slots as the first window; the stored colour names come from the first window only.
+- [ ] Human check on the staging game, recorded in the progress log: for six windows spread across the game, a person compares the answer with the video and counts plays credited to the wrong team and goals that did not happen. The feature flag stays off until the owner has seen these counts.
 - [ ] The first full-game staging run's measured dollars, upload time, preparation time and analysis time are recorded in the progress log and in EPIC.md beside the prototype's estimates.
 - [ ] Windows done out of total, tokens and dollars are stored and match the fake client's totals in tests.
 - [ ] Kill switch, daily spend cap, maximum length and sport allow-list each refuse with a distinct reason, covered by tests.

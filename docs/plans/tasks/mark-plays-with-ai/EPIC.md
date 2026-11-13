@@ -47,6 +47,7 @@ From the design review:
 23. **No recall check before building.** The model is decided; the first full-game measurements come from the engine's own staging run (T16150).
 24. **Tagging a teammate is the existing flow.** It means entering the player's name and email address, which gives that family the game and the plays in its Team lane. That flow is not changed; it only has to be easy to reach from each player the model mentions ("Right winger", "Player 10").
 25. **The older Suggested plays rows are removed** (T15820, T15830); this epic replaces them.
+26. **Both teams, always.** The analysis covers both teams and the parent picks their colour afterwards. Analysing one team only was tested on 2026-11-12 and dropped. There is no per-player analysis.
 
 ## What the prototype already measured
 
@@ -56,6 +57,8 @@ The working prototype is in `gemini_analysis_test/` at the repo root. Read `gemi
 - With all windows in parallel the analysis itself takes about two and a half minutes. Before that, the video has to reach Google and be prepared, which is estimated at five to ten minutes for a full game and has not been measured on a paid key.
 - A window yields 19 to 22 plays, of which 8 to 11 are rated 4 or 5 for one team or the other. So a full game may yield 30 to 80 strong plays for one team.
 - Jersey numbers are almost never readable from a sideline camera (0 to 3 numbered players out of 22 to 47 per run). Players are known by team colour and position only. This is why the parent does the naming.
+
+**One-team test (2026-11-12).** The owner asked whether analysing only the parent's team, chosen by tapping a player first, would be cheaper and better. Ten calls on the 20-minute test video said no: about $2.48 a game instead of $2.84 with only 22 cents of that reliable, half as many plays written per window, and no more strong plays for the chosen team. The same calls showed problems the engine must handle: most answers counted time from the start of the window rather than the video, one answer credited a team with the other's actions, three answers reported a goal that did not happen, and the number of strong plays in one window moved between 4 and 7 across repeats. Details are in `gemini_analysis_test/TEAM_ONLY_RESULTS.md`; the fixes and a human check of the staging game are in T16150.
 
 What is still unmeasured, and will first be seen on T16150's staging run: the real cost and wait for a full game on a paid key, how many strong plays a full game returns per team, and how many real highlights the model misses. Nobody has compared an answer with the video. The admin read-out (T16160) and the threshold and rating constants (T16190) are where these get corrected after launch.
 
@@ -107,6 +110,7 @@ T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind on
 - [ ] A parent without enough credits can buy more without losing their upload.
 - [ ] A second account uploading the same video is charged and receives the stored result with no new model calls.
 - [ ] Every progress state shown matches what the server is doing; an analysis that does not finish releases the credits.
+- [ ] On the staging game a person has compared six windows with the video, and the owner has seen how many plays were credited to the wrong team and how many reported goals were not real, before the feature is switched on.
 - [ ] The admin read-out shows credits charged against model cost per analysis, and the total is positive.
 - [ ] Imported plays carry tags, note and rating, sit in the Team lane, and can be moved to My athlete or have a teammate tagged by name and email from the tagging screen on a phone.
 - [ ] A teammate tagged from the tagging screen receives the game and its Team plays exactly as they would today.

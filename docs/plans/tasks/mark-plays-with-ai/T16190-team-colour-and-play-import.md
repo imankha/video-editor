@@ -21,7 +21,7 @@ The stored analysis is team-neutral and lives outside the parent's data. The app
 
 Build sections 5 ("Pick your team colour") and 6 ("What arrives in Annotate") of [UX-FEEDBACK.md](UX-FEEDBACK.md).
 
-1. **Choose.** Two large choices showing the two kit colours from the analysis. The choice is saved on the parent's game.
+1. **Choose.** Two large choices showing the two kit colours from the analysis. The choice is saved on the parent's game. This happens after the analysis, which always covers both teams; asking before it and analysing one team was tested and ruled out (see T16150).
 2. **Import.** Every play whose relevance for the chosen team is at or above the threshold (4 of 5) becomes a real play on the Team lane:
    - **Start and end** from the analysis, on the right video of a multi-video game.
    - **Tags**: every tag the model gave to players of the chosen team in that play, without repeats.
@@ -31,7 +31,7 @@ Build sections 5 ("Pick your team colour") and 6 ("What arrives in Annotate") of
 3. **Do no harm.** A play the parent already marked wins: an AI play overlapping it by half or more is not imported. Importing twice adds nothing. Imported plays do not start any automatic highlight creation or any charge.
 4. **Summary.** "46 plays added to the Team lane", then the call to action into tagging (T16200).
    The parent can change any of these afterwards with the play editor, exactly as for a play they marked themselves.
-5. **Switch team.** Free. Removes the old team's untouched AI plays and imports the other team's. Plays the parent edited, tagged or moved stay.
+5. **Switch team.** Free, because the stored result already holds both teams and no new analysis runs. Removes the old team's untouched AI plays and imports the other team's. Plays the parent edited, tagged or moved stay.
 6. **Undo.** "Remove AI plays I have not touched."
 7. **Sharing.** No change: Team-lane plays are shared as they are today, with tags, note and rating.
 8. **Measure.** `ai_team_chosen` and `ai_plays_imported` with the count.
@@ -67,6 +67,8 @@ Import inserts through the existing clip save path with `my_athlete=0` and empty
 - Tag names from the analysis are the stored names (`Save`, shown as "Keeper Save"); they must pass the same validation as hand-entered tags.
 - The import is one gesture (choosing the team) and one server call that writes all plays; the frontend never loops per play.
 - Recap, watch and counts treat AI plays as ordinary Team-lane plays. Check the coach guide's play-count rules do not congratulate the parent on 46 plays they did not mark.
+- Teams are matched by slot (`team_0`, `team_1`), never by comparing colour text; the colour name shown is the one stored on the analysis.
+- The prototype saw the model credit a play to the wrong team and report goals that did not happen (T16150 records how often on a full game). The AI mark, the play editor and "Remove AI plays I have not touched" are the parent's remedy; do not add automatic highlight creation or congratulation on AI plays.
 - Threshold and rating rule are named constants in `analysis_import.py`, so they can be tuned once real games have been through.
 
 ### Related Tasks
