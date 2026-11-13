@@ -2,14 +2,15 @@
 
 ## In plain words
 
-Parents want one assembled reel for college recruiting, and a reel that grows across the season is the only in-product reason to come back next weekend: 18 parents already have two or more highlights, and only 17 of 402 returned after a week. The first version is deliberately small: pick finished highlights, put them in order, add one title card, join them with hard cuts, and export. Fancier transitions, drag reordering and section cards come later once real reels show what matters. One warning: most highlights are portrait and coaches watch widescreen, so the Where will you share it question (T14770) should steer recruiting parents to landscape before they build a reel.
+Parents want one assembled reel for college recruiting, and a reel that grows across the season is the only in-product reason to come back next weekend: 18 parents already have two or more highlights, and only 17 of 402 returned after a week. The first version is deliberately small: pick finished highlights, put them in order, add one title card, join them with hard cuts, and export. A transition at each join (T16290) and cards with their own lengths (T16300) follow in the same epic. One warning: most highlights are portrait and coaches watch widescreen, so the Where will you share it question (T14770) should steer recruiting parents to landscape before they build a reel.
 
 
 **Status:** TODO (thawed 2026-10-20; sequenced after the Video Pre-Shrink milestone)
 **Impact:** 8
 **Complexity:** 8
 **Created:** 2026-09-24
-**Updated:** 2026-11-09
+**Updated:** 2026-11-12
+**Milestone:** Highlight reel builder (see [EPIC.md](highlight-reel-builder/EPIC.md)). Task 1 of 5.
 
 ## Problem
 
