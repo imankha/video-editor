@@ -12,6 +12,7 @@ Commands (see scripts/dotask.sh, the thin bash entry point):
   python scripts/dotask_cli.py land <slug> --after-test  # push, PR, CI, evidence (HEAD must be the tested one)
   python scripts/dotask_cli.py autoland <slug> [--no-land]  # verify -> fix -> verify, then push (headless runs this itself)
   python scripts/dotask_cli.py resume <slug> [--no-land]    # continue a headless group: build what is left, then autoland
+  python scripts/dotask_cli.py approve <slug>               # the owner tested READY_TO_TEST's stack: push, PR, CI
   python scripts/dotask_cli.py status                       # one line per live group, with its ETA
   python scripts/dotask_cli.py nextup [--limit N]          # TODO tasks bundled by shared code area
 """
@@ -1837,6 +1838,94 @@ def skipped_ids(verdict):
     return [c.get("id") for c in verdict.get("criteria", []) if c.get("status") == "skipped"]
 
 
+# --- owner test before the PR ------------------------------------------------------
+# Owner rule 2026-11-13: a clean verdict no longer opens the PR by itself. The loop brings the group's stack
+# up on the verified HEAD, writes a test guide (each task's criteria, how each was checked), stops at
+# READY_TO_TEST, and `approve` pushes that exact HEAD. Red CI after approval still goes to a fix round, and the
+# new HEAD comes back for another test.
+READY_TO_TEST = "READY_TO_TEST"
+OWNER_TEST = os.environ.get("DOTASK_OWNER_TEST", "1") != "0"  # 0: a clean verdict opens the PR at once (old flow)
+CHECK_KIND_NOTE = {"browser": "a browser check passed on the dev stack", "code": "a code check passed",
+                   "human": "nobody has checked this yet: look for it yourself"}
+
+
+def test_guide_path(slug):
+    return TASKS_ROOT / "profiles" / sanitize(slug) / "test-guide.md"
+
+
+def write_test_guide(slug, group, checkout, head, frontend):
+    """A guide the owner can read cold: where to go and what each criterion promises. The chat relaying
+    READY_TO_TEST adds the clicks to reach each screen from the task files (dotask SKILL, Test guide)."""
+    staging = {c["id"] for c in group.get("staging_checks", [])}
+    skipped = {c["id"] for c in group.get("skipped_checks", [])}
+    lines = [f"# Test {slug} before its PR", "",
+             f"App: {frontend}/?dev_account=full (HEAD {head[:9]}, branch {group['branch']})", "",
+             f"When it works: `/dotask approve {slug}`. If something is wrong, say what, and it goes back to a fix round.",
+             ""]
+    for task_id in group["tasks"]:
+        task_file = task_file_in(checkout, task_id)
+        manifest = check_manifest(checkout, task_id)
+        lines += [f"## {task_id}: {task_title(task_file)}", ""]
+        for number, text in enumerate(acceptance_items(task_file), 1):
+            cid = f"{task_id}:C{number}"
+            if cid in skipped:
+                how = "not verified: the verify budget ran out before it was checked"
+            elif cid in staging:
+                how = CHECK_KIND_NOTE["human"]
+            else:
+                how = CHECK_KIND_NOTE.get(manifest.get(cid, {}).get("kind"), "checked")
+            lines += [f"- [ ] **{cid}** {text}", f"  - {how}"]
+        lines.append("")
+    path = test_guide_path(slug)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_lf(path, "\n".join(lines))
+    return path
+
+
+def ready_to_test(slug, group, checkout, head):
+    try:
+        frontend = bring_up_stack(slug)
+    except subprocess.CalledProcessError as exc:
+        append_status(checkout, f"VERIFY_BLOCKED {head[:9]}: clean verdict, but the test stack did not start "
+                                f"(exit {exc.returncode}); /dotask resume {slug} retries")
+        return 1
+    group["tested_head"] = head
+    save_group(checkout, group)
+    guide = write_test_guide(slug, group, checkout, head, frontend)
+    append_status(checkout, f"{READY_TO_TEST} {head[:9]}: test {frontend}/?dev_account=full with {guide.as_posix()}, "
+                            f"then /dotask approve {slug}")
+    return 0
+
+
+def approved_verdict(checkout, group, head):
+    """The clean verdict `approve` lands on, or None (verify as usual)."""
+    if group.get("approved_head") != head:
+        return None
+    try:
+        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if verdict.get("head") != head or verdict_has_findings(checkout):
+        return None
+    return verdict
+
+
+def approve(args):
+    slug = args.slug
+    checkout = TASKS_ROOT / sanitize(slug)
+    group_path = checkout / GROUP_FILE
+    if not group_path.is_file():
+        die(f"no group file at {group_path}; is {slug} a live /dotask group?")
+    group = json.loads(group_path.read_text(encoding="utf-8"))
+    head = git_head(checkout)
+    if READY_TO_TEST not in last_status(checkout) or group.get("tested_head") != head:
+        die(f"{slug} is not waiting on a test of HEAD {head[:9]} (last status: {last_status(checkout)[:120]})")
+    group["approved_head"] = head
+    save_group(checkout, group)
+    append_status(checkout, f"APPROVED {head[:9]}: owner tested the stack; pushing and opening the PR")
+    return autoland(SimpleNamespace(slug=slug, no_land=False))
+
+
 def autoland(args):
     slug = args.slug
     checkout = TASKS_ROOT / sanitize(slug)
@@ -1883,7 +1972,9 @@ def autoland(args):
                 {"scope": "group", "title": "pre-land check failed", "actual": check.stdout + check.stderr}]}, indent=2) + "\n")
         else:
             try:
-                verdict = verify_once(slug, group, checkout, head, round_number, focus)
+                # `approve` re-enters here: the clean verdict on this exact HEAD stands, nothing is re-checked.
+                verdict = approved_verdict(checkout, group, head) or verify_once(
+                    slug, group, checkout, head, round_number, focus)
             except UntrustedVerdict as exc:
                 append_status(checkout, f"VERIFY_BLOCKED round {round_number}: {exc}")
                 return 1
@@ -1924,6 +2015,9 @@ def autoland(args):
                 append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}{staging_note}")
                 if args.no_land:
                     return 0
+                if OWNER_TEST and group.get("approved_head") != head:
+                    # Owner rule 2026-11-13: no PR until the owner has seen the work on a local stack.
+                    return ready_to_test(slug, group, checkout, head)
                 code = land(SimpleNamespace(slug=slug, after_test=True, fix_on_red=True))
                 if code != CI_RED:
                     if code == 0:  # without this a finished group looks like a dead loop to `status`
@@ -2116,7 +2210,9 @@ def estimate(group, checkout, now=None):
     fix_round = fix_work + verify
     fix_parts = [f"fix {len(owners)} task(s) x {impl:.0f} min", f"re-check up to {verify:.0f} min (verify budget left)"]
     parts, verify_ahead = [], True
-    if "VERIFY_PASS" in last:
+    if READY_TO_TEST in last:
+        return None, None, f"waiting on your test, then about {ci:.0f} min of CI after /dotask approve: {last[:160]}"
+    if "VERIFY_PASS" in last or " APPROVED " in last:
         minutes, verify_ahead = ci, False
         parts.append(f"CI {ci:.0f} min")
     elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and " RESUMED " not in last:
@@ -2239,7 +2335,7 @@ def status(args):
                   f"`task.sh nuke {slug}` clears it)")
         elif loop_not_running(group_path.parent) and not any(
                 f" {word} " in f" {last_status(group_path.parent)} " or f" {word}" in last_status(group_path.parent)
-                for word in (*STOP_WORDS, "LANDED")):
+                for word in (*STOP_WORDS, "LANDED", READY_TO_TEST)):
             # Its container is up but nothing drives it: a reboot or a kill, or a crash from before
             # LOOP_CRASHED. Worded like the other stops so a watcher keyed on "(stopped" relaunches it.
             print(f"  eta: none (stopped, no loop is running for this group; `bash scripts/dotask.sh resume {slug}` "
@@ -2429,6 +2525,10 @@ def main(argv=None):
     auto.add_argument("slug")
     auto.add_argument("--no-land", action="store_true", help="stop after a clean verdict; push nothing")
 
+    ok = sub.add_parser("approve", help="the owner tested READY_TO_TEST's stack: push that HEAD, open the PR, "
+                                        "wait for CI (red CI goes to a fix round and back to a test)")
+    ok.add_argument("slug")
+
     app = sub.add_parser("stack")
     app.add_argument("slug")
 
@@ -2443,7 +2543,7 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     try:
-        return {"start": start, "land": land, "autoland": locked(autoland), "resume": locked(resume), "stack": stack,
+        return {"start": start, "land": land, "autoland": locked(autoland), "resume": locked(resume), "approve": locked(approve), "stack": stack,
                 "status": status, "nextup": nextup, "staging-check": staging_check}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)

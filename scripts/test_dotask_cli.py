@@ -1467,6 +1467,7 @@ class AutolandBase(unittest.TestCase):
     """verify -> fix -> verify until clean or out of rounds. Dispatches are faked: no model, no Docker."""
     TASK_TEXT = ("# T1: Fix the thing\n\n**Status:** WIP\n\n## Acceptance Criteria\n\n"
                  "- [ ] First\n- [x] Second\n\n## Context\n\nnothing\n")
+    OWNER_TEST = False  # most tests cover verify -> land; OwnerTestBeforePrTest covers the stop before the PR
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -1498,6 +1499,7 @@ class AutolandBase(unittest.TestCase):
                             ("dispatch", self._dispatch), ("bring_up_stack", lambda slug: "http://x"),
                             ("warm_stack", lambda slug: None),
                             ("git_head", lambda checkout: self.head), ("land", self.land),
+                            ("OWNER_TEST", self.OWNER_TEST),
                             ("tracked_changes", lambda checkout: self.dirty),
                             ("run_preland_check", lambda checkout: self.preland[0])):
             patcher = patch.object(dotask_cli, name, value)
@@ -2007,6 +2009,59 @@ class AutolandTest(AutolandBase):
         (tasks / "T7-x.md").write_text("# T7\n\n## Acceptance Criteria\n\nprose only\n")
         with patch.object(dotask_cli, "task_file_in", return_value=tasks / "T7-x.md"):
             self.assertEqual(dotask_cli.criterion_line(self.root, "T7:C1"), "")
+
+
+class OwnerTestBeforePrTest(AutolandBase):
+    """Owner rule 2026-11-13: a clean verdict brings up the stack and waits for the owner; approve lands."""
+    OWNER_TEST = True
+
+    def _approve(self):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return dotask_cli.approve(SimpleNamespace(slug="g-t1-1"))
+
+    def test_a_clean_verdict_stops_at_ready_to_test_with_a_guide_and_opens_no_pr(self):
+        self.verdicts = [self._verdict()]
+        self.assertEqual(self._run(), 0)
+        self.land.assert_not_called()
+        self.assertIn("READY_TO_TEST", self._last())
+        self.assertIn("http://x/?dev_account=full", self._last())
+        self.assertIn("/dotask approve g-t1-1", self._last())
+        guide = dotask_cli.test_guide_path("g-t1-1").read_text()
+        self.assertIn("## T1: Fix the thing", guide)
+        self.assertIn("**T1:C1** First", guide)
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual(group["tested_head"], self.head)
+        best, _fix, basis = dotask_cli.estimate({**group, "slug": "g-t1-1"}, self.checkout)
+        self.assertIsNone(best)
+        self.assertIn("waiting on your test", basis)
+
+    def test_approve_lands_the_tested_head_without_re_verifying(self):
+        self.verdicts = [self._verdict()]
+        self._run()
+        reviews = len(self.dispatches)
+        self.assertEqual(self._approve(), 0)
+        self.land.assert_called_once()
+        self.assertEqual(len(self.dispatches), reviews)  # no second reviewer
+        self.assertIn("LANDED", self._last())
+
+    def test_approve_refuses_when_head_moved_after_the_test_stack(self):
+        self.verdicts = [self._verdict()]
+        self._run()
+        self.head = "b" * 40
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            self._approve()
+        self.land.assert_not_called()
+
+    def test_red_ci_after_approval_fixes_and_comes_back_for_another_test(self):
+        second = self._verdict()
+        del second["head"]  # made on the fixed HEAD
+        self.verdicts = [self._verdict(), second]
+        self._run()
+        self.land.return_value = dotask_cli.CI_RED
+        with patch.object(dotask_cli, "ci_failure_report", lambda branch, head: "job x failed"):
+            self.assertEqual(self._approve(), 0, self.status.read_text())
+        self.land.assert_called_once()
+        self.assertIn("READY_TO_TEST", self._last())  # the fixed HEAD waits for the owner again
 
 
 class StallGapsTest(AutolandBase):

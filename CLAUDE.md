@@ -124,8 +124,9 @@ the implementor/tester before asking the user for a genuinely human-only observa
 
 A headless group lands itself (user decision, 2026-11-07): after `PUSHREADY`, `autoland` verifies every
 acceptance criterion through the worker's checks (below), sends failures to a fresh worker, re-checks
-only what failed (earlier passes carry forward in the verdict), and repeats for at most 3 fix rounds. A clean verdict on the exact HEAD replaces the human test unless a criterion
-needs a person, then pushes and opens the PR. Merging stays with the user. A headless worker has
+only what failed (earlier passes carry forward in the verdict), and repeats for at most 3 fix rounds. A clean verdict on the exact HEAD
+brings up the group's local stack with a test guide and stops at `READY_TO_TEST` (owner rule 2026-11-13); the owner
+tests it and `/dotask approve <slug>` pushes that HEAD and opens the PR. Merging stays with the user. A headless worker has
 nobody to ask, so `start` refuses a task whose file still waits on a user ruling: record it under
 `## Ruling` first (`/nextup` collects these before the container starts). Fix rounds dispatch one owning
 task at a time (fix, commit, next; a stuck task is skipped, not blocking). A dispatch that runs out of
