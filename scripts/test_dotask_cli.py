@@ -579,7 +579,7 @@ class DotaskCliTest(unittest.TestCase):
         self.assertEqual(args[2:], ["resume", "g-t1-1"])
         self.assertTrue(env["DOTASK_WAVE_ID"].startswith("g-t1-1-"))
         self.assertEqual(env["DOTASK_PHASE"], "implementation")
-        self.assertIn("eta: PR about", out.getvalue())  # every relay carries an ETA
+        self.assertIn("eta: ready for your test about", out.getvalue())  # every relay carries an ETA
         log_path = self.tasks_root / "profiles" / "g-t1-1" / "run.log"
         self.assertTrue(log_path.parent.is_dir())
         group = json.loads((self.tasks_root / "g-t1-1" / dotask_cli.GROUP_FILE).read_text())
@@ -1926,7 +1926,7 @@ class AutolandTest(AutolandBase):
         self.assertIn("Old menu glitch", filed.read_text())
         plan = self.plan.read_text()
         self.assertIn("| T1240 | [Old menu glitch](tasks/T1240-old-menu-glitch.md) |", plan)
-        self.assertLess(plan.index(dotask_cli.BUG_SECTION), plan.index("## Environment Configuration"))
+        self.assertLess(plan.index(dotask_cli.BUG_SECTION), plan.index("| ID | Task |\n|---|---|"))  # at the top
         self.assertIsNone(dotask_cli.file_unrelated_bug(bug, {"slug": "g"}, "abc"))
         self.assertEqual(self.plan.read_text().count("Old menu glitch"), 1)
 
@@ -2011,6 +2011,43 @@ class AutolandTest(AutolandBase):
         (tasks / "T7-x.md").write_text("# T7\n\n## Acceptance Criteria\n\nprose only\n")
         with patch.object(dotask_cli, "task_file_in", return_value=tasks / "T7-x.md"):
             self.assertEqual(dotask_cli.criterion_line(self.root, "T7:C1"), "")
+
+
+class PlanOrderTest(unittest.TestCase):
+    """Owner rule 2026-11-13: work in flight first, then /dotask's bugs, then everything else."""
+    PLAN = ("# Plan\n\n## Current Focus\n\n### Staging QA\n\n| ID | Task |\n|---|---|\n| T5 | [Five](tasks/T5.md) |\n\n"
+            "## Roadmap\n\n### 9. Retention\n\n| ID | Task | Impact | Cmplx | Pri | Status |\n|---|---|---|---|---|---|\n"
+            "|  | **[Epic](tasks/e/EPIC.md)** | 8 | 5 | 1.6 |  |\n| T7 | ↳ [Seven](tasks/e/T7.md) | 9 | 3 | 3.0 | TODO |\n"
+            "| T8 | ↳ [Eight](tasks/e/T8.md) | 9 | 3 | 3.0 | TODO |\n\n## Environment Configuration\n\nx\n")
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.plan = Path(tmp.name) / "PLAN.md"
+        self.plan.write_bytes(self.PLAN.replace("\n", "\r\n").encode())
+
+    def test_starting_a_task_pulls_its_row_to_the_top_once(self):
+        dotask_cli.pull_to_top(self.plan, ["T7"])
+        dotask_cli.pull_to_top(self.plan, ["T7"])  # already there: nothing moves
+        text = self.plan.read_bytes().decode()
+        self.assertNotIn("\n\n", text.replace("\r\n", "\r"))  # CRLF kept, no bare LF
+        text = text.replace("\r\n", "\n")
+        top = text.index(dotask_cli.IN_PROGRESS_SECTION)
+        self.assertLess(text.index("## Current Focus"), top)
+        self.assertLess(top, text.index("| T7 | [Seven]"))  # ↳ dropped, the epic is in its link
+        self.assertLess(text.index("| T7 | [Seven]"), text.index("### Staging QA"))
+        self.assertEqual(text.count("Seven"), 1)
+        self.assertIn("| T8 | ↳ [Eight]", text)  # the epic's other child stays put
+
+    def test_the_bug_section_is_created_under_the_work_in_flight(self):
+        lines = self.PLAN.split("\n")
+        dotask_cli.pull_to_top(self.plan, ["T7"])
+        lines = self.plan.read_bytes().decode().replace("\r\n", "\n").split("\n")
+        at = dotask_cli.ensure_top_section(lines, dotask_cli.BUG_SECTION, "intro", after=dotask_cli.IN_PROGRESS_SECTION)
+        dotask_cli.append_row(lines, at, "| T9 | [Nine](tasks/T9.md) |")
+        text = "\n".join(lines)
+        self.assertLess(text.index("| T7 | [Seven]"), text.index(dotask_cli.BUG_SECTION))
+        self.assertLess(text.index("| T9 | [Nine]"), text.index("### Staging QA"))
 
 
 class QuotedResumedTest(AutolandBase):

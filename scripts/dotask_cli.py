@@ -410,6 +410,8 @@ def flip_plan_status(task_ids, status="WIP", only_from=None):
             changed = True
     if changed:
         plan_path.write_text("".join(lines), encoding="utf-8")
+    if status == "WIP":
+        pull_to_top(plan_path, task_ids)
     for task_id in task_ids:
         matches = task_file_matches(MAIN_REPO, task_id)
         if len(matches) != 1:  # start's preflight already refused these; on merge, one bad id skips only itself
@@ -421,6 +423,70 @@ def flip_plan_status(task_ids, status="WIP", only_from=None):
         if current != status and allowed(current):
             path.write_text(re.sub(r"\*\*Status:\*\*\s*\S.*", f"**Status:** {status}", text, count=1),
                             encoding="utf-8")
+
+
+# Owner rule 2026-11-13: PLAN.md opens with the work in flight, then the bugs /dotask found (bugs always
+# outrank features), then everything else. Starting a task pulls its row up into IN_PROGRESS_SECTION.
+CURRENT_FOCUS = "## Current Focus"
+IN_PROGRESS_SECTION = "### In progress (a task's row moves here when work on it starts)"
+TABLE_HEAD = ["| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |",
+              "|------|------|------|------|------|------|------|------|"]
+
+
+def section_end(lines, heading_at):
+    """Index of the next heading after heading_at (or len(lines))."""
+    at = heading_at + 1
+    while at < len(lines) and not lines[at].startswith("#"):
+        at += 1
+    return at
+
+
+def ensure_top_section(lines, heading, intro, after=None):
+    """Index of `heading`, creating it with an empty table right under `after` (a section heading) or
+    under CURRENT_FOCUS. Never moves an existing section."""
+    if heading in lines:
+        return lines.index(heading)
+    if after in lines:
+        at = section_end(lines, lines.index(after))
+    else:
+        at = lines.index(CURRENT_FOCUS) + 1 if CURRENT_FOCUS in lines else 0
+        while at < len(lines) and not lines[at].strip():
+            at += 1
+    lines[at:at] = [heading, "", intro, "", *TABLE_HEAD, ""]
+    return at
+
+
+def append_row(lines, heading_at, row):
+    """Add row at the end of the table under the heading at heading_at."""
+    at = section_end(lines, heading_at)
+    while not lines[at - 1].strip():
+        at -= 1
+    lines[at:at] = [row]
+
+
+def pull_to_top(plan_path, task_ids):
+    """Move each task's row into IN_PROGRESS_SECTION (an epic child loses its ↳: its epic is in the link)."""
+    raw = Path(plan_path).read_bytes().decode("utf-8")  # read_text would turn CRLF into LF
+    newline = "\r\n" if "\r\n" in raw else "\n"
+    lines = raw.replace("\r\n", "\n").split("\n")
+    heading_at = ensure_top_section(lines, IN_PROGRESS_SECTION, "Rows here are WIP or waiting on the owner; a "
+                                    "merged row stays until it is DONE and archived.")
+    end = section_end(lines, heading_at)
+    moved = []
+    for i, line in enumerate(lines):
+        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.startswith("|") else []
+        if cells and cells[0] in task_ids and not heading_at < i < end:
+            moved.append(i)
+    if not moved:
+        return
+    rows = [re.sub(r"\|\s*↳\s*", "| ", lines[i], count=1) if "↳" in lines[i].split("|")[2] else lines[i]
+            for i in moved]
+    for i in reversed(moved):
+        del lines[i]
+    heading_at = lines.index(IN_PROGRESS_SECTION)
+    for row in rows:
+        append_row(lines, heading_at, row)
+    Path(plan_path).write_bytes(newline.join(lines).encode("utf-8"))
 
 
 # A merged task is STAGING (CLAUDE.md Task Status Rule): merging deploys staging, which is the test phase.
@@ -843,7 +909,8 @@ ACCEPTANCE_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]")
 # (g-t15380-1, 2026-11-09). Plain items count only when the section has no checkbox items at all.
 ACCEPTANCE_PLAIN_ITEM = re.compile(r"^(?:[-*]|\d+\.)\s+")
 BUG_SECTION = "### Bugs found by /dotask verify"
-PLAN_TAIL_HEADING = "## Environment Configuration"
+BUG_SECTION_INTRO = ("Filed by /dotask verify and the staging check. Bugs outrank every feature (owner rule "
+                     "2026-11-13), so this section sits at the top, right under the work in flight.")
 REVIEW_INSTRUCTION = """You review the acceptance checks of this group, verify round {round}. You did not write this code or these checks.
 Do NOT edit tracked files, commit, or change qa/proof.json. Scripts of your own go under /tmp. HEAD is {head}.
 
@@ -1474,17 +1541,8 @@ def file_unrelated_bug(bug, group, head, found_by=None):
     source = "staging check" if found_by else "verify"
     row = f"| {task_id} | [{title}](tasks/{name}) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask {source}. |"
     lines = plan.replace("\r\n", "\n").split("\n")
-    if BUG_SECTION in lines:
-        at = lines.index(BUG_SECTION) + 1
-        while at < len(lines) and (not lines[at].strip() or lines[at].startswith("|")):
-            at += 1
-        while not lines[at - 1].strip():
-            at -= 1
-        lines[at:at] = [row]
-    else:
-        at = lines.index(PLAN_TAIL_HEADING) if PLAN_TAIL_HEADING in lines else len(lines)
-        lines[at:at] = [BUG_SECTION, "", "| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |",
-                        "|---|---|---|---|---|---|---|---|", row, ""]
+    # Bugs outrank features (owner rule 2026-11-13): the section sits at the top, under the work in flight.
+    append_row(lines, ensure_top_section(lines, BUG_SECTION, BUG_SECTION_INTRO, after=IN_PROGRESS_SECTION), row)
     plan_was_dirty = git_paths_dirty(MAIN_REPO, [plan_path])
     plan_path.write_bytes(newline.join(lines).encode("utf-8"))
     commit_filed_bug(task_id, title, [plan_path, tasks_dir / name], plan_was_dirty)
@@ -1873,7 +1931,12 @@ def write_test_guide(slug, group, checkout, head, frontend):
         task_file = task_file_in(checkout, task_id)
         manifest = check_manifest(checkout, task_id)
         lines += [f"## {task_id}: {task_title(task_file)}", ""]
-        for number, text in enumerate(acceptance_items(task_file), 1):
+        items = acceptance_items(task_file)
+        if not items:  # T16070 (2026-11-13) has no Acceptance Criteria section: list its checks instead
+            lines += ["The task file has no Acceptance Criteria section; read its plain-words section. Its checks:"]
+            lines += [f"- [ ] **{cid}** ({entry.get('kind', '?')}) {entry.get('why', '')}".rstrip()
+                      for cid, entry in manifest.items()]
+        for number, text in enumerate(items, 1):
             cid = f"{task_id}:C{number}"
             if cid in skipped:
                 how = "not verified: the verify budget ran out before it was checked"
