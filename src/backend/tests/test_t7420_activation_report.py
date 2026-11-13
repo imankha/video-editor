@@ -143,3 +143,75 @@ class TestShareTrackedAlongsideExport:
         result = _report(today)
         assert result["benchmarks"]["export_completed"] == {"target": 40.0, "median": 30.0, "great": 50.0}
         assert result["window_days"] == 14
+
+
+def _set_segment(user_id: str, **cols):
+    from app.services.pg import get_pg
+
+    sets = ", ".join(f"{k} = %s" for k in cols)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(f"UPDATE user_segments SET {sets} WHERE user_id = %s", (*cols.values(), user_id))
+
+
+class TestGroupedByDimension:
+    """Ruling 2026-11-13 (C5): the report compares whatever the Dimension pill selects --
+    one row per campaign, signup cohort or signup build. A group counts only once EVERY
+    member has had the 14 days; a younger member keeps the whole group maturing."""
+
+    def _seed(self):
+        old = datetime.now(UTC).date() - timedelta(days=60)
+        young = datetime.now(UTC).date() - timedelta(days=3)
+        register_test_user_ids("t7420-g1", "t7420-g2", "t7420-g3", "t7420-g4")
+        for uid in ("t7420-g1", "t7420-g2"):
+            _seed_user(uid, old)
+            _set_segment(uid, origin="t7420campa", signup_build=97421)
+        _action("t7420-g1", "export_completed", datetime.combine(old, datetime.min.time(), UTC) + timedelta(days=2))
+        _seed_user("t7420-g3", old)
+        _set_segment("t7420-g3", origin="t7420campb", signup_build=97422)
+        _seed_user("t7420-g4", young)  # same campaign as g3, too young for the window
+        _set_segment("t7420-g4", origin="t7420campb", signup_build=97422)
+        return old
+
+    def test_campaigns_one_row_per_campaign_and_young_member_keeps_group_maturing(self, pg_conn, monkeypatch):
+        import app.routers.admin as admin
+
+        monkeypatch.setattr(admin, "_require_admin", lambda: None)
+        self._seed()
+
+        result = admin.analytics_activation(group="campaigns")
+
+        rows = {c["group"]: c for c in result["cohorts"]}
+        assert result["group"] == "campaigns"
+        a, b = rows["t7420campa"], rows["t7420campb"]
+        assert a["signups"] == 2 and not a["maturing"]
+        assert a["export_completed"] == {"pct": 50.0, "hit": 1, "aged": 2}
+        assert a["label"] == "t7420campa"
+        assert b["signups"] == 2 and b["maturing"]
+        assert b["export_completed"] is None and b["share_completed"] is None
+
+    def test_builds_one_row_per_signup_build(self, pg_conn, monkeypatch):
+        import app.routers.admin as admin
+
+        monkeypatch.setattr(admin, "_require_admin", lambda: None)
+        self._seed()
+
+        result = admin.analytics_activation(group="builds")
+
+        rows = {c["group"]: c for c in result["cohorts"]}
+        assert rows["97421"]["export_completed"] == {"pct": 50.0, "hit": 1, "aged": 2}
+        assert rows["97422"]["maturing"]
+        assert "t7420campa" not in rows
+
+    def test_cohorts_group_by_signup_month(self, pg_conn, monkeypatch):
+        import app.routers.admin as admin
+
+        monkeypatch.setattr(admin, "_require_admin", lambda: None)
+        old = self._seed()
+
+        result = admin.analytics_activation(group="cohorts")
+
+        month = str(old.replace(day=1))
+        row = next(c for c in result["cohorts"] if c["group"] == month)
+        assert row["cohort_month"] == month and row["label"] == month
+        assert row["signups"] >= 3

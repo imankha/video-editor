@@ -2774,19 +2774,54 @@ def analytics_cohorts(
 
 @router.get("/analytics/activation")
 # sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
-def analytics_activation(exclude_test: bool = True):
-    """T7420: per monthly signup cohort, export_completed <=14d (primary,
-    scored vs the 40% scorecard target) and share_completed <=14d
-    (value-moment), with benchmark annotations. Scope-shrunk 2026-10-30
-    (owner-approved, see task file): stage-conversion/stall-distribution live
-    in T14020's Journey step inspector instead. Reads existing Postgres only."""
-    from ..services.analytics_activation import compute_activation_report
+def analytics_activation(
+    exclude_test: bool = True,
+    group: Literal["cohorts", "campaigns", "builds"] = "cohorts",
+):
+    """T7420: export_completed <=14d (primary, scored vs the 40% scorecard target) and
+    share_completed <=14d (value-moment) per group, with benchmark annotations. `group`
+    follows the dashboard's Dimension pill (ruling 2026-11-13, same rule as the Retention
+    chart): one row per signup month, per campaign (the origin dimension's T15200
+    expression) or per signup build; every row carries `group` + display `label`.
+    Scope-shrunk 2026-10-30 (owner-approved, see task file): stage-conversion/stall-
+    distribution live in T14020's Journey step inspector instead. Reads existing Postgres only."""
+    from ..analytics import segment_has_signup_build
+    from ..services.analytics_activation import SIGNUP_MONTH_EXPR, compute_activation_report
 
     _require_admin()
     excl = _test_exclusion(exclude_test)
     with get_pg() as conn:
         cur = conn.cursor()
-        return compute_activation_report(cur, excl, datetime.now(UTC).date())
+        group_expr, group_join = SIGNUP_MONTH_EXPR, ""
+        if group == "campaigns":
+            group_expr, group_join = _origin_group_expr(cur)
+        elif group == "builds":
+            if segment_has_signup_build(cur):
+                group_expr = "s.signup_build"
+            else:
+                logger.error("[Admin] user_segments.signup_build missing (v039 not applied; run POST /api/admin/migrate-postgres)")
+                group_expr = "NULL::integer"
+        report = compute_activation_report(
+            cur, excl, datetime.now(UTC).date(), group_expr=group_expr, group_join=group_join,
+        )
+        names = {}
+        if group == "campaigns":
+            name_select, name_join = _campaign_name_join(cur, "v.value")
+            cur.execute(f"""
+                SELECT v.value, {name_select}
+                FROM unnest(%s::text[]) AS v(value)
+                {name_join}
+            """, ([c["group"] for c in report["cohorts"]],))
+            names = {r["value"]: r["campaign_name"] for r in cur.fetchall()}
+
+    for row in report["cohorts"]:
+        row["label"] = names.get(row["group"]) or row["group"]
+    if group == "campaigns":
+        report["cohorts"].sort(key=lambda c: -c["signups"])
+    elif group == "builds":
+        report["cohorts"].sort(key=lambda c: (c["group"] == "unrecorded", -int(c["group"]) if c["group"] != "unrecorded" else 0))
+    report["group"] = group
+    return report
 
 
 @router.get("/analytics/retention-chart")

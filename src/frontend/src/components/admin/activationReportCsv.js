@@ -12,14 +12,24 @@ function pctCell(metric) {
   return metric ? metric.pct : '';
 }
 
-/** @param cohorts activationData.cohorts */
-export function activationReportCsv(cohorts) {
+// The group column is named after the Dimension pill the report was loaded for.
+export const ACTIVATION_GROUP_HEADERS = {
+  cohorts: 'Cohort month',
+  campaigns: 'Campaign',
+  builds: 'Signup build',
+};
+
+/**
+ * @param cohorts activationData.cohorts
+ * @param group activationData.group ('cohorts' | 'campaigns' | 'builds')
+ */
+export function activationReportCsv(cohorts, group) {
   const lines = [
-    ['Cohort month', 'Signups', 'Maturing', 'Export <=14d %', 'Export hit', 'Share <=14d %', 'Share hit'].join(','),
+    [ACTIVATION_GROUP_HEADERS[group], 'Signups', 'Maturing', 'Export <=14d %', 'Export hit', 'Share <=14d %', 'Share hit'].join(','),
   ];
   for (const row of cohorts) {
     lines.push([
-      cell(row.cohort_month),
+      cell(row.label),
       cell(row.signups),
       cell(row.maturing),
       cell(pctCell(row.export_completed)),

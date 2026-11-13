@@ -1,12 +1,19 @@
 import { RefreshCw } from 'lucide-react';
 import { fmtPct } from './formatNumber';
-import { activationReportCsv, downloadActivationCsv } from './activationReportCsv';
+import { ACTIVATION_GROUP_HEADERS, activationReportCsv, downloadActivationCsv } from './activationReportCsv';
 
-// T7420: activation report -- per monthly signup cohort, % reaching export_completed
+// T7420: activation report -- per group of the dashboard's Dimension pill (signup
+// month, campaign or signup build; ruling 2026-11-13), % reaching export_completed
 // (primary, scored vs the 40% target) and share_completed (value-moment) within 14
 // days of acquired_at, with benchmark annotations. Scope shrunk 2026-10-30
 // (owner-approved): stage-conversion and the non-activated stall distribution live in
 // the Journey tab's step inspector (T14020) instead of here.
+
+const GROUP_CAPTIONS = {
+  cohorts: 'by monthly signup cohort',
+  campaigns: 'by campaign',
+  builds: 'by signup build',
+};
 
 function MetricCell({ metric }) {
   if (!metric) {
@@ -34,13 +41,13 @@ export function ActivationReport({ data, loading, error, onRefresh }) {
           {data ? 'Refresh' : 'Load activation'}
         </button>
         <span className="text-gray-500 text-xs">
-          Export (primary, 14d) and share (value-moment, 14d) by monthly signup cohort.
+          Export (primary, 14d) and share (value-moment, 14d) {data ? GROUP_CAPTIONS[data.group] : 'by the Dimension pill'}.
         </span>
         {data && (
           <button
             type="button"
             disabled={!data.cohorts?.length}
-            onClick={() => downloadActivationCsv(activationReportCsv(data.cohorts))}
+            onClick={() => downloadActivationCsv(activationReportCsv(data.cohorts, data.group))}
             className="rounded border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5 disabled:opacity-40"
           >
             Download CSV
@@ -66,7 +73,7 @@ export function ActivationReport({ data, loading, error, onRefresh }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider">
-                <th className="text-left px-3 py-2.5">Signup month</th>
+                <th className="text-left px-3 py-2.5">{ACTIVATION_GROUP_HEADERS[data.group]}</th>
                 <th className="text-right px-3 py-2.5">Signups</th>
                 <th className="text-right px-3 py-2.5">Export &lt;=14d</th>
                 <th className="text-right px-3 py-2.5">Share &lt;=14d</th>
@@ -74,9 +81,9 @@ export function ActivationReport({ data, loading, error, onRefresh }) {
             </thead>
             <tbody>
               {data.cohorts.map((row) => (
-                <tr key={row.cohort_month} className="border-b border-white/5" data-testid="activation-cohort-row">
+                <tr key={row.group} className="border-b border-white/5" data-testid="activation-cohort-row">
                   <td className="px-3 py-2 text-gray-200 text-xs whitespace-nowrap">
-                    {row.cohort_month}
+                    {row.label}
                     {row.maturing && (
                       <span className="ml-2 text-amber-400 text-[10px] uppercase tracking-wider" data-testid="maturing-label">
                         maturing

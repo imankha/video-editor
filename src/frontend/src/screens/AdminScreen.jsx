@@ -420,7 +420,7 @@ export function AdminScreen({ onBack }) {
           />
         </CollapsibleSection>
 
-        {/* T7420: activation report -- export/share <=14d by monthly signup cohort.
+        {/* T7420: activation report -- export/share <=14d per Dimension-pill group.
             Collapsed, on-demand fetch. */}
         <CollapsibleSection title="Activation">
           <ActivationReport

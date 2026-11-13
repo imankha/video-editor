@@ -6,8 +6,11 @@ function baseData(overrides = {}) {
   return {
     window_days: 14,
     benchmarks: { export_completed: { target: 40, median: 30, great: 50 } },
+    group: 'cohorts',
     cohorts: [
       {
+        group: '2026-05-01',
+        label: '2026-05-01',
         cohort_month: '2026-05-01',
         signups: 20,
         maturing: false,
@@ -28,7 +31,7 @@ describe('ActivationReport (T7420)', () => {
 
   it('shows a maturing cohort labeled, with metrics blank -- never a fabricated 0%', () => {
     const data = baseData({
-      cohorts: [{ cohort_month: '2026-11-01', signups: 5, maturing: true, export_completed: null, share_completed: null }],
+      cohorts: [{ group: '2026-11-01', label: '2026-11-01', cohort_month: '2026-11-01', signups: 5, maturing: true, export_completed: null, share_completed: null }],
     });
     render(<ActivationReport data={data} loading={false} error={null} onRefresh={vi.fn()} />);
     expect(screen.getByTestId('maturing-label')).toBeTruthy();
@@ -48,5 +51,30 @@ describe('ActivationReport (T7420)', () => {
   it('shows "no cohorts" when the report returns none', () => {
     render(<ActivationReport data={baseData({ cohorts: [] })} loading={false} error={null} onRefresh={vi.fn()} />);
     expect(screen.getByText('No signup cohorts available.')).toBeTruthy();
+  });
+
+  it('groups by the Dimension pill: one row per campaign, labelled by name (ruling 2026-11-13)', () => {
+    const data = baseData({
+      group: 'campaigns',
+      cohorts: [
+        { group: 'c1', label: 'Spring Promo', signups: 4, maturing: false, export_completed: { pct: 50, hit: 2, aged: 4 }, share_completed: null },
+        { group: 'organic', label: 'organic', signups: 9, maturing: true, export_completed: null, share_completed: null },
+      ],
+    });
+    render(<ActivationReport data={data} loading={false} error={null} onRefresh={vi.fn()} />);
+    expect(screen.getByRole('columnheader', { name: 'Campaign' })).toBeTruthy();
+    const rows = screen.getAllByTestId('activation-cohort-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Spring Promo');
+    expect(screen.getByText(/by campaign/)).toBeTruthy();
+  });
+
+  it('labels the Builds grouping as signup build', () => {
+    const data = baseData({
+      group: 'builds',
+      cohorts: [{ group: '9431', label: '9431', signups: 3, maturing: false, export_completed: null, share_completed: null }],
+    });
+    render(<ActivationReport data={data} loading={false} error={null} onRefresh={vi.fn()} />);
+    expect(screen.getByRole('columnheader', { name: 'Signup build' })).toBeTruthy();
   });
 });

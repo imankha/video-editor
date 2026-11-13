@@ -123,7 +123,7 @@ export const useAdminStore = create((set, get) => ({
   retentionChartData: null, retentionChartLoading: false, retentionChartError: null,
   retentionChartAction: '',
   retentionChartBin: 'week', // weekly/monthly signup-cohort bin (Cohorts grouping only)
-  // T7420: activation report (export/share <=14d by monthly signup cohort), on-demand.
+  // T7420: activation report (export/share <=14d per Dimension-pill group), on-demand.
   activationData: null, activationLoading: false, activationError: null,
 
   // T14000: `build` is the 4th dimension value; omitting it clears the build, so a
@@ -166,6 +166,8 @@ export const useAdminStore = create((set, get) => ({
     // T7430 (ruling 2026-11-13): the Retention chart compares whatever the pill selects,
     // so a chart already on screen reloads with the new grouping; one nobody loaded stays unloaded.
     if (state.retentionChartData) state.fetchRetentionChart();
+    // T7420 (same ruling): so does the Activation report.
+    if (state.activationData) state.fetchActivation();
     if (dimension === 'campaigns' && !state.channelsData && !state.channelsLoading) {
       state.fetchChannels();
     } else if (dimension === 'cohorts' && !state.cohortsData && !state.cohortsLoading) {
@@ -841,12 +843,13 @@ export const useAdminStore = create((set, get) => ({
     }
   },
 
-  // T7420: activation report -- export_completed/share_completed <=14d by monthly
-  // signup cohort, with benchmarks. On-demand, never on mount.
+  // T7420: activation report -- export_completed/share_completed <=14d per group of
+  // the Dimension pill, with benchmarks. On-demand, never on mount.
   fetchActivation: async () => {
     set({ activationLoading: true, activationError: null });
     try {
-      const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      const { excludeTest, dimension } = get();
+      const params = new URLSearchParams({ exclude_test: excludeTest, group: dimension });
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/activation?${params}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

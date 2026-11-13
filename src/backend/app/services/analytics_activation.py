@@ -13,7 +13,12 @@ pure read of user_segments/user_actions, no new storage of any kind.
 from datetime import date
 from typing import Any
 
+from .analytics_retention_chart import group_key_sql
+
 ACTIVATION_WINDOW_DAYS = 14
+
+# The Cohorts grouping: signup month, the cohort key T7430's monthly bin uses too.
+SIGNUP_MONTH_EXPR = "date_trunc('month', s.acquired_at)::date"
 
 # Benchmarks to print beside the actuals (EPIC.md "Locked metric definitions"
 # research, 2026-08-20): activation median ~30%, 50%+ is the fundable talking
@@ -38,10 +43,15 @@ def compute_activation_report(
     excl: str,
     today: date,
     window_days: int = ACTIVATION_WINDOW_DAYS,
+    group_expr: str = SIGNUP_MONTH_EXPR,
+    group_join: str = "",
 ) -> dict[str, Any]:
-    """Per monthly signup cohort: export_completed <=14d (primary) and
+    """Per group of `group_expr` -- the Dimension pill's grouping (ruling 2026-11-13):
+    signup month by default, or the caller's campaign / signup build expression, NULL
+    shown as "unrecorded". Each row carries `group`; signup-month rows also keep
+    `cohort_month`. Per group: export_completed <=14d (primary) and
     share_completed <=14d (value-moment), both reported only once EVERY
-    member of the cohort has aged past the window (same maturity convention
+    member of the group has aged past the window (same maturity convention
     as T16070's compute_day_n_retention) -- a partially-matured cohort is
     "maturing", never blended in with a fabricated number.
 
@@ -56,14 +66,15 @@ def compute_activation_report(
     cur.execute(f"""
         WITH base AS (
             SELECT s.user_id,
-                   date_trunc('month', s.acquired_at)::date AS cohort_month,
+                   {group_key_sql(group_expr)} AS grp,
                    s.acquired_at AS acquired_at
             FROM user_segments s
             LEFT JOIN users u ON u.user_id = s.user_id
+            {group_join}
             WHERE s.acquired_at IS NOT NULL {excl_and}
         ),
         flags AS (
-            SELECT b.user_id, b.cohort_month,
+            SELECT b.user_id, b.grp,
                    (b.acquired_at + %(window)s) <= %(today)s AS matured,
                    EXISTS (
                        SELECT 1 FROM user_actions a
@@ -77,14 +88,14 @@ def compute_activation_report(
                    ) AS shared
             FROM base b
         )
-        SELECT cohort_month,
+        SELECT grp,
                COUNT(*) AS cohort_size,
                COUNT(*) FILTER (WHERE matured) AS matured,
                COUNT(*) FILTER (WHERE matured AND exported) AS export_hit,
                COUNT(*) FILTER (WHERE matured AND shared) AS share_hit
         FROM flags
-        GROUP BY cohort_month
-        ORDER BY cohort_month DESC
+        GROUP BY grp
+        ORDER BY grp DESC
     """, {"window": window_days, "today": aged_before})
     rows = cur.fetchall()
 
@@ -92,13 +103,16 @@ def compute_activation_report(
     for row in rows:
         cohort_size = row["cohort_size"]
         is_mature = row["matured"] == cohort_size
-        cohorts.append({
-            "cohort_month": str(row["cohort_month"]),
+        entry = {
+            "group": row["grp"],
             "signups": cohort_size,
             "maturing": not is_mature,
             "export_completed": _cell(row["export_hit"], cohort_size) if is_mature else None,
             "share_completed": _cell(row["share_hit"], cohort_size) if is_mature else None,
-        })
+        }
+        if group_expr == SIGNUP_MONTH_EXPR:
+            entry["cohort_month"] = row["grp"]
+        cohorts.append(entry)
 
     return {
         "window_days": window_days,
