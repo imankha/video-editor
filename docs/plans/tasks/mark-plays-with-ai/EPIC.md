@@ -52,7 +52,8 @@ From the design review:
 For the AI reel builder (owner, 2026-11-13):
 
 27. **Each strong action says what it demonstrates.** For every player's part in a play, the model also records one to three qualities from a fixed list for the sport and one plain sentence saying what the action shows about the player. A quality is what the play shows about the athlete (pace, vision, composure); a tag is what happened (Goal, Tackle). This is in the first version of the prompt, because an analysis is stored once per video and adding it later would mean analysing every stored game again. The list comes from the recruiting reel research (T16320), which runs before the engine.
-28. **Everything the reel builder needs in one read.** The [AI reel builder](../ai-reel-builder/EPIC.md), planned after the reel builder, reads text only. This epic ends by proving that one call returns every fact it needs about an athlete's highlights (T16205).
+28. **Worked backwards from what coaches look for.** The analysis is told to hunt for the things coaches scout, using the visible signs the research writes for each quality. A play in which one of the team's players clearly demonstrates a quality is a highlight: it is always imported, rated Brilliant, and its note opens with what it demonstrates. No other play is rated Brilliant.
+29. **Everything the reel builder needs in one read.** The [AI reel builder](../ai-reel-builder/EPIC.md), planned after the reel builder, reads text only. This epic ends by proving that one call returns every fact it needs about an athlete's highlights (T16205).
 
 ## What the prototype already measured
 
@@ -84,7 +85,7 @@ The upper cost of $3.27 allows 15% for windows that have to be watched again. At
 - **One analysis per video, for everyone.** Results are stored in the shared database against the video's fingerprint, the sport and the prompt version. The analysis covers both teams, so parents on either side reuse it.
 - **Per-parent choices stay per parent.** Which team is theirs, which plays were imported, and which players they tagged live in the parent's own data.
 - **Charge.** Credits are reserved when the analysis starts, taken when the result is ready, and released in full if it does not finish. One parent is never charged twice for the same game.
-- **Import.** Plays with relevance 4 or 5 for the chosen team become real plays in the Team lane with tags, note and rating filled in, and a small AI mark until the parent touches them.
+- **Import.** Plays with relevance 4 or 5 for the chosen team, and every play in which one of its players demonstrates something a coach scouts, become real plays in the Team lane with tags, note and rating filled in, and a small AI mark until the parent touches them.
 - **Soccer first.** Only soccer has been tried. The prompt takes its tag list from the sport, and other sports are switched on one at a time.
 - **Safety switches.** A kill switch, a daily spend cap, a per-account daily cap and a maximum video length.
 - **Feedback.** Every state, every string and every layout is defined in [UX-FEEDBACK.md](UX-FEEDBACK.md), written by the UX designer and approved by the owner. Its section 9 holds the owner's rulings and wins where it differs from earlier text. UI tasks build from it and do not invent copy.

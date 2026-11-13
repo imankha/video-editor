@@ -40,6 +40,8 @@ For each answer, say how strong the evidence is: agreed by many sources, said by
 
 **2. The quality list for soccer.** A quality is what a play shows about the athlete, such as pace, vision or composure under pressure; a tag is what happened, such as Goal or Tackle. The list is fixed, short enough for a model to choose from reliably (about twelve to twenty), covers every position including goalkeeper, uses the words coaches use, and each entry has a one-line meaning. It also marks which qualities apply to any sport and which are soccer's own, so later sports reuse the general ones.
 
+Each quality also gets its signs: what a person watching a sideline video would actually see when a player demonstrates it at a level a college coach cares about, and what a routine version looks like that does not count. The owner asked on 2026-11-13 for the game analysis to be worked backwards from what coaches look for, so that the plays it marks as highlights are the scoutable ones. These signs are what the analysis is told to look for (T16150), so they must describe things visible in the footage, in a sentence or two each.
+
 **3. Recommendations to the tasks that depend on it.** A short list, one line each: what the title card should hold (T15880), what the cards and their default lengths should be (T16300), and what the reel model must be told (T16330). These are proposals for the owner to accept or change, not changes to those tasks.
 
 ## Why this and not something else
@@ -51,6 +53,7 @@ Letting the model rely on its own general knowledge was ruled out by the owner: 
 - [ ] The findings document answers every question above, each with at least two sources and an evidence strength.
 - [ ] At least fifteen real recruiting reels were looked at, across at least three positions, and what they do is tabulated: length, number of highlights, title card contents, where contact details appear, how the athlete is pointed out.
 - [ ] The soccer quality list is written with a meaning for each entry and is marked general or soccer-only.
+- [ ] Every quality has its visible signs and a routine example that does not count, and the owner, watching five plays from a real game, can say from the signs alone which qualities each one shows.
 - [ ] The owner has read the findings and ruled on the recommendations; the rulings are recorded in this file under `## Ruling`.
 - [ ] The quality list is stored with the sport, beside its tags, where both the app and the server can read it.
 

@@ -25,7 +25,8 @@ Build sections 5 ("Pick your team colour") and 6 ("What arrives in Annotate") of
 2. **Import.** Every play whose relevance for the chosen team is at or above the threshold (4 of 5) becomes a real play on the Team lane:
    - **Start and end** from the analysis, on the right video of a multi-video game.
    - **Tags**: every tag the model gave to players of the chosen team in that play, without repeats.
-   - **Rating**: 1 "Needs work: decision" if any of the team's players has a decision score of 2 or lower; otherwise 2 "Needs work: skill" if any has an execution score of 2 or lower; otherwise 5 "Brilliant" if relevance is 5 and all scores are 4 or higher; otherwise 4 "Good" if the average score is 3.5 or higher; otherwise 3 "Interesting".
+   - **Scoutable plays are highlights** (owner, 2026-11-13). A play is scoutable when a player of the chosen team demonstrates at least one quality (something a college coach looks for, from the sport's fixed list) with decision and execution scores of 4 or higher. A scoutable play is always imported and is rated 5 "Brilliant", whatever else happened in it, and its note opens with the sentence saying what it demonstrates. The rule below rates every other play, and no other play is rated 5.
+   - **Rating** for a play that is not scoutable: 1 "Needs work: decision" if any of the team's players has a decision score of 2 or lower; otherwise 2 "Needs work: skill" if any has an execution score of 2 or lower; otherwise 4 "Good" if the average score is 3.5 or higher; otherwise 3 "Interesting".
    - **Note**: the play's one-sentence summary, then for each player what the action demonstrates and the player's note, cut to the 280-character limit. What is demonstrated comes before the lesson, so it survives the cut. The full text stays in the play's AI detail.
    - **AI detail**: the model's player mentions for the chosen team (position, jersey number when read, tags, qualities, the sentence saying what the action shows, scores, note), kept with the play for the tagging screen (T16200) and for the AI reel builder's one read of highlight facts (T16205).
 3. **Do no harm.** A play the parent already marked wins: an AI play overlapping it by half or more is not imported. Importing twice adds nothing. Imported plays do not start any automatic highlight creation or any charge.
@@ -77,8 +78,10 @@ Import inserts through the existing clip save path with `my_athlete=0` and empty
 ## Acceptance Criteria
 
 - [ ] A ready analysis shows the two kit colours; nothing is imported before a choice.
-- [ ] After choosing, only plays at or above the threshold for that team are on the Team lane, each with tags, a note of at most 280 characters and a rating that follows the rule (table-driven test).
+- [ ] After choosing, only plays at or above the threshold for that team, and every scoutable play, are on the Team lane, each with tags, a note of at most 280 characters and a rating that follows the rule (table-driven test).
 - [ ] Each imported play's AI detail keeps every player's qualities and sentence exactly as the analysis stored them, and the note states what is demonstrated before any lesson (table-driven test).
+- [ ] Every scoutable play for the chosen team is imported, rated Brilliant, and its note opens with what it demonstrates; no play without a demonstrated quality is rated Brilliant (table-driven test).
+- [ ] On the staging game the number of Brilliant plays for each team is recorded and the owner has seen it before the feature is switched on, so a rating that lands on nearly every play is caught.
 - [ ] No imported play is on the My athlete lane.
 - [ ] A hand-marked play overlapping an AI play by half or more is kept and the AI play is not imported.
 - [ ] Importing twice adds no plays.
