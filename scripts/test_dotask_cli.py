@@ -1236,7 +1236,7 @@ class PrelandCheckTest(unittest.TestCase):
         git_c(self.repo, "commit", "-qm", "T1: change")
 
     def _run(self):
-        result = subprocess.run(["bash", str(PRELAND), str(self.repo)], capture_output=True, text=True, check=False)
+        result = subprocess.run([dotask_cli.bash(), PRELAND.as_posix(), self.repo.as_posix()], capture_output=True, text=True, check=False)
         return result.returncode, result.stdout + result.stderr
 
     def test_clean_branch_passes(self):
