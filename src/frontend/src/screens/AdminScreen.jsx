@@ -122,6 +122,8 @@ export function AdminScreen({ onBack }) {
   const retentionChartError = useAdminStore(s => s.retentionChartError);
   const retentionChartAction = useAdminStore(s => s.retentionChartAction);
   const setRetentionChartAction = useAdminStore(s => s.setRetentionChartAction);
+  const retentionChartBin = useAdminStore(s => s.retentionChartBin);
+  const setRetentionChartBin = useAdminStore(s => s.setRetentionChartBin);
   const fetchRetentionChart = useAdminStore(s => s.fetchRetentionChart);
   const activationData = useAdminStore(s => s.activationData);
   const activationLoading = useAdminStore(s => s.activationLoading);
@@ -401,7 +403,8 @@ export function AdminScreen({ onBack }) {
           />
         </CollapsibleSection>
 
-        {/* T7430: investor-grade retention chart -- triangle, curves, WAU, return-after-gap.
+        {/* T7430: investor-grade retention chart -- one large curve chart (no table) whose
+            curves follow the Dimension pill, plus WAU and return-after-gap captions.
             T16070's day 1/3/7/14/28 figures show in its hover (no Day N section, ruling
             2026-11-13). Collapsed, on-demand fetch. */}
         <CollapsibleSection title="Retention Chart">
@@ -412,6 +415,8 @@ export function AdminScreen({ onBack }) {
             onRefresh={() => fetchRetentionChart()}
             action={retentionChartAction}
             onActionChange={setRetentionChartAction}
+            cohortBin={retentionChartBin}
+            onCohortBinChange={setRetentionChartBin}
           />
         </CollapsibleSection>
 

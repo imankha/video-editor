@@ -8,6 +8,8 @@ the cohort-key derivation needing to stay identical).
 from datetime import date
 from typing import Any
 
+from .analytics_retention_chart import group_key_sql
+
 # The five standard checkpoints (so figures compare against published
 # consumer-app benchmarks). App-defined, never user input -- safe to splice
 # as integer literals into the generated SQL below.
@@ -45,6 +47,8 @@ def compute_day_n_retention(
     excl: str,
     today: date,
     checkpoints: tuple[int, ...] = RETENTION_CHECKPOINTS,
+    group_expr: str | None = None,
+    group_join: str = "",
 ) -> dict[str, Any]:
     """Day-1/3/7/14/28 return rate by weekly signup cohort, plus one "all
     weeks" row pooling every matured member across cohorts.
@@ -63,6 +67,13 @@ def compute_day_n_retention(
     excluded from one is excluded from all. ``today`` is passed in rather
     than read from ``CURRENT_DATE`` so callers (and tests) control it
     exactly -- the same pattern as ``build_spend_readiness(cur, excl, now)``.
+
+    ``group_expr`` (T7430 ruling 2026-11-13) groups by the Retention chart's
+    Dimension pill (campaign origin, signup build) instead of the signup week.
+    Such a group spans many signup dates, so its cells pool the members old
+    enough for day N -- the all-weeks rule -- rather than waiting for every
+    member. Every cohort entry carries ``group``; week cohorts keep
+    ``cohort_week`` too.
     """
     flags = _flag_columns(checkpoints)
     agg = _agg_columns(checkpoints)
@@ -71,10 +82,11 @@ def compute_day_n_retention(
     cur.execute(f"""
         WITH base AS (
             SELECT s.user_id,
-                   date_trunc('week', s.acquired_at)::date AS cohort_week,
+                   {group_key_sql(group_expr)} AS cohort_week,
                    s.acquired_at::date AS signup_date
             FROM user_segments s
             LEFT JOIN users u ON u.user_id = s.user_id
+            {group_join}
             WHERE s.acquired_at IS NOT NULL {excl_and}
         ),
         flags AS (
@@ -115,15 +127,17 @@ def compute_day_n_retention(
         for n in checkpoints:
             matured = row[f"matured_{n}"]
             hit = row[f"hit_{n}"]
-            # A cohort is only measurable once ALL its members matured -- a
-            # partially-matured cohort reports every checkpoint as None, not
-            # the pooled subset (that honesty belongs to the all-weeks row).
-            days[str(n)] = _cell(hit, cohort_size) if matured == cohort_size else None
-        cohorts.append({
-            "cohort_week": str(row["cohort_week"]),
-            "signups": cohort_size,
-            "days": days,
-        })
+            if group_expr is not None:
+                days[str(n)] = _cell(hit, matured)
+            else:
+                # A cohort is only measurable once ALL its members matured -- a
+                # partially-matured cohort reports every checkpoint as None, not
+                # the pooled subset (that honesty belongs to the all-weeks row).
+                days[str(n)] = _cell(hit, cohort_size) if matured == cohort_size else None
+        entry = {"group": row["cohort_week"], "signups": cohort_size, "days": days}
+        if group_expr is None:
+            entry["cohort_week"] = row["cohort_week"]
+        cohorts.append(entry)
 
     all_days = {
         str(n): _cell(all_weeks_row[f"hit_{n}"], all_weeks_row[f"matured_{n}"])

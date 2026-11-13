@@ -122,6 +122,7 @@ export const useAdminStore = create((set, get) => ({
   // T7430: retention chart (triangle + WAU + return-after-gap), on-demand -- never on mount.
   retentionChartData: null, retentionChartLoading: false, retentionChartError: null,
   retentionChartAction: '',
+  retentionChartBin: 'week', // weekly/monthly signup-cohort bin (Cohorts grouping only)
   // T7420: activation report (export/share <=14d by monthly signup cohort), on-demand.
   activationData: null, activationLoading: false, activationError: null,
 
@@ -162,6 +163,9 @@ export const useAdminStore = create((set, get) => ({
   setDimension: (dimension) => {
     set({ dimension });
     const state = get();
+    // T7430 (ruling 2026-11-13): the Retention chart compares whatever the pill selects,
+    // so a chart already on screen reloads with the new grouping; one nobody loaded stays unloaded.
+    if (state.retentionChartData) state.fetchRetentionChart();
     if (dimension === 'campaigns' && !state.channelsData && !state.channelsLoading) {
       state.fetchChannels();
     } else if (dimension === 'cohorts' && !state.cohortsData && !state.cohortsLoading) {
@@ -812,13 +816,18 @@ export const useAdminStore = create((set, get) => ({
     }
   },
 
-  // T7430: retention chart (triangle, WAU/MAU + low-volume shading, return-after-gap,
-  // action-level toggle). On-demand -- never on mount.
+  // T7430: retention chart (curves grouped by the Dimension pill, WAU/MAU + low-volume
+  // shading, return-after-gap, action-level toggle). On-demand -- never on mount.
   setRetentionChartAction: (action) => set({ retentionChartAction: action }),
+  setRetentionChartBin: (bin) => {
+    set({ retentionChartBin: bin });
+    if (get().retentionChartData) get().fetchRetentionChart();
+  },
   fetchRetentionChart: async () => {
     set({ retentionChartLoading: true, retentionChartError: null });
     try {
-      const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      const { excludeTest, dimension, retentionChartBin } = get();
+      const params = new URLSearchParams({ exclude_test: excludeTest, group: dimension, cohort_bin: retentionChartBin });
       const action = get().retentionChartAction;
       if (action) params.set('action', action);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/retention-chart?${params}`);

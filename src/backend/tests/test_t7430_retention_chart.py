@@ -138,3 +138,103 @@ class TestActionRetention:
         cohort = result["cohorts"][0]
         assert cohort["base"] == 10
         assert cohort["weeks"]["1"] == {"pct": 40.0, "hit": 4, "aged": 10}
+
+
+def _set_segment(user_id: str, **cols):
+    from app.services.pg import get_pg
+
+    sets = ", ".join(f"{k} = %s" for k in cols)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(f"UPDATE user_segments SET {sets} WHERE user_id = %s", (*cols.values(), user_id))
+
+
+def _grouped(today, group_expr, weeks=4):
+    from app.routers.admin import _test_exclusion
+    from app.services.analytics_retention import compute_day_n_retention
+    from app.services.analytics_retention_chart import compute_retention_triangle
+    from app.services.pg import get_pg
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        excl = _test_exclusion(True)
+        return (
+            compute_retention_triangle(cur, excl, today, weeks, group_expr=group_expr),
+            compute_day_n_retention(cur, excl, today, group_expr=group_expr),
+        )
+
+
+class TestGroupedByDimension:
+    """Ruling 2026-11-13 (C6): the chart compares whatever the Dimension pill selects.
+    A non-week group pools its members' own weeks-since-signup: a cell counts only the
+    members old enough for that week (aged), never a fabricated 0."""
+
+    def test_groups_by_campaign_origin_and_pools_members_across_signup_weeks(self, pg_conn):
+        today = date(2026, 6, 29)  # Monday
+        old_week, new_week = date(2026, 5, 4), date(2026, 6, 22)
+        register_test_user_ids("t7430-g1", "t7430-g2", "t7430-g3")
+        _seed_user("t7430-g1", old_week)
+        _seed_user("t7430-g2", old_week)
+        _seed_user("t7430-g3", new_week)  # same campaign, too young for week 1
+        for uid in ("t7430-g1", "t7430-g2", "t7430-g3"):
+            _set_segment(uid, origin="t7430camp")
+        _add_daily("t7430-g1", old_week + timedelta(weeks=1), 10)
+
+        triangle, day_n = _grouped(today, "s.origin")
+
+        row = next(c for c in triangle["cohorts"] if c["group"] == "t7430camp")
+        assert row["signups"] == 3
+        assert row["weeks"]["1"]["classic"] == {"pct": 50.0, "hit": 1, "aged": 2}
+        assert "cohort_week" not in row
+        assert any(c["group"] == "t7430camp" for c in day_n["cohorts"])
+
+    def test_groups_by_signup_build_with_unrecorded_bucket(self, pg_conn):
+        today = date(2026, 6, 29)
+        week = date(2026, 5, 4)
+        register_test_user_ids("t7430-b1", "t7430-b2")
+        _seed_user("t7430-b1", week)
+        _seed_user("t7430-b2", week)
+        _set_segment("t7430-b1", signup_build=9431)
+        _set_segment("t7430-b2", signup_build=None)
+        _add_daily("t7430-b1", week + timedelta(days=1), 10)  # day-1 return
+
+        triangle, day_n = _grouped(today, "s.signup_build")
+
+        groups = {c["group"] for c in triangle["cohorts"]}
+        assert "9431" in groups and "unrecorded" in groups
+        b = next(c for c in day_n["cohorts"] if c["group"] == "9431")
+        assert b["days"]["1"] == {"pct": 100.0, "hit": 1, "aged": 1}
+
+    def test_cohort_mode_rows_carry_group_equal_to_cohort_week(self, pg_conn):
+        today = date(2026, 6, 29)
+        week = date(2026, 5, 4)
+        register_test_user_ids("t7430-c9")
+        _seed_user("t7430-c9", week)
+
+        triangle, day_n = _grouped(today, None)
+
+        row = next(c for c in triangle["cohorts"] if c["cohort_week"] == str(week))
+        assert row["group"] == str(week)
+        assert next(c for c in day_n["cohorts"] if c["cohort_week"] == str(week))["group"] == str(week)
+
+
+class TestMonthlyCohortBin:
+    """Amended C1: the weekly/monthly toggle bins the Cohorts grouping by signup month."""
+
+    def test_monthly_bin_groups_signups_by_month(self, pg_conn, monkeypatch):
+        import app.routers.admin as admin
+
+        monkeypatch.setattr(admin, "_require_admin", lambda: None)
+        register_test_user_ids("t7430-m1", "t7430-m2")
+        _seed_user("t7430-m1", date(2025, 3, 3))
+        _seed_user("t7430-m2", date(2025, 3, 24))  # different week, same month
+
+        weekly = admin.analytics_retention_chart(group="cohorts", cohort_bin="week")
+        monthly = admin.analytics_retention_chart(group="cohorts", cohort_bin="month")
+
+        assert {"2025-03-03", "2025-03-24"} <= {c["group"] for c in weekly["triangle"]["cohorts"]}
+        march = next(c for c in monthly["triangle"]["cohorts"] if c["group"] == "2025-03-01")
+        assert march["signups"] >= 2
+        assert "2025-03-24" not in {c["group"] for c in monthly["triangle"]["cohorts"]}
+        assert any(c["group"] == "2025-03-01" for c in monthly["day_n"]["cohorts"])
+        assert monthly["cohort_bin"] == "month"

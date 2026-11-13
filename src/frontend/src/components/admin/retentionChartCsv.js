@@ -1,5 +1,6 @@
-// T7430: the retention triangle as CSV (classic view), built client-side from the
-// cohorts already on screen. Same cell-escaping rule as channelsCsv.js -- dimension
+// T7430: the retention chart's data as CSV (the selected classic/unbounded view, one row
+// per curve group -- signup week, campaign or build, per the Dimension pill), built
+// client-side from the data already loaded. Same cell-escaping rule as channelsCsv.js -- dimension
 // values are backend-derived dates here, but keep the guard for consistency.
 
 function cell(value) {
@@ -9,16 +10,19 @@ function cell(value) {
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-/** @param cohorts triangle.cohorts; @param weeksTracked triangle.weeks_tracked */
-export function retentionTriangleCsv(cohorts, weeksTracked, view) {
+/**
+ * @param cohorts triangle.cohorts; @param weeksTracked triangle.weeks_tracked
+ * @param groupHeader first column's header, e.g. 'Campaign'
+ */
+export function retentionTriangleCsv(cohorts, weeksTracked, view, groupHeader) {
   const weekCols = Array.from({ length: weeksTracked }, (_, i) => `Week ${i}`);
-  const lines = [['Cohort week', 'Signups', ...weekCols].join(',')];
+  const lines = [[groupHeader, 'Signups', ...weekCols].join(',')];
   for (const row of cohorts) {
     const cells = weekCols.map((_, i) => {
       const c = row.weeks[String(i)]?.[view];
       return c ? c.pct : '';
     });
-    lines.push([cell(row.cohort_week), cell(row.signups), ...cells.map(cell)].join(','));
+    lines.push([cell(row.label), cell(row.signups), ...cells.map(cell)].join(','));
   }
   return lines.join('\r\n');
 }

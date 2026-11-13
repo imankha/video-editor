@@ -3,127 +3,152 @@ import { RefreshCw } from 'lucide-react';
 import { fmtPct } from './formatNumber';
 import { downloadRetentionCsv, retentionTriangleCsv } from './retentionChartCsv';
 
-// T7430: the investor-grade retention chart -- triangle (classic/unbounded), curve
-// overlay, WAU strip with low-volume shading, return-after-gap headline, and the
-// action-level toggle (export_completed / clip-library, from T7400's rollup).
+// T7430: the investor-grade retention chart. Owner ruling 2026-11-13: it is the only
+// retention view and the only thing on screen in its section -- one large curve chart,
+// no table; hovering a point shows its exact percent and counts; its curves compare
+// whatever the dashboard's Dimension pill selects (campaigns, signup cohorts, builds).
+// WAU low-volume shading and the return-after-gap headline ride beneath it as captions.
 
-function TriangleCell({ cell, smallN }) {
-  if (!cell) {
-    return <span className="text-gray-500 text-xs" title="Not yet measurable">--</span>;
-  }
-  if (smallN) {
-    return <span className="text-gray-300 text-xs" title="Cohort under 5 -- raw fraction, not a %">{cell.hit}/{cell.aged}</span>;
-  }
-  return <span className="text-gray-200 text-xs">{fmtPct(cell.pct)}</span>;
+// What each Dimension pill makes the chart compare (backend `group` values).
+const GROUPINGS = {
+  cohorts: { noun: 'signup cohorts', header: 'Cohort week', order: 'newest' },
+  campaigns: { noun: 'campaigns', header: 'Campaign', order: 'largest' },
+  builds: { noun: 'signup builds', header: 'Build', order: 'newest' },
+};
+
+const MAX_CURVES = 8;
+const COLORS = ['#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a3a3a3', '#f472b6', '#2dd4bf'];
+const W = 960, H = 420;
+const PAD = { left: 48, right: 16, top: 16, bottom: 32 };
+
+function xFor(week, weeks) {
+  return PAD.left + (week / Math.max(1, weeks - 1)) * (W - PAD.left - PAD.right);
 }
 
-function Triangle({ triangle, view }) {
-  if (!triangle?.cohorts?.length) {
-    return <p className="text-gray-500 text-sm">No signup cohorts available.</p>;
+function yFor(pct) {
+  return PAD.top + (1 - pct / 100) * (H - PAD.top - PAD.bottom);
+}
+
+// Cohort under 5: the raw fraction, never a misleading %.
+function cellText(cell, smallN) {
+  return smallN ? `${cell.hit}/${cell.aged}` : `${fmtPct(cell.pct)} (${cell.hit} of ${cell.aged})`;
+}
+
+// One curve per group (or per action cohort): its measurable points, in week order.
+function curvePoints(weeksByIndex, weeks, pick) {
+  const points = [];
+  for (let i = 0; i < weeks; i++) {
+    const cell = pick(weeksByIndex[String(i)]);
+    if (cell) points.push({ week: i, cell, x: xFor(i, weeks), y: yFor(cell.pct) });
   }
-  const weekCols = Array.from({ length: triangle.weeks_tracked }, (_, i) => i);
+  return points;
+}
+
+// T16070 (ruling 2026-11-13): the hovered group's day 1/3/7/14/28 figures -- the only
+// place they appear. A blank cell is "not yet measurable", never 0%.
+function DayNFigures({ group, dayN }) {
+  const days = dayN?.cohorts?.find((c) => c.group === group)?.days ?? {};
   return (
-    <div className="rounded-lg border border-white/10 overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider">
-            <th className="text-left px-3 py-2.5">Signup week</th>
-            <th className="text-right px-3 py-2.5">Signups</th>
-            {weekCols.map((w) => (
-              <th key={w} className="text-right px-3 py-2.5">W{w}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {triangle.cohorts.map((row) => (
-            <tr key={row.cohort_week} className="border-b border-white/5" data-testid="retention-triangle-row">
-              <td className="px-3 py-2 text-gray-200 text-xs whitespace-nowrap">{row.cohort_week}</td>
-              <td className="px-3 py-2 text-right text-gray-300 text-xs">{row.signups}</td>
-              {weekCols.map((w) => (
-                <td key={w} className="px-3 py-2 text-right whitespace-nowrap">
-                  <TriangleCell cell={row.weeks[String(w)]?.[view]} smallN={row.small_n} />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 mt-1">
+      {(dayN?.checkpoints ?? []).map((n) => {
+        const cell = days[String(n)];
+        return (
+          <div key={n} className="contents">
+            <dt className="text-gray-400">Day {n}</dt>
+            <dd className={cell ? 'text-gray-200 text-right' : 'text-gray-500 text-right'}>
+              {cell ? `${fmtPct(cell.pct)} (${cell.hit} of ${cell.aged})` : 'not yet measurable'}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+function HoverCard({ hover, dayN }) {
+  const left = (hover.x / W) * 100;
+  const top = (hover.y / H) * 100;
+  return (
+    <div
+      data-testid="retention-hover"
+      className="absolute pointer-events-none z-10 rounded border border-white/10 bg-gray-900/95 px-3 py-2 text-xs shadow-lg"
+      style={{
+        left: `${left}%`,
+        top: `${top}%`,
+        transform: `translate(${left > 60 ? 'calc(-100% - 12px)' : '12px'}, ${top > 60 ? '-100%' : '0'})`,
+      }}
+    >
+      <p className="text-gray-200">{hover.label}</p>
+      <p className="text-gray-500">{hover.signups} signups</p>
+      {hover.cell && <p className="text-gray-100 font-medium mt-1">Week {hover.week}: {cellText(hover.cell, hover.smallN)}</p>}
+      {!hover.action && <DayNFigures group={hover.group} dayN={dayN} />}
     </div>
   );
 }
 
-// T16070 (ruling 2026-11-13): the hovered cohort's day 1/3/7/14/28 figures -- the
-// only place they appear (no separate Day N section). A blank cell is "not yet
-// measurable", never 0%.
-function DayNHover({ cohortWeek, dayN }) {
-  const days = dayN?.cohorts?.find((c) => c.cohort_week === cohortWeek)?.days ?? {};
+function RetentionChart({ curves, weeks, dayN }) {
+  const [hover, setHover] = useState(null);
+  const gridlines = [0, 25, 50, 75, 100];
   return (
-    <div data-testid="retention-hover" className="rounded border border-white/10 bg-gray-900 px-3 py-2 text-xs">
-      <p className="text-gray-200 mb-1">{cohortWeek}</p>
-      <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
-        {(dayN?.checkpoints ?? []).map((n) => {
-          const cell = days[String(n)];
+    <div className="relative w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[28rem]" role="img" aria-label="Retention curves">
+        {gridlines.map((pct) => (
+          <g key={pct}>
+            <line x1={PAD.left} x2={W - PAD.right} y1={yFor(pct)} y2={yFor(pct)} stroke="rgba(255,255,255,0.08)" />
+            <text x={PAD.left - 8} y={yFor(pct) + 4} textAnchor="end" fontSize="12" fill="#9ca3af">{pct}%</text>
+          </g>
+        ))}
+        {Array.from({ length: weeks }, (_, i) => (
+          <text key={i} x={xFor(i, weeks)} y={H - 8} textAnchor="middle" fontSize="12" fill="#9ca3af">Week {i}</text>
+        ))}
+        {curves.map((curve) => {
+          if (curve.points.length < 2) return null;
+          const base = { group: curve.group, label: curve.label, signups: curve.signups, smallN: curve.smallN, action: curve.action };
+          const last = curve.points[curve.points.length - 1];
+          const isHovered = hover?.group === curve.group && hover?.action === curve.action;
           return (
-            <div key={n} className="contents">
-              <dt className="text-gray-400">Day {n}</dt>
-              <dd className={cell ? 'text-gray-200 text-right' : 'text-gray-500 text-right'}>
-                {cell ? `${fmtPct(cell.pct)} (${cell.hit} of ${cell.aged})` : 'not yet measurable'}
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
-    </div>
-  );
-}
-
-// Lightweight inline SVG curve overlay -- no new chart library (FunnelChart.jsx
-// precedent uses plain HTML/CSS; this is the smallest step up for a line curve).
-function CurveOverlay({ triangle, view, dayN }) {
-  const [hoveredWeek, setHoveredWeek] = useState(null);
-  const cohorts = (triangle?.cohorts ?? []).slice(0, 6);
-  if (!cohorts.length) return null;
-  const weeks = triangle.weeks_tracked;
-  const w = 320, h = 120, pad = 8;
-  const colors = ['#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a3a3a3'];
-  return (
-    <div className="flex items-start gap-3 flex-wrap">
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-md h-28" role="img" aria-label="Retention curves">
-        {cohorts.map((row, idx) => {
-          const points = [];
-          for (let i = 0; i < weeks; i++) {
-            const cell = row.weeks[String(i)]?.[view];
-            if (!cell) continue;
-            const x = pad + (i / (weeks - 1)) * (w - 2 * pad);
-            const y = pad + (1 - cell.pct / 100) * (h - 2 * pad);
-            points.push(`${x},${y}`);
-          }
-          if (points.length < 2) return null;
-          const hover = {
-            onMouseEnter: () => setHoveredWeek(row.cohort_week),
-            onMouseLeave: () => setHoveredWeek(null),
-          };
-          return (
-            <g key={row.cohort_week}>
+            <g key={`${curve.action ? 'action' : 'group'}-${curve.group}`}>
               <polyline
-                data-testid="retention-curve"
-                points={points.join(' ')}
+                data-testid={curve.action ? 'retention-action-curve' : 'retention-curve'}
+                points={curve.points.map((p) => `${p.x},${p.y}`).join(' ')}
                 fill="none"
-                stroke={colors[idx % colors.length]}
-                strokeWidth={hoveredWeek === row.cohort_week ? 3 : 1.5}
+                stroke={curve.color}
+                strokeDasharray={curve.action ? '6 4' : undefined}
+                strokeWidth={isHovered ? 3.5 : 2}
                 pointerEvents="stroke"
-                {...hover}
+                onMouseEnter={() => setHover({ ...base, x: last.x, y: last.y })}
+                onMouseLeave={() => setHover(null)}
               />
-              {/* Wider hit targets on each point so hovering is easy (and has a real center). */}
-              {points.map((p) => {
-                const [cx, cy] = p.split(',');
-                return <circle key={p} data-testid="retention-point" cx={cx} cy={cy} r="5" fill="transparent" {...hover} />;
-              })}
+              {curve.points.map((p) => (
+                <circle
+                  key={p.week}
+                  data-testid="retention-point"
+                  cx={p.x}
+                  cy={p.y}
+                  r={isHovered && hover.week === p.week ? 6 : 4}
+                  fill={curve.color}
+                  stroke="#111827"
+                  strokeWidth="1.5"
+                  onMouseEnter={() => setHover({ ...base, x: p.x, y: p.y, week: p.week, cell: p.cell })}
+                  onMouseLeave={() => setHover(null)}
+                />
+              ))}
             </g>
           );
         })}
       </svg>
-      {hoveredWeek && <DayNHover cohortWeek={hoveredWeek} dayN={dayN} />}
+      {hover && <HoverCard hover={hover} dayN={dayN} />}
+      <ul data-testid="retention-legend" className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-300">
+        {curves.map((curve) => (
+          <li key={`${curve.action ? 'action' : 'group'}-${curve.group}`} className="flex items-center gap-1.5">
+            <span
+              className="inline-block w-4 h-0.5"
+              style={{ background: curve.action ? 'transparent' : curve.color, borderTop: curve.action ? `2px dashed ${curve.color}` : undefined }}
+            />
+            {curve.label} <span className="text-gray-500">({curve.signups})</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -152,36 +177,55 @@ function WauStrip({ wau, lowVolumeRule }) {
   );
 }
 
+// The long-horizon headline as a caption line (not a table, ruling 2026-11-13).
 function ReturnAfterGap({ returnAfterGap }) {
-  const cohorts = returnAfterGap?.cohorts ?? [];
-  const measurable = cohorts.filter((c) => c.pct != null);
+  const measurable = (returnAfterGap?.cohorts ?? []).filter((c) => c.pct != null);
   if (!measurable.length) {
     return <p className="text-gray-500 text-xs">No month has matured past the {returnAfterGap?.gap_days}-day gap yet.</p>;
   }
   return (
-    <table className="text-xs">
-      <thead>
-        <tr className="text-gray-400 uppercase tracking-wider">
-          <th className="text-left pr-3 py-1">Month</th>
-          <th className="text-right pr-3 py-1">Cohort</th>
-          <th className="text-right py-1">Returned {returnAfterGap.gap_days}d+</th>
-        </tr>
-      </thead>
-      <tbody>
-        {measurable.map((c) => (
-          <tr key={c.month}>
-            <td className="pr-3 py-1 text-gray-200">{c.month}</td>
-            <td className="pr-3 py-1 text-right text-gray-300">{c.cohort_size}</td>
-            <td className="py-1 text-right text-gray-200">{fmtPct(c.pct)} ({c.hit}/{c.aged})</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <p className="text-xs text-gray-300" data-testid="return-after-gap">
+      <span className="text-gray-400">Active again {returnAfterGap.gap_days}+ days later: </span>
+      {measurable.map((c, i) => (
+        <span key={c.month}>
+          {i > 0 && <span className="text-gray-600"> · </span>}
+          {c.month.slice(0, 7)} {fmtPct(c.pct)} ({c.hit} of {c.cohort_size})
+        </span>
+      ))}
+    </p>
   );
 }
 
-export function RetentionView({ data, loading, error, onRefresh, action, onActionChange }) {
+export function RetentionView({ data, loading, error, onRefresh, action, onActionChange, cohortBin, onCohortBinChange }) {
   const [view, setView] = useState('unbounded');
+  const grouping = data ? GROUPINGS[data.group] : null;
+  const groups = data?.triangle?.cohorts ?? [];
+  const weeks = data?.triangle?.weeks_tracked ?? 0;
+  const binDisabled = Boolean(data) && data.group !== 'cohorts';
+  const csvHeader = data?.group === 'cohorts' && data.cohort_bin === 'month' ? 'Cohort month' : grouping?.header;
+
+  const curves = groups.slice(0, MAX_CURVES).map((row, idx) => ({
+    group: row.group,
+    label: row.label,
+    signups: row.signups,
+    smallN: row.small_n,
+    action: false,
+    color: COLORS[idx % COLORS.length],
+    points: curvePoints(row.weeks, weeks, (w) => w?.[view]),
+  }));
+  // Action-level retention (T7400 rollup) joins the same chart as dashed curves, keyed by signup week.
+  const actionCohorts = action && data?.action?.available ? data.action.cohorts : [];
+  actionCohorts.slice(0, MAX_CURVES).forEach((c, idx) => {
+    curves.push({
+      group: c.cohort_week,
+      label: `${action} ${c.cohort_week}`,
+      signups: c.base,
+      smallN: c.base < 5,
+      action: true,
+      color: COLORS[idx % COLORS.length],
+      points: curvePoints(c.weeks, weeks, (w) => w),
+    });
+  });
 
   return (
     <div className="space-y-4">
@@ -208,6 +252,20 @@ export function RetentionView({ data, loading, error, onRefresh, action, onActio
             onChange={() => setView('unbounded')}
           /> Unbounded
         </label>
+        {['week', 'month'].map((bin) => (
+          <label
+            key={bin}
+            className="flex items-center gap-2 text-xs text-gray-400"
+            title={binDisabled ? 'Weekly/monthly bins apply to the Cohorts grouping' : undefined}
+          >
+            <input
+              type="radio"
+              checked={cohortBin === bin}
+              disabled={binDisabled}
+              onChange={() => onCohortBinChange(bin)}
+            /> {bin === 'week' ? 'Weekly' : 'Monthly'}
+          </label>
+        ))}
         <label className="flex items-center gap-2 text-xs text-gray-400">
           Action (optional)
           <input
@@ -221,8 +279,8 @@ export function RetentionView({ data, loading, error, onRefresh, action, onActio
         {data && (
           <button
             type="button"
-            disabled={!data.triangle?.cohorts?.length}
-            onClick={() => downloadRetentionCsv(retentionTriangleCsv(data.triangle.cohorts, data.triangle.weeks_tracked, view), view)}
+            disabled={!groups.length}
+            onClick={() => downloadRetentionCsv(retentionTriangleCsv(groups, weeks, view, csvHeader), view)}
             className="rounded border border-white/10 px-2 py-1 text-xs text-gray-300 hover:bg-white/5 disabled:opacity-40"
           >
             Download CSV
@@ -235,47 +293,22 @@ export function RetentionView({ data, loading, error, onRefresh, action, onActio
 
       {data && (
         <>
-          {data.coverage_start && (
-            <p className="text-gray-500 text-[11px]">Data begins {data.coverage_start} -- weeks before that never render as zero retention.</p>
+          <p className="text-gray-500 text-[11px]">
+            Comparing {grouping.noun} (the Dimension pill above)
+            {groups.length > MAX_CURVES && `, ${MAX_CURVES} ${grouping.order} of ${groups.length}`}.
+            {data.coverage_start && ` Data begins ${data.coverage_start} -- weeks before that never render as zero retention.`}
+          </p>
+          {groups.length
+            ? <RetentionChart curves={curves} weeks={weeks} dayN={data.day_n} />
+            : <p className="text-gray-500 text-sm">No signup cohorts available.</p>}
+          {action && data.action?.available === false && (
+            <p className="text-gray-500 text-xs">Run the action rollup first (Analytics &gt; Run rollup).</p>
           )}
-          <Triangle triangle={data.triangle} view={view} />
-          <CurveOverlay triangle={data.triangle} view={view} dayN={data.day_n} />
+          {action && data.action?.available && !data.action.cohorts.length && (
+            <p className="text-gray-500 text-xs">No cohorts yet for {action}.</p>
+          )}
           <WauStrip wau={data.wau} lowVolumeRule={data.low_volume_rule} />
-          <div>
-            <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Return after 120+ day gap</p>
-            <ReturnAfterGap returnAfterGap={data.return_after_gap} />
-          </div>
-          {action && (
-            <div>
-              <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Action: {action}</p>
-              {data.action?.available === false ? (
-                <p className="text-gray-500 text-xs">Run the action rollup first (Analytics &gt; Run rollup).</p>
-              ) : !data.action?.cohorts?.length ? (
-                <p className="text-gray-500 text-xs">No cohorts yet for this action.</p>
-              ) : (
-                <table className="text-xs">
-                  <thead>
-                    <tr className="text-gray-400 uppercase tracking-wider">
-                      <th className="text-left pr-3 py-1">Cohort week</th>
-                      <th className="text-right pr-3 py-1">Base</th>
-                      <th className="text-right py-1">Week 1</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.action.cohorts.map((c) => (
-                      <tr key={c.cohort_week}>
-                        <td className="pr-3 py-1 text-gray-200">{c.cohort_week}</td>
-                        <td className="pr-3 py-1 text-right text-gray-300">{c.base}</td>
-                        <td className="py-1 text-right text-gray-200">
-                          {c.weeks['1'] ? `${fmtPct(c.weeks['1'].pct)} (${c.weeks['1'].hit}/${c.weeks['1'].aged})` : '--'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
+          <ReturnAfterGap returnAfterGap={data.return_after_gap} />
         </>
       )}
     </div>

@@ -26,67 +26,79 @@ def _cell(hit: int, aged: int) -> dict[str, Any] | None:
     return {"pct": round(hit / aged * 100, 2), "hit": hit, "aged": aged}
 
 
+def group_key_sql(group_expr: str | None) -> str:
+    """The SQL key a chart curve groups on. None = the weekly signup cohort (the
+    cohort-key derivation shared with compute_day_n_retention); otherwise the caller's
+    Dimension-pill expression (campaign origin, signup build), NULL shown as
+    "unrecorded" and never dropped. `group_expr` is app-defined SQL, never user input."""
+    if group_expr is None:
+        return "date_trunc('week', s.acquired_at)::date::text"
+    return f"COALESCE(({group_expr})::text, 'unrecorded')"
+
+
 def compute_retention_triangle(
-    cur, excl: str, today: date, weeks: int = WEEKS_TRACKED
+    cur, excl: str, today: date, weeks: int = WEEKS_TRACKED,
+    group_expr: str | None = None, group_join: str = "",
 ) -> dict[str, Any]:
-    """One row per signup week; one cell per week_index 0..weeks-1 holding both the
-    classic (active IN week N) and unbounded (active week N or any later week) rate.
-    A cell is None until every member of the cohort has matured into week N -- same
-    honesty rule as compute_day_n_retention, never a fabricated 0."""
+    """One row per group; one cell per week_index 0..weeks-1 holding both the classic
+    (active IN week N since the member's own signup week) and unbounded (active week N
+    or any later week) rate. Each cell counts only the members old enough for week N
+    (`aged`); None when nobody is -- never a fabricated 0. A weekly signup cohort
+    (group_expr None) ages all-or-nothing, so its rows keep `cohort_week` as well."""
     excl_and = f"AND {excl}" if excl else ""
     cur.execute(f"""
         WITH base AS (
-            SELECT s.user_id, date_trunc('week', s.acquired_at)::date AS cohort_week
+            SELECT s.user_id, {group_key_sql(group_expr)} AS grp,
+                   date_trunc('week', s.acquired_at)::date AS cohort_week
             FROM user_segments s
             LEFT JOIN users u ON u.user_id = s.user_id
+            {group_join}
             WHERE s.acquired_at IS NOT NULL {excl_and}
         ),
         weeks AS (SELECT generate_series(0, %(max_week)s) AS week_index),
-        cells AS (
-            SELECT b.cohort_week, w.week_index,
-                   COUNT(*) AS cohort_size,
+        flags AS (
+            SELECT b.grp, w.week_index,
                    (b.cohort_week + w.week_index * 7 + 6) <= %(today)s AS matured,
-                   COUNT(*) FILTER (
-                       WHERE EXISTS (
-                           SELECT 1 FROM user_usage_daily d
-                           WHERE d.user_id = b.user_id
-                             AND d.day BETWEEN b.cohort_week + w.week_index * 7
-                                           AND b.cohort_week + w.week_index * 7 + 6
-                       )
-                   ) AS classic_hit,
-                   COUNT(*) FILTER (
-                       WHERE EXISTS (
-                           SELECT 1 FROM user_usage_daily d
-                           WHERE d.user_id = b.user_id
-                             AND d.day >= b.cohort_week + w.week_index * 7
-                       )
-                   ) AS unbounded_hit
+                   EXISTS (
+                       SELECT 1 FROM user_usage_daily d
+                       WHERE d.user_id = b.user_id
+                         AND d.day BETWEEN b.cohort_week + w.week_index * 7
+                                       AND b.cohort_week + w.week_index * 7 + 6
+                   ) AS classic,
+                   EXISTS (
+                       SELECT 1 FROM user_usage_daily d
+                       WHERE d.user_id = b.user_id
+                         AND d.day >= b.cohort_week + w.week_index * 7
+                   ) AS unbounded
             FROM base b CROSS JOIN weeks w
-            GROUP BY b.cohort_week, w.week_index
         )
-        SELECT cohort_week, week_index, cohort_size, matured, classic_hit, unbounded_hit
-        FROM cells
-        ORDER BY cohort_week DESC, week_index
+        SELECT grp, week_index,
+               COUNT(*) AS group_size,
+               COUNT(*) FILTER (WHERE matured) AS aged,
+               COUNT(*) FILTER (WHERE matured AND classic) AS classic_hit,
+               COUNT(*) FILTER (WHERE matured AND unbounded) AS unbounded_hit
+        FROM flags
+        GROUP BY grp, week_index
+        ORDER BY grp, week_index
     """, {"today": today, "max_week": weeks - 1})
 
-    cohorts: dict[str, dict[str, Any]] = {}
+    groups: dict[str, dict[str, Any]] = {}
     for row in cur.fetchall():
-        cw = str(row["cohort_week"])
-        cohort = cohorts.setdefault(cw, {
-            "cohort_week": cw, "signups": row["cohort_size"], "small_n": row["cohort_size"] < 5, "weeks": {},
-        })
-        wi = str(row["week_index"])
-        if not row["matured"]:
-            cohort["weeks"][wi] = {"classic": None, "unbounded": None}
-        else:
-            cohort["weeks"][wi] = {
-                "classic": _cell(row["classic_hit"], row["cohort_size"]),
-                "unbounded": _cell(row["unbounded_hit"], row["cohort_size"]),
-            }
+        grp = row["grp"]
+        entry = groups.get(grp)
+        if entry is None:
+            entry = {"group": grp, "signups": row["group_size"], "small_n": row["group_size"] < 5, "weeks": {}}
+            if group_expr is None:
+                entry["cohort_week"] = grp
+            groups[grp] = entry
+        entry["weeks"][str(row["week_index"])] = {
+            "classic": _cell(row["classic_hit"], row["aged"]),
+            "unbounded": _cell(row["unbounded_hit"], row["aged"]),
+        }
 
     return {
         "weeks_tracked": weeks,
-        "cohorts": sorted(cohorts.values(), key=lambda c: c["cohort_week"], reverse=True),
+        "cohorts": sorted(groups.values(), key=lambda c: c["group"], reverse=True),
     }
 
 
