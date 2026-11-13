@@ -1,0 +1,20 @@
+{
+  "criteria": {
+    "T16080:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16080_payment_thank_you_email.py::TestWebhookSendsThankYou -q"
+    },
+    "T16080:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16080_payment_thank_you_email.py::TestEmailFailureDoesNotFailPayment -q"
+    },
+    "T16080:C3": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16080_payment_thank_you_email.py::TestVerifySessionSendsThankYou -q"
+    },
+    "T16080:C4": {
+      "kind": "human",
+      "why": "A real purchase, real Discord/tutorial link delivery, and a real reply reaching the owner's inbox cannot be observed by automation (per the task's own AC)."
+    }
+  }
+}
