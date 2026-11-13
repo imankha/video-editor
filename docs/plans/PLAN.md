@@ -31,6 +31,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T16340 | [Admin upload success reads over 100% on production](tasks/T16340-upload-success-over-100-percent.md) | 6 | 2 | 3.0 | TODO | [ ] | Owner report 2026-11-13. The production Builds table shows 131.66% upload success for older sign-ups, with more users succeeding than trying. The attempt event only started on 2026-09-22, and the percent counts events while the tries column counts users. The dashboard's alarm number cannot be trusted until it is fixed. |
 | T15320 | [test_analytics_dashboards.py has pre-existing failures against shared Postgres test state](tasks/T15320-test-analytics-dashboards-py-has-pre.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 | T15950 | [1.5x ETA accuracy half of AC3 is unaddressed and untested](tasks/T15950-1-5x-eta-accuracy-half-of.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
