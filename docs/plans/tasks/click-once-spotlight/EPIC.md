@@ -21,6 +21,7 @@ A parent taps their athlete once in Spotlight and gets a circle that stays on th
 2. **Prove it outside the app first.** Done: the prototype project and its results are described below.
 3. **The model is SAM 2.1 base+.** The owner picked it from the prototype table. It is free to use commercially (Apache 2 licence).
 4. **This runs before Mark plays with AI.**
+5. **A new spotlight stays two seconds long.** Following covers those two seconds, and continues for as long as the parent stretches the spotlight (T16260).
 
 ## What the prototype measured
 
@@ -51,10 +52,6 @@ The prototype lives outside this repo at `C:/Users/imank/projects/player-trackin
 - **Failure is quiet.** If the follower cannot run, is switched off, or takes too long, the parent sees today's four taps with one plain line of explanation. Nothing is lost and nothing is charged.
 - **Safety switches.** A kill switch and a daily spend cap, like the ones planned for Mark plays with AI.
 - **Frame is not in this epic.** Frame is the step where the parent crops around their athlete. Following there happens on the raw game video, where athletes are far smaller; that stays a separate, unproven task (T15860, T15870).
-
-## Open question for the owner (does not block the first three tasks)
-
-A spotlight is two seconds long unless the parent stretches it. The goal mentions four seconds. Should a new spotlight start at four seconds once following works, or stay at two and simply follow for as long as the parent stretches it? T16260 is written for the second reading and notes the one-line change for the first.
 
 ## Tasks (dependency order)
 
