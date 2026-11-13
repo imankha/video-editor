@@ -52,37 +52,79 @@ function Triangle({ triangle, view }) {
   );
 }
 
+// T16070 (ruling 2026-11-13): the hovered cohort's day 1/3/7/14/28 figures -- the
+// only place they appear (no separate Day N section). A blank cell is "not yet
+// measurable", never 0%.
+function DayNHover({ cohortWeek, dayN }) {
+  const days = dayN?.cohorts?.find((c) => c.cohort_week === cohortWeek)?.days ?? {};
+  return (
+    <div data-testid="retention-hover" className="rounded border border-white/10 bg-gray-900 px-3 py-2 text-xs">
+      <p className="text-gray-200 mb-1">{cohortWeek}</p>
+      <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
+        {(dayN?.checkpoints ?? []).map((n) => {
+          const cell = days[String(n)];
+          return (
+            <div key={n} className="contents">
+              <dt className="text-gray-400">Day {n}</dt>
+              <dd className={cell ? 'text-gray-200 text-right' : 'text-gray-500 text-right'}>
+                {cell ? `${fmtPct(cell.pct)} (${cell.hit} of ${cell.aged})` : 'not yet measurable'}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
+  );
+}
+
 // Lightweight inline SVG curve overlay -- no new chart library (FunnelChart.jsx
 // precedent uses plain HTML/CSS; this is the smallest step up for a line curve).
-function CurveOverlay({ triangle, view }) {
+function CurveOverlay({ triangle, view, dayN }) {
+  const [hoveredWeek, setHoveredWeek] = useState(null);
   const cohorts = (triangle?.cohorts ?? []).slice(0, 6);
   if (!cohorts.length) return null;
   const weeks = triangle.weeks_tracked;
   const w = 320, h = 120, pad = 8;
   const colors = ['#c084fc', '#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a3a3a3'];
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-md h-28" role="img" aria-label="Retention curves">
-      {cohorts.map((row, idx) => {
-        const points = [];
-        for (let i = 0; i < weeks; i++) {
-          const cell = row.weeks[String(i)]?.[view];
-          if (!cell) continue;
-          const x = pad + (i / (weeks - 1)) * (w - 2 * pad);
-          const y = pad + (1 - cell.pct / 100) * (h - 2 * pad);
-          points.push(`${x},${y}`);
-        }
-        if (points.length < 2) return null;
-        return (
-          <polyline
-            key={row.cohort_week}
-            points={points.join(' ')}
-            fill="none"
-            stroke={colors[idx % colors.length]}
-            strokeWidth="1.5"
-          />
-        );
-      })}
-    </svg>
+    <div className="flex items-start gap-3 flex-wrap">
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-md h-28" role="img" aria-label="Retention curves">
+        {cohorts.map((row, idx) => {
+          const points = [];
+          for (let i = 0; i < weeks; i++) {
+            const cell = row.weeks[String(i)]?.[view];
+            if (!cell) continue;
+            const x = pad + (i / (weeks - 1)) * (w - 2 * pad);
+            const y = pad + (1 - cell.pct / 100) * (h - 2 * pad);
+            points.push(`${x},${y}`);
+          }
+          if (points.length < 2) return null;
+          const hover = {
+            onMouseEnter: () => setHoveredWeek(row.cohort_week),
+            onMouseLeave: () => setHoveredWeek(null),
+          };
+          return (
+            <g key={row.cohort_week}>
+              <polyline
+                data-testid="retention-curve"
+                points={points.join(' ')}
+                fill="none"
+                stroke={colors[idx % colors.length]}
+                strokeWidth={hoveredWeek === row.cohort_week ? 3 : 1.5}
+                pointerEvents="stroke"
+                {...hover}
+              />
+              {/* Wider hit targets on each point so hovering is easy (and has a real center). */}
+              {points.map((p) => {
+                const [cx, cy] = p.split(',');
+                return <circle key={p} data-testid="retention-point" cx={cx} cy={cy} r="5" fill="transparent" {...hover} />;
+              })}
+            </g>
+          );
+        })}
+      </svg>
+      {hoveredWeek && <DayNHover cohortWeek={hoveredWeek} dayN={dayN} />}
+    </div>
   );
 }
 
@@ -197,7 +239,7 @@ export function RetentionView({ data, loading, error, onRefresh, action, onActio
             <p className="text-gray-500 text-[11px]">Data begins {data.coverage_start} -- weeks before that never render as zero retention.</p>
           )}
           <Triangle triangle={data.triangle} view={view} />
-          <CurveOverlay triangle={data.triangle} view={view} />
+          <CurveOverlay triangle={data.triangle} view={view} dayN={data.day_n} />
           <WauStrip wau={data.wau} lowVolumeRule={data.low_volume_rule} />
           <div>
             <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Return after 120+ day gap</p>

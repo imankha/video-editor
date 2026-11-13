@@ -1,4 +1,4 @@
-"""T16070: day-1/3/7/14/28 return-rate table (admin panel).
+"""T16070: day-1/3/7/14/28 return rates, shown in the Retention chart hover.
 
 Shared counting function so T7430's richer retention chart reuses the SAME
 return definition instead of writing a second one (see that task's note on

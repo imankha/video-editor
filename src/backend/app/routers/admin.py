@@ -2789,31 +2789,17 @@ def analytics_activation(exclude_test: bool = True):
         return compute_activation_report(cur, excl, datetime.now(UTC).date())
 
 
-@router.get("/analytics/retention")
-# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
-def analytics_retention(exclude_test: bool = True):
-    """T16070: day-1/3/7/14/28 return rate by weekly signup cohort + an "all
-    weeks" pooled row. Reads existing user_usage_daily/user_segments only --
-    no new storage. T7430's richer retention chart reuses
-    compute_day_n_retention so both surfaces count returns identically."""
-    from ..services.analytics_retention import compute_day_n_retention
-
-    _require_admin()
-    excl = _test_exclusion(exclude_test)
-    with get_pg() as conn:
-        cur = conn.cursor()
-        return compute_day_n_retention(cur, excl, datetime.now(UTC).date())
-
-
 @router.get("/analytics/retention-chart")
 # sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_retention_chart(exclude_test: bool = True, action: str | None = None):
     """T7430: the investor-grade retention chart -- weekly cohort triangle
     (classic + unbounded), WAU/MAU series with low-volume-week shading, and the
-    return-after-gap headline. Reads the same user_usage_daily/user_segments spine
-    as T16070's /analytics/retention (identical cohort-key derivation). `action`
+    return-after-gap headline. `day_n` carries T16070's day-1/3/7/14/28 figures
+    (compute_day_n_retention, same cohort-key derivation) for the chart's hover --
+    there is no separate Day N endpoint or section (owner ruling 2026-11-13). `action`
     (optional) adds the action-level curve from T7400's rollup_action_weekly --
     None/empty cohorts when the rollup hasn't run yet, never an error."""
+    from ..services.analytics_retention import compute_day_n_retention
     from ..services.analytics_retention_chart import (
         LOW_VOLUME_RATIO,
         LOW_VOLUME_TRAILING_WEEKS,
@@ -2835,6 +2821,7 @@ def analytics_retention_chart(exclude_test: bool = True, action: str | None = No
         wau = compute_wau_series(cur, excl, today)
         return_after_gap = compute_return_after_gap(cur, excl, today)
         coverage = coverage_start(cur, excl)
+        day_n = compute_day_n_retention(cur, excl, today)
 
     low_volume_flags = detect_low_volume_weeks(wau)
     for row, flagged in zip(wau, low_volume_flags):
@@ -2846,6 +2833,7 @@ def analytics_retention_chart(exclude_test: bool = True, action: str | None = No
         "return_after_gap": {"gap_days": RETURN_AFTER_GAP_DAYS, "cohorts": return_after_gap},
         "coverage_start": str(coverage) if coverage else None,
         "low_volume_rule": {"ratio": LOW_VOLUME_RATIO, "trailing_weeks": LOW_VOLUME_TRAILING_WEEKS},
+        "day_n": day_n,
         "action": None,
     }
     if action:

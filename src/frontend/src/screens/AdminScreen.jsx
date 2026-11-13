@@ -17,7 +17,6 @@ import { RevenueReconciliation } from '../components/admin/RevenueReconciliation
 import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
 import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
-import { DayNRetentionTable } from '../components/admin/DayNRetentionTable';
 import { RetentionView } from '../components/admin/RetentionView';
 import { ActivationReport } from '../components/admin/ActivationReport';
 import { BySportTable } from '../components/admin/BySportTable';
@@ -118,10 +117,6 @@ export function AdminScreen({ onBack }) {
   const packMixLoading = useAdminStore(s => s.packMixLoading);
   const packMixError = useAdminStore(s => s.packMixError);
   const fetchPackMix = useAdminStore(s => s.fetchPackMix);
-  const retentionData = useAdminStore(s => s.retentionData);
-  const retentionLoading = useAdminStore(s => s.retentionLoading);
-  const retentionError = useAdminStore(s => s.retentionError);
-  const fetchRetention = useAdminStore(s => s.fetchRetention);
   const retentionChartData = useAdminStore(s => s.retentionChartData);
   const retentionChartLoading = useAdminStore(s => s.retentionChartLoading);
   const retentionChartError = useAdminStore(s => s.retentionChartError);
@@ -406,18 +401,9 @@ export function AdminScreen({ onBack }) {
           />
         </CollapsibleSection>
 
-        {/* T16070: day-1/3/7/14/28 retention by signup week. Collapsed, on-demand fetch. */}
-        <CollapsibleSection title="Day N Retention">
-          <DayNRetentionTable
-            data={retentionData}
-            loading={retentionLoading}
-            error={retentionError}
-            onRefresh={() => fetchRetention()}
-          />
-        </CollapsibleSection>
-
         {/* T7430: investor-grade retention chart -- triangle, curves, WAU, return-after-gap.
-            Collapsed, on-demand fetch. */}
+            T16070's day 1/3/7/14/28 figures show in its hover (no Day N section, ruling
+            2026-11-13). Collapsed, on-demand fetch. */}
         <CollapsibleSection title="Retention Chart">
           <RetentionView
             data={retentionChartData}
