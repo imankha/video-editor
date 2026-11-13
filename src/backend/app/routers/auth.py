@@ -632,7 +632,8 @@ async def auth_me(request: Request):
     from app.services.resume_points import get_resume_point
 
     try:
-        resume_point = get_resume_point(user_id)
+        # T15790: blocking psycopg2 read; offloaded so it never stalls the loop.
+        resume_point = await run_in_context(get_resume_point, user_id)
     except Exception:
         logger.exception(f"[Auth] /me: get_resume_point failed for user={user_id} (ignored)")
         resume_point = None

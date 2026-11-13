@@ -15,14 +15,15 @@
  * `--cta-bar-h` to 233px, the real height measured live on Focus at 1366x660 with the
  * Trim/SlowMo row showing (ActionBand.jsx's own useCtaBarHeight is what publishes this var in
  * production; this check exercises CornerStack's consumption of it, which is the regressed
- * contract). It fires the exact production `toast.success` call GlobalExportIndicator makes on
- * completion, then asserts neither the toast nor the Report button sit inside the band's
- * reserved footprint.
+ * contract). The toast comes from GlobalExportIndicator's own completion effect, fed by a
+ * just-completed export in the app's export-recovery response (T16000: no /src module imports,
+ * so C1 also runs against a deployed build), then it asserts neither the toast nor the Report
+ * button sit inside the band's reserved footprint.
  *
- * C2 reproduces "re-shown on every reload" by injecting a completed export, dismissing the
- * toast via its real Dismiss button (persists the export id via T15740's
- * dismissedExportToasts util), reloading the page, and re-injecting the SAME completed export
- * -- the toast must not reappear.
+ * C2 reproduces "re-shown on every reload": the same recovery response raises the toast, it
+ * is dismissed via its real Dismiss button (persists the export id via T15740's
+ * dismissedExportToasts util), the page reloads and recovery delivers the SAME just-completed
+ * export again -- the toast must not reappear (T16010: no /src imports, so C2 runs on staging).
  *
  * Run: bash scripts/dev-verify.sh e2e/checks/T15740.check.spec.js --reporter=line
  */
@@ -33,42 +34,41 @@ import { loginForCheck } from '../helpers/checkAuth';
 // (band top y=426.75, viewport height 660).
 const TALL_BAND_HEIGHT_PX = 233;
 
-async function fireCompletionToast(page, { exportId = 'check-export-1', projectName = 'Probe Reel' } = {}) {
-  return page.evaluate(async ({ exportId: id, projectName: name }) => {
-    const { toast } = await import('/src/components/shared/Toast.jsx');
-    const { rememberDismissedExportToast } = await import('/src/utils/dismissedExportToasts.js');
-    toast.success('Highlight ready', {
-      message: name,
-      duration: 8000,
-      onDismiss: () => rememberDismissedExportToast(id),
-    });
-  }, { exportId, projectName });
-}
-
-// Drives the REAL production path: writing a completed export into exportStore, which
-// GlobalExportIndicator's own completion effect (mounted on every screen, see App.jsx) picks
-// up and toasts -- this is what actually reproduces "re-shown on every reload", since the
-// bug is in that effect's dismissed-id check, not in the raw toast() call.
-async function completeExportInStore(page, { exportId, projectName = 'Probe Reel' }) {
-  return page.evaluate(async ({ id, name }) => {
-    const { useExportStore } = await import('/src/stores/exportStore.js');
+// T16000: the toast is raised through the real production path on any target (dev stack or a
+// deployed build, which serves no /src module paths): the app's own export-recovery response
+// carries one export that has just completed, so useExportRecovery loads it into exportStore
+// and GlobalExportIndicator's completion effect shows the toast. Recovery reads the exports
+// from /api/bootstrap, or from /api/exports/active when bootstrap takes longer than its 2 s
+// wait (the slow dev stack), so both responses carry it. Only the responses are rewritten
+// (the requests still go to the real backend); nothing is written server-side.
+// `exports` is read on every response, so a test can change what the next load delivers.
+async function routeRecoveryWithCompletedExports(page, exports) {
+  const completedExports = () => {
     const now = new Date().toISOString();
-    useExportStore.setState({
-      activeExports: {
-        [id]: {
-          exportId: id, projectId: -1, projectName: name, type: 'overlay',
-          status: 'complete', progress: { percent: 100 }, startedAt: now, completedAt: now,
-          error: null, outputVideoId: null, outputFilename: null,
-        },
-      },
-    });
-  }, { id: exportId, name: projectName });
+    return exports.map(({ exportId, projectName }) => ({
+      job_id: exportId, project_id: -1, project_name: projectName, type: 'overlay',
+      status: 'complete', progress: 100, started_at: now, completed_at: now,
+    }));
+  };
+  await page.route('**/api/bootstrap', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const recovered = body.exports || { active: [], unacknowledged: [] };
+    body.exports = { ...recovered, active: [...(recovered.active || []), ...completedExports()] };
+    await route.fulfill({ response, json: body });
+  });
+  await page.route('**/api/exports/active', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.exports = [...(body.exports || []), ...completedExports()];
+    await route.fulfill({ response, json: body });
+  });
 }
 
 test('T15740:C1 - the toast never overlaps the action bar or the chat bubble', async ({ context, page }) => {
-  test.skip(!!process.env.E2E_BASE_URL, '[T15740] drives the app through dev-server module imports (/src/...); a deployed build serves no such paths');
   await page.setViewportSize({ width: 1366, height: 660 });
   await loginForCheck(context);
+  await routeRecoveryWithCompletedExports(page, [{ exportId: `check-export-${Date.now()}`, projectName: 'Probe Reel' }]);
   await page.goto('/');
   await page.getByTestId('corner-stack').waitFor({ timeout: 30000 });
 
@@ -79,9 +79,8 @@ test('T15740:C1 - the toast never overlaps the action bar or the chat bubble', a
     document.documentElement.style.setProperty('--cta-bar-h', `${h}px`);
   }, TALL_BAND_HEIGHT_PX);
 
-  await fireCompletionToast(page);
   const toastEl = page.locator('[role="alert"]').first();
-  await expect(toastEl).toBeVisible();
+  await expect(toastEl).toBeVisible({ timeout: 60000 });
 
   const viewportHeight = 660;
   const bandTop = viewportHeight - TALL_BAND_HEIGHT_PX;
@@ -101,14 +100,13 @@ test('T15740:C1 - the toast never overlaps the action bar or the chat bubble', a
   ).toBe(true);
 });
 
-// C2 drives the real GlobalExportIndicator effect (mounted inside <App/>), unlike C1's
-// direct Toast.jsx call -- `corner-stack` alone is NOT enough to wait for: it (and
+// C2 waits for <App/> itself (GlobalExportIndicator is mounted inside it) -- `corner-stack` alone is NOT enough to wait for: it (and
 // ToastContainer/Report button) is mounted in main.jsx OUTSIDE <App/>, so it renders
 // before App's own `isCheckingSession` session-init gate resolves. On a freshly created
 // dev-preset account that gate can take well over the health-check's usual few seconds in
 // this sandbox (slow /api/auth/me, /api/geo), during which App renders null and
-// GlobalExportIndicator simply isn't mounted yet -- injecting into the store before then is
-// a silent no-op. Wait for a Home-screen-only marker instead.
+// GlobalExportIndicator simply isn't mounted yet, and the toast's Dismiss button sits under
+// the #preloader overlay. Wait for a Home-screen-only marker instead.
 async function waitForHomeScreenReady(page) {
   await page.getByTestId('corner-stack').waitFor({ timeout: 30000 });
   await page.getByText('ReelBallers').first().waitFor({ timeout: 60000 });
@@ -119,35 +117,38 @@ async function waitForHomeScreenReady(page) {
 }
 
 test('T15740:C2 - a dismissed toast stays dismissed after reload', async ({ context, page }) => {
-  test.skip(!!process.env.E2E_BASE_URL, '[T15740] drives the app through dev-server module imports (/src/...); a deployed build serves no such paths');
+  test.setTimeout(240000);
   await loginForCheck(context);
+  const stamp = Date.now();
+  const dismissed = { exportId: `check-export-${stamp}`, projectName: 'Dismissed Probe Reel' };
+  const exports = [dismissed];
+  // The route stays installed across page.reload() and stamps completed_at fresh on every
+  // response -- so after the reload the same export arrives again inside the toast's 10 s
+  // recency window, exactly the "re-shown on every reload" scenario.
+  await routeRecoveryWithCompletedExports(page, exports);
   await page.goto('/');
   await waitForHomeScreenReady(page);
 
-  const exportId = `check-export-${Date.now()}`;
-  const toastEl = page.locator('[role="alert"]').first();
-  // useExportRecovery's startup fetch (App.jsx) replaces the WHOLE activeExports map once
-  // it lands, which can race our direct-store injection and wipe it before the toast
-  // effect runs -- re-inject until recovery has settled and the toast actually shows.
-  await expect.poll(async () => {
-    await completeExportInStore(page, { exportId });
-    return toastEl.isVisible();
-  }, { timeout: 30000, intervals: [500] }).toBe(true);
+  const dismissedToast = page.locator('[role="alert"]').filter({ hasText: dismissed.projectName });
+  await expect(dismissedToast).toBeVisible({ timeout: 60000 });
 
   // The real user gesture: click the toast's own Dismiss button.
-  await toastEl.getByLabel('Dismiss').click();
-  await expect(toastEl).toBeHidden();
+  await dismissedToast.getByLabel('Dismiss').click();
+  await expect(dismissedToast).toBeHidden();
 
+  // Positive control: the reloaded app also recovers a second just-completed export the user
+  // never dismissed. Its toast showing proves recovery re-delivered both exports in time to
+  // toast; the dismissed one must still stay away.
+  const control = { exportId: `check-export-${stamp}-control`, projectName: 'Control Probe Reel' };
+  exports.push(control);
   await page.reload();
-  await waitForHomeScreenReady(page);
-
-  // Same export completing again (e.g. useExportRecovery re-processing the still-
-  // unacknowledged job on the fresh mount) must not re-show the toast the user dismissed.
-  // Re-inject repeatedly across the recovery-settle window above (the same race could
-  // otherwise race the injection away for the wrong reason instead of proving the fix).
-  for (let i = 0; i < 10; i++) {
-    await completeExportInStore(page, { exportId });
-    await page.waitForTimeout(300);
-    await expect(page.locator('[role="alert"]')).toHaveCount(0);
+  // The reload may restore an editor screen rather than Home, so the control toast itself is
+  // the readiness signal (no Home-only marker).
+  await expect(page.locator('[role="alert"]').filter({ hasText: control.projectName }))
+    .toBeVisible({ timeout: 120000 });
+  await expect(dismissedToast).toHaveCount(0);
+  for (let i = 0; i < 6; i++) {
+    await page.waitForTimeout(500);
+    await expect(dismissedToast).toHaveCount(0);
   }
 });

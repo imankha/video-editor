@@ -17,6 +17,7 @@ from app.services.resume_points import delete_resume_point, upsert_resume_point
 from app.services.sharing_db import ensure_invite_code
 from app.services.user_db import get_default_profile_sport
 from app.user_context import get_current_impersonator_id, get_current_user_id
+from app.utils.offload import run_in_context
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,9 @@ async def set_resume_point(payload: ResumePointReport) -> Response:
         return Response(status_code=204)
 
     user_id = get_current_user_id()
-    upsert_resume_point(user_id, payload.model_dump())
+    # T15790: psycopg2 is blocking; on the loop it stalled every concurrent request
+    # of a cold-reopen restore (T6200 fingerprint), pushing Frame past 10 s.
+    await run_in_context(upsert_resume_point, user_id, payload.model_dump())
     return Response(status_code=204)
 
 
@@ -82,5 +85,5 @@ async def clear_resume_point() -> Response:
     if get_current_impersonator_id():
         return Response(status_code=204)
 
-    delete_resume_point(get_current_user_id())
+    await run_in_context(delete_resume_point, get_current_user_id())  # T15790: off the loop
     return Response(status_code=204)
