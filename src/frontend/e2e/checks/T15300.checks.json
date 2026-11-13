@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T15300:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t15300_pg_fixture_stale_analytics.py -q -p no:cacheprovider"
+    }
+  }
+}

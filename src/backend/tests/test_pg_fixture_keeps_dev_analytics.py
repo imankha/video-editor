@@ -58,22 +58,7 @@ def test_schema_rebuild_keeps_non_test_analytics_rows(pg_conn):
         conn.close()
 
 
-def test_schema_rebuild_repairs_stale_legacy_analytics_tables(pg_conn):
-    """A DB still holding the pre-v009 shape (user_actions.event) is rebuilt."""
-    conn = _connect()
-    cur = conn.cursor()
-    try:
-        cur.execute("DROP TABLE IF EXISTS user_actions CASCADE")
-        cur.execute(
-            "CREATE TABLE user_actions (user_id TEXT NOT NULL, event TEXT NOT NULL, count INTEGER)"
-        )
-        mark_pg_schema_dirty()
-        _build_pg_schema(cur)
-        cur.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'user_actions'"
-        )
-        cols = {r["column_name"] for r in cur.fetchall()}
-        assert {"action", "platform"} <= cols
-        assert "event" not in cols
-    finally:
-        conn.close()
+
+# T15300: the stale-legacy-table repair test lived here and DROPped the real dev
+# user_actions to stage itself; it now runs in a scratch schema in
+# test_t15300_pg_fixture_stale_analytics.py.

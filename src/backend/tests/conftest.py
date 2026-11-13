@@ -202,17 +202,15 @@ def _analytics_columns(cur, schema):
     return shape
 
 
-def _analytics_schema_is_stale(cur):
-    """True when an analytics table differs from what a fresh _SCHEMA_DDL build creates:
-    legacy tables (user_flow_events, user_milestones) or missing, extra or retyped
-    columns, e.g. left by a test that altered the schema and marked it dirty. The
-    reference is built in a scratch schema inside a rolled-back transaction. Missing
-    tables are not stale: _SCHEMA_DDL creates them."""
+def _analytics_shapes(cur):
+    """(live, reference) analytics column shapes: `live` in the current schema,
+    `reference` from a fresh _SCHEMA_DDL build in a scratch schema inside a
+    rolled-back transaction."""
     from app.services.pg import _SCHEMA_DDL
     cur.execute("SELECT current_schema() AS s")
     live = _analytics_columns(cur, cur.fetchone()["s"])
     if not live:
-        return False
+        return live, {}
     cur.execute("BEGIN")
     try:
         cur.execute("CREATE SCHEMA t14210_reference")
@@ -221,7 +219,64 @@ def _analytics_schema_is_stale(cur):
         reference = _analytics_columns(cur, "t14210_reference")
     finally:
         cur.execute("ROLLBACK")
-    return any(columns != reference.get(table) for table, columns in live.items())
+    return live, reference
+
+
+def _repair_stale_analytics_tables(cur):
+    """Bring analytics tables that differ from a fresh _SCHEMA_DDL build (legacy
+    tables, or missing, extra or retyped columns, e.g. left by a test that altered
+    the schema and marked it dirty) back to the DDL shape WITHOUT losing a row.
+    Missing tables are not stale: _SCHEMA_DDL creates them.
+
+    T15300: pg_conn runs against the SHARED dev Postgres. Dropping a stale table
+    that holds rows erased every dev user's segments and actions, so only an
+    empty stale table is dropped (the DDL recreates it) and only an all-NULL
+    extra column is removed from a table with rows. Any other drift on a table
+    with rows (another branch's column holding data, a missing or retyped
+    column) raises before anything changes; the repairs run in one transaction.
+    """
+    live, reference = _analytics_shapes(cur)
+    drop_tables, drop_columns, refusals = [], [], []
+    for table in sorted(live):
+        columns, ref = live[table], reference.get(table)
+        if columns == ref:
+            continue
+        cur.execute(f"SELECT EXISTS (SELECT 1 FROM {table}) AS has_rows")
+        if not cur.fetchone()["has_rows"]:
+            drop_tables.append(table)
+            continue
+        if ref is None:
+            refusals.append(f"{table}: legacy table holding rows")
+            continue
+        missing = sorted(ref - columns)
+        if missing:
+            refusals.append(f"{table}: missing or changed columns {missing}")
+        ref_names = {name for name, _, _ in ref}
+        for name in sorted(name for name, _, _ in columns - ref if name not in ref_names):
+            cur.execute(f'SELECT EXISTS (SELECT 1 FROM {table} WHERE "{name}" IS NOT NULL) AS has_data')
+            if cur.fetchone()["has_data"]:
+                refusals.append(f"{table}.{name}: extra column holding data")
+            else:
+                drop_columns.append((table, name))
+    if refusals:
+        raise RuntimeError(
+            "REFUSING to rebuild the analytics schema: it drifted from _SCHEMA_DDL on tables "
+            "holding rows, and repairing it would destroy them (T15300). "
+            + "; ".join(refusals)
+            + ". Migrate or fix this Postgres by hand, then rerun."
+        )
+    if not drop_tables and not drop_columns:
+        return
+    cur.execute("BEGIN")
+    try:
+        for table, name in drop_columns:
+            cur.execute(f'ALTER TABLE {table} DROP COLUMN "{name}"')
+        if drop_tables:
+            cur.execute(f"DROP TABLE {', '.join(drop_tables)} CASCADE")
+    except Exception:
+        cur.execute("ROLLBACK")
+        raise
+    cur.execute("COMMIT")
 
 
 # T14410: postgres migrations whose up() writes rows (INSERT/UPDATE/DELETE),
@@ -236,15 +291,13 @@ _NEVER_REPLAYED_DATA_MIGRATIONS = (5, 6, 7, 9, 15, 25, 26, 35)
 
 
 def _build_pg_schema(cur):
-    """Drop stale analytics tables, apply _SCHEMA_DDL, replay the structural migrations."""
+    """Repair stale analytics tables, apply _SCHEMA_DDL, replay the structural migrations."""
     from app.services.pg import _SCHEMA_DDL
-    # T14210: pg_conn runs against the SHARED dev Postgres, so only drop the
-    # analytics tables when their shape is stale; a blanket DROP erased every
-    # dev user's user_actions rows and (via the v009 backfill) segment origins.
-    if _analytics_schema_is_stale(cur):
-        cur.execute("DROP TABLE IF EXISTS user_actions, user_flow_events, user_segments, user_milestones CASCADE")
+    # T14210 + T15300: pg_conn runs against the SHARED dev Postgres; a blanket
+    # DROP erased every dev user's user_actions rows and segment origins.
+    _repair_stale_analytics_tables(cur)
     # _SCHEMA_DDL (idempotent CREATE IF NOT EXISTS) must run before the DELETE
-    # so schema_migrations exists on a fresh DB. Runs after the DROP so that
+    # so schema_migrations exists on a fresh DB. Runs after the repair so that
     # user_actions is present when RUNNER sees it (v009 fresh-deploy branch).
     cur.execute(_SCHEMA_DDL)
     cur.execute(
