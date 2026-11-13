@@ -2077,6 +2077,34 @@ class PlanOrderTest(unittest.TestCase):
         self.assertLess(text.index("| T9 | [Nine]"), text.index("### Staging QA"))
 
 
+class ProcessStartRetryTest(unittest.TestCase):
+    """g-t16340-2 (2026-11-13): `git rev-parse HEAD` exited 0xC0000142 (never started) and killed the loop."""
+
+    def _results(self, *codes):
+        return [subprocess.CompletedProcess(["git"], code, "out", "") for code in codes]
+
+    def test_a_process_that_failed_to_start_is_run_again(self):
+        with patch.object(dotask_cli.subprocess, "run", side_effect=self._results(0xC0000142, 0)) as run, \
+                patch.object(dotask_cli.time, "sleep"):
+            result = dotask_cli.run_cmd(["git", "rev-parse", "HEAD"], check=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(run.call_count, 2)
+
+    def test_a_process_that_ran_and_failed_is_not_retried(self):
+        with patch.object(dotask_cli.subprocess, "run", side_effect=self._results(128)) as run:
+            with self.assertRaises(subprocess.CalledProcessError):
+                dotask_cli.run_cmd(["git", "rev-parse", "HEAD"], check=True)
+        self.assertEqual(run.call_count, 1)
+
+    def test_retries_stop_and_the_failure_is_raised(self):
+        codes = [0xC0000142] * (dotask_cli.PROCESS_START_RETRIES + 1)
+        with patch.object(dotask_cli.subprocess, "run", side_effect=self._results(*codes)) as run, \
+                patch.object(dotask_cli.time, "sleep"):
+            with self.assertRaises(subprocess.CalledProcessError):
+                dotask_cli.run_cmd(["git"], check=True)
+        self.assertEqual(run.call_count, dotask_cli.PROCESS_START_RETRIES + 1)
+
+
 class QuotedResumedTest(AutolandBase):
     def test_a_stop_line_quoting_resumed_is_still_a_stop_and_a_restart_marks_itself(self):
         stop = "t VERIFY_BLOCKED round 1: reviewer did not finish: t RESUMED autoland verify: restarted"
