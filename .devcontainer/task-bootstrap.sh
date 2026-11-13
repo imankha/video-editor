@@ -8,7 +8,7 @@ set -euo pipefail
 sudo chown -R dev:dev "$HOME/.claude" 2>/dev/null || true
 mkdir -p "$HOME/.claude"
 
-# bypassPermissions (the whole point) + the user's Sonnet-default requirement, merged
+# bypassPermissions (the whole point) + the user's Opus-default requirement (2026-11-13), merged
 # idempotently so a re-bootstrap never clobbers other keys and never drops the bypass
 # mode -- scripts/ensure_sonnet_default.py (tested directly; see test_dotask_cli.py).
 python3 /workspace/scripts/ensure_sonnet_default.py "$HOME/.claude/settings.json" 2>/dev/null || true

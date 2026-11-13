@@ -222,10 +222,13 @@ class Dispatch(unittest.TestCase):
             os.chdir(cwd)
         self.assertEqual(code, 3)  # a new untracked file outside docs/ is still source
 
-    def test_opus_cli_guard(self):
-        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
-            profile.main(["run", "--directory", str(self.root / "p"), "--wave", "w", "--tasks", "t",
-                          "--phase", "implementation", "--model", "opus", "--reason", "x", "--", "go"])
+    def test_an_opus_worker_dispatch_is_allowed_in_any_phase_and_not_flagged(self):
+        """Owner rule 2026-11-13: dotask workers run Opus in every phase."""
+        code, parent, _ = self.dispatch([agent_call("toolu_A", "tester"),
+                                         assistant("c1", 9, model="claude-opus-x", parent="toolu_A"),
+                                         assistant("m1", 3, model="claude-opus-x"), result()], model="opus")
+        self.assertEqual(code, 0)
+        self.assertEqual(parent["policy_violations"], [])
 
     def test_heartbeat_tool_progress_never_creates_a_phantom_child_record(self):
         """A tool_progress event carrying parent_tool_use_id of a plain Bash call must not

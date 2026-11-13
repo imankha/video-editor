@@ -66,8 +66,9 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   which is what `/nextup` (`dotask.sh nextup`) bundles for.
 - **The work happens in a NEW VS Code window attached to that container**
   (`task.sh code <slug> --prompt-file <kickoff>`, run by `dotask.sh start`). The user talks to
-  that Claude session directly -- it IS the worker, running on Sonnet (every task container's
-  settings default to the `sonnet` alias; see `.devcontainer/task-bootstrap.sh`). This chat
+  that Claude session directly -- it IS the worker, running on Opus (owner rule 2026-11-13: every
+  task container's settings default to the `opus` alias, see `.devcontainer/task-bootstrap.sh`; headless
+  dispatches run `opus` at effort `medium` in every phase, `DOTASK_MODEL`/`DOTASK_EFFORT` override). This chat
   does not relay turns to or from it.
   Once the container has the Claude extension (about a minute on a first attach), `task.sh code`
   opens `vscode://anthropic.claude-code/open?prompt=...`, which prefills the kickoff line in the

@@ -540,7 +540,11 @@ def opus_models(models):
 
 
 def policy_violations(record, children):
+    """Opus where the dispatch asked for Sonnet. Owner rule 2026-11-13: workers run Opus in every phase, so a
+    dispatch launched on Opus (the default) is not a violation, and neither are its nested agents."""
     found = []
+    if record.get("requested_model") == "opus":
+        return found
     if record["phase"] != "design" and opus_models(record["models"]):
         found.append(f"top-level {record['phase']} dispatch used {opus_models(record['models'])}")
     for child in children:
@@ -1373,8 +1377,6 @@ def main(argv=None):
         if args.action == "run":
             if not SAFE_ID.fullmatch(args.wave):
                 parser.error("wave id must match [A-Za-z0-9._-]+")
-            if args.model == "opus" and (not args.reason or args.phase != "design"):
-                parser.error("Opus requires --phase design and a design/root-cause --reason")
             if not 1 <= args.max_turns <= 500:
                 parser.error("--max-turns must be between 1 and 500")
             if args.tools and not re.fullmatch(r"[A-Za-z]+(,[A-Za-z]+)*", args.tools):

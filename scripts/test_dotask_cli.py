@@ -1187,7 +1187,7 @@ class VerifyBudgetOverrideTest(unittest.TestCase):
 
 
 class EnsureSonnetDefault(unittest.TestCase):
-    """D7: every task container's Claude defaults to the sonnet alias."""
+    """D7: every task container's Claude defaults to the opus alias (owner rule 2026-11-13)."""
 
     def test_merges_sonnet_default_keeping_bypass_and_other_keys(self):
         import ensure_sonnet_default
@@ -1197,7 +1197,7 @@ class EnsureSonnetDefault(unittest.TestCase):
         path.write_text(json.dumps({"permissions": {"defaultMode": "bypassPermissions"}, "other": "keepme"}))
         ensure_sonnet_default.merge(path)
         data = json.loads(path.read_text())
-        self.assertEqual(data["model"], "sonnet")
+        self.assertEqual(data["model"], "opus")
         self.assertEqual(data["permissions"]["defaultMode"], "bypassPermissions")
         self.assertEqual(data["other"], "keepme")
 
@@ -1208,7 +1208,7 @@ class EnsureSonnetDefault(unittest.TestCase):
         path = Path(tmp.name) / "nested" / "settings.json"
         ensure_sonnet_default.merge(path)
         data = json.loads(path.read_text())
-        self.assertEqual(data["model"], "sonnet")
+        self.assertEqual(data["model"], "opus")
         self.assertEqual(data["permissions"]["defaultMode"], "bypassPermissions")
         ensure_sonnet_default.merge(path)  # idempotent re-run
         data2 = json.loads(path.read_text())

@@ -1,6 +1,6 @@
-"""Idempotently merge the Sonnet-alias default and bypassPermissions into a Claude
+"""Idempotently merge the Opus-alias default and bypassPermissions into a Claude
 settings.json, without clobbering any other key (container task workers only; the
-user requires every task container's Claude to default to `sonnet`). Called from
+user requires every task container's Claude to default to `opus`, owner rule 2026-11-13). Called from
 `.devcontainer/task-bootstrap.sh` on every `task.sh up`.
 
 Usage: python scripts/ensure_sonnet_default.py <settings.json path>
@@ -23,7 +23,7 @@ def merge(path):
         permissions = {}
     permissions["defaultMode"] = "bypassPermissions"
     data["permissions"] = permissions
-    data["model"] = "sonnet"
+    data["model"] = "opus"  # owner rule 2026-11-13 (was sonnet; file name kept for the bootstrap)
     # Past the 2-minute default, a command is backgrounded, which ends a headless dispatch. `npm ci` on
     # the Windows bind mount takes about 3 minutes (g-t15000-2, 2026-11-06).
     env = data.get("env")

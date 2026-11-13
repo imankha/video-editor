@@ -56,7 +56,8 @@ passing the relevant `.claude/knowledge/` doc name(s) and a precise question, wh
 The expert returns analysis/design only; this session implements it. Architecture and non-obvious root-cause agents use Opus only for design.
 Exploration, implementation, QA, review and independent proof verification use Sonnet.
 All dispatch configuration uses aliases (`opus`, `sonnet`), never model versions.
-Container workers route by phase, not task size (spawn-worker SKILL).
+Exception (owner rule 2026-11-13): /dotask container workers run Opus at effort medium in every phase
+(`scripts/task.sh` default; `DOTASK_MODEL=sonnet` restores the old routing).
 
 
 ## Task Rules
