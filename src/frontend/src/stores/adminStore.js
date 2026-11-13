@@ -119,6 +119,8 @@ export const useAdminStore = create((set, get) => ({
   bySportData: null, bySportLoading: false, bySportError: null,
   // T13931: R2 usage by source (on-demand -- never on mount; the backend caches 10 min).
   r2UsageData: null, r2UsageLoading: false, r2UsageError: null,
+  // T16070: day-1/3/7/14/28 retention table (on-demand -- never on mount).
+  retentionData: null, retentionLoading: false, retentionError: null,
 
   // T14000: `build` is the 4th dimension value; omitting it clears the build, so a
   // campaign/cohort pick replaces a build pick. The platform breakdown follows the build
@@ -804,6 +806,22 @@ export const useAdminStore = create((set, get) => ({
       set({ packMixData: await res.json(), packMixLoading: false });
     } catch (err) {
       set({ packMixLoading: false, packMixError: err.message });
+    }
+  },
+
+  // T16070: day-1/3/7/14/28 retention, by weekly signup cohort + "all weeks".
+  fetchRetention: async () => {
+    set({ retentionLoading: true, retentionError: null });
+    try {
+      const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/retention?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ retentionData: await res.json(), retentionLoading: false });
+    } catch (err) {
+      set({ retentionLoading: false, retentionError: err.message });
     }
   },
 

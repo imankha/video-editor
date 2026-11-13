@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T16070:C1": {"kind": "browser"},
+    "T16070:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16070_day_n_retention.py -q"},
+    "T16070:C3": {"kind": "human", "why": "needs the production database: the 7-day figure for users who signed up before 2026-11-02 must match a hand count pulled from prod, which no automated check can reproduce."}
+  }
+}

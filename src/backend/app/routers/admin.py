@@ -2772,6 +2772,22 @@ def analytics_cohorts(
     }
 
 
+@router.get("/analytics/retention")
+# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_retention(exclude_test: bool = True):
+    """T16070: day-1/3/7/14/28 return rate by weekly signup cohort + an "all
+    weeks" pooled row. Reads existing user_usage_daily/user_segments only --
+    no new storage. T7430's richer retention chart reuses
+    compute_day_n_retention so both surfaces count returns identically."""
+    from ..services.analytics_retention import compute_day_n_retention
+
+    _require_admin()
+    excl = _test_exclusion(exclude_test)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        return compute_day_n_retention(cur, excl, datetime.now(UTC).date())
+
+
 @router.get("/analytics/builds")
 # sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_builds(

@@ -17,6 +17,7 @@ import { RevenueReconciliation } from '../components/admin/RevenueReconciliation
 import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
 import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
+import { DayNRetentionTable } from '../components/admin/DayNRetentionTable';
 import { BySportTable } from '../components/admin/BySportTable';
 import { CampaignsModal } from '../components/admin/CampaignsModal';
 
@@ -115,6 +116,10 @@ export function AdminScreen({ onBack }) {
   const packMixLoading = useAdminStore(s => s.packMixLoading);
   const packMixError = useAdminStore(s => s.packMixError);
   const fetchPackMix = useAdminStore(s => s.fetchPackMix);
+  const retentionData = useAdminStore(s => s.retentionData);
+  const retentionLoading = useAdminStore(s => s.retentionLoading);
+  const retentionError = useAdminStore(s => s.retentionError);
+  const fetchRetention = useAdminStore(s => s.fetchRetention);
   const bySportData = useAdminStore(s => s.bySportData);
   const bySportLoading = useAdminStore(s => s.bySportLoading);
   const bySportError = useAdminStore(s => s.bySportError);
@@ -386,6 +391,16 @@ export function AdminScreen({ onBack }) {
             loading={packMixLoading}
             error={packMixError}
             onRefresh={() => fetchPackMix()}
+          />
+        </CollapsibleSection>
+
+        {/* T16070: day-1/3/7/14/28 retention by signup week. Collapsed, on-demand fetch. */}
+        <CollapsibleSection title="Day N Retention">
+          <DayNRetentionTable
+            data={retentionData}
+            loading={retentionLoading}
+            error={retentionError}
+            onRefresh={() => fetchRetention()}
           />
         </CollapsibleSection>
 
