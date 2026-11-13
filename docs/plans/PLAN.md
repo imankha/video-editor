@@ -238,6 +238,7 @@ The largest fixable leak in the make-the-highlight band. The bug rows that cause
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T16420 | [Share the video file from a published highlight](tasks/T16420-share-video-from-published-highlight.md) | 7 | 3 | 2.3 | TODO | [ ] | Owner ruling 2026-11-13. A published highlight's Share buttons open the private-by-default Share dialog (T13120), which shares a link only; posting the video to Reels or TikTok takes Download and a manual upload. Add Share video to that dialog on phones that can share files, without touching the private default. Done when Share video hands the file to the phone's share sheet and the share-or-download rate out of paid highlights moves. |
 
 ### 2. Spotlight first, then the next play (stage: first session to return; 5 of 22 Spotlight exporters returned and all 5 payers were among them, against 2 of 30 and none)
 
