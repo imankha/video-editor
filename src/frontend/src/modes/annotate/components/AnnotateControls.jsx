@@ -266,7 +266,7 @@ export function AnnotateControls({
             icon={isEditMode ? Pencil : Plus}
             onClick={onAddClip}
             title={isEditMode ? 'Edit selected play (A)' : 'Mark play ending at current time (A)'}
-            className="hidden sm:flex"
+            className="hidden sm:flex coarse-pointer:min-h-11"
           >
             {isEditMode ? ANNOTATE.EDIT_PLAY : ANNOTATE.MARK_PLAY}
           </Button>

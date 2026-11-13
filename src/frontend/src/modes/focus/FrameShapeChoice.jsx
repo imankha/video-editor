@@ -58,7 +58,7 @@ export default function FrameShapeChoice({ aspectRatio, hasPositions, onChange, 
           data-testid="focus-shape-chip"
           onClick={() => choose(otherRatio)}
           aria-label={`${ratioLabel(aspectRatio)}, tap to switch shape`}
-          className={`inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-slate-900/80 px-3 py-1.5 text-xs font-semibold text-white/80 hover:border-cyan-300/40 hover:text-white transition-colors ${compact ? '' : ''}`}
+          className={`inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-slate-900/80 px-3 py-1.5 text-xs coarse-pointer:min-h-11 font-semibold text-white/80 hover:border-cyan-300/40 hover:text-white transition-colors ${compact ? '' : ''}`}
         >
           {ratioLabel(aspectRatio)}
           <ArrowLeftRight size={13} aria-hidden="true" />
