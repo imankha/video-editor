@@ -791,7 +791,9 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("2 task(s) x 30 min", basis)
         self.assertIn("verify up to 30 min", basis)
         self.assertIn("medians of 4 timed dispatch(es)", basis)
-        self.assertIn("eta: PR about 11:38 (12:38 with one fix round)", dotask_cli.eta_line(group, checkout, now))
+        self.assertIn("eta: ready for your test about 11:30 (12:30 with one fix round)", dotask_cli.eta_line(group, checkout, now))
+        with patch.object(dotask_cli, "OWNER_TEST", False):
+            self.assertIn("eta: PR about 11:38 (12:38 with one fix round)", dotask_cli.eta_line(group, checkout, now))
 
     def test_eta_never_counts_verification_past_the_budget_left(self):
         now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
@@ -860,7 +862,7 @@ class DotaskCliTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(dotask_cli.main(["status"]), 0)
         self.assertIn("g-x\tT1,T2,T3\trunning", out.getvalue())
-        self.assertIn("  eta: PR about", out.getvalue())
+        self.assertIn("  eta: ready for your test about", out.getvalue())
 
     def test_status_gives_no_eta_for_a_stopped_or_merged_group(self):
         # A merged group's file outlived its PR, and a stopped container's PUSHREADY was weeks old:

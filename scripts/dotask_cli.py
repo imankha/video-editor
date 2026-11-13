@@ -2276,6 +2276,15 @@ def eta_line(group, checkout, now=None):
     best, with_fix, basis = estimate(group, checkout, now)
     if best is None:
         return f"eta: none ({basis})"
+    if OWNER_TEST and " APPROVED " not in last_status(checkout):
+        # The owner's test comes before the push, so the next milestone is the test stack, not the PR.
+        ci = dt.timedelta(minutes=DEFAULT_MINUTES["ci"])
+        best, with_fix = best - ci, (with_fix - ci if with_fix else None)
+        basis = basis.replace(f", CI {DEFAULT_MINUTES['ci']} min", "").replace(f"CI {DEFAULT_MINUTES['ci']} min", "")
+        line = f"eta: ready for your test about {clock(best, now)}"
+        if with_fix:
+            line += f" ({clock(with_fix, now)} with one fix round)"
+        return f"{line} -- {basis}; PR about {DEFAULT_MINUTES['ci']} min after you approve"
     line = f"eta: PR about {clock(best, now)}"
     if with_fix:
         line += f" ({clock(with_fix, now)} with one fix round)"
