@@ -8,7 +8,7 @@ A highlight is one finished short clip of an athlete, and a reel is several of t
 **Filed:** 2026-11-13
 **Started:** not started
 **Impact:** 7 **Complexity:** 5 **Priority:** 1.4
-**Placement:** after the Highlight reel builder and before the Referral programme (owner, 2026-11-13). Its research task runs earlier, before Mark plays with AI, because that epic's prompt and stored data depend on it.
+**Placement:** after the Highlight reel builder, which the owner moved to after the Referral programme on 2026-11-13. Its research task runs earlier, before Mark plays with AI, because that epic's prompt and stored data depend on it.
 
 ## Goal
 

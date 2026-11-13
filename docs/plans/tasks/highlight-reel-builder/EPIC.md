@@ -8,7 +8,7 @@ Today a parent can finish a highlight (one short clip of their athlete) and shar
 **Filed:** 2026-11-12
 **Started:** not started
 **Impact:** 8 **Complexity:** 8 **Priority:** 1.0
-**Placement:** after Mark plays with AI and before the Referral programme (owner request, 2026-11-12).
+**Placement:** after the Referral programme and Click-once Spotlight (owner, 2026-11-13; it was first placed between Mark plays with AI and the Referral programme on 2026-11-12).
 **Design:** decision page https://claude.ai/artifact/Ug2wkCAVfxhUCfBgKQWq2H . It shows how other apps do this, the choices, and a recommendation for each. The owner answered all eight on 2026-11-13; the answers are below and in each task file.
 
 ## Goal
