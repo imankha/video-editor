@@ -4,7 +4,7 @@
 
 Today the admin panel shows how many people signed up, uploaded, made a highlight and paid, but it never says how many of them came back. The only return number we have, 17 of 402 users still active after a week, was pulled by hand from the production database on 2026-11-09. We will add a retention table to the admin panel: of the people who signed up in each week, what share used the app again 1, 3, 7, 14 and 28 days after signing up, with one total row across all weeks. These five checkpoints are the standard ones, so our numbers can be compared with other consumer apps, and they are short enough to read within a month of a change. Done when the admin panel shows the table and its 7-day figure for users who signed up before 2026-11-02 matches a hand count from the production database.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-11-11
