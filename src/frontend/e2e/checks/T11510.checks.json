@@ -8,7 +8,8 @@
       "kind": "browser"
     },
     "T11510:C3": {
-      "kind": "browser"
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/DraftReelPreview.test.jsx -t \"T11510:C3\" && npx vitest run src/components/PublishedReelsPanel.coarseShare.test.jsx"
     },
     "T11510:C4": {
       "kind": "browser"
@@ -21,9 +22,13 @@
       "kind": "code",
       "command": "git diff --exit-code origin/master -- src/frontend/src/components/ShareModal.jsx && cd src/frontend && npx vitest run src/components/GlobalExportIndicator.test.jsx src/components/PublishLinkFlow.test.jsx -t \"fine pointer\""
     },
+    "T11510:C7": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/PublishedReelsPanel.coarseShare.test.jsx"
+    },
     "T11510:C8": {
       "kind": "code",
-      "command": "cd src/frontend && npx vitest run src/components/collections/ReelTile.test.jsx -t \"T11510:C8\""
+      "command": "! git ls-files | grep -E '(^|/)(Share)?ActionSheet\\.jsx$' && cd src/frontend && npx vitest run src/components/collections/ReelTile.test.jsx -t \"T11510:C8\""
     },
     "T11510:C9": {
       "kind": "code",
@@ -37,6 +42,10 @@
     },
     "T11510:C12": {
       "kind": "browser"
+    },
+    "T11510:C13": {
+      "kind": "code",
+      "command": "! git ls-files | grep -E '(^|/)(Share)?ActionSheet\\.jsx$' && grep -q 'Preparing video' docs/plans/tasks/T16420-share-video-from-published-highlight.md"
     },
     "T11510:C14": {
       "kind": "browser"

@@ -45,6 +45,8 @@ vi.mock('./shared/Toast', () => ({
 // additive alongside the existing copyLink/webShare.
 // T10860: useWebShare gains repointShareLink({ downloadId, shareToken }) ->
 // Promise<string url>, additive alongside createShareLink/copyLink/webShare.
+// T11510:C3 flips webShareDevice to a phone with file sharing (coarse pointer, FULL).
+const { webShareDevice } = vi.hoisted(() => ({ webShareDevice: { isMobile: false, capability: 'none' } }));
 vi.mock('../hooks/useWebShare', () => ({
   ShareCapability: { FULL: 'full', LINK_ONLY: 'link', NONE: 'none' },
   useWebShare: () => ({
@@ -53,8 +55,8 @@ vi.mock('../hooks/useWebShare', () => ({
     shareLink: shareLinkMock,
     createShareLink: createShareLinkMock,
     repointShareLink: repointShareLinkMock,
-    isMobile: false,
-    capability: 'none',
+    isMobile: webShareDevice.isMobile,
+    capability: webShareDevice.capability,
   }),
 }));
 const { downloadsApi } = vi.hoisted(() => ({
@@ -306,6 +308,60 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
 });
 
 // T10190 §3.2 Shaper 2: gameId threading + onBackToGame gating/wiring.
+// T11510:C3 (restated 2026-11-13): an unpublished highlight never offers Share
+// video or mints a link without the "Publish and get link" review, on a phone
+// that CAN share files. (Published highlights share through T13120's ShareModal:
+// PublishedReelsPanel.coarseShare.test.jsx.)
+describe('T11510:C3 unpublished draft on a phone with file sharing', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+    createShareLinkMock.mockReset();
+    createShareLinkMock.mockResolvedValue('https://reelballers.com/shared/tok123');
+    shareVideoFileMock.mockReset();
+    shareLinkMock.mockReset();
+    webShareDevice.isMobile = true;
+    webShareDevice.capability = 'full';
+    act(() => useReelPreviewStore.getState().close());
+  });
+  afterEach(() => {
+    webShareDevice.isMobile = false;
+    webShareDevice.capability = 'none';
+  });
+
+  it('T11510:C3 offers no Share video and mints nothing until the review is confirmed', async () => {
+    render(<DraftReelPreview />);
+    openPreview();
+    const shareVideo = () => screen.queryByRole('button', { name: 'Share video' });
+    const shareLinkBtn = () => screen.queryByRole('button', { name: 'Share link' });
+
+    // Idle: only the review entry.
+    expect(screen.getByRole('button', { name: 'Get link' })).toBeTruthy();
+    expect(shareVideo()).toBeNull();
+    expect(shareLinkBtn()).toBeNull();
+
+    // Review open, then cancelled: still nothing offered, nothing written.
+    fireEvent.click(screen.getByRole('button', { name: 'Get link' }));
+    expect(shareVideo()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(shareVideo()).toBeNull();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(createShareLinkMock).not.toHaveBeenCalled();
+    expect(shareVideoFileMock).not.toHaveBeenCalled();
+
+    // Only confirming the review publishes, then mints, then offers Share video.
+    apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get link' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+    });
+    await waitFor(() => expect(screen.getByText('Link ready')).toBeTruthy());
+    expect(apiFetchMock.mock.invocationCallOrder[0]).toBeLessThan(createShareLinkMock.mock.invocationCallOrder[0]);
+    expect(createShareLinkMock).toHaveBeenCalledTimes(1);
+    expect(shareVideo()).toBeTruthy();
+    expect(shareLinkBtn()).toBeTruthy();
+  });
+});
+
 describe('DraftReelPreview gameId threading and onBackToGame (T10190)', () => {
   beforeEach(() => {
     setPendingGameMock.mockClear();

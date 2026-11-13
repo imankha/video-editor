@@ -13,6 +13,11 @@
  * the exact payload each button sends. Playwright's touch emulation (hasTouch + isMobile)
  * makes `pointer: coarse` match, which is what useIsCoarsePointer reads.
  *
+ * Owner ruling 2026-11-13 (task file ## Ruling): the share chooser is superseded by T13120.
+ * C3 (unpublished draft, plus published highlights through ShareModal), C7 (the three
+ * published-highlight Share buttons open ShareModal) and C8/C13 are code checks in
+ * T11510.checks.json; the published Gallery tiles are not reachable from this harness.
+ *
  * C11's player Share (CollectionPlayer) is not reachable here: the dev preset's Gallery holds
  * no single published highlight tile to open. Its coarse-pointer floor is asserted in
  * src/components/collections/CollectionPlayer.test.jsx ('T11510:C11 ...').
@@ -123,35 +128,6 @@ test.describe('T11510 phone (360px, coarse pointer)', () => {
       return { btn: el.getBoundingClientRect().width, inner };
     });
     expect(Math.abs(widths.btn - widths.inner), `Share link ${widths.btn}px vs column ${widths.inner}px`).toBeLessThanOrEqual(1);
-  });
-
-  test('T11510:C3 - an unpublished draft offers no Share video and mints no link before the review; a published one mints on Share link with no review', async ({ page }) => {
-    const calls = await openDraft(page);
-    // Unpublished, idle: only the review entry; no Share video, no link actions.
-    await expect(page.getByRole('button', { name: 'Get link' })).toBeVisible({ timeout: 10000 });
-    await expect(shareVideoBtn(page)).toHaveCount(0);
-    await expect(shareLinkBtn(page)).toHaveCount(0);
-    // Opening the review mints nothing; Cancel mints nothing.
-    await page.getByRole('button', { name: 'Get link' }).click();
-    await expect(page.getByText(/Anyone with the link can watch/)).toBeVisible();
-    await expect(shareVideoBtn(page)).toHaveCount(0);
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    expect(calls.shareMint, 'no link minted without the review being confirmed').toBe(0);
-    expect(calls.publish).toBe(0);
-    // Only confirming the review publishes and mints.
-    await publishToReady(page);
-    expect(calls.publish).toBe(1);
-    expect(calls.shareMint).toBe(1);
-
-    // Published, no link yet (R5 ready-capable): Share link mints directly, no review card.
-    const page2 = await page.context().newPage();
-    const calls2 = await openDraft(page2, { hash: 'alreadyPublished=1' });
-    await expect(shareLinkBtn(page2)).toBeVisible({ timeout: 10000 });
-    await shareLinkBtn(page2).click();
-    await expect(page2.getByText('Link ready')).toBeVisible({ timeout: 10000 });
-    await expect(page2.getByText(/Anyone with the link can watch/)).toHaveCount(0);
-    expect(calls2.shareMint, 'published highlight mints on Share link').toBe(1);
-    expect(calls2.publish, 'no publish/review for an already-published highlight').toBe(0);
   });
 
   test('T11510:C4 - each phone label sends the payload it names; the coarse toast has no share action', async ({ page }) => {
