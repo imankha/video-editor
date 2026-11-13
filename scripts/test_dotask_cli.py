@@ -2094,6 +2094,24 @@ class OwnerTestBeforePrTest(AutolandBase):
         self.assertEqual(len(self.dispatches), reviews)  # no second reviewer
         self.assertIn("LANDED", self._last())
 
+    def test_owner_changes_run_a_fix_round_for_the_owning_task_then_wait_for_a_new_test(self):
+        self.verdicts = [self._verdict()]
+        self._run()
+        tested = self.head
+        recheck = self._verdict()
+        del recheck["head"]  # made on the fixed HEAD
+        self.verdicts = [recheck]
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = dotask_cli.changes(SimpleNamespace(slug="g-t1-1", finding=[["T1", "Make the chart big"]]))
+        self.assertEqual(code, 0)
+        fixes = [text for phase, text in self.dispatches if phase == "implementation"]
+        self.assertEqual(len(fixes), 1)
+        self.assertIn("Owner change: Make the chart big", fixes[0])
+        self.assertNotEqual(self.head, tested)
+        self.assertIn("OWNER_CHANGES", self.status.read_text())
+        self.assertIn("READY_TO_TEST", self._last())
+        self.land.assert_not_called()
+
     def test_approve_refuses_when_head_moved_after_the_test_stack(self):
         self.verdicts = [self._verdict()]
         self._run()

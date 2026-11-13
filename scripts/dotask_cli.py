@@ -1980,6 +1980,68 @@ def approved_verdict(checkout, group, head):
     return verdict
 
 
+OWNER_CHANGES_RECHECK_MIN = 15
+
+
+def tested_or_plans_only(checkout, tested, head):
+    """HEAD is the tested one, or moved only by commits under docs/plans (the owner's ruling recorded in a
+    task file before `changes`, g-t16070-3 2026-11-13): the code the owner tested is unchanged."""
+    if not tested or tested == head:
+        return tested == head
+    diff = subprocess.run([tool("git"), "-C", str(checkout), "diff", "--name-only", tested, head],
+                          capture_output=True, text=True, check=False)
+    paths = [p for p in diff.stdout.splitlines() if p.strip()]
+    return diff.returncode == 0 and is_ancestor(checkout, tested, head) and all(p.startswith("docs/plans/") for p in paths)
+
+
+def owner_changes_verdict(checkout, group, head):
+    """The verdict a `changes` request turns into a fix round: the clean verdict on this HEAD plus the owner's
+    findings as group bugs, written where the fix workers read it. None when no request waits on this HEAD."""
+    request = group.get("owner_changes")
+    if not request or request.get("head") != head:
+        return None
+    try:
+        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        verdict = {"criteria": []}
+    verdict = {**verdict, "head": head, "bugs": [*verdict.get("bugs", []), *request["bugs"]]}
+    write_lf(Path(checkout) / VERIFY_FILE, json.dumps(verdict, indent=2) + "\n")
+    group.pop("owner_changes")
+    save_group(checkout, group)
+    return verdict
+
+
+def changes(args):
+    """The owner tested READY_TO_TEST's stack and wants changes (g-t16070-3, 2026-11-13): each finding becomes a
+    group bug owned by its task, and autoland runs a fix round, a re-check and a new READY_TO_TEST. Record any
+    criterion the owner changed in the task file (## Ruling) first: fix workers never edit criteria."""
+    slug = args.slug
+    checkout = TASKS_ROOT / sanitize(slug)
+    group_path = checkout / GROUP_FILE
+    if not group_path.is_file():
+        die(f"no group file at {group_path}; is {slug} a live /dotask group?")
+    group = json.loads(group_path.read_text(encoding="utf-8"))
+    head = git_head(checkout)
+    if READY_TO_TEST not in last_status(checkout) or not tested_or_plans_only(checkout, group.get("tested_head"), head):
+        die(f"{slug} is not waiting on a test of HEAD {head[:9]} (last status: {last_status(checkout)[:120]})")
+    bugs = []
+    for task_id, text in args.finding:
+        if task_id not in group["tasks"]:
+            die(f"{task_id} is not in {slug} ({' '.join(group['tasks'])})")
+        bugs.append({"scope": "group", "task": task_id, "title": f"Owner change: {text[:90]}",
+                     "steps": f"The owner tested HEAD {head[:9]} on the local stack. Read {task_id}'s task file, "
+                              "including any ## Ruling, before changing code.",
+                     "expected": text, "actual": "Not built this way at the tested HEAD."})
+    group["owner_changes"] = {"head": head, "bugs": bugs}
+    # The owner re-tests anyway, but the re-check of their changes should not start with no budget left.
+    budget = group.get("verify_budget_min", VERIFY_BUDGET_MINUTES)
+    group["verify_spent_s"] = min(group.get("verify_spent_s", 0), (budget - OWNER_CHANGES_RECHECK_MIN) * 60)
+    save_group(checkout, group)
+    append_status(checkout, f"OWNER_CHANGES {head[:9]}: {len(bugs)} change(s) for "
+                            f"{' '.join(sorted({b['task'] for b in bugs}))}; fix round next")
+    return autoland(SimpleNamespace(slug=slug, no_land=False))
+
+
 def approve(args):
     slug = args.slug
     checkout = TASKS_ROOT / sanitize(slug)
@@ -2043,8 +2105,8 @@ def autoland(args):
         else:
             try:
                 # `approve` re-enters here: the clean verdict on this exact HEAD stands, nothing is re-checked.
-                verdict = approved_verdict(checkout, group, head) or verify_once(
-                    slug, group, checkout, head, round_number, focus)
+                verdict = (approved_verdict(checkout, group, head) or owner_changes_verdict(checkout, group, head)
+                           or verify_once(slug, group, checkout, head, round_number, focus))
             except UntrustedVerdict as exc:
                 append_status(checkout, f"VERIFY_BLOCKED round {round_number}: {exc}")
                 return 1
@@ -2608,6 +2670,12 @@ def main(argv=None):
                                         "wait for CI (red CI goes to a fix round and back to a test)")
     ok.add_argument("slug")
 
+    redo = sub.add_parser("changes", help="the owner tested READY_TO_TEST's stack and wants changes: a fix round, "
+                                          "a re-check, then a new READY_TO_TEST")
+    redo.add_argument("slug")
+    redo.add_argument("--finding", nargs=2, action="append", required=True, metavar=("TASK", "TEXT"),
+                      help="a change the owner wants, owned by one task of the group (repeatable)")
+
     app = sub.add_parser("stack")
     app.add_argument("slug")
 
@@ -2622,7 +2690,7 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     try:
-        return {"start": start, "land": land, "autoland": locked(autoland), "resume": locked(resume), "approve": locked(approve), "stack": stack,
+        return {"start": start, "land": land, "autoland": locked(autoland), "resume": locked(resume), "approve": locked(approve), "changes": locked(changes),"stack": stack,
                 "status": status, "nextup": nextup, "staging-check": staging_check}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)
