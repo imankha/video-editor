@@ -17,7 +17,7 @@ The owner ruled on the decision page (owner, 2026-11-13):
 
 - **Which transitions (choice 3):** cut, fade through black, and crossfade.
 - **Reach (choice 2):** one transition for the whole reel, so the job takes one kind and one length, not one per join.
-- **Transition length (choice 4):** set with a slider, so the job must accept any length in the slider's range (proposed 0.2 to 2.0 seconds), not three fixed values.
+- **Transition length (choice 4):** set with a slider, so the job must accept any length in the slider's range (0.2 to 2.0 seconds, accepted by the owner), not three fixed values.
 - **Sound (choice 8):** each highlight keeps its sound and one switch mutes the reel. Music under a reel is wanted too, if a music bank with terms that cover us is found; that is its own task (T16310), and this job only has to leave room for one extra sound track.
 
 ## How we got here

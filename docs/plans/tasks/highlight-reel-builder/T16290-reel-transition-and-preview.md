@@ -16,12 +16,12 @@ In the first version of the reel (several highlights, which are finished short c
 The owner ruled on the decision page (owner, 2026-11-13):
 
 - **Shape of the builder (choice 1):** one list in playing order. Not a film-editor timeline.
-- **Reach of a transition (choice 2):** one transition for the whole reel. No setting at each join. This keeps the 2026-10-20 ruling and is simpler than the recommendation.
+- **Reach of a transition (choice 2):** one transition for the whole reel. No setting at each join, because a parent should not mix different transitions inside the same video. This keeps the 2026-10-20 ruling and is simpler than the recommendation.
 - **Which transitions (choice 3):** cut, fade through black, and crossfade. Cut is the starting value.
 - **Transition length (choice 4):** a slider, not three named lengths.
 - **Preview (choice 7):** the transition and the cards play in the preview before export.
 
-One detail the ruling leaves to the design, proposed here: the slider runs from 0.2 to 2.0 seconds in steps of a tenth, starts at half a second, and shows its value as a number beside it.
+- **Slider range:** accepted as proposed. The slider runs from 0.2 to 2.0 seconds in steps of a tenth, starts at half a second, and shows its value as a number beside it.
 
 ## How we got here
 

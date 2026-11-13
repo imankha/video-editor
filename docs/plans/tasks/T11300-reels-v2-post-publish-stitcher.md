@@ -86,7 +86,7 @@ Backend
 - Related: season-highlights-spec.md section 3 (collections verbs Play / Share / Video), T11500 (dev account picker's Full preset waits on this reel)
 
 ### Technical Notes
-- **Leave room for the later tasks in this epic (rulings recorded 2026-11-13).** The reel's stored design must already carry: one transition kind (cut, fade through black, crossfade) and one transition length for the whole reel (a slider, proposed 0.2 to 2.0 seconds); a length on each card; a kind on each card (title, section, end); and one optional music track. This version only uses cut or fade and the fixed 2.5 second card, but T16280, T16290, T16300 and T16310 must not need a second change to stored data. See [EPIC.md](highlight-reel-builder/EPIC.md).
+- **Leave room for the later tasks in this epic (rulings recorded 2026-11-13).** The reel's stored design must already carry: one transition kind (cut, fade through black, crossfade) and one transition length for the whole reel (a slider, 0.2 to 2.0 seconds); a length on each card; a kind on each card (title, section, end); and one optional music track. This version only uses cut or fade and the fixed 2.5 second card, but T16280, T16290, T16300 and T16310 must not need a second change to stored data. See [EPIC.md](highlight-reel-builder/EPIC.md).
 - L-tier, design-gated: the Architect writes `T11300-design.md` covering the `reels` schema
   (members as project ids + stitched `final_video_id` snapshot, order, text frames, transition,
   title card, exported `final_video_id`), the surgical endpoint contract, the fade step, and the
