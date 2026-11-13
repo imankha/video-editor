@@ -5,7 +5,7 @@
 On a phone, every Share button sends the video file itself, even the one labelled Share link. A file never shows the cover picture the parent chose, because Instagram, iMessage and WhatsApp pick their own thumbnail; only a link shows our cover. Of the 56 parents who paid for a highlight, 11 downloaded or shared it, so this is where finished highlights die. We will give phones two clear choices, Share video for posting to Reels or TikTok and Share link for messaging, and fix the mislabelled button. The cover picture itself is handled by the reel's title card (T15880). Done when both choices work on a phone and the share-or-download rate out of paid highlights moves on the admin Journey.
 
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-10-01
@@ -400,52 +400,28 @@ Analytics: `track('share_initiated', { method, source })`. `method` becomes
   scope.
 - The style guide gains an "Action sheet" entry once this ships and is approved (not before).
 
-## Implementation note (2026-11-13, code audit)
+## Ruling
 
-**D1-D4 (ActionSheet/ShareActionSheet, PublishedReelsPanel player Share, ReelTile card-face
-and kebab Share) are superseded, not implemented.** This doc was written 2026-10-01; a later
-task, T13120, already replaced `webShareReel`/`sharePlayerReel` on both those surfaces so
-"Share" opens `ShareModal` (visibility choice + Copy link) on **every** pointer type now.
-`ShareModal` has zero `navigator.share`/file-sharing code -- it never sends the raw video file,
-so the bug this task describes ("every Share sends a file even though labelled link") does not
-exist on those two surfaces anymore; Download (separate button, correctly labelled) is the only
-way to get the file there. Building D1-D4 on top of that would duplicate/partially undo
-T13120's shipped decision. An inline comment in `ReelTile.jsx`'s kebab claiming `onWebShare`
-"restores native share sheet capability" was stale from before T13120 and has been corrected.
-
-**What this task actually fixed** (the two call sites that still did raw `navigator.share`
-with a video file): `DraftReelPreview.jsx`'s `PublishLinkFlow` ready-phase button (was
-mislabelled "Share link..." while sending the file) now has two real, correctly-labelled
-siblings (D6: Share link / Share video, LINK_ONLY collapses to one), via `useWebShare`'s new
-`shareLink`/`shareVideoFile` (AC1). `GlobalExportIndicator.jsx`'s post-export toast (D5) no
-longer offers any share action on coarse pointers (it shared an unpublished draft's file under
-a bare "Share" label; desktop Copy link is unchanged). D3's backend `has_public_link` field and
-the full `ActionSheet`/`ShareActionSheet` component were not needed for this narrowed scope.
-
-**Open product question for the owner, not resolved here:** T13120 removed the "share the
-video file to Reels/TikTok" option from published highlights (ReelTile / PublishedReelsPanel)
-entirely -- there is now no file-sharing affordance on those two surfaces at all (only Download
-and ShareModal's link-sharing). If that capability is wanted back there, it needs its own task;
-this one did not restore it, since doing so inside T11510 would mean re-deciding T13120's
-shipped change rather than fixing the bug this task was filed for.
+**Owner, 2026-11-13: the share chooser (D1-D4, `ActionSheet` / `ShareActionSheet`) is superseded by T13120.** T13120 (owner decision 2026-10-18) made the published highlight player's Share, the tile's card-face Share and the tile's mobile menu Share open `ShareModal`, private by default, on every device. The chooser as written would mint a public link with no visibility choice, the exposure T13120 fixed. So T11510 fixes the mislabelled share where it still exists (the draft link-ready card and the post-export toast), and its criteria below are restated to match: C7 and C13 now say what is true under T13120, and C2, C3 and C8 lose their chooser halves. Sending the video file from a published highlight (Share video for Reels or TikTok) is filed as T16420.
 
 ## Acceptance Criteria
 - [ ] On a coarse-pointer device with file sharing, "Share video" calls `navigator.share` with
       `files` and no `url`, and "Share link" calls it with `url` and no `files`. Unit tests assert
       the exact payload for each.
-- [ ] A LINK_ONLY device shows "Share link" and doesn't show "Share video" on every surface: the
-      chooser and the draft link-ready grid (which collapses to one full-width button).
+- [ ] A LINK_ONLY device shows "Share link" and doesn't show "Share video" on the draft link-ready
+      grid, which collapses to one full-width button (the chooser is superseded, ruling 2026-11-13).
 - [ ] An unpublished highlight never offers Share video or mints a link without the existing
-      "Publish and get link" review (test). A published highlight with no link mints it directly
-      on Share link / Copy link, with no review (T10180 R5).
+      "Publish and get link" review (test). Published highlights share through T13120's ShareModal
+      (ruling 2026-11-13).
 - [ ] No label on any surface names a payload different from the one it sends.
 - [ ] Live-verified on a real phone: Share link -> iMessage shows the chosen cover frame in the
       preview card.
 - [ ] Desktop ShareModal / Copy link behaviour unchanged.
-- [ ] The published highlight player Share, the tile card-face Share and the mobile kebab "Share..." all open the
-      same `ShareActionSheet` on coarse pointers (test).
-- [ ] `ActionSheet` closes only via Cancel/Done or Escape; tapping the backdrop does nothing
-      (test). ReelTile's mobile kebab no longer closes on a backdrop tap and has a Cancel row.
+- [ ] The published highlight player Share, the tile card-face Share and the mobile kebab "Share..." all open
+      T13120's `ShareModal` on coarse pointers, private by default, and none of them sends the video file (test;
+      ruling 2026-11-13: no `ShareActionSheet`).
+- [ ] ReelTile's mobile kebab no longer closes on a backdrop tap and has a Cancel row (test; no
+      `ActionSheet`, ruling 2026-11-13).
 - [ ] The post-export toast on coarse pointers offers no share action (test); desktop toast is
       unchanged.
 - [ ] The draft link-ready phase on mobile shows the link card, Share link (cyan) and Share video
@@ -454,7 +430,7 @@ shipped change rather than fixing the bug this task was filed for.
       `min-h-11`): the player Share, LinkReadyCard Copy, the toast action, and the PublishLinkFlow
       buttons.
 - [ ] The toast container does not overflow at 360px.
-- [ ] A Share video in progress shows "Preparing video..." with a spinner and disables the other
-      rows; the sheet closes on success or AbortError and stays open on any other error.
+- [ ] Superseded with the share sheet (ruling 2026-11-13): no `ActionSheet` or `ShareActionSheet`
+      component is added (code check). The progress state for Share video moves to T16420.
 - [ ] No user-facing string added or touched by this task calls a single finished highlight a
       "reel".
