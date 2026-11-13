@@ -5,7 +5,7 @@
 The retention chart: for each week's sign-ups, how many were still active one, two and three weeks later. This is the number the whole roadmap is judged by, and we do not have it today.
 
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-08-20

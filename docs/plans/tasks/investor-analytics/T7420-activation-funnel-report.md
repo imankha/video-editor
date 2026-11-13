@@ -5,7 +5,7 @@
 For each month's sign-ups, how many made a highlight and how many shared one within two weeks, and where the rest dropped off.
 
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-08-20
