@@ -1,0 +1,315 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "Navy blue"
+    },
+    "team_1": {
+      "color": "White"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:06",
+      "end": "00:12",
+      "summary": "Our defenders withstand a dangerous attack down the opponent's left wing and clear the ball out of the penalty area to launch a counter.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception",
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Virgil van Dijk, staying composed inside the box to read the danger and clear the threat cleanly."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:12",
+      "end": "00:24",
+      "summary": "Our central midfielder hits a long through ball over the top to send the striker into a 1v1 duel inside the box, ending in a shot wide of the goal.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Kevin De Bruyne, spotting the forward run early and weighting an accurate long ball into space behind the back line."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-forward",
+            "tags": [
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Great pace and strength to hold off the defender, but next time keep your head over the ball and strike low across the goalkeeper to hit the target."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:57",
+      "end": "01:13",
+      "summary": "Our team wins possession in midfield and links several short passes up the far side before a final through ball into the box runs to the opponent goalkeeper.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right midfielder",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Toni Kroos, winning the ball cleanly and using simple one- and two-touch passing to keep the move flowing."
+          },
+          {
+            "jersey_number": null,
+            "position": "attacking midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 2,
+            "note": "The idea to slip the runner into the box was right, so next time take a touch off the pace of the pass so the striker can reach it before the goalkeeper."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:21",
+      "end": "01:27",
+      "summary": "An opponent midfielder dribbles across the center of the pitch and draws a foul from our player, conceding a free kick.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 2,
+            "execution_score": 1,
+            "note": "Do not dive in when the attacker already has momentum across midfield; stay on your feet, jockey, and force them away from goal."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:36",
+      "end": "01:51",
+      "summary": "Our back line defends a long free kick into our box and wins possession to counter-attack, though the long forward pass goes too far.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception",
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Sergio Ramos, attacking the bouncing ball aggressively at the edge of the box to shut down the set-piece threat."
+          },
+          {
+            "jersey_number": null,
+            "position": "midfielder",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Look up before launching the early long ball on the counter; take an extra touch if needed so you can weight the pass into your winger's stride."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:58",
+      "end": "02:11",
+      "summary": "After winning the ball in our own half, our midfielder switches play with a lofted pass to the right winger, who brings it down and dribbles into the box to win a corner.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "defensive midfielder",
+            "tags": [
+              "Tackle",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like N'Golo Kante, stepping in cleanly to win possession and immediately laying it off to start the transition."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Xabi Alonso, lifting his head early and delivering an accurate diagonal ball over the defense into space."
+          },
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Control",
+              "Dribble"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Bukayo Saka, cushioning the aerial pass on the run and attacking the full-back 1v1 to earn a corner."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "02:45",
+      "end": "02:52",
+      "summary": "An opponent winger breaks down our right flank and plays a ball toward the box, which our defender intercepts and clears to safety.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Like Thiago Silva, reading the cross early and positioning yourself inside the danger zone to clear cleanly."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "02:52",
+      "end": "03:00",
+      "summary": "Our players combine tightly along the near touchline under pressure to escape our defensive half and push play forward.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left midfielder",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Luka Modric, staying calm in tight space to shield the ball and thread a forward pass out of pressure."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "03:51",
+      "end": "04:07",
+      "summary": "A long free kick from deep in our half sets up our attacking midfielder at the edge of the box to thread a clever through ball, and our striker finishes cleanly into the net.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Trent Alexander-Arnold, driving a purposeful long free kick from deep into a dangerous central zone."
+          },
+          {
+            "jersey_number": null,
+            "position": "attacking midfielder",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Chance Creation",
+              "Assist"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Martin Odegaard, controlling the second ball near the arc and slipping an incisive pass into the striker's stride."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-forward",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Erling Haaland, timing the run inside the box and burying the 1v1 finish past the goalkeeper."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    }
+  ]
+}

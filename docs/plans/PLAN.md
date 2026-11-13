@@ -11,10 +11,10 @@
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T15450 | [Staging sign-in does not survive a reload in Safari-class browsers (cross-site session cookie)](tasks/T15450-staging-sign-in-does-not-survive-a.md) | 7 | 4 | 1.8 | STAGING | [ ] | QA 2026-11-09, possible. WebKit drops the pages.dev->fly.dev session cookie; check on a real iPhone. Likely staging-only. |
-| T15540 | [Wrong sign-in code: boxes not cleared and a Verify tap double-submits, burning attempts](tasks/T15540-wrong-sign-in-code-boxes-not-cleared.md) | 6 | 2 | 3.0 | WIP | [ ] | QA 2026-11-09. Retry after a typo burns the 5-attempt limit. |
-| T15580 | [Impersonation banner has no Reopen their page link for some users](tasks/T15580-impersonation-banner-has-no-reopen-their-page.md) | 5 | 2 | 2.5 | WIP | [ ] | QA 2026-11-09. T14990 criterion fails for an overlay resume point. |
-| T15600 | [Under-44px touch targets across sign-in, Annotate, Spotlight, Gallery and the share page](tasks/T15600-under-44px-touch-targets-across-sign-in.md) | 5 | 3 | 1.7 | WIP | [ ] | QA 2026-11-09. Full list in the task file. |
-| T15620 | [Device-wrong copy: phone wording on desktop and iPad, desktop wording on phones](tasks/T15620-device-wrong-copy-phone-wording-on-desktop.md) | 4 | 2 | 2.0 | WIP | [ ] | QA 2026-11-09. |
+| T15540 | [Wrong sign-in code: boxes not cleared and a Verify tap double-submits, burning attempts](tasks/T15540-wrong-sign-in-code-boxes-not-cleared.md) | 6 | 2 | 3.0 | STAGING | [ ] | QA 2026-11-09. Retry after a typo burns the 5-attempt limit. |
+| T15580 | [Impersonation banner has no Reopen their page link for some users](tasks/T15580-impersonation-banner-has-no-reopen-their-page.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09. T14990 criterion fails for an overlay resume point. |
+| T15600 | [Under-44px touch targets across sign-in, Annotate, Spotlight, Gallery and the share page](tasks/T15600-under-44px-touch-targets-across-sign-in.md) | 5 | 3 | 1.7 | STAGING | [ ] | QA 2026-11-09. Full list in the task file. |
+| T15620 | [Device-wrong copy: phone wording on desktop and iPad, desktop wording on phones](tasks/T15620-device-wrong-copy-phone-wording-on-desktop.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. |
 | T16210 | [Remaining small touch targets on phone and iPad](tasks/T16210-remaining-touch-targets-on-phone-and-ipad.md) | 4 | 3 | 1.3 | WIP | [ ] | Ten controls now meet the 44 pixel finger minimum; eleven others the QA pass measured were never re-measured after the fix. Measure them on an iPhone and iPad, fix any still small, and check each. |
 | T15670 | [Journey map in full screen is wider than 1440 px and cuts off the first stages](tasks/T15670-journey-map-in-full-screen-is-wider.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. T14730 criterion fails. |
 | T15680 | [Visit beacon POST /api/t returns 422 on some page loads](tasks/T15680-visit-beacon-post-api-t-returns-422.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09, possible. Would undercount mobile visits. |
@@ -34,7 +34,6 @@ String highlights into reels for college recruiting. The reel is the only in-pro
 | T11270 | ↳ [Collapse clip selection](tasks/single-clip-editor/T11270-collapse-clip-selection.md) | 3 | 3 | 1.0 | TODO | [ ] | Rename the internal selected-clip plumbing to the clip, now that a project has exactly one. A move-only change with no behaviour change. |
 |  | **[Remove the Quest System](tasks/quest-removal/EPIC.md)** | 6 | 5 | 1.2 | TODO |  | The quest system, guided steps that paid out credits, is hidden from parents but still in the code. One piece of it carries the events the admin funnel reads, so that piece moves first; the deletions wait in Later. |
 | T11175 | ↳ [Move funnel events off quests](tasks/quest-removal/T11175-funnel-analytics-reroute.md) | 5 | 3 | 1.7 | TODO | [ ] | The admin Journey counts events that still travel through the retired quest system's endpoint. Move them to the funnel's own path, keeping the same names, so the map stays accurate when quests are deleted. |
-| T15890 | [Suggested reel](tasks/T15890-llm-reel-assembly.md) | 6 | 4 | 1.5 | TODO | [ ] | After reels exist, a model can suggest which highlights to include, in what order, with a title and section cards, for about a cent per reel. The parent still edits and finishes. Before it is on by default we compare its suggestions with ten reels you build by hand. |
 
 ### Payment return and campaign attribution lost on arrival (priority, owner-requested 2026-11-05, BUGS FIRST)
 

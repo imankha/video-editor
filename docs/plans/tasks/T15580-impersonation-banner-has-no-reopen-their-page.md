@@ -1,6 +1,6 @@
 # T15580: Impersonation banner has no Reopen their page link for some users
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-09

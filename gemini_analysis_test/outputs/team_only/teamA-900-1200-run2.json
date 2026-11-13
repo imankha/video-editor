@@ -1,0 +1,308 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "navy blue"
+    },
+    "team_1": {
+      "color": "white and black"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:02",
+      "end": "00:15",
+      "summary": "The opponent drives down the left flank into team_0's penalty area before a centre-back intercepts and clears the ball from in front of goal.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Show the winger onto his weaker outside foot and close the space earlier instead of letting him cut inside into the penalty area."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Read the danger across the goalmouth cleanly and cleared first time, reminiscent of Virgil van Dijk's box awareness."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:18",
+      "end": "00:24",
+      "summary": "Team_0's left-back closes down an opponent advancing down the far wing and wins possession with a clean touchline tackle.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Timed the challenge cleanly on the touchline to halt the wide attack, reminiscent of Andrew Robertson's aggressive wide defending."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:04",
+      "end": "01:14",
+      "summary": "Team_0 defends a dangerous attack inside the box as a centre-back blocks the close-range threat and the goalkeeper gathers the loose ball.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Tackle",
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Closed down the shooting lane inside the box immediately, much like Ruben Dias stepping in to block close-range efforts."
+          },
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Stayed big and smothered the close-range effort cleanly, similar to Alisson Becker's composure in crowded penalty boxes."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:31",
+      "end": "01:41",
+      "summary": "Team_0's right-back tracks a winger into the corner of the penalty area, holds his ground 1v1, and wins the ball to earn a goal kick.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Tackle",
+              "Control"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Patiently matched the winger's pace and won possession cleanly without diving in, reminiscent of Kyle Walker's 1v1 recovery defending."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "02:04",
+      "end": "02:10",
+      "summary": "Team_0's centre-back attacks a high ball sent into the penalty area and wins an aerial clearing header before a whistle stops play.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Attacked the high ball decisively inside the box to clear danger, similar to John Stones commanding the penalty area."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "02:51",
+      "end": "03:05",
+      "summary": "After winning possession deep in their own half, team_0's central midfielder carries the ball past midfield on a surging dribble and threads a forward pass to the left winger.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Interception",
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Won the second ball cleanly and immediately found a midfielder in space, like Joao Cancelo starting transitions from deep."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Build-Up",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Drove relentlessly through the heart of midfield and picked out the wide runner at the exact right moment, reminiscent of Frenkie de Jong."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "03:05",
+      "end": "03:16",
+      "summary": "Team_0's left winger receives the through pass, drives down the far flank, and attempts a low cross into the area that is deflected out.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Used pace well to attack the wide space; next time lift your head earlier to pick out a cutback to the arriving midfielders."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "04:13",
+      "end": "04:21",
+      "summary": "Team_0's right-back dives into a slide tackle near the halfway line on a counter-attack and misses, leaving the opponent free to run into the box.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 1,
+            "execution_score": 1,
+            "note": "Stay on your feet and delay the attacker toward the touchline instead of diving into a high-risk slide tackle near midfield."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "04:21",
+      "end": "04:29",
+      "summary": "Following a breakaway down the left side of the penalty area, team_0's goalkeeper makes a clean save to deny the close-range shot.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Held his angle well and made a decisive stop to bail out the back line, similar to Thibaut Courtois."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "04:39",
+      "end": "04:54",
+      "summary": "Team_0's central midfielder wins a tough challenge in midfield and feeds the right winger, who drives forward and hits a long-range lob over the goalkeeper into the net.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle",
+              "Control",
+              "Pass",
+              "Chance Creation",
+              "Assist"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Fought to win possession in midfield and immediately released the runner into space, reminiscent of Kevin De Bruyne."
+          },
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Spotted the goalkeeper off his line and struck a sensational long-range lob into the top corner, just like Son Heung-min."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    }
+  ]
+}

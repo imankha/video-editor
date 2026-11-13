@@ -1,0 +1,356 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "navy blue"
+    },
+    "team_1": {
+      "color": "white"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:06",
+      "end": "00:13",
+      "summary": "Navy blue's centre-back steps in to win the ball near the edge of the box and lays it off to the central midfielder to launch a counterattack.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Tackle",
+              "Interception",
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Virgil van Dijk-like composure stepping in cleanly at the edge of the box and immediately playing forward to start the counter."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Luka Modric-style awareness to receive under pressure and open up space for a forward pass."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:12",
+      "end": "00:24",
+      "summary": "Navy blue's central midfielder plays a long ball over the top to the striker, who outmuscles a defender into the box and forces a save.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation",
+              "Build-Up"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Kevin De Bruyne-style vision to spot the early run and clip an accurate ball over the backline."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Erling Haaland-like physicality to hold off the defender at full speed and get a clean shot on target."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:47",
+      "end": "00:56",
+      "summary": "Navy blue's central midfielder threads a pass down the right channel for the right winger, who drives toward the box before losing possession.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Toni Kroos-like weight of pass into space to stretch the opponent's backline."
+          },
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Control",
+              "Dribble"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "When isolated near the corner of the box against a set defender, look to cut back or lay the ball off to supporting midfielders instead of forcing a 1v1."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:57",
+      "end": "01:13",
+      "summary": "Navy blue presses high to win possession on the far touchline and builds through midfield to the edge of the box before the final pass is cut out.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left midfielder",
+            "tags": [
+              "Interception",
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "N'Golo Kante-like anticipation to press the touchline, win possession, and recycle the ball cleanly."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Build-Up",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Sergio Busquets-style patience to circulate possession and thread a vertical pass into the attacking third."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Check shoulders before receiving at the edge of the box and play a quicker one-touch layoff rather than taking extra touches into traffic."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:20",
+      "end": "01:28",
+      "summary": "Navy blue's centre-back dives into a central challenge outside the defensive penalty area and concedes a dangerous free kick.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 1,
+            "execution_score": 1,
+            "note": "Stay on your feet, jockey the ball carrier, and delay until midfield cover arrives instead of lunging in and conceding a set piece outside the box."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:31",
+      "end": "01:44",
+      "summary": "Navy blue defends a free kick into the box, wins the second ball under pressure, and passes cleanly out to the left wing.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception",
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Ruben Dias-like concentration to attack the second ball in the box and find a teammate rather than panicking."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:58",
+      "end": "02:11",
+      "summary": "Navy blue's central midfielder wins the ball near halfway and hits a diagonal pass for the right winger, who attacks the box to win a corner kick.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Xabi Alonso-like transition play to win the ball in midfield and immediately launch an accurate diagonal ball into space."
+          },
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Control",
+              "Dribble"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Bukayo Saka-style direct running to attack the space behind the full-back and earn a dangerous corner kick."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "02:38",
+      "end": "02:58",
+      "summary": "Navy blue loses possession quickly from a restart on the right flank, forcing a recovery run to disrupt the counterattack near the box.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right midfielder",
+            "tags": [
+              "Pass",
+              "Control"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Protect the ball on restarts and play the simple safe pass into open space instead of turning into pressure."
+          },
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Tackle",
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Kyle Walker-like recovery speed to track back and disrupt the opponent's shot at the edge of the box."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "03:51",
+      "end": "04:06",
+      "summary": "Navy blue launches a long free kick from deep, secures the second ball, and threads a through ball into the box for a clinical goal.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Trent Alexander-Arnold-like delivery from deep to bypass the midfield press and put the attack on the front foot."
+          },
+          {
+            "jersey_number": null,
+            "position": "right midfielder",
+            "tags": [
+              "Control",
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Bernardo Silva-like composure to secure the bouncing second ball and move it centrally into a dangerous pocket."
+          },
+          {
+            "jersey_number": null,
+            "position": "attacking midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation",
+              "Assist"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Martin Odegaard-style disguise and weight on the final through ball to split the defence."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Control",
+              "Goal"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Harry Kane-like timing on the run into the box and clinical first-time finish past the goalkeeper."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    }
+  ]
+}

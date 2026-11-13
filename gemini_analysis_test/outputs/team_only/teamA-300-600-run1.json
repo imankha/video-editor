@@ -1,0 +1,378 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "navy blue"
+    },
+    "team_1": {
+      "color": "white and black"
+    }
+  },
+  "plays": [
+    {
+      "start": "05:05",
+      "end": "05:17",
+      "summary": "White breaks down the left flank into the penalty area before our team's defenders narrow the space and the goalkeeper rushes out to clear the danger.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Close down the winger earlier before he enters the final third so he cannot turn and drive at the back line."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Keep tracking the central runner closely and hold the offside line until the goalkeeper calls for the ball."
+          },
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save",
+              "Distribution"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Alisson Becker style sweeping off the line to read the through pass early and clear first time under pressure."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "05:40",
+      "end": "05:50",
+      "summary": "From a free kick in their own half, our team launches a long diagonal pass down the right wing that forces the opponent to defend near the touchline.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Take a touch or look for an open short option in midfield before hitting a long ball into a crowded channel."
+          },
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Control"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Start your sprint a fraction earlier as the kicker approaches the ball to arrive in front of the full-back."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "06:10",
+      "end": "06:28",
+      "summary": "Our team executes a coordinated high press in the opponent's half, trapping their defenders near the touchline and forcing them all the way back to their goalkeeper.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Roberto Firmino style relentless pressing from the front, curving the run to cut off the line pass and trap the defender."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "N'Golo Kante style anticipation to step up behind the front press and shut down the central passing lane."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "06:33",
+      "end": "06:40",
+      "summary": "Our team wins possession high on the left flank and immediately whips in a dangerous cross that a striker meets in the box with an aerial effort just off target.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Rodri style ball recovery in midfield followed immediately by an incisive vertical pass to start the counter."
+          },
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Bukayo Saka style decisive delivery from the wing, whipping the ball into the corridor of uncertainty at pace."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Attack the ball at its highest point and direct the header downward toward the far post to keep it on target."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "07:09",
+      "end": "07:17",
+      "summary": "After winning a midfield duel on the far touchline, our left winger drives down the flank and sends a low cross into the area that forces a corner kick.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Declan Rice style strong challenge to win the loose ball and immediately feed the wide runner in space."
+          },
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Chance Creation",
+              "Pass"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Vinicius Junior style direct pace down the left touchline to beat the full-back and deliver a dangerous ball across the box."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "07:38",
+      "end": "07:48",
+      "summary": "Our team delivers a dangerous corner kick into the six-yard box, sparking a close-range scramble before the opponent clears the ball away.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Trent Alexander-Arnold style whipped corner delivery right into the six-yard danger zone."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Stay alert on the rebound and make clean contact first time before defenders can crowd the six-yard box."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "08:23",
+      "end": "08:33",
+      "summary": "Our team wins an aerial duel in midfield and plays a direct ball into the right channel for an attacker, though the move ends with a whistle near the box.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Check your shoulder before heading forward so you can direct the second ball cleanly to a teammate's feet."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Dribble"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Hold your run slightly or stay square with the last defender to avoid committing a foul or drifting offside."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "09:01",
+      "end": "09:10",
+      "summary": "Our team progresses the ball down the left wing and sets up an attacking midfielder at the edge of the box for a strong shot that forces a diving save and a corner.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Jack Grealish style composed carry down the left before picking out the late runner at the top of the box."
+          },
+          {
+            "jersey_number": null,
+            "position": "attacking midfielder",
+            "tags": [
+              "Control",
+              "Goal"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Kevin De Bruyne style first touch out of the feet and crisp strike from the edge of the area to test the keeper."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "09:36",
+      "end": "09:44",
+      "summary": "Our team scores from a curled left-sided corner kick as an attacker converts inside the six-yard box.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Pass",
+              "Chance Creation",
+              "Assist"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "James Ward-Prowse style pinpoint corner delivery curled right into the six-yard box where the keeper cannot claim it."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Virgil van Dijk style dominant movement in the six-yard box to attack the set piece and finish clinically."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "09:54",
+      "end": "09:59",
+      "summary": "Following the kickoff, our team reads the opponent's long ball forward and intercepts possession cleanly near midfield.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Control"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Sergio Busquets style positioning to read the long clearance early and win the ball cleanly in midfield."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    }
+  ]
+}
