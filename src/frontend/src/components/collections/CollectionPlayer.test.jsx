@@ -8,8 +8,8 @@ import { CollectionPlayer } from './CollectionPlayer';
 vi.mock('../shared/Button', () => ({
   // Mirror the real Button's disabled-or-loading semantics so `loading` (T8530's
   // Publish spinner) also disables the mocked button, matching production.
-  Button: ({ onClick, disabled, loading, title, children, 'aria-label': ariaLabel }) => (
-    <button onClick={onClick} disabled={disabled || loading} title={title} aria-label={ariaLabel}>
+  Button: ({ onClick, disabled, loading, title, className, children, 'aria-label': ariaLabel }) => (
+    <button onClick={onClick} disabled={disabled || loading} title={title} className={className} aria-label={ariaLabel}>
       {children}
     </button>
   ),
@@ -242,6 +242,13 @@ describe('CollectionPlayer Share button (T8540)', () => {
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onShare={onShare} />);
     fireEvent.click(screen.getByTitle('Share'));
     expect(onShare).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }));
+  });
+
+  // T11510 C11 (UI Decisions D2): the player Share is a mobile control, so it
+  // carries the coarse-pointer 44px floor like the Publish button beside it.
+  it('T11510:C11 floors the Share touch target at 44px on coarse pointers', () => {
+    render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onShare={vi.fn()} />);
+    expect(screen.getByTitle('Share').className).toContain('coarse-pointer:min-h-11');
   });
 
   it('Download still renders alongside Share', () => {

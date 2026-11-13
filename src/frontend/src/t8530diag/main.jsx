@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { DraftReelPreview } from '../components/DraftReelPreview';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
-import { ToastContainer } from '../components/shared/Toast';
+import { ToastContainer, toast } from '../components/shared/Toast';
 import '../index.css'; // Tailwind — CollectionPlayer/ConfirmationDialog fixed/inset classes need it
 
 /**
@@ -18,22 +18,30 @@ import '../index.css'; // Tailwind — CollectionPlayer/ConfirmationDialog fixed
  * payload: `#finalVideoId=999001&name=QA%20Draft` etc. Defaults are provided
  * so the harness works with zero params for the common case.
  */
-const params = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+// An imported app module rewrites the URL before this line runs (the hash is gone by now), so a
+// spec can also pass the params as window.__T8530DIAG from an init script (cropdiag's pattern).
+const params = new URLSearchParams(window.__T8530DIAG || (location.hash || '').replace(/^#/, ''));
 
 const payload = {
   projectId: Number(params.get('projectId') || 424242),
   finalVideoId: Number(params.get('finalVideoId') || 999001),
-  name: params.get('name') || 'QA Draft Reel',
+  // T11510 check: `name=` (present but empty) exercises the no-name share fallbacks.
+  name: params.has('name') ? params.get('name') : 'QA Draft Reel',
   aspectRatio: params.get('aspectRatio') || '9:16',
   clipCount: Number(params.get('clipCount') || 3),
   gameName: params.get('gameName') || 'QA Game',
   gameStartTime: null,
+  // T11510 check: `alreadyPublished=1` opens the R5 'ready-capable' phase (published, no link yet).
+  alreadyPublished: params.get('alreadyPublished') === '1',
 };
 
 useReelPreviewStore.getState().open(payload);
 
 // Expose for the spec to re-open/close/inspect without a second module context.
 window.__t8530Store = useReelPreviewStore;
+// T11510 check: fire a toast into THIS module graph's ToastContainer (a spec's own
+// import('/src/...') resolves a separate Toast store instance, see the header above).
+window.__t8530Toast = toast;
 
 function T8530DiagHarness() {
   return (

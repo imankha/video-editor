@@ -577,7 +577,7 @@ export function CollectionPlayer({
               icon={Share2}
               onClick={() => onShare(activeReel)}
               title="Share"
-              className={shareRing ? 'ring-2 ring-cyan-400/70 animate-pulse' : ''}
+              className={`coarse-pointer:min-h-11${shareRing ? ' ring-2 ring-cyan-400/70 animate-pulse' : ''}`}
             >
               Share
             </Button>

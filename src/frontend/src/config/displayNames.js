@@ -537,6 +537,8 @@ export const SECTION_NAMES_SHORT = {
 // .claude/references/copy-glossary.md). Verbs: Edit highlight / Edit spotlight reopen
 // a highlight; "Move to Highlights" files it under the Highlights tab. Counts say plays.
 export const HOME_TILE = {
+  // T11510 D4: the explicit close row of a tile's mobile kebab sheet (its backdrop is inert).
+  MENU_CANCEL: 'Cancel',
   EDIT_HIGHLIGHT: 'Edit highlight',
   EDIT_SPOTLIGHT: 'Edit spotlight',
   MOVE_TO_HIGHLIGHTS: 'Move to Highlights',
