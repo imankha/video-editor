@@ -162,6 +162,8 @@ def jobs_for(path):
         return {'harness'}
     if path.startswith(('docs/', 'src/assets/', 'workers/', 'deploy/')) or path in LOCAL_ONLY or path in KNOWN_STRAYS:
         return set()  # docs/attachments, static brand files, hand-deployed edge code
+    if path.startswith('gemini_analysis_test/'):
+        return set()  # hand-run Gemini prototype and its outputs: nothing in src/, CI or scripts/ reads it
     if path.startswith('qa/') and path.endswith(QA_EVIDENCE):
         return set()
     if path == 'nuf-reset-emails.txt':
