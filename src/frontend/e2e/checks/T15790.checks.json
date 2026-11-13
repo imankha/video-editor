@@ -2,7 +2,7 @@
   "criteria": {
     "T15790:C1": {
       "kind": "code",
-      "command": "cd src/backend && python3 -m pytest tests/test_t15790_resume_point_loop.py -q -p no:cacheprovider"
+      "command": "bash scripts/check_spec_on_preview_build.sh e2e/checks/T15790.check.spec.js 'T15790:C1'"
     }
   }
 }
