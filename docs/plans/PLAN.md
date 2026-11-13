@@ -38,6 +38,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 |------|------|------|------|------|------|------|------|
 | T16370 | [Serve staging from reelballers.com so Safari can sign in](tasks/T16370-staging-on-our-own-domain.md) | 6 | 3 | 2.0 | TODO | [ ] | Owner decision 2026-11-13. Staging's app and API sit on two different sites, so Safari treats the sign-in cookie as third-party and blocks it: nobody can stay signed in to staging in Safari (shown in a WebKit iPhone 14 run; Chromium keeps the cookie). Move staging to reelballers.com subdomains like production. Unblocks T15720 and every Safari check on staging. |
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T16440 | [Staging check failed: T7430:C1 The Retention chart renders on demand from live data as](tasks/T16440-staging-check-failed-t7430-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
