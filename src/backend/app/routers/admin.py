@@ -2670,39 +2670,59 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
         {where_clause}
         GROUP BY grp, a.action
     """, [*group_params, *where_params])
-    uploads: dict = {}
     for ar in cur.fetchall():
         row = rows.get(ar["grp"])
         if row is None:
             continue
-        outcome = uploads.setdefault(ar["grp"], {"succeeded": 0, "failed": 0, "attempted": 0})
-        if ar["action"] == "game_upload_succeeded":
-            outcome["succeeded"] += ar["occurrences"]
-        elif ar["action"].startswith("game_upload_failed:"):
-            outcome["failed"] += ar["occurrences"]
-        elif ar["action"] == "game_upload_attempted":
-            outcome["attempted"] += ar["occurrences"]
         if ar["action"] in DIMENSION_STEPS:
             key = FLOW_EVENTS[ar["action"]]["label"].lower().replace(" ", "_") + "_pct"
             row[key] = round(ar["users"] / row["signups"] * 100, 2) if row["signups"] else 0
         if ar["action"] in DIMENSION_COUNTS:
             row[DIMENSION_COUNTS[ar["action"]]] = ar["users"]
 
+    # T15770: the denominator counts every ATTEMPT, not just the ones that got an
+    # outcome -- an attempt that stalled with no success/failure row (abandoned tab,
+    # dead client) used to vanish from the rate (build-7102: 4 of 12 uploaders).
+    # T16340: but game_upload_attempted only fires since T11010 (2026-09-22), so an
+    # older upload has its outcome and no attempt; dividing by attempts alone read
+    # 131.66% on prod. Per user, tries = GREATEST(attempts, outcomes): every outcome
+    # is a try even when its attempt was never recorded, so successes <= tries.
+    # upload_tries / upload_successes are the Upload tries column AND the rate.
+    cur.execute(f"""
+        SELECT grp,
+               SUM(GREATEST(attempted, succeeded + failed)) AS tries,
+               SUM(succeeded) AS succeeded,
+               SUM(GREATEST(0, attempted - succeeded - failed)) AS no_outcome
+        FROM (
+            SELECT
+                {group_expr} AS grp,
+                COALESCE(SUM(a.count) FILTER (WHERE a.action = 'game_upload_attempted'), 0) AS attempted,
+                COALESCE(SUM(a.count) FILTER (WHERE a.action = 'game_upload_succeeded'), 0) AS succeeded,
+                COALESCE(SUM(a.count) FILTER (WHERE a.action LIKE 'game_upload_failed:%%'), 0) AS failed
+            FROM user_actions a
+            JOIN user_segments s ON a.user_id = s.user_id
+            {excl_join}
+            {where_clause}
+              AND (a.action IN ('game_upload_attempted', 'game_upload_succeeded')
+                   OR a.action LIKE 'game_upload_failed:%%')
+            GROUP BY grp, a.user_id
+        ) per_user
+        GROUP BY grp
+    """, [*group_params, *where_params])
+    uploads = {r["grp"]: r for r in cur.fetchall()}
+
     for grp, row in rows.items():
         for count_key in DIMENSION_COUNTS.values():
             row.setdefault(count_key, 0)
         for step in DIMENSION_STEPS:
             row.setdefault(FLOW_EVENTS[step]["label"].lower().replace(" ", "_") + "_pct", 0)
-        outcome = uploads.get(grp, {"succeeded": 0, "failed": 0, "attempted": 0})
-        # T15770: the denominator is every ATTEMPT (game_upload_attempted occurrences),
-        # not just the ones that got an outcome -- an attempt that stalled with no
-        # success/failure row (abandoned tab, dead client) used to count toward
-        # NEITHER side and vanish from the rate entirely (build-7102: 4 of 12
-        # uploaders). `attempted` is the honest denominator; outcome["succeeded"] +
-        # outcome["failed"] can be less than it, and that gap is the no-outcome count.
-        attempts = outcome["attempted"]
-        row["upload_success_pct"] = round(outcome["succeeded"] / attempts * 100, 2) if attempts else None
-        row["upload_no_outcome"] = max(0, attempts - outcome["succeeded"] - outcome["failed"])
+        outcome = uploads.get(grp)
+        tries = int(outcome["tries"]) if outcome else 0
+        successes = int(outcome["succeeded"]) if outcome else 0
+        row["upload_tries"] = tries
+        row["upload_successes"] = successes
+        row["upload_success_pct"] = round(successes / tries * 100, 2) if tries else None
+        row["upload_no_outcome"] = int(outcome["no_outcome"]) if outcome else 0
     return rows
 
 

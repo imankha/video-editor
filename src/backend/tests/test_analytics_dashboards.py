@@ -1040,6 +1040,8 @@ _DIMENSION_KPIS = {
     "deleted",
     # T15770: attempts with no recorded outcome (abandoned/invisible before this task)
     "upload_no_outcome",
+    # T16340: the Upload tries column, the same counts the rate divides
+    "upload_tries", "upload_successes",
 }
 
 
@@ -1093,6 +1095,77 @@ class TestUniformDimensionKpis:
             f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()["builds"]}
         assert builds["unrecorded"]["upload_success_pct"] is None
         assert builds["unrecorded"]["upload_no_outcome"] == 0
+
+
+@pytest.fixture()
+def unpaired_successes(builds_setup):
+    """T16340: uploads that finished before game_upload_attempted existed (T11010,
+    2026-09-22) left a success with no attempt. user-d (build 4814) has one attempt
+    and three successes (two pre-T11010 uploads); user-e (build 4815) only ever has
+    a success. Both join builds_setup's private origin."""
+    import uuid
+
+    import app.analytics as analytics
+    from tests.conftest import register_test_user_ids
+
+    user_d, user_e = (f"t16340-{name}-{uuid.uuid4().hex[:8]}" for name in ("d", "e"))
+    register_test_user_ids(user_d, user_e)
+    create_user(user_d, email=f"{user_d}@test.com")
+    create_user(user_e, email=f"{user_e}@test.com")
+    with patch.object(analytics, "APP_BUILD", 4814), patch.object(analytics, "APP_VERSION", "aaa4814aaaa"):
+        create_user_segment(user_d, T14000_ORIGIN, None, "otp")
+    with patch.object(analytics, "APP_BUILD", 4815), patch.object(analytics, "APP_VERSION", "bbb4815bbbb"):
+        create_user_segment(user_e, T14000_ORIGIN, None, "otp")
+    record_milestone(user_d, "game_upload_attempted")
+    for _ in range(3):
+        record_milestone(user_d, "game_upload_succeeded")
+    record_milestone(user_e, "game_upload_succeeded")
+    yield
+
+
+def _all_dimension_rows(client):
+    channels = [_channel_row(client, T14000_ORIGIN)]
+    cohorts = client.get(f"/api/admin/analytics/cohorts?origin={T14000_ORIGIN}", headers=_auth()).json()["cohorts"]
+    builds = client.get(f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()["builds"]
+    return channels, cohorts, builds
+
+
+class TestUploadSuccessNeverOver100:
+    """T16340: production read 131.66% (91 tries / 141 successes) on the Unrecorded
+    build row: successes with no recorded attempt outnumbered the attempts."""
+
+    def test_success_without_attempt_stays_at_or_below_100(self, client, unpaired_successes):
+        channels, cohorts, builds = _all_dimension_rows(client)
+        assert cohorts and builds
+        for row in [*channels, *cohorts, *builds]:
+            pct = row["upload_success_pct"]
+            assert pct is None or 0 <= pct <= 100, row
+        by_build = {b["build"]: b for b in builds}
+        # One attempt, three successes: three tries, all succeeded.
+        assert by_build[4814]["upload_success_pct"] == 100
+        # A success with no attempt event at all is still a try that succeeded.
+        assert by_build[4815]["upload_success_pct"] == 100
+        # Channel: user-a 1/1, user-b 0/1 (no outcome), user-d 3/3, user-e 1/1.
+        assert channels[0]["upload_success_pct"] == 83.33
+
+    def test_rate_and_tries_column_use_the_same_counts(self, client, unpaired_successes):
+        channels, cohorts, builds = _all_dimension_rows(client)
+        for row in [*channels, *cohorts, *builds]:
+            tries, successes = row["upload_tries"], row["upload_successes"]
+            assert successes <= tries, row
+            expected = round(successes / tries * 100, 2) if tries else None
+            assert row["upload_success_pct"] == expected, row
+        assert (channels[0]["upload_tries"], channels[0]["upload_successes"]) == (6, 5)
+        by_build = {b["build"]: b for b in builds}
+        assert (by_build[4814]["upload_tries"], by_build[4814]["upload_successes"]) == (3, 3)
+        assert (by_build[4815]["upload_tries"], by_build[4815]["upload_successes"]) == (1, 1)
+        assert (by_build["unrecorded"]["upload_tries"], by_build["unrecorded"]["upload_successes"]) == (0, 0)
+
+    def test_pulse_upload_success_rate_stays_at_or_below_100(self, client, unpaired_successes):
+        card = client.get(f"/api/admin/analytics/pulse?origin={T14000_ORIGIN}",
+                          headers=_auth()).json()["cards"]["upload_success_rate"]
+        assert card["succeeded"] >= 5
+        assert card["today"] is not None and 0 <= card["today"] <= 100, card
 
 
 class TestPulsePopulationKpis:

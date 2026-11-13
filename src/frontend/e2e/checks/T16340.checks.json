@@ -1,0 +1,6 @@
+{"criteria": {
+  "T16340:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k test_success_without_attempt_stays_at_or_below_100"},
+  "T16340:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k test_rate_and_tries_column_use_the_same_counts"},
+  "T16340:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k test_pulse_upload_success_rate_stays_at_or_below_100"},
+  "T16340:C4": {"kind": "human", "why": "Production admin dashboard data after deploy; only the owner reads prod Builds rows"}
+}}
