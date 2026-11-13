@@ -2013,6 +2013,17 @@ class AutolandTest(AutolandBase):
             self.assertEqual(dotask_cli.criterion_line(self.root, "T7:C1"), "")
 
 
+class QuotedResumedTest(AutolandBase):
+    def test_a_stop_line_quoting_resumed_is_still_a_stop_and_a_restart_marks_itself(self):
+        stop = "t VERIFY_BLOCKED round 1: reviewer did not finish: t RESUMED autoland verify: restarted"
+        self.status.write_text(f"t STAGE_DONE T1 commit \"x\"\n{stop}\n")
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertIsNone(dotask_cli.estimate({**group, "slug": "g-t1-1"}, self.checkout)[0])
+        self.verdicts = [None]  # the restart stops again; what matters is the line it wrote first
+        self._run()
+        self.assertIn("RESUMED autoland verify", self.status.read_text().splitlines()[2])
+
+
 class OwnerTestBeforePrTest(AutolandBase):
     """Owner rule 2026-11-13: a clean verdict brings up the stack and waits for the owner; approve lands."""
     OWNER_TEST = True

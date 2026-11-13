@@ -1006,6 +1006,13 @@ def restore_tool_noise(checkout, paths):
         print(f"[dotask] put back tool output the verifier rewrote: {' '.join(paths)}", file=sys.stderr)
 
 
+def status_word(line):
+    """The word after a status line's timestamp. A stop line can quote an earlier RESUMED line
+    (g-t16070-3, 2026-11-13), so a substring test read a stop as a restart."""
+    parts = line.split()
+    return parts[1] if len(parts) > 1 else ""
+
+
 def last_status(checkout):
     path = Path(checkout) / ".dotask-status"
     lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
@@ -1948,7 +1955,7 @@ def autoland(args):
         group["verify_budget_min"] = float(os.environ["DOTASK_VERIFY_BUDGET_MIN"])
         save_group(checkout, group)
     last_line = (status_text.strip().splitlines() or [""])[-1]
-    if any(f" {word} " in f" {last_line} " for word in STOP_WORDS) and " RESUMED " not in last_line:
+    if any(f" {word} " in f" {last_line} " for word in STOP_WORDS) and status_word(last_line) != "RESUMED":
         # `status` read the old stop line as current while the restarted loop ran (g-t15540-4, 2026-11-12).
         append_status(checkout, "RESUMED autoland verify: restarted after a stop, re-checking")
 
@@ -2215,12 +2222,12 @@ def estimate(group, checkout, now=None):
     if "VERIFY_PASS" in last or " APPROVED " in last:
         minutes, verify_ahead = ci, False
         parts.append(f"CI {ci:.0f} min")
-    elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and " RESUMED " not in last:
+    elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and status_word(last) != "RESUMED":
         return None, None, f"stopped, needs a restart or a ruling: {last[:140]}"
-    elif " RESUMED " in last and "autoland verify" in last:
+    elif status_word(last) == "RESUMED" and "autoland verify" in last:
         minutes = verify + ci
         parts += [f"re-check up to {verify:.0f} min", f"CI {ci:.0f} min"]
-    elif " RESUMED " in last and "fix round" in last.lower():
+    elif status_word(last) == "RESUMED" and "fix round" in last.lower():
         # A fix dispatch restarted after running out of turns: the rest of the round, then the re-check.
         minutes = fix_round + ci
         parts += ["fix round (restarted)", *fix_parts, f"CI {ci:.0f} min"]
