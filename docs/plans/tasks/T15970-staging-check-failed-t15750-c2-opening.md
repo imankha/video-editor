@@ -1,6 +1,6 @@
 # T15970: Staging check failed: T15750:C2 Opening Edit play does not start playback.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10
