@@ -1179,6 +1179,22 @@ class StagingDeployWaitTest(unittest.TestCase):
             runs["deploy-backend.yml"].pop(0)  # no later success: still a failure
             self.assertEqual(dotask_cli.wait_for_staging_deploy("a", interval=0), "failed: deploy-backend.yml")
 
+    def test_a_failed_deploy_waits_for_a_redeploy_still_running(self):
+        polls = []
+        runs = {"deploy-frontend.yml": [{"headSha": "c", "status": "in_progress", "conclusion": None},
+                                        {"headSha": "a", "status": "completed", "conclusion": "failure"}],
+                "deploy-backend.yml": [{"headSha": "a", "status": "completed", "conclusion": "success"}]}
+
+        def fake_run(cmd, **kwargs):
+            workflow = cmd[cmd.index("--workflow") + 1]
+            polls.append(workflow)
+            if len(polls) > 2:  # the redeploy finishes on the second poll
+                runs["deploy-frontend.yml"][0].update(status="completed", conclusion="success")
+            return SimpleNamespace(returncode=0, stdout=json.dumps(runs[workflow]), stderr="")
+
+        with patch.object(dotask_cli.subprocess, "run", fake_run), patch.object(dotask_cli.time, "sleep", lambda s: None):
+            self.assertEqual(dotask_cli.wait_for_staging_deploy("a", interval=0), "deployed")
+
 
 class VerifyBudgetOverrideTest(unittest.TestCase):
     def test_a_budget_saved_on_the_group_beats_the_default(self):

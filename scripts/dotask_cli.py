@@ -2525,6 +2525,9 @@ def wait_for_staging_deploy(sha, cap_minutes=40, appear_minutes=5, interval=30):
                 newer = entries[:entries.index(mine[0])]
                 if any(r.get("status") == "completed" and r.get("conclusion") == "success" for r in newer):
                     mine = [next(r for r in newer if r.get("conclusion") == "success")]
+                elif any(r.get("status") != "completed" for r in newer):
+                    # A redeploy is running (PR #750's re-dispatch, 2026-11-13): wait for it, do not fail now.
+                    mine = [next(r for r in newer if r.get("status") != "completed")]
             runs[workflow] = mine[0] if mine else None
         found = [r for r in runs.values() if r]
         waited = (time.time() - started) / 60
