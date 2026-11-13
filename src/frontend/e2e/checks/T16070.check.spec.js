@@ -32,18 +32,34 @@ test('T16070:C1 no Day N section; Retention Chart hover shows the day 1/3/7/14/2
   const body = await response.json();
   expect(body.day_n?.checkpoints, 'the chart response carries the day-N checkpoints').toEqual([1, 3, 7, 14, 28]);
 
+  // The admin account's dev data has signup cohorts; an empty chart is a failure, not a pass.
   const curves = page.getByTestId('retention-curve');
-  if (!(await curves.count())) {
-    await expect(page.getByText('No signup cohorts available.')).toBeVisible();
-    return;
-  }
+  await expect(curves.first()).toBeVisible({ timeout: 30000 });
 
-  // The last-painted point is never covered (week-0 points coincide at 100% across cohorts).
-  await page.getByTestId('retention-point').last().hover();
+  const pct = (v) => `${Number(v).toFixed(2)}%`;
+  const groupByLabel = new Map(body.triangle.cohorts.map((c) => [c.label, c.group]));
   const hover = page.getByTestId('retention-hover');
-  await expect(hover).toBeVisible();
-  for (const n of [1, 3, 7, 14, 28]) {
-    await expect(hover.getByText(`Day ${n}`, { exact: true })).toBeVisible();
+  let measurableSeen = 0;
+  const curveCount = await curves.count();
+  for (let i = 0; i < curveCount; i++) {
+    // Hover the curve's last point; whatever group the card names is the one checked
+    // (a covering point from another curve is fine: the card says which group it is).
+    await curves.nth(i).locator('xpath=..').getByTestId('retention-point').last().hover({ force: true });
+    await expect(hover).toBeVisible();
+    const label = (await hover.locator('p').first().innerText()).trim();
+    expect(groupByLabel.has(label), `hover card names a chart group (got "${label}")`).toBeTruthy();
+    const dayN = body.day_n.cohorts.find((c) => c.group === groupByLabel.get(label));
+    expect(dayN, `day_n carries figures for hovered group "${label}"`).toBeTruthy();
+
+    await expect(hover.locator('dt')).toHaveText([1, 3, 7, 14, 28].map((n) => `Day ${n}`));
+    await expect(hover.getByText('Day 0', { exact: true })).toHaveCount(0);
+    // Each figure is the HOVERED group's own day-N cell, never another group's or a blank.
+    const expected = [1, 3, 7, 14, 28].map((n) => {
+      const cell = dayN.days[String(n)];
+      if (cell) measurableSeen++;
+      return cell ? `${pct(cell.pct)} (${cell.hit} of ${cell.aged})` : 'not yet measurable';
+    });
+    await expect(hover.locator('dd')).toHaveText(expected);
   }
-  await expect(hover.getByText('Day 0', { exact: true })).toHaveCount(0);
+  expect(measurableSeen, 'at least one hovered group shows a measured day-N figure').toBeGreaterThan(0);
 });
