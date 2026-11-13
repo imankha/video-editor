@@ -10,9 +10,10 @@
  *     different email -- all 5 of the sign-in screen's own listed controls.
  *   - Public share pages (no login): SharedCollectionView's Share + Download this
  *     highlight, SharedGameView's REEL BALLERS link, SharedAnnotationView's logo link.
- *   - Authenticated real controls (loginAsDevPreset('full'), a per-container cloned
- *     account with games/clips/projects -- T11500): Annotate's "1x" speed chip
- *     (AnnotateControls' SpeedControl).
+ *   - Authenticated real controls (loginForCheck -- a per-container cloned preset
+ *     account locally, the seeded e2e-gate account on a deployed target, both with
+ *     games/clips/projects -- T11500): Annotate's "1x" speed chip (AnnotateControls'
+ *     SpeedControl).
  *   - NOT covered here (documented gap, not claimed): the Plays-list "View
  *     details"/"Jump to play" buttons (ClipListItem/ClipsSidePanel) -- a coarse-pointer
  *     touch context renders Annotate's mobile card layout instead of that sidebar, so
@@ -34,7 +35,8 @@
  * Run: bash scripts/dev-verify.sh e2e/checks/T15600.check.spec.js --reporter=line
  */
 import { test, expect } from '@playwright/test';
-import { loginAsDevPreset, openGameInAnnotate } from '../helpers/realAuth';
+import { openGameInAnnotate } from '../helpers/realAuth';
+import { loginForCheck, checkApi } from '../helpers/checkAuth';
 
 const IPHONE_14 = { width: 390, height: 844 };
 const IPAD = { width: 834, height: 1194 };
@@ -135,9 +137,9 @@ for (const [label, viewport] of VIEWPORTS) {
   test(`T15600:C1 - authenticated Annotate speed chip is >=44x44 on ${label}`, async ({ browser }) => {
     const { context, page } = await newCoarseContext(browser, viewport);
     try {
-      await loginAsDevPreset(page, 'full');
+      await loginForCheck(page);
 
-      const gamesRes = await page.request.get('/api/games');
+      const gamesRes = await page.request.get(checkApi('/games'));
       const { games } = await gamesRes.json();
       const activeGame = games.find((g) => g.storage_status !== 'expired') ?? games[0];
       expect(activeGame).toBeTruthy();
