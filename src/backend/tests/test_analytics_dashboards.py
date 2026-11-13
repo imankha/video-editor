@@ -346,7 +346,9 @@ class TestPulseEndpoint:
     def _direct_referral_rate(self, days=30):
         # Direct referred/total over the endpoint's exact window (start = today-(days-1)),
         # whole table: pair with `?exclude_test=false`, since the endpoint hides test
-        # accounts by default and the shared dev DB holds some (T14200).
+        # accounts by default and the shared dev DB holds some (T14200). Rounded to 2 dp
+        # exactly like the endpoint: at 1 dp the cross-check only held while the shared DB's
+        # rate happened to be a round tenth (0.58 vs 0.6 failed, T15320).
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
@@ -358,7 +360,7 @@ class TestPulseEndpoint:
                       BETWEEN CURRENT_DATE - make_interval(days => %s) AND CURRENT_DATE
             """, (days - 1,))
             row = cur.fetchone()
-        return round(row["referred"] / row["total"] * 100, 1) if row["total"] else None
+        return round(row["referred"] / row["total"] * 100, 2) if row["total"] else None
 
     def test_viral_conversion_is_bounded_referral_rate(self, client):
         # T7960: "Viral Conv." must be referred signups / total signups (bounded 0-100%),
