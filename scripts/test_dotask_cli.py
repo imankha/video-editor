@@ -1178,6 +1178,12 @@ class StagingDeployWaitTest(unittest.TestCase):
             self.assertEqual(dotask_cli.wait_for_staging_deploy("a", interval=0), "failed: deploy-backend.yml")
 
 
+class VerifyBudgetOverrideTest(unittest.TestCase):
+    def test_a_budget_saved_on_the_group_beats_the_default(self):
+        self.assertEqual(dotask_cli.budget_left_minutes({"verify_spent_s": 1800.0}), 0.0)
+        self.assertEqual(dotask_cli.budget_left_minutes({"verify_spent_s": 1800.0, "verify_budget_min": 75}), 45.0)
+
+
 class EnsureSonnetDefault(unittest.TestCase):
     """D7: every task container's Claude defaults to the sonnet alias."""
 

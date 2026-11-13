@@ -1676,7 +1676,9 @@ def run_checks(slug, checkout, group, wanted, deadline):
 
 
 def budget_left_minutes(group):
-    return VERIFY_BUDGET_MINUTES - group.get("verify_spent_s", 0) / 60
+    # A raised budget is saved on the group (autoland), so `status` and a restart see it, not just the process
+    # that had DOTASK_VERIFY_BUDGET_MIN in its environment (g-t15540-4, 2026-11-12: status showed 0 min left).
+    return group.get("verify_budget_min", VERIFY_BUDGET_MINUTES) - group.get("verify_spent_s", 0) / 60
 
 
 def spend_budget(group, checkout, seconds):
@@ -1853,6 +1855,13 @@ def autoland(args):
         if ignored not in (exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""):
             with exclude_path.open("a", encoding="utf-8") as stream:
                 stream.write(ignored + "\n")
+    if os.environ.get("DOTASK_VERIFY_BUDGET_MIN"):
+        group["verify_budget_min"] = float(os.environ["DOTASK_VERIFY_BUDGET_MIN"])
+        save_group(checkout, group)
+    last_line = (status_text.strip().splitlines() or [""])[-1]
+    if any(f" {word} " in f" {last_line} " for word in STOP_WORDS) and " RESUMED " not in last_line:
+        # `status` read the old stop line as current while the restarted loop ran (g-t15540-4, 2026-11-12).
+        append_status(checkout, "RESUMED autoland verify: restarted after a stop, re-checking")
 
     # After a failed round: what the next verifier re-checks. A restart after a fix round resumes it.
     focus, first_round = resume_focus(checkout, group, git_head(checkout))
@@ -2112,6 +2121,9 @@ def estimate(group, checkout, now=None):
         parts.append(f"CI {ci:.0f} min")
     elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and " RESUMED " not in last:
         return None, None, f"stopped, needs a restart or a ruling: {last[:140]}"
+    elif " RESUMED " in last and "autoland verify" in last:
+        minutes = verify + ci
+        parts += [f"re-check up to {verify:.0f} min", f"CI {ci:.0f} min"]
     elif " RESUMED " in last and "fix round" in last.lower():
         # A fix dispatch restarted after running out of turns: the rest of the round, then the re-check.
         minutes = fix_round + ci
