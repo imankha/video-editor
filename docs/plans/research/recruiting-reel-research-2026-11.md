@@ -245,14 +245,14 @@ A quality is what a play shows about the athlete. A tag is what happened. A scou
 
 | Stored name | Meaning | Counts when you see | Routine, does not count |
 |---|---|---|---|
-| Pace | Covers ground faster than the opponent. | The player gets to the ball or the space before an opponent who started level or ahead. | Nobody was racing them. |
+| Pace | Covers ground faster than the opponent. | The player wins a race against an opponent who started level or ahead. | Nobody was racing them. |
 | Strength | Wins or keeps possession through contact. | In body contact with an opponent, the player stays balanced and comes away in control. | No opponent touched them. |
 | Composure | Stays calm and in control when pressed. | Under close pressure from one or more opponents, the player keeps control and makes a clean next action instead of a hurried one. | Time and space, nobody near. |
-| Vision | Sees a teammate or a space others do not. | The player looks away from the ball first, then finds a teammate or a space that was not the obvious option. | The nearest, obvious option. |
+| Vision | Sees a teammate or a space others do not. | The player looks around first, then finds a teammate or a space that was not the obvious option. | The nearest, obvious option. |
 | Decision Making | Chooses the better option, quickly. | Two or more options were visible and the player took the one that hurt the opponent most, or acted before the pressure arrived. | Only one option was on. |
-| Anticipation | Reads the play and arrives first. | The player moves before the opponent acts and gets there first: cuts out a pass, steps in front, or covers for a beaten teammate. | The ball came straight to them. |
-| Work Rate | Chases back or presses to win possession. | A long sprint or repeated efforts without the ball that win possession back or stop an attack. | Jogging back into position. |
-| Off-Ball Movement | Gets free without the ball. | A timed move without the ball loses the marker, and a teammate finds the player. | Standing in space and receiving. |
+| Anticipation | Reads the play and arrives first. | The player moves before the opponent acts and gets there first: cuts out a pass, steps in front, or covers for a beaten teammate. | The play came straight to them. |
+| Work Rate | Chases back or presses to win possession. | A long sprint or repeated efforts off the play that win possession back or stop an attack. | Jogging back into position. |
+| Off-Ball Movement | Gets free without possession. | A timed move without possession loses the marker, and a teammate finds the player. | Standing in space and receiving. |
 | 1v1 Attacking | Beats a defender alone. | Facing a set defender, the player gets past alone and the move leads to a scoring chance or advances the play. | The defender was out of position or not engaged. |
 | 1v1 Defending | Stops an attacker alone. | Isolated against an attacker, the player stops them cleanly without help. | Help was already there and the attacker had slowed. |
 

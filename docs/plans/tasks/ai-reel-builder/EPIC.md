@@ -48,7 +48,7 @@ Returns: which highlights to use, their order, the sections with a heading for e
 
 | ID | Task | Status | Runs |
 |----|------|--------|------|
-| T16320 | [Recruiting reel research](T16320-recruiting-reel-research.md) | WIP | Before Mark plays with AI |
+| T16320 | [Recruiting reel research](T16320-recruiting-reel-research.md) | WAITING ON USER | Before Mark plays with AI |
 | T16330 | [Reel expert prompt](T16330-reel-expert-prompt.md) | TODO | After the Highlight reel builder |
 | T15890 | [Suggested reel](../T15890-llm-reel-assembly.md) | TODO | After T16330 |
 
