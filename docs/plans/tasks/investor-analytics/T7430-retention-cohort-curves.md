@@ -55,10 +55,20 @@ Definitions locked in [EPIC.md](EPIC.md): active day = usage_daily row with seco
 4. [ ] CSV branches
 5. [ ] Tests: classic vs unbounded math on fixtures (incl. a lapsed-and-returned user), low-volume week detection edges, small-N rendering, coverage-start masking
 
+## Ruling
+
+**Owner, 2026-11-13** (after testing g-t16070-3 on its local stack with demo data):
+
+- There is one retention view, the **Retention chart**. The separate **Day N Retention** table is removed; its day 1, 3, 7, 14 and 28 figures are read from the chart.
+- The chart is the only thing on screen: no table under or beside it. It is **large** (the full width of the admin panel and tall enough to read), and **hovering any point shows its exact number** (the percent, plus how many of how many users).
+- The chart's grouping follows the dashboard's top-level **Dimension** pills: with **Campaigns** selected it compares campaigns, with **Cohorts** it compares sign-up cohorts, with **Builds** it compares sign-up builds. Changing the pill changes the chart.
+- CSV export stays (it is a download, not an on-screen table).
+
 ## Acceptance Criteria
 
-- [ ] Triangle + curves render on demand from live data; unbounded/classic and weekly/monthly toggles work
+- [ ] The Retention chart renders on demand from live data as one large chart with no table on screen; unbounded/classic and weekly/monthly toggles work, and hovering any point shows its exact percent and counts (ruling 2026-11-13)
 - [ ] A user dormant through a detected low-volume period does NOT read as churned in the unbounded view; low-volume weeks are visibly shaded with the detection rule printed
 - [ ] Return-after-gap rate (active again 120+ days later) displayed with cohort sizes
 - [ ] Clip-library retention viewable once T7400+T7450 land
 - [ ] CSV export works; no new stored data beyond T7400's rollup
+- [ ] The chart compares whatever the dashboard's Dimension pill selects: campaigns, sign-up cohorts or sign-up builds; changing the pill changes the chart (ruling 2026-11-13)
