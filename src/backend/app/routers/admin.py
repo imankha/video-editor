@@ -2788,6 +2788,65 @@ def analytics_retention(exclude_test: bool = True):
         return compute_day_n_retention(cur, excl, datetime.now(UTC).date())
 
 
+@router.get("/analytics/retention-chart")
+# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_retention_chart(exclude_test: bool = True, action: str | None = None):
+    """T7430: the investor-grade retention chart -- weekly cohort triangle
+    (classic + unbounded), WAU/MAU series with low-volume-week shading, and the
+    return-after-gap headline. Reads the same user_usage_daily/user_segments spine
+    as T16070's /analytics/retention (identical cohort-key derivation). `action`
+    (optional) adds the action-level curve from T7400's rollup_action_weekly --
+    None/empty cohorts when the rollup hasn't run yet, never an error."""
+    from ..services.analytics_retention_chart import (
+        LOW_VOLUME_RATIO,
+        LOW_VOLUME_TRAILING_WEEKS,
+        RETURN_AFTER_GAP_DAYS,
+        compute_action_retention,
+        compute_retention_triangle,
+        compute_return_after_gap,
+        compute_wau_series,
+        coverage_start,
+        detect_low_volume_weeks,
+    )
+
+    _require_admin()
+    excl = _test_exclusion(exclude_test)
+    today = datetime.now(UTC).date()
+    with get_pg() as conn:
+        cur = conn.cursor()
+        triangle = compute_retention_triangle(cur, excl, today)
+        wau = compute_wau_series(cur, excl, today)
+        return_after_gap = compute_return_after_gap(cur, excl, today)
+        coverage = coverage_start(cur, excl)
+
+    low_volume_flags = detect_low_volume_weeks(wau)
+    for row, flagged in zip(wau, low_volume_flags):
+        row["low_volume"] = flagged
+
+    result = {
+        "triangle": triangle,
+        "wau": wau,
+        "return_after_gap": {"gap_days": RETURN_AFTER_GAP_DAYS, "cohorts": return_after_gap},
+        "coverage_start": str(coverage) if coverage else None,
+        "low_volume_rule": {"ratio": LOW_VOLUME_RATIO, "trailing_weeks": LOW_VOLUME_TRAILING_WEEKS},
+        "action": None,
+    }
+    if action:
+        from ..services.analytics_rollup import load_newest_action_rollup
+
+        rollup, partial = load_newest_action_rollup(tables=("rollup_action_weekly",))
+        if rollup is None:
+            result["action"] = {"action": action, "cohorts": [], "available": False, "partial": partial}
+        else:
+            result["action"] = {
+                **compute_action_retention(rollup["rollup_action_weekly"], action),
+                "available": True,
+                "partial": partial,
+                "computed_at": rollup["meta"]["computed_at"],
+            }
+    return result
+
+
 @router.get("/analytics/builds")
 # sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_builds(

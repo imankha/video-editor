@@ -121,6 +121,9 @@ export const useAdminStore = create((set, get) => ({
   r2UsageData: null, r2UsageLoading: false, r2UsageError: null,
   // T16070: day-1/3/7/14/28 retention table (on-demand -- never on mount).
   retentionData: null, retentionLoading: false, retentionError: null,
+  // T7430: retention chart (triangle + WAU + return-after-gap), on-demand -- never on mount.
+  retentionChartData: null, retentionChartLoading: false, retentionChartError: null,
+  retentionChartAction: '',
 
   // T14000: `build` is the 4th dimension value; omitting it clears the build, so a
   // campaign/cohort pick replaces a build pick. The platform breakdown follows the build
@@ -822,6 +825,26 @@ export const useAdminStore = create((set, get) => ({
       set({ retentionData: await res.json(), retentionLoading: false });
     } catch (err) {
       set({ retentionLoading: false, retentionError: err.message });
+    }
+  },
+
+  // T7430: retention chart (triangle, WAU/MAU + low-volume shading, return-after-gap,
+  // action-level toggle). On-demand -- never on mount.
+  setRetentionChartAction: (action) => set({ retentionChartAction: action }),
+  fetchRetentionChart: async () => {
+    set({ retentionChartLoading: true, retentionChartError: null });
+    try {
+      const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      const action = get().retentionChartAction;
+      if (action) params.set('action', action);
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/retention-chart?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ retentionChartData: await res.json(), retentionChartLoading: false });
+    } catch (err) {
+      set({ retentionChartLoading: false, retentionChartError: err.message });
     }
   },
 

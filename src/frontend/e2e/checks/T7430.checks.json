@@ -1,0 +1,9 @@
+{
+  "criteria": {
+    "T7430:C1": {"kind": "browser"},
+    "T7430:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t7430_retention_chart.py::TestLowVolumeDetection -q"},
+    "T7430:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t7430_retention_chart.py::TestTriangleClassicVsUnbounded -q"},
+    "T7430:C4": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t7430_retention_chart.py::TestActionRetention -q"},
+    "T7430:C5": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/admin/retentionChartCsv.test.js"}
+  }
+}

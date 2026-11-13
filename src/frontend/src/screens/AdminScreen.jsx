@@ -18,6 +18,7 @@ import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
 import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
 import { DayNRetentionTable } from '../components/admin/DayNRetentionTable';
+import { RetentionView } from '../components/admin/RetentionView';
 import { BySportTable } from '../components/admin/BySportTable';
 import { CampaignsModal } from '../components/admin/CampaignsModal';
 
@@ -120,6 +121,12 @@ export function AdminScreen({ onBack }) {
   const retentionLoading = useAdminStore(s => s.retentionLoading);
   const retentionError = useAdminStore(s => s.retentionError);
   const fetchRetention = useAdminStore(s => s.fetchRetention);
+  const retentionChartData = useAdminStore(s => s.retentionChartData);
+  const retentionChartLoading = useAdminStore(s => s.retentionChartLoading);
+  const retentionChartError = useAdminStore(s => s.retentionChartError);
+  const retentionChartAction = useAdminStore(s => s.retentionChartAction);
+  const setRetentionChartAction = useAdminStore(s => s.setRetentionChartAction);
+  const fetchRetentionChart = useAdminStore(s => s.fetchRetentionChart);
   const bySportData = useAdminStore(s => s.bySportData);
   const bySportLoading = useAdminStore(s => s.bySportLoading);
   const bySportError = useAdminStore(s => s.bySportError);
@@ -401,6 +408,19 @@ export function AdminScreen({ onBack }) {
             loading={retentionLoading}
             error={retentionError}
             onRefresh={() => fetchRetention()}
+          />
+        </CollapsibleSection>
+
+        {/* T7430: investor-grade retention chart -- triangle, curves, WAU, return-after-gap.
+            Collapsed, on-demand fetch. */}
+        <CollapsibleSection title="Retention Chart">
+          <RetentionView
+            data={retentionChartData}
+            loading={retentionChartLoading}
+            error={retentionChartError}
+            onRefresh={() => fetchRetentionChart()}
+            action={retentionChartAction}
+            onActionChange={setRetentionChartAction}
           />
         </CollapsibleSection>
 
