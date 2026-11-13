@@ -2,19 +2,27 @@
 
 ## In plain words
 
-Today the app joins highlights (finished short clips) for a download by gluing the files end to end, which takes seconds but can only cut from one to the next. A reel (several highlights joined into one video) with a fade or a crossfade needs the picture around each join re-made, and a card (a still screen with words) needs turning into video of an exact length. This builds the server job that takes a reel's running order and produces one file: every highlight, every join with its transition and length, every card with its length. It also measures what nobody knows yet: how long a parent waits and what it costs us when a reel has fades in it. Done when a ten-highlight reel with mixed transitions and three cards comes out on staging with every length right, and a reel with only cuts is still as fast as today.
+Today the app joins highlights (finished short clips) for a download by gluing the files end to end, which takes seconds but can only cut from one to the next. A reel (several highlights joined into one video) with a fade or a crossfade needs the picture around each join re-made, and a card (a still screen with words) needs turning into video of an exact length. This builds the server job that takes a reel's running order and produces one file: every highlight, every card at its own length, and the reel's one transition played at every join for the length the parent set. It also measures what nobody knows yet: how long a parent waits and what it costs us when a reel has fades in it. Done when a ten-highlight reel with a crossfade at every join and three cards comes out on staging with every length right, and a reel with only cuts is still as fast as today.
 
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-11-12
-**Updated:** 2026-11-12
-**Milestone:** Highlight reel builder (see [EPIC.md](EPIC.md)). Task 2 of 5.
-**Waits on:** the decision page linked in the epic. Choices 3, 4 and 8 (which transitions, their lengths, and sound) set what this job must render.
+**Updated:** 2026-11-13
+**Milestone:** Highlight reel builder (see [EPIC.md](EPIC.md)). Task 2 of 6.
+
+## Ruling
+
+The owner ruled on the decision page (owner, 2026-11-13):
+
+- **Which transitions (choice 3):** cut, fade through black, and crossfade.
+- **Reach (choice 2):** one transition for the whole reel, so the job takes one kind and one length, not one per join.
+- **Transition length (choice 4):** set with a slider, so the job must accept any length in the slider's range (proposed 0.2 to 2.0 seconds), not three fixed values.
+- **Sound (choice 8):** each highlight keeps its sound and one switch mutes the reel. Music under a reel is wanted too, if a music bank with terms that cover us is found; that is its own task (T16310), and this job only has to leave room for one extra sound track.
 
 ## How we got here
 
-The first version of the reel (T11300) exports with straight cuts, or with one fade to black for the whole reel. On 2026-11-12 the owner asked for transitions the parent can define and cards with defined lengths. The joining code the app has today never re-makes the picture unless the files do not match, and the service the app rents for video work has never rendered a crossfade.
+The first version of the reel (T11300) exports with straight cuts, or with one fade to black for the whole reel. On 2026-11-12 the owner asked for transitions the parent can define and cards with defined lengths, and on 2026-11-13 ruled on the choices above. The joining code the app has today never re-makes the picture unless the files do not match, and the service the app rents for video work has never rendered a crossfade.
 
 ## The problem
 
@@ -22,7 +30,7 @@ A crossfade shows two highlights at once, so both must be decoded and blended, a
 
 ## What we will do
 
-1. Accept a running order: highlights and cards in sequence, a transition and a length for each join, a length for each card, and whether the reel is muted.
+1. Accept a running order: highlights and cards in sequence, a length for each card, one transition kind and one length for the reel, and whether the reel is muted.
 2. Render cut, fade through black and crossfade, with the sound fading in step with the picture.
 3. Turn each card into video of exactly its length, in the same size and frame rate as the highlights.
 4. Keep the fast path: a reel with only cuts is joined without re-making the picture, as today.
@@ -31,12 +39,13 @@ A crossfade shows two highlights at once, so both must be decoded and blended, a
 
 ## Why this and not something else
 
-Re-making the whole reel whenever one join fades is the simple way and may be fast enough. Re-making only the second around each join is faster but far harder to get right. This task measures the simple way first and only builds the harder one if the wait is too long for a parent to sit through.
+Re-making the whole reel whenever it has a fade is the simple way and may be fast enough. Re-making only the second around each join is faster but far harder to get right. This task measures the simple way first and only builds the harder one if the wait is too long for a parent to sit through.
 
 ## How we will know it worked
 
-- [ ] The owner has ruled on choices 3, 4 and 8 of the decision page, and the answers are recorded in this file.
-- [ ] A reel of ten highlights with cut, fade and crossfade joins and three cards renders on staging; every transition and card is within a tenth of a second of the length asked for.
+- [x] The owner has ruled on choices 3, 4 and 8 of the decision page, and the answers are recorded in this file.
+- [ ] A reel of ten highlights and three cards renders on staging once with a fade through black and once with a crossfade; every transition and card is within a tenth of a second of the length asked for.
+- [ ] A transition length at each end of the slider's range and one in between all render correctly.
 - [ ] The total length of the file equals the sum of the items minus the overlap of each crossfade.
 - [ ] Sound fades with the picture at a fade or crossfade, and a muted reel has no sound.
 - [ ] A reel with only cuts finishes in the same time as a joined download today.
@@ -46,8 +55,8 @@ Re-making the whole reel whenever one join fades is the simple way and may be fa
 ## For the implementer
 
 ### Related Tasks
-- Depends on: T11300's `reels` and `reel_members` tables and `POST /api/reels/{id}/export`. T11300's design doc must already carry a per-join transition and length and a per-card length.
-- Blocks: T16290, T16300.
+- Depends on: T11300's `reels` and `reel_members` tables and `POST /api/reels/{id}/export`. T11300's design doc must already carry a transition kind and length on the reel and a length on each card.
+- Blocks: T16290, T16300, T16310.
 
 ### Relevant Files (REQUIRED)
 - `src/backend/app/services/ffmpeg_concat.py` - `concat_segments` (copy path stays; new transition path)
@@ -58,5 +67,7 @@ Re-making the whole reel whenever one join fades is the simple way and may be fa
 
 ### Technical Notes
 - ffmpeg `xfade` and `acrossfade` need a full decode of both neighbours and constant frame rate; offsets are cumulative, so compute them from probed lengths, never from stored ones.
+- A transition cannot be longer than the shorter of its two neighbours; clamp and report the clamped total (same rule as T16290's shown length).
+- Keep the audio graph able to take one more input mixed under the whole reel (T16310), without building it here.
 - Load `.claude/knowledge/export-pipeline.md` and `.claude/knowledge/modal-gpu.md` first.
 - Progress follows the T7050 rule: only report what the server has finished.

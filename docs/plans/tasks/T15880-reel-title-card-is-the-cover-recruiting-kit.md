@@ -10,7 +10,7 @@ The reel's title card, with the athlete's name, number, position, graduation yea
 **Complexity:** 4
 **Created:** 2026-11-09
 **Updated:** 2026-11-09
-**Milestone:** Highlight reel builder (see [EPIC.md](highlight-reel-builder/EPIC.md)). Task 5 of 5. After T11300.
+**Milestone:** Highlight reel builder (see [EPIC.md](highlight-reel-builder/EPIC.md)). Task 6 of 6. After T11300.
 
 ## How we got here
 
