@@ -1860,7 +1860,10 @@ def autoland(args):
         print(f"[dotask] resuming at round {first_round}: re-checking {focus['criteria']} and "
               f"{len(focus['bugs'])} bug(s) from {focus['previous']['head'][:9]}")
     eta = EtaReporter(group, checkout)
-    for fix_round in range(first_round - 1, MAX_FIX_ROUNDS + 1):
+    # A restart after VERIFY_EXHAUSTED (an owner ruling amended a criterion, g-t15540-4, 2026-11-12) resumes at
+    # round MAX+2, where the range below was empty and the run exited without a verdict or a status line.
+    # Cap it: one final verify, and no fix round after it.
+    for fix_round in range(min(first_round - 1, MAX_FIX_ROUNDS), MAX_FIX_ROUNDS + 1):
         round_number = fix_round + 1
         head = git_head(checkout)
         eta.report()
