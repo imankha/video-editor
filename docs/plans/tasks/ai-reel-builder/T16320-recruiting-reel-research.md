@@ -4,7 +4,7 @@
 
 A reel is several highlights (finished short clips of an athlete) joined into one video for a college coach. Today everything we plan for reels rests on guesses: what a coach wants to see, what goes on the title card, how long a reel should be. Three pieces of planned work depend on the answers: the AI that marks plays in a game has to write down what each play demonstrates, the reel builder has to know what its cards should hold, and the AI reel builder has to know how a good reel is put together. This task does the research once, from what college coaches and recruiting services publish and from reels that worked, and writes down the answers with their sources. It builds no screens and no code. Done when the owner has read the findings, the list of qualities a soccer play can demonstrate is fixed, and each open question below has an answer or is marked as genuinely disputed.
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (research and documents only; no application code)
@@ -58,7 +58,7 @@ Letting the model rely on its own general knowledge was ruled out by the owner: 
 - [x] The signs of a social-worthy moment are written with at least two sources and soccer examples.
 - [ ] Every quality has its visible signs and a routine example that does not count, and the owner, watching five plays from a real game, can say from the signs alone which qualities each one shows.
 - [x] The owner has read the findings and ruled on the recommendations; the rulings are recorded in this file under `## Ruling`.
-- [ ] The quality list is stored with the sport, beside its tags, where both the app and the server can read it.
+- [x] The quality list is stored with the sport, beside its tags, where both the app and the server can read it. (App side merged 2026-11-13; the server copy comes with T16150.)
 
 ## Progress
 
@@ -91,7 +91,7 @@ The owner ruled on 2026-11-13, after reading the findings and the decision page.
 
 ## Still open
 
-- The general qualities and soccer's strings are stored in the app by pull request 754 (https://github.com/imankha/video-editor/pull/754), which waits for the owner to merge. Its test checks that the general part names no sport and that a sport with no strings gets the ten general qualities.
+- The general qualities and soccer's strings are stored in the app by pull request 754 (https://github.com/imankha/video-editor/pull/754), merged by the owner on 2026-11-13. Its test checks that the general part names no sport and that a sport with no strings gets the ten general qualities.
 - The owner, watching five plays from a real game, checks that the signs alone are enough to name the qualities each one shows. This needs a real game on screen and is easiest on the first staging analysis (T16150).
 
 ## For the implementer
