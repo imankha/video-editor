@@ -22,7 +22,7 @@ A parent with a bank of finished highlights taps once and gets a recruiting reel
 4. **The athlete's bank decides.** Every athlete has a different set of highlights. We send the notes for all of them and the model decides which to use, in what order, and how to group them. The groups become section cards. A winger and a centre-back will get different sections, but because of what they have good highlights of, not because of a position template.
 5. **A fixed list plus a sentence.** Each play marked by the AI records what it demonstrates in two ways: one to three qualities from a fixed list for the sport, and one plain sentence a parent can read. A quality is what the play shows about the athlete (pace, vision, composure); a tag is what happened (Goal, Tackle).
 6. **Use what exists for the rest.** Highlights from plays a parent marked by hand, or from clips uploaded directly, have no AI note. For those the model works from tags, star rating, comparison-game standing and any note the parent typed. No extra video analysis and no extra questions.
-7. **Recruiting only at first.** Other purposes, such as a season recap, can be added later as another prompt over the same data.
+7. **Recruiting only at first.** Other purposes, such as a season recap, can be added later as another prompt over the same data. Each play already records whether it is Brilliant for scouting, for social media, or both, so a recruiting reel leans on the scoutable ones and a later social reel has its picks waiting.
 8. **Designed before Mark plays with AI is built.** The data the reel builder needs is written into that epic's tasks now, so the two are one design and the stored game analyses never have to be redone.
 
 ## Why the data work happens early

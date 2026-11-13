@@ -42,6 +42,8 @@ For each answer, say how strong the evidence is: agreed by many sources, said by
 
 Each quality also gets its signs: what a person watching a sideline video would actually see when a player demonstrates it at a level a college coach cares about, and what a routine version looks like that does not count. The owner asked on 2026-11-13 for the game analysis to be worked backwards from what coaches look for, so that the plays it marks as highlights are the scoutable ones. These signs are what the analysis is told to look for (T16150), so they must describe things visible in the footage, in a sentence or two each.
 
+**2b. What impresses on social media.** The owner ruled on 2026-11-13 that a play is Brilliant when it is scoutable or when it is impressive for social media, and the second kind needs its own description. Research which youth sports clips are watched and shared most on Instagram, TikTok and YouTube Shorts, and write the visible signs of a social-worthy moment the same way: what makes a stranger stop and watch, with examples for soccer and a note on what holds for any sport. Say where the two kinds differ, for example a composed pass out of pressure that a coach values and a stranger scrolls past.
+
 **3. Recommendations to the tasks that depend on it.** A short list, one line each: what the title card should hold (T15880), what the cards and their default lengths should be (T16300), and what the reel model must be told (T16330). These are proposals for the owner to accept or change, not changes to those tasks.
 
 ## Why this and not something else
@@ -53,6 +55,7 @@ Letting the model rely on its own general knowledge was ruled out by the owner: 
 - [ ] The findings document answers every question above, each with at least two sources and an evidence strength.
 - [ ] At least fifteen real recruiting reels were looked at, across at least three positions, and what they do is tabulated: length, number of highlights, title card contents, where contact details appear, how the athlete is pointed out.
 - [ ] The soccer quality list is written with a meaning for each entry and is marked general or soccer-only.
+- [ ] The signs of a social-worthy moment are written with at least two sources and soccer examples.
 - [ ] Every quality has its visible signs and a routine example that does not count, and the owner, watching five plays from a real game, can say from the signs alone which qualities each one shows.
 - [ ] The owner has read the findings and ruled on the recommendations; the rulings are recorded in this file under `## Ruling`.
 - [ ] The quality list is stored with the sport, beside its tags, where both the app and the server can read it.
