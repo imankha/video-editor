@@ -912,12 +912,15 @@ export function FocusModeView({
           {/* T14770: "Where will you share it?" (design decision 1, Option C) —
               prominent above the video while the highlight has no box positions
               yet, then a small chip once the first position is placed. Not shown
-              fullscreen (no room, same as CompactGuide above). */}
+              fullscreen (no room, same as CompactGuide above).
+              T15990: the LIVE count, not `boxPrePlaced` (frozen at mount by T15610 for
+              the step total) -- positions that load or get placed after mount must
+              collapse to the chip and make a shape switch ask first, as the cockpit does. */}
           {!isFullscreen && !mobileFs && (
             <div className="mb-2">
               <FrameShapeChoice
                 aspectRatio={globalAspectRatio}
-                hasPositions={boxPrePlaced}
+                hasPositions={focusPointCount > 0}
                 onChange={onAspectRatioChange}
                 onChosen={handleShapeChosen}
               />

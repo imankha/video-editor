@@ -23,6 +23,10 @@ export async function loginForCheck(pageOrContext) {
  * The URL of an API path for page.request: the local stack proxies /api, a deployed frontend
  * does not, so a deployed target goes to E2E_API_BASE.
  *
+ * On staging, page.request calls made after the app has started its own session in the page
+ * got 401 (T16100); call the API before the first navigation, or from inside the page with
+ * fetch(checkApi(path), { credentials: 'include' }) (see T16090.check.spec.js pageApi).
+ *
  * @param {string} path - starts with '/', without the '/api' prefix, e.g. '/projects'
  */
 export function checkApi(path) {
