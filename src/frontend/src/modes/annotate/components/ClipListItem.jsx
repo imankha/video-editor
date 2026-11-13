@@ -195,7 +195,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
             {onViewDetails && (
               <button
                 onClick={onViewDetails}
-                className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors coarse-pointer:min-w-11 coarse-pointer:min-h-11"
                 title="View details"
               >
                 <Info size={16} />
@@ -203,7 +203,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
             )}
             <button
               onClick={onJumpToClip}
-              className="p-2 rounded-lg bg-green-700 hover:bg-green-600 text-white transition-colors"
+              className="p-2 rounded-lg bg-green-700 hover:bg-green-600 text-white transition-colors coarse-pointer:min-w-11 coarse-pointer:min-h-11"
               title="Jump to play"
             >
               <Play size={16} />

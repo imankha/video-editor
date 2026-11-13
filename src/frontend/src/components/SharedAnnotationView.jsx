@@ -208,7 +208,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 function Shell({ children }) {
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 px-6">
-      <a href="https://www.reelballers.com/" className="absolute top-4 left-4 flex items-center gap-2">
+      <a href="https://www.reelballers.com/" className="absolute top-4 left-4 flex items-center gap-2 coarse-pointer:min-h-11">
         <Logo size={32} />
         <span className="text-white font-semibold">ReelBallers</span>
       </a>

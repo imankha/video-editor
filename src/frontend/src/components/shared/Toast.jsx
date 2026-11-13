@@ -140,7 +140,7 @@ function ToastItem({ toast, onDismiss }) {
               toast.action.onClick?.();
               handleDismiss();
             }}
-            className="mt-2 inline-flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+            className="mt-2 inline-flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 transition-colors coarse-pointer:min-h-11"
           >
             {toast.action.label}
             <ExternalLink size={14} />
@@ -152,7 +152,7 @@ function ToastItem({ toast, onDismiss }) {
       <button
         onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
         aria-label="Dismiss"
-        className="flex-shrink-0 p-2 -m-1 text-gray-500 hover:text-white rounded transition-colors"
+        className="flex-shrink-0 p-2 -m-1 text-gray-500 hover:text-white rounded transition-colors coarse-pointer:min-w-11 coarse-pointer:min-h-11"
       >
         <X size={16} />
       </button>

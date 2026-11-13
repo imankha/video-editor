@@ -316,11 +316,10 @@ export default function RegionLayer({
   const renderHighlightControls = (region) => {
     return (
       <button
-        // T5430: intentionally NOT enlarged on coarse pointers. This is a
-        // destructive control (deletes the highlight region); keeping it small on
-        // mobile avoids accidental fat-finger deletion. (Swatches + detection
-        // markers still get the 44px floor.)
-        className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
+        // T16210: T5430's "intentionally small" exception is gone -- this click only
+        // opens the confirm dialog below (setPendingDeleteRegionId), never deletes
+        // directly, so enlarging the tap target doesn't raise fat-finger-deletion risk.
+        className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white coarse-pointer:min-w-11 coarse-pointer:min-h-11"
         onClick={(e) => {
           e.stopPropagation();
           setPendingDeleteRegionId(region.id);
