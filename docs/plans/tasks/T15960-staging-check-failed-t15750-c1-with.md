@@ -1,6 +1,6 @@
 # T15960: Staging check failed: T15750:C1 With Edit play open in portrait fullscreen, the picture is
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10

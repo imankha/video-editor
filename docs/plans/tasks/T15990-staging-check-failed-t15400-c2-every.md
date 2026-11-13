@@ -1,6 +1,6 @@
 # T15990: Staging check failed: T15400:C2 Every button of the 'Switch to landscape?' dialog is tappable
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10
