@@ -116,38 +116,24 @@ export function useWebShare() {
     return { shareUrl: data.share_url, changed: data.changed };
   }, []);
 
-  const webShare = useCallback(async ({ downloadId, title, text, filename }) => {
-    if (capability === ShareCapability.FULL) {
-      const { response } = await fetchReelDownload(downloadId);
-      const blob = await response.blob();
-      const file = new File([blob], filename, { type: 'video/mp4' });
-      await navigator.share({ title, text, files: [file] });
-      return 'native';
-    }
+  // T11510: a file and a link are two different shares (EPIC decision 1), so
+  // they are two intent-named functions instead of one that picks a payload
+  // by capability. The CALLER decides which to offer, using `capability`
+  // (FULL -> both; LINK_ONLY -> shareLink only) -- these two never branch on
+  // capability themselves.
+  const shareVideoFile = useCallback(async ({ downloadId, title, text, filename }) => {
+    const { response } = await fetchReelDownload(downloadId);
+    const blob = await response.blob();
+    const file = new File([blob], filename, { type: 'video/mp4' });
+    await navigator.share({ title, text, files: [file] });
+  }, []);
 
-    const shareUrl = await createShareUrl(downloadId);
+  const shareLink = useCallback(async ({ url, title, text }) => {
+    await navigator.share({ title, text, url });
+  }, []);
 
-    // Gate on `capability` (isMobile-aware), not the raw navigator.share
-    // feature check -- some desktop Chromium builds expose navigator.share
-    // for URL-only shares even without touch, which would otherwise pop the
-    // bare OS share sheet on desktop instead of respecting the mobile-only
-    // capability this hook already computed above.
-    if (capability !== ShareCapability.NONE && navigator.share) {
-      await navigator.share({ title, text, url: shareUrl });
-      return 'link';
-    }
-
-    await copyToClipboard(shareUrl);
-    return 'clipboard';
-  }, [capability]);
-
-  // Legacy: single share function that picks the best method
-  const share = useCallback(async (opts) => {
-    if (capability !== ShareCapability.NONE) {
-      return webShare(opts);
-    }
-    return copyLink(opts);
-  }, [capability, webShare, copyLink]);
-
-  return { capability, isMobile, share, copyLink, webShare, createShareLink, repointShareLink };
+  return {
+    capability, isMobile, copyLink, createShareLink, repointShareLink,
+    shareVideoFile, shareLink,
+  };
 }

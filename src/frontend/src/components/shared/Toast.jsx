@@ -143,7 +143,10 @@ function ToastItem({ toast, onDismiss }) {
             className="mt-2 inline-flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 transition-colors coarse-pointer:min-h-11"
           >
             {toast.action.label}
-            <ExternalLink size={14} />
+            {(() => {
+              const ActionIcon = toast.action.icon || ExternalLink;
+              return <ActionIcon size={14} />;
+            })()}
           </button>
         )}
       </div>
@@ -172,7 +175,7 @@ export function ToastContainer({ stacked = false }) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className={`${stacked ? '' : `fixed bottom-4 right-4 ${Z.NOTICE}`} flex flex-col gap-2 max-w-xs w-full pointer-events-none`}>
+    <div className={`${stacked ? '' : `fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-4 ${Z.NOTICE}`} flex flex-col gap-2 sm:w-full max-w-sm pointer-events-none`}>
       {toasts.map((t) => (
         <div key={t.id} className="pointer-events-auto">
           <ToastItem toast={t} onDismiss={removeToast} />

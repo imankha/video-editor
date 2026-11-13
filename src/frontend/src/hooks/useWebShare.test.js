@@ -68,21 +68,6 @@ describe('useWebShare capability gating (T5220 desktop-share regression, T7350 p
     expect(result.current.capability).toBe(ShareCapability.NONE);
   });
 
-  it('webShare() on a fine-pointer desktop never calls navigator.share, falls back to clipboard', async () => {
-    mockPointer({ coarse: false });
-    navigator.share = vi.fn().mockResolvedValue();
-    const { result } = renderHook(() => useWebShare());
-
-    let method;
-    await act(async () => {
-      method = await result.current.webShare({ downloadId: 1, title: 't', text: 'x', filename: 'f.mp4' });
-    });
-
-    expect(navigator.share).not.toHaveBeenCalled();
-    expect(navigator.clipboard.writeText).toHaveBeenCalled();
-    expect(method).toBe('clipboard');
-  });
-
   it('reports isMobile on a coarse-pointer device (native share path), independent of UA string', () => {
     mockPointer({ coarse: true });
     navigator.share = vi.fn().mockResolvedValue();
@@ -90,22 +75,12 @@ describe('useWebShare capability gating (T5220 desktop-share regression, T7350 p
     expect(result.current.isMobile).toBe(true);
   });
 
-  it('webShare() on a coarse-pointer device with LINK_ONLY capability does call navigator.share', async () => {
+  it('computes LINK_ONLY capability on a coarse-pointer device with no file-share support', () => {
     mockPointer({ coarse: true });
     navigator.share = vi.fn().mockResolvedValue();
     navigator.canShare = undefined;
     const { result } = renderHook(() => useWebShare());
     expect(result.current.capability).toBe(ShareCapability.LINK_ONLY);
-
-    let method;
-    await act(async () => {
-      method = await result.current.webShare({ downloadId: 1, title: 't', text: 'x', filename: 'f.mp4' });
-    });
-
-    expect(navigator.share).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 't', text: 'x' })
-    );
-    expect(method).toBe('link');
   });
 
   it('computes FULL capability on a coarse-pointer device when canShare({files}) is supported', () => {
@@ -114,6 +89,72 @@ describe('useWebShare capability gating (T5220 desktop-share regression, T7350 p
     navigator.canShare = vi.fn(() => true);
     const { result } = renderHook(() => useWebShare());
     expect(result.current.capability).toBe(ShareCapability.FULL);
+  });
+});
+
+// T11510 (Social Cover Image epic): a file and a link are two different
+// shares, so they are two separate functions with two separate payload
+// shapes -- neither branches on capability itself (the caller picks which to
+// offer). shareVideoFile sends ONLY files; shareLink sends ONLY a url. A
+// regression here (one function sending both, or the wrong one) is exactly
+// the bug this task fixes: a mobile "Share link" button that silently sent
+// the video file instead, so the user's chosen cover never reached iMessage.
+describe('useWebShare.shareVideoFile / shareLink (T11510 split payloads)', () => {
+  const originalShare = navigator.share;
+  const originalClipboard = navigator.clipboard;
+
+  beforeEach(() => {
+    mockShareResponse();
+    navigator.clipboard = { writeText: vi.fn().mockResolvedValue() };
+  });
+
+  afterEach(() => {
+    navigator.share = originalShare;
+    navigator.clipboard = originalClipboard;
+  });
+
+  it('shareVideoFile calls navigator.share with files and NO url', async () => {
+    navigator.share = vi.fn().mockResolvedValue();
+    // fetchReelDownload: first apiFetch resolves file-url (non-proxied -> a
+    // presigned R2 url), then a raw fetch() retrieves the bytes.
+    globalThis.apiFetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ url: 'https://r2.example/presigned', filename: 'highlight.mp4', proxied: false }),
+    }));
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(['bytes'], { type: 'video/mp4' }),
+    });
+    const { result } = renderHook(() => useWebShare());
+
+    await act(async () => {
+      await result.current.shareVideoFile({
+        downloadId: 1, title: 't', text: 'x', filename: 'highlight.mp4',
+      });
+    });
+
+    expect(navigator.share).toHaveBeenCalledTimes(1);
+    const payload = navigator.share.mock.calls[0][0];
+    expect(payload.url).toBeUndefined();
+    expect(payload.files).toHaveLength(1);
+    expect(payload.files[0]).toBeInstanceOf(File);
+    expect(payload.files[0].name).toBe('highlight.mp4');
+  });
+
+  it('shareLink calls navigator.share with url and NO files', async () => {
+    navigator.share = vi.fn().mockResolvedValue();
+    const { result } = renderHook(() => useWebShare());
+
+    await act(async () => {
+      await result.current.shareLink({
+        url: 'https://reelballers.com/shared/tok123', title: 't', text: 'x',
+      });
+    });
+
+    expect(navigator.share).toHaveBeenCalledTimes(1);
+    const payload = navigator.share.mock.calls[0][0];
+    expect(payload.files).toBeUndefined();
+    expect(payload.url).toBe('https://reelballers.com/shared/tok123');
   });
 });
 

@@ -575,6 +575,81 @@ describe('GlobalExportIndicator — a dismissed completion toast stays dismissed
   });
 });
 
+// T11510 (D5): the post-export toast used to send the raw video file on
+// mobile under a "Share" label for an UNPUBLISHED draft -- the one surface
+// where no link exists yet and no "Publish and get link" review has
+// happened. Coarse pointers now get no share action on this toast at all;
+// fine pointers are unchanged (Copy link).
+describe('GlobalExportIndicator — completion toast share action (T11510 D5)', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  function mockPointer({ coarse }) {
+    window.matchMedia = vi.fn((query) => ({
+      matches: query.includes('pointer: coarse') ? coarse : false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }));
+  }
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('coarse pointer: the completion toast carries NO action (no share, no file-send)', async () => {
+    mockPointer({ coarse: true });
+    const { toast } = await import('./shared');
+    const spy = vi.spyOn(toast, 'success').mockImplementation(() => {});
+
+    render(<GlobalExportIndicator />);
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_mobile: {
+            ...makeExport({ exportId: 'export_mobile', projectId: 60 }),
+            status: 'complete',
+            completedAt: new Date(NOW).toISOString(),
+            outputVideoId: 123,
+          },
+        },
+      });
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const options = spy.mock.calls[0][1];
+    expect(options.action).toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it('fine pointer: the completion toast keeps the unchanged Copy link action', async () => {
+    mockPointer({ coarse: false });
+    const { toast } = await import('./shared');
+    const spy = vi.spyOn(toast, 'success').mockImplementation(() => {});
+
+    render(<GlobalExportIndicator />);
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_desktop: {
+            ...makeExport({ exportId: 'export_desktop', projectId: 61 }),
+            status: 'complete',
+            completedAt: new Date(NOW).toISOString(),
+            outputVideoId: 456,
+          },
+        },
+      });
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    const options = spy.mock.calls[0][1];
+    expect(options.action).toBeDefined();
+    expect(options.action.label).toBe('Copy link');
+    spy.mockRestore();
+  });
+});
+
 describe('GlobalExportIndicator — docks above the editor action band below lg (T14230)', () => {
   // Real-browser geometry proof: e2e/T14230-verify.mjs. This pins the slot classes it measured.
   it('offsets by --cta-bar-h below lg and keeps the bottom-4/right-4 slot on desktop', () => {

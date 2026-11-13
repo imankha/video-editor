@@ -400,6 +400,35 @@ Analytics: `track('share_initiated', { method, source })`. `method` becomes
   scope.
 - The style guide gains an "Action sheet" entry once this ships and is approved (not before).
 
+## Implementation note (2026-11-13, code audit)
+
+**D1-D4 (ActionSheet/ShareActionSheet, PublishedReelsPanel player Share, ReelTile card-face
+and kebab Share) are superseded, not implemented.** This doc was written 2026-10-01; a later
+task, T13120, already replaced `webShareReel`/`sharePlayerReel` on both those surfaces so
+"Share" opens `ShareModal` (visibility choice + Copy link) on **every** pointer type now.
+`ShareModal` has zero `navigator.share`/file-sharing code -- it never sends the raw video file,
+so the bug this task describes ("every Share sends a file even though labelled link") does not
+exist on those two surfaces anymore; Download (separate button, correctly labelled) is the only
+way to get the file there. Building D1-D4 on top of that would duplicate/partially undo
+T13120's shipped decision. An inline comment in `ReelTile.jsx`'s kebab claiming `onWebShare`
+"restores native share sheet capability" was stale from before T13120 and has been corrected.
+
+**What this task actually fixed** (the two call sites that still did raw `navigator.share`
+with a video file): `DraftReelPreview.jsx`'s `PublishLinkFlow` ready-phase button (was
+mislabelled "Share link..." while sending the file) now has two real, correctly-labelled
+siblings (D6: Share link / Share video, LINK_ONLY collapses to one), via `useWebShare`'s new
+`shareLink`/`shareVideoFile` (AC1). `GlobalExportIndicator.jsx`'s post-export toast (D5) no
+longer offers any share action on coarse pointers (it shared an unpublished draft's file under
+a bare "Share" label; desktop Copy link is unchanged). D3's backend `has_public_link` field and
+the full `ActionSheet`/`ShareActionSheet` component were not needed for this narrowed scope.
+
+**Open product question for the owner, not resolved here:** T13120 removed the "share the
+video file to Reels/TikTok" option from published highlights (ReelTile / PublishedReelsPanel)
+entirely -- there is now no file-sharing affordance on those two surfaces at all (only Download
+and ShareModal's link-sharing). If that capability is wanted back there, it needs its own task;
+this one did not restore it, since doing so inside T11510 would mean re-deciding T13120's
+shipped change rather than fixing the bug this task was filed for.
+
 ## Acceptance Criteria
 - [ ] On a coarse-pointer device with file sharing, "Share video" calls `navigator.share` with
       `files` and no `url`, and "Share link" calls it with `url` and no `files`. Unit tests assert

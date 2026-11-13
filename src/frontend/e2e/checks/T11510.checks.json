@@ -1,0 +1,20 @@
+{
+  "criteria": {
+    "T11510:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/hooks/useWebShare.test.js"
+    },
+    "T11510:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/PublishLinkFlow.test.jsx"
+    },
+    "T11510:C4": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/GlobalExportIndicator.test.jsx"
+    },
+    "T11510:C5": {
+      "kind": "human",
+      "why": "iMessage/Instagram/TikTok rendering of the shared payload on a real phone cannot be observed by automation (per the task's own AC: 'Live-verified on a real phone')."
+    }
+  }
+}

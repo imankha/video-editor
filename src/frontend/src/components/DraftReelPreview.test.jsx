@@ -7,13 +7,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // that shows the share URL BEFORE any copy. See docs/plans/tasks/T10180-design.md.
 //
 // apiFetch + store fns for the publish path (usePublishProject).
-const { apiFetchMock, fetchProjectsMock, toastSuccessMock, toastErrorMock, createShareLinkMock, webShareMock, repointShareLinkMock } = vi.hoisted(() => ({
+const { apiFetchMock, fetchProjectsMock, toastSuccessMock, toastErrorMock, createShareLinkMock, shareVideoFileMock, shareLinkMock, repointShareLinkMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
   fetchProjectsMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   toastErrorMock: vi.fn(),
   createShareLinkMock: vi.fn(),
-  webShareMock: vi.fn(),
+  shareVideoFileMock: vi.fn(),
+  shareLinkMock: vi.fn(),
   repointShareLinkMock: vi.fn(),
 }));
 
@@ -45,12 +46,15 @@ vi.mock('./shared/Toast', () => ({
 // T10860: useWebShare gains repointShareLink({ downloadId, shareToken }) ->
 // Promise<string url>, additive alongside createShareLink/copyLink/webShare.
 vi.mock('../hooks/useWebShare', () => ({
+  ShareCapability: { FULL: 'full', LINK_ONLY: 'link', NONE: 'none' },
   useWebShare: () => ({
     copyLink: vi.fn().mockResolvedValue('clipboard'),
-    webShare: webShareMock,
+    shareVideoFile: shareVideoFileMock,
+    shareLink: shareLinkMock,
     createShareLink: createShareLinkMock,
     repointShareLink: repointShareLinkMock,
     isMobile: false,
+    capability: 'none',
   }),
 }));
 const { downloadsApi } = vi.hoisted(() => ({
@@ -146,7 +150,8 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     mountSpy.mockReset();
     createShareLinkMock.mockReset();
     createShareLinkMock.mockResolvedValue('https://reelballers.com/shared/tok123');
-    webShareMock.mockReset();
+    shareVideoFileMock.mockReset();
+    shareLinkMock.mockReset();
     downloadsApi.downloadFile.mockClear();
     downloadsApi.downloadingId = null;
     act(() => useReelPreviewStore.getState().close());

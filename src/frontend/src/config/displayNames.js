@@ -457,7 +457,12 @@ export const RESULT_PUBLISH = {
   // Heading while no link exists yet (never claim 'Link ready' without a URL).
   SHARE_HEADING: 'Share this highlight',
   COPY_LINK: 'Copy link',
-  SHARE_LINK: 'Share link...',   // coarse-pointer native share entry
+  // T11510: this button now actually sends a LINK (no ellipsis -- it no longer
+  // promises a choice it doesn't deliver). SHARE_VIDEO is its new sibling,
+  // sending the raw file for posting to Reels/TikTok/Stories.
+  SHARE_LINK: 'Share link',
+  SHARE_VIDEO: 'Share video',
+  SHARE_CHOICE_HINT: 'Share link for texts and DMs. Share video to post on Instagram or TikTok.',
   // T10860: re-point an already-distributed share token to a moved final_video
   // after a private re-export. Shown only when payload.staleShare is non-null.
   UPDATE_SHARED: 'Update link',

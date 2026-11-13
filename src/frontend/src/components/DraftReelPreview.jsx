@@ -10,7 +10,7 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
-import { useWebShare } from '../hooks/useWebShare';
+import { useWebShare, ShareCapability } from '../hooks/useWebShare';
 import { useDownloads } from '../hooks/useDownloads';
 import { toast } from './shared/Toast';
 import { setPendingGame, clearAnnotateOrigin } from '../utils/pendingNavigation';
@@ -99,7 +99,8 @@ export function DraftReelPreview() {
 function DraftReelPreviewInner({ payload }) {
   const close = useReelPreviewStore((s) => s.close);
   const { publish, isPublishing } = usePublishProject({ id: payload.projectId });
-  const { copyLink, webShare, createShareLink, repointShareLink, isMobile } = useWebShare();
+  const { copyLink, shareVideoFile, shareLink, createShareLink, repointShareLink, isMobile, capability } = useWebShare();
+  const canShareFile = capability === ShareCapability.FULL;
   const { downloadFile, downloadingId } = useDownloads();
 
   // T10860 (design §3.3): a pre-existing share token whose snapshot is stale
@@ -234,24 +235,42 @@ function DraftReelPreviewInner({ payload }) {
     }
   }, [copyLink, payload.finalVideoId]);
 
-  // "Share link..." click (coarse pointer, ready phase): existing useWebShare
-  // native-share path.
+  // "Share link" click (coarse pointer, ready phase, link already minted):
+  // navigator.share with a url, no files -- the one payload that carries the
+  // user's chosen cover (T11510). When no link exists yet (ready-capable),
+  // PublishLinkFlow is wired to handleGetLinkCapable instead (see actionBar
+  // below): that first tap only mints the link and moves to 'ready', so this
+  // handler always has a real shareUrl by the time it runs.
   const handleNativeShare = useCallback(async () => {
     try {
-      const method = await webShare({
+      await shareLink({
+        url: shareUrl,
+        title: payload.name || 'Highlight',
+        text: `Check out ${payload.name || 'this highlight'}!`,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      toast.error(userErrorMessage(err, ERROR_COPY.SHARE));
+    }
+  }, [shareLink, shareUrl, payload.name]);
+
+  // "Share video" click (coarse pointer, ready phase): navigator.share with
+  // the raw file, no url -- for posting to Reels/TikTok/Stories (T11510).
+  // Needs no token, so it works immediately in both 'ready' and
+  // 'ready-capable' (the highlight is already published either way).
+  const handleShareVideo = useCallback(async () => {
+    try {
+      await shareVideoFile({
         downloadId: payload.finalVideoId,
         title: payload.name || 'Highlight',
         text: `Check out ${payload.name || 'this highlight'}!`,
         filename: `${payload.name || 'highlight'}-highlight.mp4`,
       });
-      if (method === 'clipboard') {
-        toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
-      }
     } catch (err) {
       if (err.name === 'AbortError') return;
       toast.error(userErrorMessage(err, ERROR_COPY.SHARE));
     }
-  }, [webShare, payload.finalVideoId, payload.name]);
+  }, [shareVideoFile, payload.finalVideoId, payload.name]);
 
   const handleDownload = useCallback(async (reel) => {
     try {
@@ -365,12 +384,14 @@ function DraftReelPreviewInner({ payload }) {
         reelName={payload.name}
         shareUrl={phase === 'ready-capable' ? null : shareUrl}
         isMobile={isMobile}
+        canShareFile={canShareFile}
         copied={copied}
         onPublishClick={handlePublishClick}
         onCancel={handleCancelReview}
         onConfirm={handleConfirmPublish}
         onCopy={handleCopy}
         onNativeShare={phase === 'ready-capable' ? handleGetLinkCapable : handleNativeShare}
+        onShareVideo={handleShareVideo}
         onGetLink={handleGetLinkCapable}
       />
       </div>

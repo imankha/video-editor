@@ -416,9 +416,11 @@ export function ReelTile({
                     : <Download size={20} className="text-gray-300 flex-shrink-0" />}
                   <span className="text-gray-200">Download</span>
                 </button>
-                {/* T6300: the removed inline chip was the only mobile path to
-                    onWebShare (native share sheet) — restored here so coarse
-                    pointers keep that capability, not just Copy Link. */}
+                {/* T13120: onWebShare now opens ShareModal (visibility choice
+                    + Copy link), not a native share sheet -- ShareModal has
+                    no navigator.share/file-sharing code at all. The comment
+                    this replaced (T6300, "restores native share sheet
+                    capability") was stale (T11510 audit, 2026-11-13). */}
                 <button onClick={(e) => { onWebShare(e, download); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
                   <Share2 size={20} className="text-gray-300 flex-shrink-0" />
                   <span className="text-gray-200">Share</span>

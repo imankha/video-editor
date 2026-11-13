@@ -1,4 +1,4 @@
-import { Loader } from 'lucide-react';
+import { Loader, Link2, Share2 } from 'lucide-react';
 import { Button } from './shared/Button';
 import { LinkReadyCard } from './LinkReadyCard';
 import { RESULT_PUBLISH } from '../config/displayNames';
@@ -26,7 +26,15 @@ import { GUIDE_PULSE } from './instructions/guideTargets';
  * @param {Function} onCancel       - review -> idle (no write)
  * @param {Function} onConfirm      - review -> publishing (the write gesture)
  * @param {Function} onCopy         - ready (fine pointer): copy the share URL
- * @param {Function} onNativeShare  - ready (coarse pointer): native share sheet
+ * @param {Function} onNativeShare  - ready (coarse pointer): share the link
+ *                                     (navigator.share with a url, no files)
+ * @param {Function=} onShareVideo  - ready (coarse pointer), only when
+ *                                     `canShareFile`: share the raw video
+ *                                     file (navigator.share with files, no
+ *                                     url) -- for posting to Reels/TikTok.
+ * @param {boolean}  canShareFile   - FULL capability (file sharing works);
+ *                                     LINK_ONLY devices collapse to a single
+ *                                     full-width Share link button (D6).
  * @param {Function=} onGetLink     - ready (fine pointer) with shareUrl still
  *                                     null (R5 alreadyPublished capability):
  *                                     mints the link on the first click.
@@ -37,18 +45,20 @@ export function PublishLinkFlow({
   reelName,
   shareUrl = null,
   isMobile = false,
+  canShareFile = false,
   copied = false,
   onPublishClick,
   onCancel,
   onConfirm,
   onCopy,
   onNativeShare,
+  onShareVideo,
   onGetLink,
 }) {
   if (phase === 'idle') {
     return (
       <div className="flex items-center justify-center px-3 py-2">
-        <Button variant="cyan" size="sm" onClick={onPublishClick} data-testid="finished-get-link" guideTarget={GUIDE_PULSE.GET_LINK}>
+        <Button variant="cyan" size="sm" className="coarse-pointer:min-h-11" onClick={onPublishClick} data-testid="finished-get-link" guideTarget={GUIDE_PULSE.GET_LINK}>
           {RESULT_PUBLISH.PUBLISH_GET_LINK}
         </Button>
       </div>
@@ -61,10 +71,10 @@ export function PublishLinkFlow({
         <p className="text-sm font-medium text-white">{RESULT_PUBLISH.REVIEW_TITLE(reelName)}</p>
         <p className="text-xs text-gray-300">{RESULT_PUBLISH.REVIEW_BODY}</p>
         <div className="flex items-center justify-end gap-2">
-          <Button variant="secondary" size="sm" onClick={onCancel}>
+          <Button variant="secondary" size="sm" className="coarse-pointer:min-h-11" onClick={onCancel}>
             {RESULT_PUBLISH.REVIEW_CANCEL}
           </Button>
-          <Button variant="cyan" size="sm" onClick={onConfirm}>
+          <Button variant="cyan" size="sm" className="coarse-pointer:min-h-11" onClick={onConfirm}>
             {RESULT_PUBLISH.REVIEW_CONFIRM}
           </Button>
         </div>
@@ -88,9 +98,26 @@ export function PublishLinkFlow({
           {shareUrl ? RESULT_PUBLISH.LINK_READY : RESULT_PUBLISH.SHARE_HEADING}
         </p>
         {isMobile ? (
-          <Button variant="cyan" size="sm" onClick={onNativeShare}>
-            {RESULT_PUBLISH.SHARE_LINK}
-          </Button>
+          <>
+            {shareUrl && (
+              <LinkReadyCard link={shareUrl} copied={copied} onCopy={onCopy} />
+            )}
+            {canShareFile ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="cyan" size="sm" icon={Link2} className="w-full coarse-pointer:min-h-11" onClick={onNativeShare}>
+                  {RESULT_PUBLISH.SHARE_LINK}
+                </Button>
+                <Button variant="secondary" size="sm" icon={Share2} className="w-full coarse-pointer:min-h-11" onClick={onShareVideo}>
+                  {RESULT_PUBLISH.SHARE_VIDEO}
+                </Button>
+              </div>
+            ) : (
+              <Button variant="cyan" size="sm" icon={Link2} fullWidth className="coarse-pointer:min-h-11" onClick={onNativeShare}>
+                {RESULT_PUBLISH.SHARE_LINK}
+              </Button>
+            )}
+            <p className="text-xs text-gray-400">{RESULT_PUBLISH.SHARE_CHOICE_HINT}</p>
+          </>
         ) : (
           <LinkReadyCard link={shareUrl} onGetLink={onGetLink} triggerLabel={RESULT_PUBLISH.PUBLISH_GET_LINK} copied={copied} onCopy={onCopy} />
         )}

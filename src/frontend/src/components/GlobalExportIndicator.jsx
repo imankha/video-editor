@@ -204,7 +204,7 @@ export function GlobalExportIndicator() {
   const [isExpanded, setIsExpanded] = useState(false);
   // T11330: exportIds whose over-budget popup the user has dismissed (local, session-scoped).
   const [dismissedBudgetIds, setDismissedBudgetIds] = useState(() => new Set());
-  const { isMobile, share, copyLink } = useWebShare();
+  const { isMobile, copyLink } = useWebShare();
 
   // Get export state from store (updated via WebSocket)
   const activeExports = useExportStore((state) => state.activeExports);
@@ -306,27 +306,19 @@ export function GlobalExportIndicator() {
           && exp.projectId === useProjectsStore.getState().selectedProjectId
           && useEditorStore.getState().editorMode === EDITOR_MODES.FRAMING
         ) return;
-        const shareAction = exp.outputVideoId ? {
-          label: isMobile ? 'Share' : SHARE_COPY.COPY_LINK,
+        // T11510 (D5): the export here is an unpublished draft -- it cannot
+        // be shared as a video file (no publish gesture has happened yet),
+        // and a link needs the "Publish and get link" review, which doesn't
+        // belong in an 8-second toast. Coarse pointers get NO share action at
+        // all now (previously this silently sent the raw file under a
+        // "Share" label); fine pointers keep the unchanged Copy link action.
+        const shareAction = exp.outputVideoId && !isMobile ? {
+          label: SHARE_COPY.COPY_LINK,
           onClick: async () => {
             try {
-              if (isMobile) {
-                const filename = `${exp.projectName || projectLabel}-highlight.mp4`;
-                const method = await share({
-                  downloadId: exp.outputVideoId,
-                  title: projectLabel,
-                  text: `Check out my ${projectLabel} highlight!`,
-                  filename,
-                });
-                track('share_initiated', { method, source: 'toast' });
-                if (method === 'clipboard') {
-                  toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
-                }
-              } else {
-                await copyLink({ downloadId: exp.outputVideoId });
-                track('share_initiated', { method: 'clipboard', source: 'toast' });
-                toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
-              }
+              await copyLink({ downloadId: exp.outputVideoId });
+              track('share_initiated', { method: 'clipboard', source: 'toast' });
+              toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
             } catch (err) {
               if (err.name === 'AbortError') return;
               toast.error(userErrorMessage(err, ERROR_COPY.SHARE));

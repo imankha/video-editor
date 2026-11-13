@@ -64,7 +64,7 @@ export function LinkReadyCard({ link, onGetLink, triggerLabel = RESULT_PUBLISH.R
         onClick={onCopy}
         aria-label={RESULT_PUBLISH.COPY_LINK}
         title={RESULT_PUBLISH.COPY_LINK}
-        className="text-gray-400 hover:text-white transition-colors p-1 flex-shrink-0"
+        className="text-gray-400 hover:text-white transition-colors p-1 flex-shrink-0 inline-flex items-center justify-center coarse-pointer:min-h-11 coarse-pointer:min-w-11"
       >
         {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
       </button>
