@@ -2267,6 +2267,12 @@ def wait_for_staging_deploy(sha, cap_minutes=40, appear_minutes=5, interval=30):
             mine = [r for r in entries if r.get("headSha") == sha]
             if mine and mine[0].get("conclusion") == "cancelled" and entries:
                 mine = entries[:1]  # superseded: the newest run carries this commit
+            elif mine and mine[0].get("conclusion") == "failure":
+                # A failed deploy (PR #748's Fly release command timed out, 2026-11-12) is superseded by a
+                # later successful deploy of the same workflow: master is linear, so that run carried this commit.
+                newer = entries[:entries.index(mine[0])]
+                if any(r.get("status") == "completed" and r.get("conclusion") == "success" for r in newer):
+                    mine = [next(r for r in newer if r.get("conclusion") == "success")]
             runs[workflow] = mine[0] if mine else None
         found = [r for r in runs.values() if r]
         waited = (time.time() - started) / 60

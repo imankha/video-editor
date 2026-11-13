@@ -1162,6 +1162,22 @@ class DotaskCliTest(unittest.TestCase):
         capture_mock.assert_called_once()  # D4: --capture -> exactly one capture-and-gate call
 
 
+class StagingDeployWaitTest(unittest.TestCase):
+    def test_a_failed_deploy_superseded_by_a_later_success_counts_as_deployed(self):
+        runs = {"deploy-backend.yml": [{"headSha": "b", "status": "completed", "conclusion": "success"},
+                                       {"headSha": "a", "status": "completed", "conclusion": "failure"}],
+                "deploy-frontend.yml": [{"headSha": "a", "status": "completed", "conclusion": "success"}]}
+
+        def fake_run(cmd, **kwargs):
+            workflow = cmd[cmd.index("--workflow") + 1]
+            return SimpleNamespace(returncode=0, stdout=json.dumps(runs[workflow]), stderr="")
+
+        with patch.object(dotask_cli.subprocess, "run", fake_run):
+            self.assertEqual(dotask_cli.wait_for_staging_deploy("a", interval=0), "deployed")
+            runs["deploy-backend.yml"].pop(0)  # no later success: still a failure
+            self.assertEqual(dotask_cli.wait_for_staging_deploy("a", interval=0), "failed: deploy-backend.yml")
+
+
 class EnsureSonnetDefault(unittest.TestCase):
     """D7: every task container's Claude defaults to the sonnet alias."""
 
