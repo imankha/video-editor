@@ -2772,6 +2772,23 @@ def analytics_cohorts(
     }
 
 
+@router.get("/analytics/activation")
+# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_activation(exclude_test: bool = True):
+    """T7420: per monthly signup cohort, export_completed <=14d (primary,
+    scored vs the 40% scorecard target) and share_completed <=14d
+    (value-moment), with benchmark annotations. Scope-shrunk 2026-10-30
+    (owner-approved, see task file): stage-conversion/stall-distribution live
+    in T14020's Journey step inspector instead. Reads existing Postgres only."""
+    from ..services.analytics_activation import compute_activation_report
+
+    _require_admin()
+    excl = _test_exclusion(exclude_test)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        return compute_activation_report(cur, excl, datetime.now(UTC).date())
+
+
 @router.get("/analytics/retention")
 # sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_retention(exclude_test: bool = True):

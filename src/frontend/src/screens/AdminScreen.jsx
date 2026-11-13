@@ -19,6 +19,7 @@ import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
 import { DayNRetentionTable } from '../components/admin/DayNRetentionTable';
 import { RetentionView } from '../components/admin/RetentionView';
+import { ActivationReport } from '../components/admin/ActivationReport';
 import { BySportTable } from '../components/admin/BySportTable';
 import { CampaignsModal } from '../components/admin/CampaignsModal';
 
@@ -127,6 +128,10 @@ export function AdminScreen({ onBack }) {
   const retentionChartAction = useAdminStore(s => s.retentionChartAction);
   const setRetentionChartAction = useAdminStore(s => s.setRetentionChartAction);
   const fetchRetentionChart = useAdminStore(s => s.fetchRetentionChart);
+  const activationData = useAdminStore(s => s.activationData);
+  const activationLoading = useAdminStore(s => s.activationLoading);
+  const activationError = useAdminStore(s => s.activationError);
+  const fetchActivation = useAdminStore(s => s.fetchActivation);
   const bySportData = useAdminStore(s => s.bySportData);
   const bySportLoading = useAdminStore(s => s.bySportLoading);
   const bySportError = useAdminStore(s => s.bySportError);
@@ -421,6 +426,17 @@ export function AdminScreen({ onBack }) {
             onRefresh={() => fetchRetentionChart()}
             action={retentionChartAction}
             onActionChange={setRetentionChartAction}
+          />
+        </CollapsibleSection>
+
+        {/* T7420: activation report -- export/share <=14d by monthly signup cohort.
+            Collapsed, on-demand fetch. */}
+        <CollapsibleSection title="Activation">
+          <ActivationReport
+            data={activationData}
+            loading={activationLoading}
+            error={activationError}
+            onRefresh={() => fetchActivation()}
           />
         </CollapsibleSection>
 

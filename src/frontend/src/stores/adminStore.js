@@ -124,6 +124,8 @@ export const useAdminStore = create((set, get) => ({
   // T7430: retention chart (triangle + WAU + return-after-gap), on-demand -- never on mount.
   retentionChartData: null, retentionChartLoading: false, retentionChartError: null,
   retentionChartAction: '',
+  // T7420: activation report (export/share <=14d by monthly signup cohort), on-demand.
+  activationData: null, activationLoading: false, activationError: null,
 
   // T14000: `build` is the 4th dimension value; omitting it clears the build, so a
   // campaign/cohort pick replaces a build pick. The platform breakdown follows the build
@@ -845,6 +847,23 @@ export const useAdminStore = create((set, get) => ({
       set({ retentionChartData: await res.json(), retentionChartLoading: false });
     } catch (err) {
       set({ retentionChartLoading: false, retentionChartError: err.message });
+    }
+  },
+
+  // T7420: activation report -- export_completed/share_completed <=14d by monthly
+  // signup cohort, with benchmarks. On-demand, never on mount.
+  fetchActivation: async () => {
+    set({ activationLoading: true, activationError: null });
+    try {
+      const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/activation?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ activationData: await res.json(), activationLoading: false });
+    } catch (err) {
+      set({ activationLoading: false, activationError: err.message });
     }
   },
 
