@@ -9,7 +9,7 @@ Today the parent drags a crop box keyframe by keyframe in Frame and places the S
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-09
-**Updated:** 2026-11-09
+**Updated:** 2026-11-12
 **Milestone:** Roadmap 5, Click-once following (see PLAN.md). Gated on T15900.
 
 ## How we got here
@@ -21,6 +21,22 @@ from a single click at 17 to 23 fps on an L4, about $0.004 to $0.02 per 10-secon
 study found 50% recovery in crowded boxes and 8.7% once the player leaves frame for more than 15
 frames. Prod: 69 users placed 1,287 framing points by hand (about 19 each); Spotlight completion is the
 strongest return and payment signal we have (T15800).
+
+## What a first prototype already showed (2026-11-12)
+
+T15900 is done and says GO. A local prototype (project `C:/Users/imank/projects/player-tracking`, outside
+this repo) ran ten trackers on 54 real Spotlight clips from the owner's prod account, starting each
+from one box on the first frame. SAMURAI on SAM 2.1 base+ held the clicked player for 4 seconds on
+47 of 54 clips with no further click; plain SAM 2.1 base+ is equal within one clip; EdgeTAM is
+nearly twice as fast and five clips worse; SAM 2.1 large is slower and no better. The 2025 ByteTrack
+approach held 22 of 47 clean clips. Three real failures, all look-alike players crossing. Details:
+[click-once-following-2026-11.md](../research/click-once-following-2026-11.md).
+
+Still open from this task's own list, so it stays TODO: the click as a real YOLO box (the prototype
+used the parent's stored ellipse), Veo and DJI footage, whole-clip following beyond 4 seconds, the
+parent's Frame crop path as ground truth with a smoothed box, and speed and cost on Modal L4 and
+A100 (the prototype measured a laptop RTX 4060 only: about 5 frames per second). The two failure
+modes to report explicitly are look-alike crossings and the athlete leaving the frame.
 
 ## The problem
 
