@@ -4,6 +4,39 @@
 
 ## Current Focus
 
+### In progress (a task's row moves here when work on it starts)
+
+Rows here are WIP or waiting on the owner; a merged row stays until it is DONE and archived.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T16210 | [Remaining small touch targets on phone and iPad](tasks/T16210-remaining-touch-targets-on-phone-and-ipad.md) | 4 | 3 | 1.3 | WIP | [ ] | Ten controls now meet the 44 pixel finger minimum; eleven others the QA pass measured were never re-measured after the fix. Measure them on an iPhone and iPad, fix any still small, and check each. |
+| T11510 | [Phone share: video or link](tasks/social-cover-image/T11510-split-share-video-vs-share-link.md) | 8 | 3 | 2.7 | WIP | [ ] | On a phone, every Share button sends the video file itself, even the one labelled Share link. A file never shows the cover picture the parent chose, because Instagram, iMessage and WhatsApp pick their own thumbnail; only a link shows our cover. Of the 56 parents who paid for a highlight, 11 downloaded or shared it, so this is where finished highlights die. We will give phones two clear choices, Share video for posting to Reels or TikTok and Share link for messaging, and fix the mislabelled button. The cover picture itself is handled by the reel's title card (T15880). Done when both choices work on a phone and the share-or-download rate out of paid highlights moves on the admin Journey. |
+| T16080 | [Thank-you email to payers](tasks/T16080-thank-you-email-to-payers.md) | 7 | 2 | 3.5 | WIP | [ ] | A parent who buys credits gets Stripe's receipt and nothing from us, and of 56 parents who paid for a highlight only 11 downloaded or shared it. Right after each payment we will send a short personal email from Iman: thank you, I will help with any problem, just reply, plus links to our Discord and the short tutorial. A stuck payer is the person most worth helping, and a reply to a person gets sent far more often than a support form. Done when a staging test purchase delivers exactly one email with working links and a reply reaches the owner's inbox. |
+| T16070 | [Day 1 to day 28 retention](tasks/investor-analytics/T16070-day-n-retention-admin.md) | 9 | 3 | 3.0 | WIP | [ ] | The admin panel shows sign-ups, uploads, highlights and payments, but never how many people came back; the one figure we have, 17 of 402 still active after a week, was counted by hand. We will add a table showing, for each week's sign-ups, what share used the app again 1, 3, 7, 14 and 28 days after signing up, with the raw counts beside each percentage. These are the standard checkpoints, so we can compare against other apps and see a change within a month. Done when the table is live and its 7-day figure matches a hand count from the production database. |
+| T7430 | [Retention chart](tasks/investor-analytics/T7430-retention-cohort-curves.md) | 9 | 4 | 2.3 | WIP | [ ] | The retention chart: for each week's sign-ups, how many were still active one, two and three weeks later. This is the number the whole roadmap is judged by, and we do not have it today. |
+| T7420 | [Activation report](tasks/investor-analytics/T7420-activation-funnel-report.md) | 8 | 2 | 4.0 | WIP | [ ] | For each month's sign-ups, how many made a highlight and how many shared one within two weeks, and where the rest dropped off. |
+
+### Bugs found by /dotask verify
+
+Filed by /dotask verify and the staging check. Bugs outrank every feature (owner rule 2026-11-13), so this section sits at the top, right under the work in flight.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T15300 | [pg_conn test fixture can silently drop and empty the shared dev Postgres analytics tables](tasks/T15300-pg-conn-test-fixture-can-silently.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
+| T15320 | [test_analytics_dashboards.py has pre-existing failures against shared Postgres test state](tasks/T15320-test-analytics-dashboards-py-has-pre.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
+| T15790 | [Cold-reopen of /focus/p/<id> from a closed tab still does not load the Frame editor within 10s](tasks/T15790-cold-reopen-of-focus-p-id.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
+| T15950 | [1.5x ETA accuracy half of AC3 is unaddressed and untested](tasks/T15950-1-5x-eta-accuracy-half-of.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
+| T15960 | [Staging check failed: T15750:C1 With Edit play open in portrait fullscreen, the picture is](tasks/T15960-staging-check-failed-t15750-c1-with.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T15970 | [Staging check failed: T15750:C2 Opening Edit play does not start playback.](tasks/T15970-staging-check-failed-t15750-c2-opening.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T15990 | [Staging check failed: T15400:C2 Every button of the 'Switch to landscape?' dialog is tappable](tasks/T15990-staging-check-failed-t15400-c2-every.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T16000 | [Staging check failed: T15740:C1 The toast never overlaps the action bar or the chat](tasks/T16000-staging-check-failed-t15740-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T16010 | [Staging check failed: T15740:C2 A dismissed toast stays dismissed after reload.](tasks/T16010-staging-check-failed-t15740-c2-a.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T16100 | [T16090's browser check cannot run on staging](tasks/T16100-staging-check-failed-t16090-c3-c3.md) | 5 | 2 | 2.5 | TODO | [ ] | Filed by the /dotask staging check after PR #747, rewritten 2026-11-12. The check for "a deleted reel takes its highlight with it" sets up its highlight through a test-only endpoint that does not exist on staging, so it failed at setup and staging has not yet shown whether the feature works there. Not a product bug. We will rewrite the check to publish and delete a reel the way a parent does, and make the harness refuse browser checks that call test-only endpoints. Done when the check passes on staging. |
+| T16110 | [A /dotask group stopped by a sign-in failure recovers on its own](tasks/T16110-auth-dead-group-recovers-on-its-own.md) | 6 | 2 | 3.0 | TODO | [ ] | Owner request 2026-11-12. When a headless group's container cannot sign in to Claude, it stops (AUTH_DEAD) and nobody is told; g-t16090-1 sat idle for over an hour until a status check, and a plain resume worked at once, as every resume has. The loop will wait longer and retry by itself before stopping. Done when a short sign-in outage no longer needs a manual resume. |
+| T16120 | [Judge the seven PR #746 criteria the reviewer never saw](tasks/T16120-judge-pr746-unjudged-criteria.md) | 4 | 2 | 2.0 | TODO | [ ] | Owner request 2026-11-12. PR #746 shipped with only the first criterion of each task judged by the reviewer, because the harness miscounted criteria (fixed). The other seven have passing tests, but nobody confirmed the tests prove what the criteria say. We will read each check against its criterion, strengthen weak ones, and settle whether staging should show T16050's logs and T16060's note. Done when all seven have checks that fail on broken code. |
+
 ### Staging QA 2026-11-09: bugs and possible bugs (owner-requested, BUGS FIRST)
 
 **Why this section exists.** Owner asked on 2026-11-09 to file every bug and possible bug from the staging QA pass (new-user flow on desktop, iPhone and iPad, plus the version check of everything in STAGING) at the top of the task list. Screenshots: `qa/staging-qa-2026-11-09/` (local, gitignored). Rows marked possible need a repro first.
@@ -15,7 +48,6 @@
 | T15580 | [Impersonation banner has no Reopen their page link for some users](tasks/T15580-impersonation-banner-has-no-reopen-their-page.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09. T14990 criterion fails for an overlay resume point. |
 | T15600 | [Under-44px touch targets across sign-in, Annotate, Spotlight, Gallery and the share page](tasks/T15600-under-44px-touch-targets-across-sign-in.md) | 5 | 3 | 1.7 | STAGING | [ ] | QA 2026-11-09. Full list in the task file. |
 | T15620 | [Device-wrong copy: phone wording on desktop and iPad, desktop wording on phones](tasks/T15620-device-wrong-copy-phone-wording-on-desktop.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. |
-| T16210 | [Remaining small touch targets on phone and iPad](tasks/T16210-remaining-touch-targets-on-phone-and-ipad.md) | 4 | 3 | 1.3 | WIP | [ ] | Ten controls now meet the 44 pixel finger minimum; eleven others the QA pass measured were never re-measured after the fix. Measure them on an iPhone and iPad, fix any still small, and check each. |
 | T15670 | [Journey map in full screen is wider than 1440 px and cuts off the first stages](tasks/T15670-journey-map-in-full-screen-is-wider.md) | 4 | 2 | 2.0 | STAGING | [ ] | QA 2026-11-09. T14730 criterion fails. |
 | T15680 | [Visit beacon POST /api/t returns 422 on some page loads](tasks/T15680-visit-beacon-post-api-t-returns-422.md) | 5 | 2 | 2.5 | STAGING | [ ] | QA 2026-11-09, possible. Would undercount mobile visits. |
 | T15690 | [Admin Journey controls and map are clipped on mobile and iPad with no scroll](tasks/T15690-admin-journey-controls-and-map-are-clipped.md) | 3 | 2 | 1.5 | STAGING | [ ] | QA 2026-11-09. |
@@ -174,8 +206,6 @@ The largest fixable leak in the make-the-highlight band. The bug rows that cause
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T11510 | [Phone share: video or link](tasks/social-cover-image/T11510-split-share-video-vs-share-link.md) | 8 | 3 | 2.7 | WIP | [ ] | On a phone, every Share button sends the video file itself, even the one labelled Share link. A file never shows the cover picture the parent chose, because Instagram, iMessage and WhatsApp pick their own thumbnail; only a link shows our cover. Of the 56 parents who paid for a highlight, 11 downloaded or shared it, so this is where finished highlights die. We will give phones two clear choices, Share video for posting to Reels or TikTok and Share link for messaging, and fix the mislabelled button. The cover picture itself is handled by the reel's title card (T15880). Done when both choices work on a phone and the share-or-download rate out of paid highlights moves on the admin Journey. |
-| T16080 | [Thank-you email to payers](tasks/T16080-thank-you-email-to-payers.md) | 7 | 2 | 3.5 | WIP | [ ] | A parent who buys credits gets Stripe's receipt and nothing from us, and of 56 parents who paid for a highlight only 11 downloaded or shared it. Right after each payment we will send a short personal email from Iman: thank you, I will help with any problem, just reply, plus links to our Discord and the short tutorial. A stuck payer is the person most worth helping, and a reply to a person gets sent far more often than a support form. Done when a staging test purchase delivers exactly one email with working links and a reply reaches the owner's inbox. |
 
 ### 2. Spotlight first, then the next play (stage: first session to return; 5 of 22 Spotlight exporters returned and all 5 payers were among them, against 2 of 30 and none)
 
@@ -243,9 +273,6 @@ There is no retention chart. T7430 is the cohort triangle; T7420 is the shrunk a
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 |  | **[Investor-Grade Analytics](tasks/investor-analytics/EPIC.md)** | 8 | 5 | 1.6 |  |  | The admin numbers behind this roadmap. Two pieces are on staging already; the retention chart is the one we still lack. |
-| T16070 | ↳ [Day 1 to day 28 retention](tasks/investor-analytics/T16070-day-n-retention-admin.md) | 9 | 3 | 3.0 | WIP | [ ] | The admin panel shows sign-ups, uploads, highlights and payments, but never how many people came back; the one figure we have, 17 of 402 still active after a week, was counted by hand. We will add a table showing, for each week's sign-ups, what share used the app again 1, 3, 7, 14 and 28 days after signing up, with the raw counts beside each percentage. These are the standard checkpoints, so we can compare against other apps and see a change within a month. Done when the table is live and its 7-day figure matches a hand count from the production database. |
-| T7430 | ↳ [Retention chart](tasks/investor-analytics/T7430-retention-cohort-curves.md) | 9 | 4 | 2.3 | WIP | [ ] | The retention chart: for each week's sign-ups, how many were still active one, two and three weeks later. This is the number the whole roadmap is judged by, and we do not have it today. |
-| T7420 | ↳ [Activation report](tasks/investor-analytics/T7420-activation-funnel-report.md) | 8 | 2 | 4.0 | WIP | [ ] | For each month's sign-ups, how many made a highlight and how many shared one within two weeks, and where the rest dropped off. |
 
 ### 10. Per-player moments (stage: footage landed to first play, after Suggested plays)
 
@@ -416,24 +443,6 @@ When suggesting the next task, always check the Bug Fix Sprint section first. Do
 ## Completed Tasks
 
 DONE rows live in [PLAN-archive.md](PLAN-archive.md).
-
-### Bugs found by /dotask verify
-
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-| T15300 | [pg_conn test fixture can silently drop and empty the shared dev Postgres analytics tables](tasks/T15300-pg-conn-test-fixture-can-silently.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
-| T15320 | [test_analytics_dashboards.py has pre-existing failures against shared Postgres test state](tasks/T15320-test-analytics-dashboards-py-has-pre.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
-| T15790 | [Cold-reopen of /focus/p/<id> from a closed tab still does not load the Frame editor within 10s](tasks/T15790-cold-reopen-of-focus-p-id.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
-| T15950 | [1.5x ETA accuracy half of AC3 is unaddressed and untested](tasks/T15950-1-5x-eta-accuracy-half-of.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
-| T15960 | [Staging check failed: T15750:C1 With Edit play open in portrait fullscreen, the picture is](tasks/T15960-staging-check-failed-t15750-c1-with.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T15970 | [Staging check failed: T15750:C2 Opening Edit play does not start playback.](tasks/T15970-staging-check-failed-t15750-c2-opening.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T15990 | [Staging check failed: T15400:C2 Every button of the 'Switch to landscape?' dialog is tappable](tasks/T15990-staging-check-failed-t15400-c2-every.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T16000 | [Staging check failed: T15740:C1 The toast never overlaps the action bar or the chat](tasks/T16000-staging-check-failed-t15740-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T16010 | [Staging check failed: T15740:C2 A dismissed toast stays dismissed after reload.](tasks/T16010-staging-check-failed-t15740-c2-a.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T16100 | [T16090's browser check cannot run on staging](tasks/T16100-staging-check-failed-t16090-c3-c3.md) | 5 | 2 | 2.5 | TODO | [ ] | Filed by the /dotask staging check after PR #747, rewritten 2026-11-12. The check for "a deleted reel takes its highlight with it" sets up its highlight through a test-only endpoint that does not exist on staging, so it failed at setup and staging has not yet shown whether the feature works there. Not a product bug. We will rewrite the check to publish and delete a reel the way a parent does, and make the harness refuse browser checks that call test-only endpoints. Done when the check passes on staging. |
-| T16110 | [A /dotask group stopped by a sign-in failure recovers on its own](tasks/T16110-auth-dead-group-recovers-on-its-own.md) | 6 | 2 | 3.0 | TODO | [ ] | Owner request 2026-11-12. When a headless group's container cannot sign in to Claude, it stops (AUTH_DEAD) and nobody is told; g-t16090-1 sat idle for over an hour until a status check, and a plain resume worked at once, as every resume has. The loop will wait longer and retry by itself before stopping. Done when a short sign-in outage no longer needs a manual resume. |
-| T16120 | [Judge the seven PR #746 criteria the reviewer never saw](tasks/T16120-judge-pr746-unjudged-criteria.md) | 4 | 2 | 2.0 | TODO | [ ] | Owner request 2026-11-12. PR #746 shipped with only the first criterion of each task judged by the reviewer, because the harness miscounted criteria (fixed). The other seven have passing tests, but nobody confirmed the tests prove what the criteria say. We will read each check against its criterion, strengthen weak ones, and settle whether staging should show T16050's logs and T16060's note. Done when all seven have checks that fail on broken code. |
 
 ## Environment Configuration
 
