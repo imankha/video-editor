@@ -1,6 +1,6 @@
 # T15950: 1.5x ETA accuracy half of AC3 is unaddressed and untested
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10
