@@ -695,6 +695,40 @@ class DotaskCliTest(unittest.TestCase):
             code, calls, _ = self._loop(lambda task, n: (body, "auth_failed"), tasks=("T1",))
         self.assertEqual((code, len(calls)), (1, 3))
 
+    def test_build_loop_waits_out_a_sign_in_failure_and_carries_on(self):
+        # T16110: g-t16090-1 hit AUTH_DEAD (2026-11-12 00:44 UTC) and sat until a manual resume at 01:52,
+        # which passed the sign-in check at once. The loop now waits longer and redispatches by itself.
+        dead = "t AUTH_DEAD auth status failed 3 times\n"
+        slept = []
+
+        def behavior(task, attempt):
+            return (dead, "none") if attempt <= 2 else (self._commit(task, pushready=True), "success")
+        with patch.object(dotask_cli, "AUTH_DEAD_WAITS_MIN", (2.0, 5.0, 10.0), create=True), \
+                patch.object(dotask_cli.time, "sleep", slept.append):
+            code, calls, _ = self._loop(behavior, tasks=("T1",))
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, ["implementation g-x T1"] * 3)
+        self.assertEqual(slept, [120.0, 300.0])
+        status = (self.tasks_root / "g-x" / ".dotask-status").read_text()
+        self.assertIn("RESUMED T1 sign-in wait 1 of 3: AUTH_DEAD, redispatching in 2 min", status)
+        self.assertIn("RESUMED T1 sign-in wait 2 of 3: AUTH_DEAD, redispatching in 5 min", status)
+
+    def test_build_loop_stops_on_auth_dead_once_every_wait_fails(self):
+        slept = []
+        with patch.object(dotask_cli, "AUTH_DEAD_WAITS_MIN", (2.0, 5.0, 10.0), create=True), \
+                patch.object(dotask_cli.time, "sleep", slept.append):
+            code, calls, _ = self._loop(lambda task, n: ("t AUTH_DEAD auth status failed 3 times\n", "none"),
+                                          tasks=("T1",))
+        self.assertEqual((code, len(calls), slept), (1, 4, [120.0, 300.0, 600.0]))
+        self.assertIn("AUTH_DEAD", dotask_cli.last_status(self.tasks_root / "g-x"))
+
+    def test_status_names_an_auth_dead_group_stopped_with_the_resume_command(self):
+        group, checkout = self._group_for_eta("t RESUMED T1 sign-in wait 3 of 3: AUTH_DEAD\n"
+                                              "t AUTH_DEAD auth status failed 3 times\n")
+        out = self._status_out(group, checkout)
+        self.assertIn("eta: none (stopped: sign-in failed after every wait, needs a person; "
+                      "`bash scripts/dotask.sh resume g-x` continues it", out)
+
     def test_build_loop_gives_up_after_two_restarts(self):
         body = "t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
         code, calls, _ = self._loop(lambda task, n: (body, "budget_stop"), tasks=("T1",))

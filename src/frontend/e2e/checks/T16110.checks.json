@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T16110:C1": {
+      "kind": "code",
+      "command": "cd scripts && python3 -m pytest test_dotask_cli.py -q -p no:cacheprovider -k test_build_loop_waits_out_a_sign_in_failure_and_carries_on"
+    },
+    "T16110:C2": {
+      "kind": "code",
+      "command": "cd scripts && python3 -m pytest test_dotask_cli.py -q -p no:cacheprovider -k 'test_build_loop_stops_on_auth_dead_once_every_wait_fails or test_status_names_an_auth_dead_group_stopped_with_the_resume_command'"
+    }
+  }
+}
