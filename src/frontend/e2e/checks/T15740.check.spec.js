@@ -15,9 +15,10 @@
  * `--cta-bar-h` to 233px, the real height measured live on Focus at 1366x660 with the
  * Trim/SlowMo row showing (ActionBand.jsx's own useCtaBarHeight is what publishes this var in
  * production; this check exercises CornerStack's consumption of it, which is the regressed
- * contract). It fires the exact production `toast.success` call GlobalExportIndicator makes on
- * completion, then asserts neither the toast nor the Report button sit inside the band's
- * reserved footprint.
+ * contract). The toast comes from GlobalExportIndicator's own completion effect, fed by a
+ * just-completed export in the app's export-recovery response (T16000: no /src module imports,
+ * so C1 also runs against a deployed build), then it asserts neither the toast nor the Report
+ * button sit inside the band's reserved footprint.
  *
  * C2 reproduces "re-shown on every reload" by injecting a completed export, dismissing the
  * toast via its real Dismiss button (persists the export id via T15740's
@@ -33,16 +34,34 @@ import { loginForCheck } from '../helpers/checkAuth';
 // (band top y=426.75, viewport height 660).
 const TALL_BAND_HEIGHT_PX = 233;
 
-async function fireCompletionToast(page, { exportId = 'check-export-1', projectName = 'Probe Reel' } = {}) {
-  return page.evaluate(async ({ exportId: id, projectName: name }) => {
-    const { toast } = await import('/src/components/shared/Toast.jsx');
-    const { rememberDismissedExportToast } = await import('/src/utils/dismissedExportToasts.js');
-    toast.success('Highlight ready', {
-      message: name,
-      duration: 8000,
-      onDismiss: () => rememberDismissedExportToast(id),
-    });
-  }, { exportId, projectName });
+// T16000: the toast is raised through the real production path on any target (dev stack or a
+// deployed build, which serves no /src module paths): the app's own export-recovery response
+// carries one export that has just completed, so useExportRecovery loads it into exportStore
+// and GlobalExportIndicator's completion effect shows the toast. Recovery reads the exports
+// from /api/bootstrap, or from /api/exports/active when bootstrap takes longer than its 2 s
+// wait (the slow dev stack), so both responses carry it. Only the responses are rewritten
+// (the requests still go to the real backend); nothing is written server-side.
+async function routeRecoveryWithCompletedExport(page, { exportId, projectName = 'Probe Reel' }) {
+  const completedExport = () => {
+    const now = new Date().toISOString();
+    return {
+      job_id: exportId, project_id: -1, project_name: projectName, type: 'overlay',
+      status: 'complete', progress: 100, started_at: now, completed_at: now,
+    };
+  };
+  await page.route('**/api/bootstrap', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const exports = body.exports || { active: [], unacknowledged: [] };
+    body.exports = { ...exports, active: [...(exports.active || []), completedExport()] };
+    await route.fulfill({ response, json: body });
+  });
+  await page.route('**/api/exports/active', async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.exports = [...(body.exports || []), completedExport()];
+    await route.fulfill({ response, json: body });
+  });
 }
 
 // Drives the REAL production path: writing a completed export into exportStore, which
@@ -66,9 +85,9 @@ async function completeExportInStore(page, { exportId, projectName = 'Probe Reel
 }
 
 test('T15740:C1 - the toast never overlaps the action bar or the chat bubble', async ({ context, page }) => {
-  test.skip(!!process.env.E2E_BASE_URL, '[T15740] drives the app through dev-server module imports (/src/...); a deployed build serves no such paths');
   await page.setViewportSize({ width: 1366, height: 660 });
   await loginForCheck(context);
+  await routeRecoveryWithCompletedExport(page, { exportId: `check-export-${Date.now()}` });
   await page.goto('/');
   await page.getByTestId('corner-stack').waitFor({ timeout: 30000 });
 
@@ -79,9 +98,8 @@ test('T15740:C1 - the toast never overlaps the action bar or the chat bubble', a
     document.documentElement.style.setProperty('--cta-bar-h', `${h}px`);
   }, TALL_BAND_HEIGHT_PX);
 
-  await fireCompletionToast(page);
   const toastEl = page.locator('[role="alert"]').first();
-  await expect(toastEl).toBeVisible();
+  await expect(toastEl).toBeVisible({ timeout: 60000 });
 
   const viewportHeight = 660;
   const bandTop = viewportHeight - TALL_BAND_HEIGHT_PX;
