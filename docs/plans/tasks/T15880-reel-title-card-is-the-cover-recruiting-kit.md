@@ -57,3 +57,14 @@ T11300 (reel MVP), T11510 (share split), T6660 (athlete intro card), T15070 (end
 - `src/frontend/src/components/introcards/` (athlete card fields)
 - `src/frontend/src/hooks/useWebShare.js`
 - `src/backend/app/routers/shares.py`
+
+## From the recruiting reel research (owner accepted 2026-11-13)
+
+Findings: `docs/plans/research/recruiting-reel-research-2026-11.md`. These hold for every sport; a sport's own extra lines (such as height in basketball) come from that sport's reel notes.
+
+- The card holds name, graduation year, position, jersey number and club or team. Jersey number is on by default: coaches use it to find the player, and only 6 of 20 real reels showed it.
+- Position shows a primary position and up to two others.
+- Optional lines, off by default: high school, height, grade average.
+- No contact line on the title card by default. The card is the public cover image; contact details go on the end card (T16300).
+- The reel's title and file name follow "Name | Class of 2027 | Position | Club".
+- The card stays up about 3 to 4 seconds, from the words-based suggestion in T16300, in place of the fixed 2.5 seconds above.

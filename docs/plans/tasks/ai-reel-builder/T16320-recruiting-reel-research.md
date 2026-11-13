@@ -4,7 +4,7 @@
 
 A reel is several highlights (finished short clips of an athlete) joined into one video for a college coach. Today everything we plan for reels rests on guesses: what a coach wants to see, what goes on the title card, how long a reel should be. Three pieces of planned work depend on the answers: the AI that marks plays in a game has to write down what each play demonstrates, the reel builder has to know what its cards should hold, and the AI reel builder has to know how a good reel is put together. This task does the research once, from what college coaches and recruiting services publish and from reels that worked, and writes down the answers with their sources. It builds no screens and no code. Done when the owner has read the findings, the list of qualities a soccer play can demonstrate is fixed, and each open question below has an answer or is marked as genuinely disputed.
 
-**Status:** WAITING ON USER
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (research and documents only; no application code)
@@ -57,7 +57,7 @@ Letting the model rely on its own general knowledge was ruled out by the owner: 
 - [x] The soccer quality list is written with a meaning for each entry and is marked general or soccer-only.
 - [x] The signs of a social-worthy moment are written with at least two sources and soccer examples.
 - [ ] Every quality has its visible signs and a routine example that does not count, and the owner, watching five plays from a real game, can say from the signs alone which qualities each one shows.
-- [ ] The owner has read the findings and ruled on the recommendations; the rulings are recorded in this file under `## Ruling`.
+- [x] The owner has read the findings and ruled on the recommendations; the rulings are recorded in this file under `## Ruling`.
 - [ ] The quality list is stored with the sport, beside its tags, where both the app and the server can read it.
 
 ## Progress
@@ -72,15 +72,33 @@ Letting the model rely on its own general knowledge was ruled out by the owner: 
 - Found while researching: the app's default shape for a highlight is portrait, and every source and all twenty reels say a recruiting reel is landscape. This is decision 8.
 - Another task was filed the same day under this number ("Admin choice in the dev sign-in presets"). This is decision 10.
 
-## Waiting on the owner
+## Ruling
 
-Ten rulings, listed on the decision page: the quality list, the social-worthy signs, reel length, order and sections, title card contents, where contact details go, highlights with no spotlight, portrait highlights, which sports, and the duplicate task number. After the rulings: record them here under `## Ruling`, store the quality list in `soccerTags.js`, and carry the accepted recommendations into T15880, T16300 and T16330.
+The owner ruled on 2026-11-13, after reading the findings and the decision page.
+
+- **General first.** "Our tool is general purpose and anything we do for soccer will need to be multiplied out by every sport we support. Best to keep things as generic as possible but remember to store strings that go with the specific sports that can be injected into the prompt for those sports." The quality list is therefore split: ten general qualities stored once, and for each sport its own qualities and its own wording, stored with the sport.
+- **One bar for Brilliant (decision 2, in the owner's words).** "Both for social media and scouts, we are looking for a play where the focused player did better than a good player at that level would be expected to do. For IG specifically it can be anything players see in highlights for their favorite players on YouTube. For scouting specifically it's what the research tells us and it's demonstrating both strong decision making and execution. The AI should also find learning opportunities, but those won't be marked Brilliant and therefore won't be considered in the highlight reel system."
+- **Everything else as recommended.** "I defer to your recommendations for any other issue."
+  - Decision 1, quality list: the eighteen proposed, now ten general and eight soccer (three of those for goalkeepers).
+  - Decision 3, length: about 3 minutes and 12 to 20 highlights, never past 5 minutes.
+  - Decision 4, order: the best three to five highlights first, then sections.
+  - Decision 5, title card: name, graduation year, position (a primary and up to two others), jersey number, club or team, for about 3 to 4 seconds; high school, height and grade average optional and off.
+  - Decision 6, contact details: on the end card only, the athlete's email and optionally the club coach; phone optional and off; no parent field.
+  - Decision 7, highlights with no spotlight: prefer the ones that have it and show a count of those without; never block.
+  - Decision 8, shape: a recruiting reel is landscape and prefers landscape highlights; portrait ones are used only when needed, with bars at the sides, and the parent is told how many. No slow motion, no music by default, plain cuts.
+  - Decision 9, sports: all eleven run on the general part; baseball and softball carry a note that coaches expect a skills video.
+  - Decision 10: this task keeps the number T16320; the admin sign-in task became T16430.
+
+## Still open
+
+- The general qualities and soccer's strings are stored in the app by a pull request that waits for the owner to merge.
+- The owner, watching five plays from a real game, checks that the signs alone are enough to name the qualities each one shows. This needs a real game on screen and is easiest on the first staging analysis (T16150).
 
 ## For the implementer
 
 ### Where things go
 - Findings: `docs/plans/research/recruiting-reel-research-2026-11.md`.
-- Quality list: beside the sport's tags in `src/frontend/src/modes/annotate/constants/soccerTags.js` (export `qualities`, registered in `tagRegistry.js`), mirrored for the server where `T16150` puts the tag list, with the same cross-language guard test that task adds for tags. If T16150 has not landed, commit the list in the findings document and in `soccerTags.js` only; T16150 adds the server mirror.
+- Quality list (general first, owner ruling 2026-11-13): the ten general qualities in `src/frontend/src/modes/annotate/constants/generalQualities.js`; each sport's own strings beside its tags (`soccerTags.js` export `sportStrings`: its own qualities, the general qualities in its words, social examples, reel notes), read through `tagRegistry.js` (`getQualities`, `getSportStrings`). A sport with no strings works from the general part. T16150 adds the server mirror and the cross-language guard test.
 - Stored names are stable identifiers once an analysis has used them: renaming a quality later means a new prompt version.
 
 ### Sources to start from

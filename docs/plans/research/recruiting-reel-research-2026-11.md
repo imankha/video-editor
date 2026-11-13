@@ -1,6 +1,6 @@
 # Recruiting reel research (T16320)
 
-Written 2026-11-13. Status: findings complete, waiting for the owner's rulings on the recommendations in section 8.
+Written 2026-11-13. Status: findings complete. The owner ruled the same day: the design is general first with strings stored for each sport, Brilliant has one bar (section 8a), and every other recommendation in section 8 is accepted as written.
 
 ## How to read this
 
@@ -224,63 +224,100 @@ Links, in row order: [1](https://www.youtube.com/watch?v=TAS2bKg6Htc), [2](https
 
 ## 8. Proposals
 
-### 8a. The soccer quality list (proposed, 18 entries)
+### 8a. What makes a play Brilliant, and the quality list (ruled 2026-11-13)
 
-A quality is what a play shows about the athlete. A tag is what happened. A play carries one to three qualities.
+The owner ruled on 2026-11-13 that the design is general first: one set of rules written for any sport, and for each sport a small set of strings, stored with that sport beside its tags, that are added to the prompt for athletes of that sport. Everything in this section follows that shape. Soccer is the first sport with strings; a sport with none still works from the general part.
 
-How the list was built: the terms are the ones that recur across the U.S. Soccer "Key Qualities of a Player" and position profiles [Q5], the survey of 178 NCAA coaches [Q9], a real college camp evaluation report [Q8], and coach interviews [Q1][Q10]. A term stayed only if a person can see it in one play on wide sideline footage. Qualities coaches value but a single play cannot show were left out on purpose: coachability, communication, leadership, endurance, and response to a mistake. Coaches say they judge these from full games and in person [Q9][Q11][Q12].
+#### The one bar
 
-"General" entries apply to most team sports and can be reused. "Soccer" entries are soccer's own.
+A play is Brilliant when the player did better than a good player at that level would be expected to do. That is the whole test, for every sport. A play is judged against the level of the game being watched, not against professionals.
 
-| Stored name | Scope | Meaning | Counts when you see | Routine, does not count |
-|---|---|---|---|---|
-| Pace | General | Covers ground faster than the opponent. | The player starts level with or behind an opponent and gets to the ball or the space first over 15 yards or more, with or without the ball. | Running into open space with nobody near; beating an opponent who was walking or much smaller. |
-| Strength | General | Wins or keeps the ball through contact. | Shoulder to shoulder with an opponent, the player stays up and comes away with the ball; or holds a defender off with the body for two seconds or more and then plays a teammate in. | Receiving with no opponent touching them. |
-| Composure | General | Stays calm and keeps the ball when pressed. | One or more opponents close to within about two yards and the player keeps the ball and finds a teammate or carries out of the pressure, without a hurried clearance. | Time and space on the ball; a pass with nobody near. |
-| Vision | General | Sees a pass or a space others do not. | The player looks up or over the shoulder before the ball arrives, then plays a pass through or over a line of defenders into a teammate's run, or switches play to the unmarked far side. | A pass to the nearest open teammate. |
-| Decision Making | General | Chooses the better option, quickly. | Two options are visible and the player takes the one that hurts the opponent more, such as squaring to an unmarked teammate instead of shooting from a tight angle; or releases the ball in one or two touches before pressure arrives. | Only one option was on. |
-| Anticipation | General | Reads the play and arrives first. | The player moves before the pass is played and intercepts it, steps in front of the attacker to take the ball, or covers the space behind a beaten teammate before the attacker gets there. | The ball is played straight to them. |
-| Work Rate | General | Chases back or presses to win the ball. | After the ball is lost the player sprints 20 yards or more to win it back or stop the attack; or presses two or three times in a row and forces a turnover. | Jogging back into position. |
-| Off-Ball Movement | General | Gets free without the ball. | A timed run behind the last defender that stays onside and receives the pass; a move away and back that creates the space to receive; an overlapping run that is found. | Standing in space and receiving. |
-| 1v1 Attacking | General | Beats a defender with the ball. | Facing a set defender, the player goes past with a change of speed or direction or a feint, keeps the ball, and the move leads to a shot, cross or pass. | Running past a defender who was out of position or not engaged. |
-| 1v1 Defending | General | Stops an attacker one against one. | Isolated against an attacker running at them, the player stays on their feet, forces the attacker wide or backward, and wins the ball or blocks the cross or shot cleanly. | Clearing a loose ball; a tackle with teammates covering and the attacker already slowed. |
-| First Touch | Soccer | Receives so the next action is easy. | A driven or bouncing ball, or one received under pressure, is brought under control in one touch that moves it away from the defender and into the next pass, shot or dribble. | Controlling a slow pass with nobody near; a touch that needs two more to tidy. |
-| Passing Range | Soccer | Hits long or firm passes accurately. | A pass of 30 yards or more that reaches a teammate's feet or stride; or a firm ground pass that goes between two defenders to a teammate. | Short sideways or backward passes under no pressure. |
-| Finishing | Soccer | Scores or tests the goalkeeper with technique. | A shot placed in a corner or past a set goalkeeper, a volley or header on target, a calm finish one against one with the goalkeeper, or a goal from outside the penalty area. | A tap-in to an empty net; a shot straight at the goalkeeper. |
-| Delivery | Soccer | Puts crosses and set pieces where teammates can score. | A cross, corner or free kick that reaches a teammate in the penalty area and leads to a shot or header, hit early or on the run. | A cross that is cleared by the first defender or goes out of play. |
-| Aerial Ability | Soccer | Wins the ball in the air. | The player jumps against an opponent and wins the header, sending it to a teammate, clear of danger or on target. | An unchallenged header. |
-| Shot Stopping | Soccer, goalkeeper | Keeps out shots that should score. | A dive at full stretch, a reaction save from close range, a save one against one with the attacker, or a second save straight after the first. | Collecting a slow shot hit straight at them. |
-| Command of the Area | Soccer, goalkeeper | Controls the penalty area and the space behind the defense. | The goalkeeper comes off the line to catch or punch a cross among players, or leaves the area early to clear a through ball before the attacker reaches it. | Picking up a ball that rolls into the area with nobody chasing. |
-| Distribution | Soccer, goalkeeper | Starts attacks with feet and hands. | A throw, kick or pass that reaches a teammate in stride beyond the first line of opponents and starts an attack; a calm pass out under pressure from a forward. | A long kick to nobody in particular; a short roll to an unmarked defender with no pressure. |
+There are two ways to clear the bar, and a play can clear both:
 
-Notes for whoever stores it:
+- **For scouting:** the player shows both a strong decision and strong execution, and the play demonstrates at least one quality from the list below. A good decision carried out badly, or a fine piece of skill that was the wrong choice, is not Brilliant for scouting.
+- **For social media:** the play is the kind players see in highlight videos of their favorite players. The sport's own string names what those look like.
 
-- Ten general and eight soccer entries. Three are for goalkeepers; a goalkeeper can also carry Composure, Anticipation, Passing Range and Aerial Ability.
-- "Decision Making" is the quality the surveyed coaches rated highest of all [Q9] and also the hardest to see in one play. It stays in because a result is stored once for each video: a quality left out of the first version cannot be recovered without paying to analyze the game again, while one that turns out unreliable can simply be ignored later.
-- Hold-up play is covered by Strength. Tackling and interceptions are covered by 1v1 Defending and Anticipation. Crossing and set pieces are both Delivery.
-- The "does not count" column has almost no direct support from coaches. Sources say only to choose plays against strong opponents and under pressure [Q5][Q8][Q11]. The routine examples are our own reading of that and should be treated as a first version to correct after the first staging game.
+The analysis also finds **learning opportunities**: plays where the player could have chosen or executed better. They are kept with their lesson, are never Brilliant, and are never offered to the reel builder.
 
-### 8b. What impresses on social media
+#### General qualities (stored once, used by every sport)
 
-**The evidence is thin, and that is the main finding.** No study of which youth sports clips are shared exists. No platform publishes sport-specific guidance. The people who pick ESPN's daily top ten say they have no fixed criteria [S10]. Veo, Trace and Hudl publish stories about single clips that spread and no analysis of what those clips share. What exists is one solid general result and a set of reported cases:
+A quality is what a play shows about the athlete. A tag is what happened. A scoutable play carries one to three qualities.
+
+| Stored name | Meaning | Counts when you see | Routine, does not count |
+|---|---|---|---|
+| Pace | Covers ground faster than the opponent. | The player gets to the ball or the space before an opponent who started level or ahead. | Nobody was racing them. |
+| Strength | Wins or keeps possession through contact. | In body contact with an opponent, the player stays balanced and comes away in control. | No opponent touched them. |
+| Composure | Stays calm and in control when pressed. | Under close pressure from one or more opponents, the player keeps control and makes a clean next action instead of a hurried one. | Time and space, nobody near. |
+| Vision | Sees a teammate or a space others do not. | The player looks away from the ball first, then finds a teammate or a space that was not the obvious option. | The nearest, obvious option. |
+| Decision Making | Chooses the better option, quickly. | Two or more options were visible and the player took the one that hurt the opponent most, or acted before the pressure arrived. | Only one option was on. |
+| Anticipation | Reads the play and arrives first. | The player moves before the opponent acts and gets there first: cuts out a pass, steps in front, or covers for a beaten teammate. | The ball came straight to them. |
+| Work Rate | Chases back or presses to win possession. | A long sprint or repeated efforts without the ball that win possession back or stop an attack. | Jogging back into position. |
+| Off-Ball Movement | Gets free without the ball. | A timed move without the ball loses the marker, and a teammate finds the player. | Standing in space and receiving. |
+| 1v1 Attacking | Beats a defender alone. | Facing a set defender, the player gets past alone and the move leads to a scoring chance or advances the play. | The defender was out of position or not engaged. |
+| 1v1 Defending | Stops an attacker alone. | Isolated against an attacker, the player stops them cleanly without help. | Help was already there and the attacker had slowed. |
+
+How the list was built: the terms recur across the U.S. Soccer "Key Qualities of a Player" [Q5], the survey of 178 NCAA coaches [Q9], a real college camp evaluation report [Q8], and coach interviews [Q1][Q10], and each is a word coaches in other team sports also use. A term stayed only if a person can see it in one play on wide sideline footage. Left out on purpose because a single play cannot show them: coachability, communication, leadership, endurance and response to a mistake. Coaches say they judge these from full games and in person [Q9][Q11][Q12].
+
+"Decision Making" stays as a quality even though every scoutable play needs a good decision. It is given only when the choice itself is what stands out. A game is analyzed once and stored, so a quality left out of the first version cannot be recovered without paying to analyze the game again, while one that proves unreliable can be ignored later.
+
+The "does not count" column has almost no direct support from coaches. Sources say only to choose plays under pressure and against strong opponents [Q5][Q8][Q11]. The routine examples are our reading of that, to be corrected after the first staging game.
+
+#### What each sport stores
+
+| String | What it holds | Needed |
+|---|---|---|
+| Its own qualities | Qualities only this sport has, each with meaning, what counts and what is routine. | Optional |
+| Which general qualities apply | A sport such as tennis or baseball may not use all ten. Left out means all. | Optional |
+| The general qualities in this sport's words | One line for each general quality saying what it looks like in this sport. | Optional |
+| Social examples | The kinds of play that fill highlight videos of this sport's stars. | Optional |
+| Reel notes | What coaches of this sport expect from a recruiting reel that differs from the general rules (section 8c). | Optional |
+
+#### Soccer's strings
+
+**Soccer's own qualities**
+
+| Stored name | Meaning | Counts when you see | Routine, does not count |
+|---|---|---|---|
+| First Touch | Receives so the next action is easy. | A driven or bouncing ball, or one received under pressure, is controlled in one touch that moves it away from the defender and into the next pass, shot or dribble. | A slow pass with nobody near; a touch that needs two more to tidy. |
+| Passing Range | Hits long or firm passes accurately. | A pass of 30 yards or more that reaches a teammate's feet or stride; or a firm ground pass that goes between two defenders to a teammate. | Short sideways or backward passes under no pressure. |
+| Finishing | Scores or tests the goalkeeper with technique. | A shot placed in a corner or past a set goalkeeper, a volley or header on target, a calm finish one against one, or a goal from outside the penalty area. | A tap-in to an empty net; a shot straight at the goalkeeper. |
+| Delivery | Puts crosses and set pieces where teammates can score. | A cross, corner or free kick that reaches a teammate in the penalty area and leads to a shot or header. | Cleared by the first defender, or out of play. |
+| Aerial Ability | Wins the ball in the air. | The player jumps against an opponent and wins the header, to a teammate, clear of danger or on target. | An unchallenged header. |
+| Shot Stopping (goalkeeper) | Keeps out shots that should score. | A dive at full stretch, a reaction save from close range, a save one against one, or a second save straight after the first. | A slow shot hit straight at them. |
+| Command of the Area (goalkeeper) | Controls the penalty area and the space behind the defense. | The goalkeeper comes off the line to catch or punch a cross among players, or leaves the area early to clear a through ball. | Picking up a ball nobody is chasing. |
+| Distribution (goalkeeper) | Starts attacks with feet and hands. | A throw, kick or pass that reaches a teammate in stride beyond the first line of opponents; a calm pass out under pressure. | A long kick to nobody; a short roll to an unmarked defender. |
+
+**The general qualities in soccer's words**
+
+| General quality | In soccer |
+|---|---|
+| Pace | Wins a race of 15 yards or more to the ball or into space, with or without the ball. |
+| Strength | Shoulder to shoulder, stays up and comes away with the ball; or holds a defender off with the back to goal and plays a teammate in. |
+| Composure | Pressed within about two yards, keeps the ball and passes or carries out instead of clearing it. |
+| Vision | Checks over the shoulder before receiving, then plays through or over a line of defenders into a run, or switches play to the free side. |
+| Decision Making | Squares to an unmarked teammate instead of shooting from a tight angle; releases in one or two touches before the press arrives. |
+| Anticipation | Steps in to intercept the pass, or covers the space behind a beaten teammate before the attacker gets there. |
+| Work Rate | Sprints 20 yards or more after the ball is lost to win it back; presses two or three times in a row and forces a turnover. |
+| Off-Ball Movement | A run behind the last defender that stays onside and is found; an overlapping run that receives the pass. |
+| 1v1 Attacking | Goes past a set defender with a change of speed or direction or a feint, and it leads to a shot, cross or pass. |
+| 1v1 Defending | Stays on their feet, forces the attacker wide or backward, and wins the ball or blocks the cross or shot. |
+
+**Soccer's social examples:** a goal from long range, a volley, an overhead or scissor kick, a diving header, a free kick into the top corner, a chip over the goalkeeper, the ball played through a defender's legs, a turn or skill move that leaves a defender behind, a run past several opponents, a full-stretch or double save, a penalty save, a clearance off the goal line, a goalkeeper scoring.
+
+**Soccer's reel notes:** see section 8c.
+
+### 8b. The evidence behind the social-media side
+
+The owner's ruling replaces the six signs this research first proposed with one sentence: a play that clears the bar and is the kind players see in highlight videos of their favorite players. That sentence works for every sport, and each sport's social examples make it concrete.
+
+The research supports the ruling as far as research exists, which is not far. No study measures which youth sports clips are shared. No platform publishes sport-specific guidance. The people who pick ESPN's daily top ten say they have no fixed criteria [S10]. What exists:
 
 - Berger and Milkman (2012) found that content which produces awe or high arousal is shared more, and that surprising content is shared more. Their data was about 7,000 newspaper articles, not sport and not video [S1][S2].
-- Reported youth and amateur soccer clips with stated reach: a 15-year-old's diving header at a national championship [S3]; a high-school player's flip goal, a six-second clip "looped millions of times" [S6]; an under-12 goalkeeper scoring a last-minute winner from his own half, "viewed more than one million times" [S5]; a lob over a goalkeeper off his line, over 900,000 views [S4].
+- Reported youth and amateur soccer clips with stated reach, every one of them a play a professional highlight video would also show: a 15-year-old's diving header at a national championship [S3]; a high-school player's flip goal, a six-second clip "looped millions of times" [S6]; an under-12 goalkeeper scoring a last-minute winner from his own half, "viewed more than one million times" [S5]; a lob over a goalkeeper off his line, over 900,000 views [S4].
 
-From those, the visible signs of a social-worthy moment. A play needs at least one.
+Two things the research found that the ruling settles by its wording: a child's mistake can spread widely but is not better than expected, so it is never Brilliant; and a moment of sportsmanship can spread but is not a play.
 
-| Sign | What you see on sideline footage | Soccer examples | Holds for any sport | Evidence |
-|---|---|---|---|---|
-| It looks very hard, and it plainly worked | The ball or the body does something a stranger recognizes at once as difficult, and the result is obvious without knowing the score. | Overhead or scissor kick, diving header, volley, goal from long range, chip over the goalkeeper, free kick into the top corner. | Yes | Agreed (cases plus the one study) |
-| An opponent is left beaten | A defender or goalkeeper is visibly sent the wrong way, on the ground, or standing still as the player goes past. | Ball played through a defender's legs, a turn that drops the defender, a run past three or more opponents. | Yes | Inferred; no measured support |
-| A spectacular stop | A save or block that looked certain to be a goal. | Full-stretch dive, two saves in a row, penalty save, clearance off the goal line. | Yes | Inferred |
-| Someone out of their role | A player does what their position never does. | Goalkeeper scores or dribbles upfield. | Yes, in other forms | A few (three reported cases) |
-| Distance or speed you can see | The ball or the player covers a very long way. | Goal from the player's own half; a run with the ball the length of the field. | Yes | Weak |
-| The moment and the reaction | The play decides something, and people react. | Late winner or equalizer followed by the bench and crowd running on. | Yes | A few |
-
-Left out on purpose: a child's mistake (bloopers spread, but posting one is a different act from posting a highlight), and moments of sportsmanship (they spread, but they are not a play and the tagging screen has no place for them).
-
-**Where the two kinds differ.**
+**Where the two kinds differ**, in soccer's terms:
 
 | Play | Coach | Stranger |
 |---|---|---|
@@ -288,7 +325,6 @@ Left out on purpose: a child's mistake (bloopers spread, but posting one is a di
 | An interception from reading the pass early | Values it: Anticipation | Scrolls past |
 | A 25-yard recovery run and clean tackle | Values it: Work Rate, 1v1 Defending | Scrolls past |
 | A trick that beats nobody and leads to nothing | Discounts it: "not just flashy tactics" [6] | May stop |
-| A tap-in followed by a wild celebration | Routine | May stop, for the reaction |
 | A volley into the top corner from the edge of the area | Finishing | Stops |
 | A dribble past two defenders and a finish | 1v1 Attacking, Finishing | Stops |
 
@@ -318,7 +354,7 @@ A builder that joins game highlights fits soccer field players, basketball, foot
 
 ### 8d. Recommendations to the tasks that depend on this
 
-These are proposals for the owner to accept or change. The decision page lays out the choices behind each.
+The owner accepted all of these on 2026-11-13. Each is written for any sport; where a sport differs, the difference lives in that sport's reel notes (section 8c).
 
 **Title card and cover (T15880)**
 
@@ -338,15 +374,15 @@ These are proposals for the owner to accept or change. The decision page lays ou
 
 9. Open with the athlete's three to five strongest highlights whatever their type, then group the rest into two to four sections named for what this athlete has.
 10. Aim for about 3 minutes and 12 to 20 highlights. Never suggest past 5 minutes. With few highlights, a shorter reel is better than a padded one.
-11. Rank by the scoutable signs: plays under pressure and against a set opponent beat the same action unopposed. Do not pick a play only because it is social-worthy.
-12. Section names come from the quality list in the words coaches use: for a goalkeeper, Shot Stopping, Distribution, Command of the Area; for a center back, Defending, Passing Out of the Back, In the Air.
+11. Use only highlights from Brilliant plays and from plays the parent rated well; never a learning opportunity. Rank by what counts for scouting: plays under pressure and against a set opponent beat the same action unopposed. Do not pick a play only because it is Brilliant for social media.
+12. Section names come from the athlete's sport's quality names, in the words coaches use. In soccer a goalkeeper's sections might be Shot Stopping, Distribution and Command of the Area.
 13. Prefer landscape highlights. Prefer highlights where the athlete is pointed out. Prefer recent games.
-14. Show range for the position: a center back's reel should not be only tackles, and a goalkeeper's should not be only saves.
+14. Show range for the position: a reel should not be one kind of play repeated. In soccer, a center back's reel should not be only tackles and a goalkeeper's not only saves.
 15. Baseball and softball run on the general part with a note that coaches in those sports expect a skills video.
 
 **The game analysis (T16150)**
 
-16. The quality list in 8a, with its signs, is the description of a scoutable play. The signs in 8b are the description of a social-worthy play.
+16. The prompt is built general first: the one bar and the general qualities in 8a, then the athlete's sport's strings. The sport's social examples describe the social kind. Learning opportunities are found and kept with their lesson, and are never Brilliant.
 
 ---
 

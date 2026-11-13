@@ -23,7 +23,7 @@ One read-only server call, for one athlete profile, that returns:
 
 - **The athlete:** name, sport, position, graduation year, team.
 - **Each finished highlight:** its name, length, shape (portrait or landscape), the date it was made, and the game it came from with the date and opponent when known.
-- **What it shows:** the tags, the star rating and the note from its play. When the play came from the AI and a player in it was marked as the parent's athlete: that player's qualities (what the play demonstrates, from the sport's fixed list), the sentence saying so, whether it is impressive for social media and why, the coaching note, and the decision and execution scores. Each entry says plainly whether the highlight is Brilliant for scouting, for social media, or both.
+- **What it shows:** the tags, the star rating and the note from its play. When the play came from the AI and a player in it was marked as the parent's athlete: that player's qualities (what the play demonstrates, from the sport's fixed list), the sentence saying so, whether it is impressive for social media and why, the coaching note, and the decision and execution scores. Each entry says plainly whether the highlight is Brilliant for scouting, for social media, or both, and whether its play was a learning opportunity (rated Needs work), because the owner ruled on 2026-11-13 that learning opportunities are never considered for a reel.
 - **How it ranks:** its standing in the comparison game (the "which is better?" game), how many comparisons it has been in, and how settled that standing is.
 - **Where the facts came from:** AI analysis, a play marked by hand, or a clip uploaded directly, so the reader knows how much to trust a thin entry.
 
