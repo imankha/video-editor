@@ -1,79 +1,50 @@
-# T15860: Click-once following prototype
+# T15860: Following in Frame: proof
 
 ## In plain words
 
-Today the parent drags a crop box keyframe by keyframe in Frame and places the Spotlight circle by hand; 69 parents placed about 19 crop points each. New open models can follow one clicked object through a video for a few cents per clip, but they are weakest on exactly our case: small fast players who blur and cross each other. We will test them on twenty real highlights against the parents' own crop paths and count how often a parent would have to click again. Go if 15 of 20 clips need at most one extra click and the box stays on the athlete. The history note (T15900) tells us which failure cases to try first.
-
+Frame is the step where the parent crops around their athlete and pays to sharpen the result. Today they drag the crop box point by point; 69 parents placed about 19 points each. A prototype on 2026-11-12 showed that one tap can follow an athlete through a finished highlight, but Frame works on the raw game video, where the athlete is far smaller and the play runs 10 to 30 seconds, and nobody has measured following there. We will run the same model on twenty raw plays, including wide-angle Veo and DJI footage, against the parents' own crop paths, and count how often a parent would have to tap again. Go if 15 of 20 plays need at most one extra tap and the box stays on the athlete.
 
 **Status:** TODO
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-09
 **Updated:** 2026-11-12
-**Milestone:** Roadmap 5, Click-once following (see PLAN.md). Gated on T15900.
+**Milestone:** Roadmap 5, Click-once following for Frame (see PLAN.md).
 
 ## How we got here
 
-AI-vectors research 2026-11-09: SAM 2.1 (Apache-2) with SAMURAI or DAM4SAM memory tracks one object
-from a single click at 17 to 23 fps on an L4, about $0.004 to $0.02 per 10-second clip self-hosted
-(hosted SAM 3 about $0.09 per clip). Tiny fast targets are the hardest case: FMOX benchmark mean mIoU
-0.505 for DAM4SAM, 0.488 SAMURAI, 0.461 SAM 2, with 1 to 3 frame dropouts under blur; a football SAM
-study found 50% recovery in crowded boxes and 8.7% once the player leaves frame for more than 15
-frames. Prod: 69 users placed 1,287 framing points by hand (about 19 each); Spotlight completion is the
-strongest return and payment signal we have (T15800).
-
-## What a first prototype already showed (2026-11-12)
-
-T15900 is done and says GO. A local prototype (project `C:/Users/imank/projects/player-tracking`, outside
-this repo) ran ten trackers on 54 real Spotlight clips from the owner's prod account, starting each
-from one box on the first frame. SAMURAI on SAM 2.1 base+ held the clicked player for 4 seconds on
-47 of 54 clips with no further click; plain SAM 2.1 base+ is equal within one clip; EdgeTAM is
-nearly twice as fast and five clips worse; SAM 2.1 large is slower and no better. The 2025 ByteTrack
-approach held 22 of 47 clean clips. Three real failures, all look-alike players crossing. Details:
-[click-once-following-2026-11.md](../research/click-once-following-2026-11.md).
-
-Still open from this task's own list, so it stays TODO: the click as a real YOLO box (the prototype
-used the parent's stored ellipse), Veo and DJI footage, whole-clip following beyond 4 seconds, the
-parent's Frame crop path as ground truth with a smoothed box, and speed and cost on Modal L4 and
-A100 (the prototype measured a laptop RTX 4060 only: about 5 frames per second). The two failure
-modes to report explicitly are look-alike crossings and the athlete leaving the frame.
+The history note (T15900) found that the app never followed anyone: a tracker existed on the server for one day in December 2025 and was never connected to a screen. The prototype that followed it ran ten trackers on 54 of the owner's finished highlights and SAM 2.1 base+ held the athlete for four seconds on 46 of 47 cleanly scored clips ([click-once-following-2026-11.md](../research/click-once-following-2026-11.md)). That result is being built for Spotlight, the step that draws a circle that follows the athlete ([click-once-spotlight/EPIC.md](click-once-spotlight/EPIC.md)).
 
 ## The problem
 
-Frame asks the parent to keyframe a crop box by hand and Spotlight asks them to place and correct an
-ellipse; both steps are where phones stall. A click-once follower would make both nearly automatic,
-but nobody has measured drift, re-click rate or cost on our footage.
+The Spotlight result does not carry over to Frame without proof. In a finished highlight the athlete is 90 to 340 pixels tall and the stretch is a few seconds. In a raw game video from a wide camera the athlete can be 30 to 80 pixels tall, the play is much longer, and the athlete may leave the picture and return. Published tests of these models report their weakest results on exactly such small, fast targets.
 
 ## What we will do
 
-A Modal prototype, no app code.
+No app code. The work reuses the prototype project and the following engine built for Spotlight (T16220).
 
-1. Clip set: 20 real highlights from the dev fixture and owner accounts across phone, Veo wide shot
-   and DJI, portrait and landscape, with the parent's manual crop keyframes and ellipse as ground
-   truth.
-2. Run SAM 2.1 small and large with SAMURAI memory, and DAM4SAM, seeded by one click on the athlete in
-   frame 0, on Modal L4 and A100; a Kalman-smoothed box from the mask.
-3. Measure per clip: mean IoU of the smoothed box against the manual crop path, frames lost, number of
-   re-clicks a parent would need (a loss longer than 15 frames or a swap to another player), GPU
-   seconds and cost, cold start.
-4. Write `docs/plans/research/click-once-following-2026-11.md` with the table and GO / NO-GO for
-   T15870: GO if 15 of 20 clips need at most one re-click and the smoothed box IoU is at least 0.6
-   against the manual path.
+1. Twenty raw plays from the dev fixture and owner accounts across phone, Veo and DJI, portrait and landscape, with the parent's hand-placed crop points as the truth.
+2. Run SAM 2.1 base+ from one tap on the athlete in the first frame, for the whole play, and smooth the resulting box.
+3. Measure for each play: how closely the smoothed box matches the parent's crop path, frames lost, how many extra taps a parent would need (a loss longer than half a second, or a switch to another player), and the wait and cost.
+4. Add the table and a go or no-go for Frame to the research write-up.
+
+## Why this and not something else
+
+Building Frame following straight from the Spotlight result would risk shipping a follower that fails on the footage Frame actually sees. Twenty plays is enough to see whether small athletes and long plays break it.
 
 ## How we will know it worked
 
-- [ ] `scripts/prototypes/click_following/` runs one clip end to end on Modal from a clean checkout.
-- [ ] The research note has IoU, frames lost, re-clicks, cost per clip and cold start for 20 clips on two model variants and two GPUs.
-- [ ] GO / NO-GO against the stated rule, and the two failure modes T15900 named are reported explicitly.
+- [ ] The write-up has, for 20 raw plays, the match against the parent's crop path, frames lost, extra taps, wait and cost.
+- [ ] At least five of the plays are Veo or DJI wide shots, and at least three include the athlete leaving the picture.
+- [ ] Go or no-go for T15870 is stated against the rule: 15 of 20 plays need at most one extra tap and the smoothed box overlaps the parent's path well (0.6 on the usual overlap measure).
 
 ## For the implementer
 
 ### Related Tasks
-T15900 (history, gate), T15870 (productize), T15800 (Spotlight step), T5600 (detection store),
-T14295 to T14340 (Player Moments share the detector and tracker slots).
+T15900 (history, done), T16220 (the engine to reuse), T15870 (Frame, gated on this), T14295 to T14340 (Player Moments share the detector and tracker slots).
 
 ### Relevant Files (REQUIRED)
 - `src/backend/app/modal_functions/video_processing.py` (Modal app, image, GPU patterns)
-- `src/frontend/src/modes/overlay/overlays/PlayerDetectionOverlay.jsx` (what the UI stores today)
 - `src/frontend/src/screens/FocusScreen.jsx` (crop keyframes model)
-- `scripts/prototypes/` (new folder; T14310 to T14330 will share it)
+- `docs/plans/research/click-once-following-2026-11.md`
+- Prototype project, outside this repo: `C:/Users/imank/projects/player-tracking` (`bench.py`, `common.py`, `trackers/impl.py`)
