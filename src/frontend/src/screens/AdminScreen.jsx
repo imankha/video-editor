@@ -17,6 +17,8 @@ import { RevenueReconciliation } from '../components/admin/RevenueReconciliation
 import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
 import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
+import { RetentionView } from '../components/admin/RetentionView';
+import { ActivationReport } from '../components/admin/ActivationReport';
 import { BySportTable } from '../components/admin/BySportTable';
 import { CampaignsModal } from '../components/admin/CampaignsModal';
 
@@ -115,6 +117,18 @@ export function AdminScreen({ onBack }) {
   const packMixLoading = useAdminStore(s => s.packMixLoading);
   const packMixError = useAdminStore(s => s.packMixError);
   const fetchPackMix = useAdminStore(s => s.fetchPackMix);
+  const retentionChartData = useAdminStore(s => s.retentionChartData);
+  const retentionChartLoading = useAdminStore(s => s.retentionChartLoading);
+  const retentionChartError = useAdminStore(s => s.retentionChartError);
+  const retentionChartAction = useAdminStore(s => s.retentionChartAction);
+  const setRetentionChartAction = useAdminStore(s => s.setRetentionChartAction);
+  const retentionChartBin = useAdminStore(s => s.retentionChartBin);
+  const setRetentionChartBin = useAdminStore(s => s.setRetentionChartBin);
+  const fetchRetentionChart = useAdminStore(s => s.fetchRetentionChart);
+  const activationData = useAdminStore(s => s.activationData);
+  const activationLoading = useAdminStore(s => s.activationLoading);
+  const activationError = useAdminStore(s => s.activationError);
+  const fetchActivation = useAdminStore(s => s.fetchActivation);
   const bySportData = useAdminStore(s => s.bySportData);
   const bySportLoading = useAdminStore(s => s.bySportLoading);
   const bySportError = useAdminStore(s => s.bySportError);
@@ -386,6 +400,34 @@ export function AdminScreen({ onBack }) {
             loading={packMixLoading}
             error={packMixError}
             onRefresh={() => fetchPackMix()}
+          />
+        </CollapsibleSection>
+
+        {/* T7430: investor-grade retention chart -- one large curve chart (no table) whose
+            curves follow the Dimension pill, plus WAU and return-after-gap captions.
+            T16070's day 1/3/7/14/28 figures show in its hover (no Day N section, ruling
+            2026-11-13). Collapsed, on-demand fetch. */}
+        <CollapsibleSection title="Retention Chart">
+          <RetentionView
+            data={retentionChartData}
+            loading={retentionChartLoading}
+            error={retentionChartError}
+            onRefresh={() => fetchRetentionChart()}
+            action={retentionChartAction}
+            onActionChange={setRetentionChartAction}
+            cohortBin={retentionChartBin}
+            onCohortBinChange={setRetentionChartBin}
+          />
+        </CollapsibleSection>
+
+        {/* T7420: activation report -- export/share <=14d per Dimension-pill group.
+            Collapsed, on-demand fetch. */}
+        <CollapsibleSection title="Activation">
+          <ActivationReport
+            data={activationData}
+            loading={activationLoading}
+            error={activationError}
+            onRefresh={() => fetchActivation()}
           />
         </CollapsibleSection>
 

@@ -2772,6 +2772,163 @@ def analytics_cohorts(
     }
 
 
+@router.get("/analytics/activation")
+# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_activation(
+    exclude_test: bool = True,
+    group: Literal["cohorts", "campaigns", "builds"] = "cohorts",
+):
+    """T7420: export_completed <=14d (primary, scored vs the 40% scorecard target) and
+    share_completed <=14d (value-moment) per group, with benchmark annotations. `group`
+    follows the dashboard's Dimension pill (ruling 2026-11-13, same rule as the Retention
+    chart): one row per signup month, per campaign (the origin dimension's T15200
+    expression) or per signup build; every row carries `group` + display `label`.
+    Scope-shrunk 2026-10-30 (owner-approved, see task file): stage-conversion/stall-
+    distribution live in T14020's Journey step inspector instead. Reads existing Postgres only."""
+    from ..analytics import segment_has_signup_build
+    from ..services.analytics_activation import SIGNUP_MONTH_EXPR, compute_activation_report
+
+    _require_admin()
+    excl = _test_exclusion(exclude_test)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        group_expr, group_join = SIGNUP_MONTH_EXPR, ""
+        if group == "campaigns":
+            group_expr, group_join = _origin_group_expr(cur)
+        elif group == "builds":
+            if segment_has_signup_build(cur):
+                group_expr = "s.signup_build"
+            else:
+                logger.error("[Admin] user_segments.signup_build missing (v039 not applied; run POST /api/admin/migrate-postgres)")
+                group_expr = "NULL::integer"
+        report = compute_activation_report(
+            cur, excl, datetime.now(UTC).date(), group_expr=group_expr, group_join=group_join,
+        )
+        names = {}
+        if group == "campaigns":
+            name_select, name_join = _campaign_name_join(cur, "v.value")
+            cur.execute(f"""
+                SELECT v.value, {name_select}
+                FROM unnest(%s::text[]) AS v(value)
+                {name_join}
+            """, ([c["group"] for c in report["cohorts"]],))
+            names = {r["value"]: r["campaign_name"] for r in cur.fetchall()}
+
+    for row in report["cohorts"]:
+        row["label"] = names.get(row["group"]) or row["group"]
+    if group == "campaigns":
+        report["cohorts"].sort(key=lambda c: -c["signups"])
+    elif group == "builds":
+        report["cohorts"].sort(key=lambda c: (c["group"] == "unrecorded", -int(c["group"]) if c["group"] != "unrecorded" else 0))
+    report["group"] = group
+    return report
+
+
+@router.get("/analytics/retention-chart")
+# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_retention_chart(
+    exclude_test: bool = True,
+    action: str | None = None,
+    group: Literal["cohorts", "campaigns", "builds"] = "cohorts",
+    cohort_bin: Literal["week", "month"] = "week",
+):
+    """T7430: the investor-grade retention chart -- weekly cohort triangle
+    (classic + unbounded), WAU/MAU series with low-volume-week shading, and the
+    return-after-gap headline. `day_n` carries T16070's day-1/3/7/14/28 figures
+    (compute_day_n_retention, same cohort-key derivation) for the chart's hover --
+    there is no separate Day N endpoint or section (owner ruling 2026-11-13). `action`
+    (optional) adds the action-level curve from T7400's rollup_action_weekly --
+    None/empty cohorts when the rollup hasn't run yet, never an error. `group` follows
+    the dashboard's Dimension pill (ruling 2026-11-13): one curve per signup week,
+    per campaign (the origin dimension's T15200 expression) or per signup build; every
+    curve row carries `group` + display `label`, and `day_n` is grouped the same way.
+    `cohort_bin` is the weekly/monthly toggle for the Cohorts grouping (signup month
+    instead of signup week); the other groupings ignore it."""
+    from ..analytics import segment_has_signup_build
+    from ..services.analytics_retention import compute_day_n_retention
+    from ..services.analytics_retention_chart import (
+        LOW_VOLUME_RATIO,
+        LOW_VOLUME_TRAILING_WEEKS,
+        RETURN_AFTER_GAP_DAYS,
+        compute_action_retention,
+        compute_retention_triangle,
+        compute_return_after_gap,
+        compute_wau_series,
+        coverage_start,
+        detect_low_volume_weeks,
+    )
+
+    _require_admin()
+    excl = _test_exclusion(exclude_test)
+    today = datetime.now(UTC).date()
+    with get_pg() as conn:
+        cur = conn.cursor()
+        group_expr, group_join = None, ""
+        if group == "cohorts" and cohort_bin == "month":
+            group_expr = "date_trunc('month', s.acquired_at)::date"
+        elif group == "campaigns":
+            group_expr, group_join = _origin_group_expr(cur)
+        elif group == "builds":
+            if segment_has_signup_build(cur):
+                group_expr = "s.signup_build"
+            else:
+                logger.error("[Admin] user_segments.signup_build missing (v039 not applied; run POST /api/admin/migrate-postgres)")
+                group_expr = "NULL::integer"
+        triangle = compute_retention_triangle(
+            cur, excl, today, group_expr=group_expr, group_join=group_join,
+        )
+        wau = compute_wau_series(cur, excl, today)
+        return_after_gap = compute_return_after_gap(cur, excl, today)
+        coverage = coverage_start(cur, excl)
+        day_n = compute_day_n_retention(cur, excl, today, group_expr=group_expr, group_join=group_join)
+        names = {}
+        if group == "campaigns":
+            name_select, name_join = _campaign_name_join(cur, "v.value")
+            cur.execute(f"""
+                SELECT v.value, {name_select}
+                FROM unnest(%s::text[]) AS v(value)
+                {name_join}
+            """, ([c["group"] for c in triangle["cohorts"]],))
+            names = {r["value"]: r["campaign_name"] for r in cur.fetchall()}
+
+    for row in triangle["cohorts"]:
+        row["label"] = names.get(row["group"]) or row["group"]
+    if group == "campaigns":
+        triangle["cohorts"].sort(key=lambda c: -c["signups"])
+    elif group == "builds":
+        triangle["cohorts"].sort(key=lambda c: (c["group"] == "unrecorded", -int(c["group"]) if c["group"] != "unrecorded" else 0))
+
+    low_volume_flags = detect_low_volume_weeks(wau)
+    for row, flagged in zip(wau, low_volume_flags):
+        row["low_volume"] = flagged
+
+    result = {
+        "triangle": triangle,
+        "wau": wau,
+        "return_after_gap": {"gap_days": RETURN_AFTER_GAP_DAYS, "cohorts": return_after_gap},
+        "coverage_start": str(coverage) if coverage else None,
+        "low_volume_rule": {"ratio": LOW_VOLUME_RATIO, "trailing_weeks": LOW_VOLUME_TRAILING_WEEKS},
+        "group": group,
+        "cohort_bin": cohort_bin,
+        "day_n": day_n,
+        "action": None,
+    }
+    if action:
+        from ..services.analytics_rollup import load_newest_action_rollup
+
+        rollup, partial = load_newest_action_rollup(tables=("rollup_action_weekly",))
+        if rollup is None:
+            result["action"] = {"action": action, "cohorts": [], "available": False, "partial": partial}
+        else:
+            result["action"] = {
+                **compute_action_retention(rollup["rollup_action_weekly"], action),
+                "available": True,
+                "partial": partial,
+                "computed_at": rollup["meta"]["computed_at"],
+            }
+    return result
+
+
 @router.get("/analytics/builds")
 # sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_builds(
