@@ -25,6 +25,10 @@
 - DNS for `reelballers.com` and Cloudflare Pages custom domains are owner-account actions: list the exact records for the owner to add.
 - Knowledge doc: `.claude/knowledge/backend-services.md`.
 
+## Reverted (2026-11-14)
+
+PR #760 merged before the owner had created `staging.reelballers.com` and `api-staging.reelballers.com`. The staging build then called an API host with no DNS record, so staging sat on "Still connecting" and the frontend deploy's lockstep check failed on `staging.reelballers.com/build.json`. Reverted in #765. Before landing again: the owner adds the Cloudflare Pages custom domain, runs `fly certs add api-staging.reelballers.com -a reel-ballers-api-staging` with a DNS-only CNAME to `reel-ballers-api-staging.fly.dev`, runs `configure_r2_cors.py`, adds the Google OAuth origin, and both new hosts answer `curl`.
+
 ## Acceptance Criteria
 
 - [ ] A WebKit (iPhone 14) browser check against staging signs in, stays signed in after a reload and after a new browser context with the saved cookies, and runs in CI or the /dotask staging check.

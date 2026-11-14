@@ -2635,3 +2635,27 @@ class StagingCheckTest(AutolandBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RevertedPrTest(unittest.TestCase):
+    """g-t16370-1, 2026-11-14: PR #760 was reverted (#765), but every `status` flipped T16370 back to STAGING
+    because the group's branch still has a merged PR."""
+
+    def _repo(self, tmp, subjects):
+        git = ["git", "-C", tmp, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(git[:3] + ["init", "-q"], check=True)
+        for subject in subjects:
+            subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", subject], check=True)
+        return Path(tmp)
+
+    def test_a_revert_of_the_merge_commit_is_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp, ["Merge pull request #760 from x/feature/T16370-a",
+                                    'Revert "Merge pull request #760 from x/feature/T16370-a"'])
+            self.assertTrue(dotask_cli.pr_reverted("760", repo=repo, ref="HEAD"))
+
+    def test_an_unreverted_or_other_pr_is_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp, ["Merge pull request #760 from x/a",
+                                    'Revert "Merge pull request #7601 from x/b"'])
+            self.assertFalse(dotask_cli.pr_reverted("760", repo=repo, ref="HEAD"))

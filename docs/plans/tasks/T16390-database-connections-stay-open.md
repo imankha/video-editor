@@ -1,6 +1,6 @@
 # T16390: Database connections stay open
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-13

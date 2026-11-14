@@ -2539,7 +2539,9 @@ def status(args):
         # An estimate only means something for a group that is moving: a merged PR is done (its
         # group file outlives it until nuke), and a stopped container runs nothing.
         merged = merged_pr(group.get("branch"))
-        if merged:
+        if merged and pr_reverted(merged):
+            print(f"  eta: done -- PR #{merged} merged, then reverted on master; its tasks are not STAGING")
+        elif merged:
             print(f"  eta: done -- PR #{merged} merged")
             mark_staging(group.get("tasks"))  # PR #734's container was already freed when status ran
             if running == "running":
@@ -2709,6 +2711,17 @@ def merged_pr(branch):
         return None
     number = result.stdout.strip()
     return number if result.returncode == 0 and number.isdigit() else None
+
+
+def pr_reverted(number, repo=REPO_ROOT, ref="origin/master"):
+    """True when `ref` holds GitHub's revert of PR #number's merge commit.
+
+    g-t16370-1 (2026-11-14): PR #760 was reverted in #765, yet every `status` set T16370 back to STAGING
+    because the group's branch still has a merged PR."""
+    pattern = f'^Revert "Merge pull request #{number} '
+    result = run_cmd([tool("git"), "-C", str(repo), "log", ref, "-1", "--format=%H", "--grep", pattern],
+                     capture_output=True, text=True, check=False)
+    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def main(argv=None):
