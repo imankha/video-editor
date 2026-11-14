@@ -3053,8 +3053,7 @@ The full checklist for an 11th→Nth sport:
     in keyframes-framing.md's Landmines section — read that before attempting any
     "land the user in Framing right after upload" flow again.
   - Design doc with full architecture analysis preserved at `docs/plans/tasks/T7280-design.md`
-    on master (task itself superseded — see PLAN.md / dual-camera/EPIC.md "Captured
-    requirements" for where this direction actually landed).
+    on master (task itself superseded — the shared-game direction it fed was removed from the plan on 2026-11-13).
 - **Upload lifecycle invariants (T7480 — read before touching `games_upload.py`/`uploadManager.js`).**
   The R2 multipart upload path (prepare → parts → finalize → activate) caused the 2026-08-20 prod
   outage. What now holds:

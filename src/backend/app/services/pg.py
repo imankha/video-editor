@@ -30,6 +30,14 @@ _pool: ThreadedConnectionPool | None = None
 # this same number) closes that gap: threads WAIT for a free connection instead of
 # racing getconn past the ceiling. Sized from the one constant so pool capacity and
 # the gate can never drift apart.
+#
+# T16390: the pool also keeps all of them OPEN (minconn == maxconn). psycopg2 opens a
+# missing connection inside getconn() while holding the pool lock, and putconn()
+# closes any connection returned while the free list already holds minconn. With
+# minconn=2 every burst past two requests re-opened connections one after another
+# (prod 2026-11-13: 12 parallel requests took 2.0 s each, +0.17 s per extra request,
+# because each connect is several round trips LA -> Chicago). Startup now pays the
+# ten connects once; a burst finds them ready.
 _MAX_POOL_CONN = 10
 
 # Bounds concurrent pool checkouts to _MAX_POOL_CONN so getconn is never called
@@ -45,6 +53,18 @@ _checkout_gate: threading.BoundedSemaphore | None = None
 # a minutes timescale (keepalives_idle=30s), so 5s is far below any real death
 # window while still eliminating the steady-state overhead.
 _IDLE_PING_THRESHOLD_S = 5.0
+
+# T16400: limits on a connection to a database that stops answering. Without
+# connect_timeout libpq waits forever for the startup reply of a paused or
+# unreachable Postgres, so the pool's refill after a discard froze the request
+# that triggered it. tcp_user_timeout (ms) drops a socket whose sent bytes go
+# unacknowledged (a dead network path); keepalives cover the idle case. No global
+# statement_timeout: it is enforced by the server, so it never fires when the
+# server is the thing that stopped answering, and admin/analytics queries need
+# more time than the session check. The session check's own limit lives in the
+# auth middleware (db_sync.SESSION_CHECK_TIMEOUT_S).
+_CONNECT_TIMEOUT_S = 3
+_TCP_USER_TIMEOUT_MS = 10_000
 
 # id(conn) -> monotonic time the connection was last returned to the pool. Used
 # only to compute idle age for the gate above; entries are removed on discard.
@@ -673,16 +693,17 @@ def init_pg_pool():
         raise RuntimeError("DATABASE_URL environment variable is required")
     try:
         _pool = ThreadedConnectionPool(
-            minconn=2, maxconn=_MAX_POOL_CONN, dsn=dsn, cursor_factory=RealDictCursor,
+            minconn=_MAX_POOL_CONN, maxconn=_MAX_POOL_CONN, dsn=dsn, cursor_factory=RealDictCursor,
             keepalives=1, keepalives_idle=30, keepalives_interval=5, keepalives_count=3,
+            connect_timeout=_CONNECT_TIMEOUT_S, tcp_user_timeout=_TCP_USER_TIMEOUT_MS,
         )
     except psycopg2.OperationalError:
         raise RuntimeError("Postgres is not running — start it with: docker compose up -d postgres-dev "
                            "(container reel-ballers-postgres-dev)") from None
     # T6200: gate concurrent checkouts to the pool's capacity — see _MAX_POOL_CONN.
     _checkout_gate = threading.BoundedSemaphore(_MAX_POOL_CONN)
-    logger.info("[PG] Connection pool initialized (min=2, max=%d, keepalive=30s, checkout gate=%d)",
-                _MAX_POOL_CONN, _MAX_POOL_CONN)
+    logger.info("[PG] Connection pool initialized (min=max=%d, keepalive=30s, connect_timeout=%ds, checkout gate=%d)",
+                _MAX_POOL_CONN, _CONNECT_TIMEOUT_S, _MAX_POOL_CONN)
 
 
 def close_pg_pool():

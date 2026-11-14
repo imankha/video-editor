@@ -1,10 +1,22 @@
-# T13720: Fix the dead references in knowledge docs and ratchet the drift baseline to 0
+# T13720: Knowledge docs name only real code
 
 **Status:** TODO
 **Impact:** 5
-**Complexity:** 4
+**Complexity:** 3
 **Created:** 2026-10-27
 **Follow-up of:** T13710
+**Updated:** 2026-11-13
+
+## In plain words
+
+The knowledge docs the AI agents load before working point at 48 files or functions that no longer exist, 34 of them in the Annotate and Frame docs. An agent that trusts them searches for code that is gone or copies a dead pattern. Fix every reference and set the allowed count to zero, so CI blocks any new one. The Annotate doc can be fixed now; the others wait for the multi-clip removal (T11250, T11260, T11270), which rewrites them.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- `scripts/check_doc_drift.py` has `BASELINE = 49`; the real count is 48: `annotate.md` 20, `keyframes-framing.md` 14, `export-pipeline.md` 3, seven other files at 1 or 2 each.
+- `.claude/knowledge/modal-gpu.md` names `call_modal_framing_ai` as a live caller; it is not (T4410 deletes it).
 
 ## Problem
 

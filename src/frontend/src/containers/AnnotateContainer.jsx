@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useAnnotateState, useAnnotate, useClipSelection } from '../modes/annotate';
 import { toast } from '../components/shared';
 import { reportMarkPlayFailure } from '../utils/markPlayFailure';
@@ -17,7 +18,6 @@ import {
 } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
-import { useQuestStore } from '../stores/questStore';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useRawClipSave } from '../hooks/useRawClipSave';
@@ -1998,7 +1998,7 @@ export function AnnotateContainer({
         // latched true for the life of the mount, so every later Mark Play tap
         // returned early and marked nothing, with no request and no error.
         // Quest 1 step: completes "Find an Amazing Play" at the TAP, unchanged.
-        useQuestStore.getState().recordAchievement('add_clip_opened');
+        recordFunnelEvent(FUNNEL_EVENTS.ADD_CLIP_OPENED);
         const t = effectiveCurrentTime;
         const rawStart = t - DEFAULT_CLIP_BEFORE;
         const s = Math.max(0, rawStart);

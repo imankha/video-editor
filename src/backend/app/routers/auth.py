@@ -36,6 +36,7 @@ from app.profile_context import set_current_profile_id
 from app.services.auth_db import (
     create_session,
     create_user,
+    forget_user_sessions,
     generate_user_id,
     get_auth_db,
     get_user_by_email,
@@ -286,6 +287,7 @@ async def accept_terms(request: Request):
             "UPDATE users SET terms_accepted_at = now(), terms_version = %s WHERE user_id = %s",
             (version, user_id),
         )
+    forget_user_sessions(user_id)  # T16380: the remembered session row carries terms_accepted_at
     logger.info(f"[Auth] Terms accepted: user={user_id} version={version}")
     return {"accepted": True}
 
@@ -565,6 +567,15 @@ async def auth_me(request: Request):
 
     import time as _time
     t_me_start = _time.perf_counter()
+
+    if getattr(request.state, "session_validation_unavailable", False):
+        # T16400: the cookie could not be checked (Postgres unreachable or slow).
+        # A 401 here would sign the parent out; 503 tells the app to retry.
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily unavailable, please retry.",
+            headers={"Retry-After": "2"},
+        )
 
     session = getattr(request.state, "session", None)
     if not session:

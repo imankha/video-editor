@@ -117,6 +117,16 @@ def _register_test_profiles():
         session_init._profile_registry_cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _clear_session_cache():
+    """T16380: validate_session remembers sessions in process memory; a test that
+    edits the sessions table directly must not see an earlier test's entry."""
+    from app.services.auth_db import clear_session_cache
+    clear_session_cache()
+    yield
+    clear_session_cache()
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _mock_pg_startup():
     """Prevent app startup from crashing when DATABASE_URL is not set.

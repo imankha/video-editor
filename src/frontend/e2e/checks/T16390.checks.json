@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T16390:C1": {
+      "kind": "code",
+      "command": "grep -q '0 connections and kept all 10' docs/plans/tasks/T16390-database-connections-stay-open.md && grep -q 'opened 8 new connections one after another' docs/plans/tasks/T16390-database-connections-stay-open.md"
+    },
+    "T16390:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16390_pool_stays_open.py -q -p no:cacheprovider -k 'test_c2_'"
+    },
+    "T16390:C3": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16390_pool_stays_open.py -q -p no:cacheprovider -k 'test_c3_'"
+    }
+  }
+}

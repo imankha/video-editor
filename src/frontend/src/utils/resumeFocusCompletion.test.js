@@ -25,7 +25,7 @@ function makeDeps(overrides = {}) {
     resolvePreviewUrl: vi.fn(async () => 'https://cdn.example/preview.mp4'),
     openPreview: vi.fn(() => { calls.push('openPreview'); }),
     acknowledgeJob: vi.fn(async () => { calls.push('acknowledgeJob'); }),
-    recordAchievement: vi.fn(),
+    recordFunnelEvent: vi.fn(),
     toastError: vi.fn(),
     EDITOR_MODES,
     // T11220: real re-frame guard injected (production wiring); a project with
@@ -57,7 +57,7 @@ describe('resumeFocusCompletion (T9285)', () => {
     expect(deps.openPreview).toHaveBeenCalledWith({
       projectId: 42, previewUrl: 'https://cdn.example/preview.mp4', openMode: 'framing', jobId: 'job-1',
     });
-    expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_offered');
+    expect(deps.recordFunnelEvent).toHaveBeenCalledWith('overlay_offered');
     expect(deps.acknowledgeJob).toHaveBeenCalledWith('job-1');
     expect(result).toEqual({ opened: true, navigated: true });
   });
@@ -114,7 +114,7 @@ describe('resumeFocusCompletion (T9285)', () => {
     expect(deps.openPreview).toHaveBeenCalledWith({
       projectId: 42, previewUrl: 'https://cdn.example/preview.mp4', openMode: 'framing', jobId: 'job-3',
     });
-    expect(deps.recordAchievement).toHaveBeenCalledWith('overlay_offered');
+    expect(deps.recordFunnelEvent).toHaveBeenCalledWith('overlay_offered');
     expect(result).toEqual({ opened: true, navigated: false });
   });
 
@@ -231,7 +231,7 @@ describe('resumeFocusCompletion (T9285)', () => {
     expect(deps.setEditorMode).toHaveBeenCalledWith('overlay');
     expect(deps.loadProject).toHaveBeenCalledWith(finishedProject, { mode: 'overlay' });
     expect(deps.openPreview).not.toHaveBeenCalled();
-    expect(deps.recordAchievement).not.toHaveBeenCalled();
+    expect(deps.recordFunnelEvent).not.toHaveBeenCalled();
     expect(deps.acknowledgeJob).toHaveBeenCalledWith('job-11');
     expect(calls).toEqual(['selectProject', 'setEditorMode', 'loadProject', 'acknowledgeJob']);
     expect(result).toEqual({ opened: true, navigated: true });
@@ -251,7 +251,7 @@ describe('resumeFocusCompletion (T9285)', () => {
     expect(deps.setEditorMode).toHaveBeenCalledWith('overlay');
     expect(deps.loadProject).toHaveBeenCalledWith(finishedProject, { mode: 'overlay' });
     expect(deps.openPreview).not.toHaveBeenCalled();
-    expect(deps.recordAchievement).not.toHaveBeenCalled();
+    expect(deps.recordFunnelEvent).not.toHaveBeenCalled();
     expect(deps.acknowledgeJob).toHaveBeenCalledWith('job-12');
     expect(calls).toEqual(['refreshProject', 'setEditorMode', 'loadProject', 'acknowledgeJob']);
     expect(result).toEqual({ opened: true, navigated: true });

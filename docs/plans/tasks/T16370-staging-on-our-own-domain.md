@@ -1,6 +1,6 @@
 # T16370: Serve staging from reelballers.com so Safari can sign in
 
-**Status:** STAGING
+**Status:** TODO
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-13
@@ -25,18 +25,9 @@
 - DNS for `reelballers.com` and Cloudflare Pages custom domains are owner-account actions: list the exact records for the owner to add.
 - Knowledge doc: `.claude/knowledge/backend-services.md`.
 
-## Owner steps (before the PR merges)
+## Reverted (2026-11-14)
 
-Merging moves staging's build to the new hosts at once, so these must be in place first or staging stops working:
-
-1. **Cloudflare Pages:** project `reel-ballers-staging` -> Custom domains -> add `staging.reelballers.com` (Cloudflare creates the proxied CNAME `staging` -> `reel-ballers-staging.pages.dev`).
-2. **Fly:** `fly certs add api-staging.reelballers.com -a reel-ballers-api-staging`, then in Cloudflare DNS add CNAME `api-staging` -> `reel-ballers-api-staging.fly.dev`, **DNS only (gray cloud)**, same as `api` for prod. Wait for `fly certs show api-staging.reelballers.com -a reel-ballers-api-staging` to say issued.
-3. **R2 CORS:** `cd src/backend && python scripts/configure_r2_cors.py` (now allows `https://staging.reelballers.com`).
-4. **Google OAuth client:** add `https://staging.reelballers.com` to Authorized JavaScript origins.
-5. **Stripe (staging webhook), if it points at the fly.dev host:** optional, the fly.dev host keeps resolving; switch it to `https://api-staging.reelballers.com/...` for consistency.
-6. Merge. Then run the WebKit check (C1, C2): `cd src/frontend && npx playwright install --with-deps webkit && E2E_BASE_URL=https://staging.reelballers.com E2E_API_BASE=https://api-staging.reelballers.com/api npx playwright test e2e/checks/T16370.check.spec.js --reporter=line`.
-
-No redirect from the old hosts is kept: `reel-ballers-staging.pages.dev` still serves the build, but the API's CORS now only allows the new host, so sign-in works only on `staging.reelballers.com`.
+PR #760 merged before the owner had created `staging.reelballers.com` and `api-staging.reelballers.com`. The staging build then called an API host with no DNS record, so staging sat on "Still connecting" and the frontend deploy's lockstep check failed on `staging.reelballers.com/build.json`. Reverted in #765. Before landing again: the owner adds the Cloudflare Pages custom domain, runs `fly certs add api-staging.reelballers.com -a reel-ballers-api-staging` with a DNS-only CNAME to `reel-ballers-api-staging.fly.dev`, runs `configure_r2_cors.py`, adds the Google OAuth origin, and both new hosts answer `curl`.
 
 ## Acceptance Criteria
 

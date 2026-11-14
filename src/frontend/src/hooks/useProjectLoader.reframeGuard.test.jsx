@@ -45,6 +45,7 @@ import { LEGACY_MULTICLIP_REFRAME_MESSAGE } from '../utils/reelReEditable';
 // Production shapes: exactly what GET /api/projects/{id} (ProjectDetailResponse)
 // returns for these two cases — clip_count is a real field on that response now.
 const multiClipDraft = { id: 70, name: 'Legacy Reel', working_video_id: null, has_final_video: false, clip_count: 2 };
+const multiClipDraftWithVideo = { id: 72, name: 'Legacy Reel', working_video_id: 9, has_final_video: false, clip_count: 2 };
 const singleClipDraft = { id: 71, name: 'Clip', working_video_id: null, has_final_video: false, clip_count: 1 };
 
 describe('useProjectLoader.loadProject re-frame guard (T11220)', () => {
@@ -73,6 +74,17 @@ describe('useProjectLoader.loadProject re-frame guard (T11220)', () => {
 
     expect(loaded.mode).toBe('framing');
     expect(fetchClipsSpy).toHaveBeenCalledWith(71);
+    expect(toastInfoSpy).not.toHaveBeenCalled();
+  });
+
+  it('T11260:C2 a legacy multi-clip draft WITH a working video opens in Spotlight (overlay), not refused', async () => {
+    const { result } = renderHook(() => useProjectLoader());
+
+    const loaded = await result.current.loadProject(multiClipDraftWithVideo, {});
+
+    expect(loaded.refused).toBeFalsy();
+    expect(loaded.mode).toBe(EDITOR_MODES.OVERLAY);
+    expect(fetchClipsSpy).toHaveBeenCalledWith(72);
     expect(toastInfoSpy).not.toHaveBeenCalled();
   });
 });

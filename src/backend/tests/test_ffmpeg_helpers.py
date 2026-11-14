@@ -71,42 +71,6 @@ class TestCalculateMultiClipResolution:
         assert height <= 1440
 
 
-class TestChapterMetadataFormat:
-    """Test chapter metadata generation for FFmpeg."""
-
-    def test_chapter_format_valid(self):
-        """Chapter metadata should be valid FFMETADATA format."""
-        from app.routers.export.multi_clip import create_chapter_metadata_file
-        import tempfile
-        import os
-
-        chapters = [
-            {'name': 'Intro', 'index': 0, 'start_time': 0, 'end_time': 10},
-            {'name': 'Main', 'index': 1, 'start_time': 10, 'end_time': 30},
-        ]
-
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            temp_path = f.name
-
-        try:
-            result_path = create_chapter_metadata_file(chapters, temp_path)
-            assert result_path is not None
-
-            with open(result_path, 'r') as f:
-                content = f.read()
-
-            # Should have FFMETADATA header
-            assert ';FFMETADATA1' in content
-            # Should have chapter entries
-            assert '[CHAPTER]' in content
-            assert 'title=Intro' in content
-            assert 'title=Main' in content
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            if result_path and os.path.exists(result_path):
-                os.remove(result_path)
-
 
 class TestTransitionTypes:
     """Test transition type validation."""

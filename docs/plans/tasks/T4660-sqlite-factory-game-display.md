@@ -1,31 +1,23 @@
-# T4660: open_sqlite Factory + game_display Service (Small Backend Dedup)
+# T4660: One game name builder
 
 **Status:** TODO
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-07-03
-**Source:** Audit item E10 ([audit doc](../audit-2026-07-03-code-quality.md))
+**Updated:** 2026-11-13
 
-## Problem
+## In plain words
 
-[DRY] Two small, contained duplications — one of which is a latent reliability bug:
+The name shown for a game, such as the opponent and the date, is built by three separate pieces of server code, and two of them have already drifted in how they write the date. Keep one and use it everywhere. Worked when the same game reads the same on Home, in downloads and in collections, checked by one test over all three.
 
-1. **Connection recipe drift.** Canonical `database.py:1045` `get_db_connection()` sets Row factory + WAL + `busy_timeout=30000` + FK enforcement (168 call sites — good adoption). But the recipe is copy-pasted in `services/user_db.py:190/:222-227` and `services/materialization.py:30-35` (+ read-only variant :86-88), and **`routers/privacy.py:65-66/:87-88` connects raw with NO timeout/PRAGMAs** — under R2-sync write load that's `database is locked` errors waiting to happen on the privacy endpoints.
-2. **game display naming ~100 lines byte-identical:** `_get_season_for_month` + `_generate_game_display_name` + `_generate_group_key` duplicated between `projects.py:58-160` and `downloads.py:67-166`. Naming rules WILL change (they did in T4160/T4190); next time someone fixes one copy.
+## Implementer details
 
-## Solution
-
-1. `open_sqlite(path, *, readonly=False)` in `database.py` (or a tiny module) — the one place PRAGMAs live. Migrate user_db.py, materialization.py, privacy.py to it. Check each copy's variance first (materialization's read-only variant becomes the `readonly` flag; user.sqlite may differ deliberately — verify against `_USER_DB_SCHEMA` setup).
-2. `services/game_display.py` — move the three functions; both routers import. Pure motion; grep for a THIRD copy while at it (`grep -rn "_generate_game_display_name\|season" src/backend/app`).
-
-## Steps
-
-1. [ ] Diff the connection copies (variance table); factory + migrate; import check.
-2. [ ] Manual: privacy endpoints on dev (they now hold PRAGMAs — behavior should only improve under lock contention).
-3. [ ] game_display motion commit; both routers' display outputs unchanged (existing tests / snapshot a `list_downloads` response before+after).
+- `src/backend/app/routers/projects.py` and `downloads.py` each carry about 100 lines of game display naming; `downloads.py` uses `short_game_date()` while `projects.py` still has an inline `strptime` block. A third implementation is `generate_game_display_name` in `games.py` with five callers.
+- One `services/game_display.py` used by projects, downloads, collections and `download_metadata`. First check whether the two date formats differ on screen today; if they do, the owner picks which one stays.
+- The remaining `game_type` string literals sit inside the duplicated code and go with it.
+- The per-user database opener half of the old scope is done (`services/db_residency.py` `connect_db`).
 
 ## Acceptance Criteria
 
-- [ ] One PRAGMA recipe; privacy.py no longer connects raw
-- [ ] One game-display implementation; response parity verified
-- [ ] Any third naming copy found is included or filed
+- [ ] One function builds a game's display name; `projects.py` and `downloads.py` hold no copy.
+- [ ] A test feeds the same game through the project list, the downloads list and a collection and gets the same name.

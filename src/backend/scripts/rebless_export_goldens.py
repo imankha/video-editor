@@ -26,7 +26,6 @@ GOLDENS_DIR = BACKEND_DIR / "tests" / "export_golden" / "goldens"
 GOLDEN_TEST_FILES = [
     "tests/test_export_golden_local_render.py",
     "tests/test_export_golden_overlay.py",
-    "tests/test_export_golden_multiclip_modal.py",
     "tests/test_export_golden_worker.py",
     "tests/test_export_golden_sweep.py",
     "tests/test_export_golden_render.py",

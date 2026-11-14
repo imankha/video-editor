@@ -1,0 +1,24 @@
+{
+  "criteria": {
+    "T16380:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16380_session_cache.py -q -p no:cacheprovider -k 'test_c1_'"
+    },
+    "T16380:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16380_session_cache.py -q -p no:cacheprovider -k 'test_c2_'"
+    },
+    "T16380:C3": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16380_session_cache.py -q -p no:cacheprovider -k 'test_c3_'"
+    },
+    "T16380:C4": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16380_session_cache.py -q -p no:cacheprovider -k 'test_c4_'"
+    },
+    "T16380:C5": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16380_session_cache.py -q -p no:cacheprovider -k 'test_c5_'"
+    }
+  }
+}

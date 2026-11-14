@@ -57,7 +57,6 @@ export function OverlayMode({
   onHighlightComplete,
   // T5225 / T6630 round 4: Overlay text REGIONS (from useTextOverlays in OverlayScreen)
   textOverlays = [],
-  clipBoundaries = [],
   selectedRegionId = null,
   // T6630 round 5: region CREATION moved back onto the timeline lane (see
   // TextLayer's onAddRegion) -- named distinctly from onAddHighlightRegion
@@ -296,7 +295,6 @@ export function OverlayMode({
                   regions={textOverlays}
                   duration={duration}
                   visualDuration={visualDuration || duration}
-                  clipBoundaries={clipBoundaries}
                   selectedRegionId={selectedRegionId}
                   onAddRegion={onAddTextRegion}
                   onMoveTextStart={onMoveTextStart}

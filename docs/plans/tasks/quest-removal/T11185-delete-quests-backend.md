@@ -1,10 +1,23 @@
-# T11185: Delete the quest system, backend (+ optional table drops)
+# T11185: Remove quests from the server
 
 **Status:** TODO
 **Impact:** 4
 **Complexity:** 4
 **Created:** 2026-09-24
 **Epic:** [Remove the Quest System](EPIC.md)
+**Updated:** 2026-11-13
+
+## In plain words
+
+About 2,300 lines of quest endpoints, settings and tests remain on the server for a feature no parent can reach. Delete them after the app side is gone (T11180), never before, because the app still calls them until then. Two old data upgrades read a quest table, so the table stays until they are guarded. Worked when the six quest endpoints are gone and sign-up credits still arrive.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- Production code: `routers/quests.py` (544 lines), `quest_config.py` (157) and helpers in `user_db.py`, `bootstrap.py`, `db_sync.py` and `session_init.py`; the eleven named test files total 1,480 lines.
+- Welcome credits are already decoupled (`storage_credits.py`); the frozen ledger strings `quest_reward` and `quest_upfront` in `credit_ledger.py` stay.
+- Order: T11175, then T11180, then this.
 
 ## Solution (pure deletion, ~2,200 LOC)
 

@@ -60,7 +60,6 @@ const renderView = (overrides = {}) => render(
     getRegionsForExport={() => []}
     framingVideoUrl="blob:framing"
     hasFramingEdits
-    hasMultipleClips={false}
     {...overrides}
   />,
 );
@@ -168,7 +167,7 @@ describe('T14630 Spotlight copy', () => {
   });
 
   it('T14630:C9 carried spotlight notices name spotlights and the Spotlight step', () => {
-    const notes = ['dropped:1', 'dropped:2', 'multiclip_reset', 'legacy_uncertain'].map(describeHighlightCarryNote);
+    const notes = ['dropped:1', 'dropped:2', 'legacy_uncertain'].map(describeHighlightCarryNote);
     expect(notes[0]).toBe('1 spotlight fell outside your new trim. Place it again in Spotlight.');
     expect(notes[1]).toBe('2 spotlights fell outside your new trim. Place them again in Spotlight.');
     expect(notes.filter((n) => /highlights?\b|overlay|--|clip|regenerat/i.test(n))).toEqual([]);

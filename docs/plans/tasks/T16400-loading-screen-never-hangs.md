@@ -1,6 +1,6 @@
 # T16400: Loading screen never hangs silently
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-11-13

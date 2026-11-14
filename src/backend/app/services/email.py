@@ -166,7 +166,7 @@ SOCIAL_LINKS = [
 # The API serves the unsubscribe link itself (no SPA route), keyed by APP_ENV.
 API_BASE_MAP = {
     "production": "https://api.reelballers.com",
-    "staging": "https://api-staging.reelballers.com",
+    "staging": "https://reel-ballers-api-staging.fly.dev",
     "dev": "http://localhost:8000",
 }
 
@@ -879,7 +879,7 @@ async def send_bug_notification_email(
 
 DOMAIN_MAP = {
     "production": "app.reelballers.com",
-    "staging": "staging.reelballers.com",
+    "staging": "reel-ballers-staging.pages.dev",
     "dev": "localhost:5173",
 }
 

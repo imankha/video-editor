@@ -230,6 +230,44 @@ async def report_session_breadcrumbs(payload: SessionBreadcrumbReport) -> Respon
     return Response(status_code=204)
 
 
+class AppLoadReport(BaseModel):
+    """T16400: how long this app load took to become usable (milliseconds since the
+    page started) and how many /api/auth/me attempts and Retry presses it took."""
+
+    ready_ms: int
+    first_answer_ms: int | None = None
+    me_attempts: int = 1
+    retries: int = 0
+
+
+@router.post("/api/telemetry/app-load", status_code=204)
+async def report_app_load(payload: AppLoadReport) -> Response:
+    """T16400 sink. Writes one ``app_load`` row to the current user's own
+    ``user_action_log`` via record_app_load (impersonation guard, range checks).
+    Sent only by a signed-in app, so an anonymous call is logged and dropped.
+    Always 204, never raises."""
+    if get_current_impersonator_id():
+        return Response(status_code=204)
+    try:
+        user_id = get_current_user_id()
+    except RuntimeError:
+        user_id = None
+    if not user_id:
+        logger.warning("[Telemetry] app-load timing dropped: no resolvable user context")
+        return Response(status_code=204)
+
+    from app.analytics import record_app_load
+
+    try:
+        await run_in_context(
+            record_app_load, user_id, payload.ready_ms, payload.first_answer_ms,
+            payload.me_attempts, payload.retries,
+        )
+    except Exception:
+        logger.exception("[Telemetry] record_app_load failed (ignored)")
+    return Response(status_code=204)
+
+
 # ---------------------------------------------------------------------------
 # T7410: first-party visit beacon (landing + app pre-auth + share pages)
 # ---------------------------------------------------------------------------

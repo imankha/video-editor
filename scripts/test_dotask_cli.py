@@ -2420,6 +2420,55 @@ class TrackedChangesTest(unittest.TestCase):
         self.assertEqual(noise, ["qa/red.log"])
         self.assertFalse(real)
 
+    def _repo_with_staged_old_copy(self, tmp):
+        repo = Path(tmp)
+        git = ["git", "-C", tmp, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(git[:3] + ["init", "-q"], check=True)
+        (repo / "a.py").write_text("old\n")
+        subprocess.run(git + ["add", "."], check=True)
+        subprocess.run(git + ["commit", "-qm", "old"], check=True)
+        (repo / "a.py").write_text("new\n")
+        subprocess.run(git + ["commit", "-qam", "new"], check=True)
+        # The reviewer stages the pre-fix copy to test broken code, then puts the file back but not the index.
+        subprocess.run(git + ["checkout", "HEAD~1", "--", "a.py"], check=True)
+        subprocess.run(git + ["checkout", "HEAD", "--", "a.py"], check=False)
+        (repo / "a.py").write_text("new\n")
+        subprocess.run(git + ["update-index", "--cacheinfo",
+                              "100644," + subprocess.run(git + ["rev-parse", "HEAD~1:a.py"], capture_output=True,
+                                                         text=True, check=True).stdout.strip() + ",a.py"], check=True)
+        return repo, git
+
+    def test_a_reviewer_that_left_only_the_index_staged_is_put_back(self):
+        # g-t16380-3, 2026-11-14: the working tree matched HEAD, only the index held the pre-fix copies
+        # (plus a stale index.lock), and the loop stopped overnight as "reviewer changed the tree".
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, _git = self._repo_with_staged_old_copy(tmp)
+            lock = repo / ".git" / "index.lock"
+            lock.write_text("")
+            old = time.time() - 600
+            os.utime(lock, (old, old))
+            self.assertTrue(dotask_cli.tracked_changes(repo).strip())
+            dotask_cli.restore_staged_only(repo)
+            self.assertFalse(lock.exists())
+            self.assertEqual(dotask_cli.tracked_changes(repo).strip(), "")
+            self.assertEqual((repo / "a.py").read_text(), "new\n")
+
+    def test_a_real_working_tree_edit_is_left_for_the_untrusted_verdict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, _git = self._repo_with_staged_old_copy(tmp)
+            (repo / "a.py").write_text("edited by the reviewer\n")
+            dotask_cli.restore_staged_only(repo)
+            self.assertTrue(dotask_cli.tracked_changes(repo).strip())
+            self.assertEqual((repo / "a.py").read_text(), "edited by the reviewer\n")
+
+    def test_a_fresh_index_lock_is_not_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, _git = self._repo_with_staged_old_copy(tmp)
+            lock = repo / ".git" / "index.lock"
+            lock.write_text("")
+            dotask_cli.restore_staged_only(repo)
+            self.assertTrue(lock.exists())
+
 
 REAL_DISPATCH = dotask_cli.dispatch  # AutolandBase patches it out; these tests need the real one
 
@@ -2586,3 +2635,27 @@ class StagingCheckTest(AutolandBase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RevertedPrTest(unittest.TestCase):
+    """g-t16370-1, 2026-11-14: PR #760 was reverted (#765), but every `status` flipped T16370 back to STAGING
+    because the group's branch still has a merged PR."""
+
+    def _repo(self, tmp, subjects):
+        git = ["git", "-C", tmp, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(git[:3] + ["init", "-q"], check=True)
+        for subject in subjects:
+            subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", subject], check=True)
+        return Path(tmp)
+
+    def test_a_revert_of_the_merge_commit_is_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp, ["Merge pull request #760 from x/feature/T16370-a",
+                                    'Revert "Merge pull request #760 from x/feature/T16370-a"'])
+            self.assertTrue(dotask_cli.pr_reverted("760", repo=repo, ref="HEAD"))
+
+    def test_an_unreverted_or_other_pr_is_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp, ["Merge pull request #760 from x/a",
+                                    'Revert "Merge pull request #7601 from x/b"'])
+            self.assertFalse(dotask_cli.pr_reverted("760", repo=repo, ref="HEAD"))

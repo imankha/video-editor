@@ -9,7 +9,7 @@ import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
 
 /**
  * T5225 -- DEV-ONLY real-browser harness for the Overlay text layer's range
- * levers, clip-boundary snapping, add/delete/toggle.
+ * levers, start/end snapping, add/delete/toggle.
  *
  * Mounts the REAL TextLayer wired to the REAL useTextOverlays hook, so a
  * lever drag runs genuine code end-to-end: TextLayer's pointer handler ->
@@ -32,7 +32,6 @@ import useTextOverlays from '../modes/overlay/hooks/useTextOverlays';
  */
 
 const DURATION = 10;
-const CLIP_BOUNDARIES = [5.0]; // one interior cut-point at 5s, mirrors a 2-clip reel
 const BLOCK_START = 2; // addRegion(2, spec) -> a 2s block [2, 4]
 
 const DEFAULT_SPEC = {
@@ -109,7 +108,6 @@ function TextDiagHarness() {
           regions={textOverlaysWithLayout}
           duration={duration}
           visualDuration={duration}
-          clipBoundaries={CLIP_BOUNDARIES}
           selectedRegionId={selectedRegionId}
           onAddRegion={(t) => addRegion(t, DEFAULT_SPEC)}
           onMoveTextStart={moveRegionStart}

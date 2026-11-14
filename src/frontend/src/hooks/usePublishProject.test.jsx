@@ -73,7 +73,7 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
     setJustPublishedMock.mockReset();
   });
 
-  it('success: POSTs publish, fires fetchCount/notify/fetchProjects/recordAchievement, no optimistic removal', async () => {
+  it('success: POSTs publish, fires fetchCount/notify/fetchProjects, no optimistic removal', async () => {
     apiFetchMock.mockResolvedValueOnce(
       jsonResponse(200, { success: true, archived: true, final_video_id: 99, collection_game_id: null, aspect_ratio: '9:16' })
     );
@@ -87,11 +87,12 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
       expect.stringMatching(/\/api\/downloads\/publish\/42$/),
       expect.objectContaining({ method: 'POST' })
     );
-    // The whole T4050/quest side-effect chain fires exactly once.
+    // The whole T4050 side-effect chain fires exactly once.
     expect(fetchCountMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
     expect(notifyMock).toHaveBeenCalledWith('publish');
     expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
-    expect(recordAchievementMock).toHaveBeenCalledWith('moved_to_my_reels');
+    // T11175: the quest-only moved_to_my_reels trigger is gone (server emits move_succeeded).
+    expect(recordAchievementMock).not.toHaveBeenCalled();
     // openGallery:false -> the gallery drawer is NOT opened.
     expect(openMock).not.toHaveBeenCalled();
     // Card removal is driven by the refetch, never an optimistic local removal:
@@ -233,7 +234,7 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
   // Regression (Branch CI run 37040668288): an earlier version of this block
   // shared the SAME try/catch as the critical post-publish effects, so a
   // throw from the (then client-cache-based) lookup silently swallowed
-  // fetchCount/notifyCollectionsChanged/fetchProjects/recordAchievement too.
+  // fetchCount/notifyCollectionsChanged/fetchProjects too.
   // The spotlight block is isolated in its own try/catch -- still true now
   // the data source is the publish response, since setJustPublished itself
   // (a store action) could still throw for unrelated reasons, and it must
@@ -252,6 +253,7 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     expect(fetchCountMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
     expect(notifyMock).toHaveBeenCalledWith('publish');
     expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
-    expect(recordAchievementMock).toHaveBeenCalledWith('moved_to_my_reels');
+    // T11175: the quest-only moved_to_my_reels trigger is gone (server emits move_succeeded).
+    expect(recordAchievementMock).not.toHaveBeenCalled();
   });
 });

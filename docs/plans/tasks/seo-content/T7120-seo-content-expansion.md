@@ -1,10 +1,21 @@
-# T7120: SEO content expansion — comparison pages, use-case & privacy pages, guide bodies
+# T7120: Comparison pages and guides
 
 **Status:** TODO
-**Impact:** 6
-**Complexity:** 5
+**Impact:** 5
+**Complexity:** 4
 **Created:** 2026-08-16
-**Updated:** 2026-08-16
+**Updated:** 2026-11-13
+
+## In plain words
+
+The marketing site has two comparison pages and one of five planned guides. Parents search for the camera and editing brands they know, and we have no page for Hudl or iMovie. Add those comparison pages (Veo and Trace only if clearly different from the existing works-with pages) and write the four unpublished guides once the owner approves their outlines. Judged by organic visits and visit to sign-up, now measurable, against 30 to 42 organic sign-ups a week.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- `src/landing/src/data/comparisons.ts` has only `editing-by-hand` and `capcut`; `src/landing/src/data/guides.ts` has 1 of 5 guides published. `/works-with/veo` and `/works-with/trace` exist, so `/vs/veo` and `/vs/trace` risk the duplicate-content problem already diagnosed.
+- Only Phases A and D of the text below are in scope. Phases B, C and E need a trust strip that does not exist or sell a share loop six parents have used.
 
 ## Problem
 

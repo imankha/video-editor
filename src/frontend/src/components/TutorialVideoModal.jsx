@@ -3,17 +3,19 @@ import { Play, X } from 'lucide-react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { VideoControls } from './shared/VideoControls';
 import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
-import { useQuestStore } from '../stores/questStore';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { formatClock } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 
-const QUEST_ACHIEVEMENT_KEY = {
-  quest_1: 'watched_annotate_tutorial',
-  quest_2: 'watched_framing_tutorial',
-  quest_3: 'watched_overlay_tutorial',
-  quest_4: 'watched_publish_tutorial',
+// T11175: tutorial-watch funnel milestone per tutorial (still keyed by the
+// legacy quest id; T11180 re-keys the modal by topic).
+const WATCHED_TUTORIAL_EVENT = {
+  quest_1: FUNNEL_EVENTS.WATCHED_ANNOTATE_TUTORIAL,
+  quest_2: FUNNEL_EVENTS.WATCHED_FRAMING_TUTORIAL,
+  quest_3: FUNNEL_EVENTS.WATCHED_OVERLAY_TUTORIAL,
+  quest_4: FUNNEL_EVENTS.WATCHED_PUBLISH_TUTORIAL,
 };
 
 const PLAYBACK_RATES = [0.5, 0.85, 1, 1.25, 1.5, 2];
@@ -47,7 +49,7 @@ function readActiveCaption(track) {
  * TutorialVideoModal - Full-screen tutorial video player with subtitles and chapters
  *
  * Opened via useTutorialStore (quest step 0 for each quest).
- * Records the watched_*_tutorial achievement at 85% watch OR when the user
+ * Records the watched_*_tutorial funnel event at 85% watch OR when the user
  * closes (X-es out of) the video — closing counts as completing the step.
  *
  * CRITICAL: crossOrigin="anonymous" is required for cross-origin <track> cue loading
@@ -91,21 +93,20 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     handlers,
   } = useStandaloneVideo({ autoPlay: false });
 
-  // Derive achievement key from questId
-  const achievementKey = QUEST_ACHIEVEMENT_KEY[questId];
+  const watchedEvent = WATCHED_TUTORIAL_EVENT[questId];
 
-  const fireAchievement = useCallback(() => {
+  const fireWatched = useCallback(() => {
     if (completedRef.current) return;
     completedRef.current = true;
-    useQuestStore.getState().recordAchievement(achievementKey);
-  }, [achievementKey]);
+    recordFunnelEvent(watchedEvent);
+  }, [watchedEvent]);
 
   const handleClose = useCallback(() => {
-    // X-ing out of the tutorial completes the watch step. fireAchievement is
+    // X-ing out of the tutorial completes the watch step. fireWatched is
     // idempotent (completedRef guard), so this is a no-op if 85% already fired.
-    fireAchievement();
+    fireWatched();
     onClose?.();
-  }, [fireAchievement, onClose]);
+  }, [fireWatched, onClose]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -313,10 +314,10 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     if (!completedRef.current && videoRef.current) {
       const v = videoRef.current;
       if (v.duration > 0 && v.currentTime / v.duration >= 0.85) {
-        fireAchievement();
+        fireWatched();
       }
     }
-  }, [handlers, fireAchievement]);
+  }, [handlers, fireWatched]);
 
   const guide = resolveGuide({ screen: 'modal', local: { modal: 'tutorial-video' } });
 

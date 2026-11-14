@@ -1,10 +1,22 @@
-# T5940: Split `routers/admin.py` (1880 LOC, ~10 domains) into cohesive sub-routers
+# T5940: Split the admin server file
 
 **Status:** TODO
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-07-26
 **Source:** Observed during the T5840 × T4315 merge conflict (2026-07-26) — "conflicts are often a sign of weak cohesion"
+**Updated:** 2026-11-13
+
+## In plain words
+
+All 62 admin endpoints live in one 4,500 line file that 109 changes have touched since July, so unrelated tasks keep colliding in it. Split it into about six files by subject with every web address unchanged, checked by a test that compares the list of addresses before and after. Pure code moves, one subject per commit, never mixed with a behaviour change. Runs after T4610.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- Clusters today: analytics (about 2,100 lines, with the pulse and share-funnel handlers written inline), bugs, users and credits, campaigns, referrals. `services/analytics_*` modules already exist, so moving the inline SQL into them is a separate later commit.
+- The numbers in the text below (1,880 lines, 34 endpoints) are from July.
 
 ## Problem
 

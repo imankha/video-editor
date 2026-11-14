@@ -56,8 +56,9 @@ async def test_over_budget_rejection_refunds_deducted_credits(monkeypatch):
     monkeypatch.setattr(mc, "upload_bytes_to_r2", lambda user_id, key, content: True)
 
     deducted = 5
-    # Bug-58p shape: 14 full-1080p clips totalling ~79s -> far over the 2880 GPU-s budget.
-    clips = [_clip_export(i, duration=79.0 / 14, w=1920, h=1080) for i in range(14)]
+    # Bug-58p shape, single clip (T11250: _export_clips renders exactly one): 79s of
+    # full-1080p -> far over the 2880 GPU-s budget.
+    clips = [_clip_export(0, duration=79.0, w=1920, h=1080)]
 
     with pytest.raises(ExportBudgetExceeded):
         await mc._export_clips(
@@ -91,7 +92,7 @@ async def test_over_budget_rejection_with_zero_credits_refunds_nothing(monkeypat
     monkeypatch.setattr(credit_ledger, "refund_credits", lambda *a, **k: refunds.append(a))
     monkeypatch.setattr(mc, "upload_bytes_to_r2", lambda user_id, key, content: True)
 
-    clips = [_clip_export(i, duration=79.0 / 14, w=1920, h=1080) for i in range(14)]
+    clips = [_clip_export(0, duration=79.0, w=1920, h=1080)]
 
     with pytest.raises(ExportBudgetExceeded):
         await mc._export_clips(

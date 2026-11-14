@@ -145,11 +145,11 @@ export function setupActionTracking() {
     }
   });
 
-  let prevClipId = useProjectDataStore.getState().selectedClipId;
+  let prevClipId = useProjectDataStore.getState().projectClipId;
   useProjectDataStore.subscribe((state) => {
-    if (state.selectedClipId !== prevClipId) {
-      track('clip_select', { id: state.selectedClipId }, { debugOnly: true });
-      prevClipId = state.selectedClipId;
+    if (state.projectClipId !== prevClipId) {
+      track('clip_select', { id: state.projectClipId }, { debugOnly: true });
+      prevClipId = state.projectClipId;
     }
   });
 

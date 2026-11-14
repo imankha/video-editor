@@ -199,6 +199,9 @@ FLOW_EVENTS = {
     "overlay_players_assigned":     {"label": "Players Spotlighted",        "daily_col": None},
     "overlay_color_set":            {"label": "Highlight Color Set",        "daily_col": None},
     "overlay_shape_set":            {"label": "Highlight Shape Set",        "daily_col": None},
+    # T11175: the T6840 draft-preview watch was bridged here but never registered,
+    # so record_milestone dropped it as "Unknown event". Registered with the move.
+    "previewed_draft_reel_1s":      {"label": "Previewed Draft 1s",         "daily_col": None},
     # T7510: attempt/outcome/failure taxonomy. Every funnel action gets an
     # ATTEMPT (gesture-time) and, at its durable completion point, EITHER a
     # _succeeded OR a _failed carrying a machine-readable reason (see MILESTONE_REASONS).
@@ -358,6 +361,32 @@ CLIENT_FUNNEL_EVENTS = frozenset({
     "result_reopened",
     "paywall_shown",      # T13330: InsufficientCreditsModal opened
     "buy_modal_opened",   # T13330: BuyCreditsModal opened
+    # T11175: engagement events that used to ride the quest achievements POST
+    # (ACHIEVEMENT_TO_MILESTONE), kept under the same milestone names so the
+    # admin Journey history stays continuous. The client sends each once per
+    # session (funnelEvents.js SESSION_DEDUPED).
+    "add_game_opened",
+    "upload_file_selected",
+    "add_clip_opened",
+    "framing_opened",
+    "overlay_opened",
+    "gallery_viewed",
+    "custom_project_viewed",
+    "gallery_watched_1s",
+    "annotations_played",
+    "crop_adjusted",
+    "speed_segment_created",
+    "overlay_players_assigned",
+    "overlay_color_set",
+    "overlay_shape_set",
+    "overlay_offered",
+    "overlay_deferred",
+    "overlay_declined",
+    "previewed_draft_reel_1s",
+    "watched_annotate_tutorial",
+    "watched_framing_tutorial",
+    "watched_overlay_tutorial",
+    "watched_publish_tutorial",
 })
 
 # Privacy guardrail (acceptance criterion 4): the ONLY context keys a funnel
@@ -1467,6 +1496,72 @@ def record_session_exit(
         )
     except Exception:
         logger.warning("[Analytics] SQLite sync failed for session-exit breadcrumb user=%s", user_id)
+
+
+# T16400: bounds for an app-load timing row. A load longer than an hour, or a count
+# past these, is a broken client clock or payload, not a load to explain.
+APP_LOAD_MAX_MS = 3_600_000
+APP_LOAD_MAX_COUNT = 100
+
+
+def record_app_load(
+    user_id: str,
+    ready_ms: int,
+    first_answer_ms: int | None,
+    me_attempts: int,
+    retries: int,
+):
+    """T16400: write how long this app load took to become usable to the user's own log.
+
+    ``ready_ms``: page start to the loading screen gone. ``first_answer_ms``: page
+    start to the first answer from /api/auth/me. ``me_attempts``: /me requests sent.
+    ``retries``: Retry presses on the "Still connecting" screen. One row per load in
+    ``user_action_log`` (user.sqlite, synced to R2), so a slow load can still be
+    explained after the server's log buffer has rolled over. Sent once by the app
+    when it becomes usable (the page load is the trigger, not a state watch). Same
+    impersonation guard as record_session_exit. Never raises.
+    """
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.debug("[Analytics] Skipped app-load timing for %s during impersonation by %s", user_id, impersonator)
+        return
+
+    in_range = (
+        0 <= ready_ms <= APP_LOAD_MAX_MS
+        and (first_answer_ms is None or 0 <= first_answer_ms <= APP_LOAD_MAX_MS)
+        and 0 <= me_attempts <= APP_LOAD_MAX_COUNT
+        and 0 <= retries <= APP_LOAD_MAX_COUNT
+    )
+    if not in_range:
+        logger.warning(
+            "[Analytics] app-load timing out of range, not recorded: user=%s ready_ms=%s first_answer_ms=%s "
+            "me_attempts=%s retries=%s", user_id, ready_ms, first_answer_ms, me_attempts, retries,
+        )
+        return
+
+    log_context = {
+        "ready_ms": ready_ms, "first_answer_ms": first_answer_ms,
+        "me_attempts": me_attempts, "retries": retries,
+    }
+    try:
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection(user_id) as conn:
+            now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            conn.execute(
+                "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
+                ("app_load", json.dumps(log_context), now),
+            )
+            conn.commit()
+        logger.info("[Analytics] App load: user=%s ready_ms=%d first_answer_ms=%s me_attempts=%d retries=%d",
+                    user_id, ready_ms, first_answer_ms, me_attempts, retries)
+    except MigrationBlocked as e:
+        logger.critical(
+            "[Migration] ANALYTICS_WRITE_DROPPED user=%s action=app_load reason=%s — "
+            "user.sqlite is below head on this machine; the row was NOT written",
+            user_id, e.reason,
+        )
+    except Exception:
+        logger.warning("[Analytics] SQLite write failed for app-load timing user=%s", user_id)
 
 
 def share_view_counts(sharer_user_id: str, tokens: list[str]) -> dict[str, int] | None:

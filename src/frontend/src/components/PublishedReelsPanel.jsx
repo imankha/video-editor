@@ -21,7 +21,6 @@ import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { SourceType } from '../constants/sourceTypes';
-import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { toast } from './shared/Toast';
 import { ConfirmationDialog } from './shared/ConfirmationDialog';
@@ -561,15 +560,15 @@ export function PublishedReelsPanel({
     // panel" action anymore (it was a drawer-only concept), so exiting the
     // player always drops the user back on My Reels, never out of the app.
     // T540: Record achievements for viewing gallery video
-    useQuestStore.getState().recordAchievement('viewed_gallery_video');
+    recordFunnelEvent(FUNNEL_EVENTS.GALLERY_VIEWED);
     // Custom project video gets a separate achievement for Quest 3
     if (download.source_type === SourceType.CUSTOM_PROJECT) {
-      useQuestStore.getState().recordAchievement('viewed_custom_project_video');
+      recordFunnelEvent(FUNNEL_EVENTS.CUSTOM_PROJECT_VIEWED);
     }
     // T780: Record "watched 1s" achievement after 1 second of playback (autoPlay = true)
     clearTimeout(watchTimerRef.current);
     watchTimerRef.current = setTimeout(() => {
-      useQuestStore.getState().recordAchievement('watched_gallery_video_1s');
+      recordFunnelEvent(FUNNEL_EVENTS.GALLERY_WATCHED_1S);
     }, 1000);
 
     // T10010 activation funnel (result surface). result_opened = the open GESTURE;

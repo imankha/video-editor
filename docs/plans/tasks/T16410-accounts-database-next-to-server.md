@@ -1,6 +1,6 @@
 # T16410: Accounts database next to the server
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-11-13
@@ -23,6 +23,8 @@
 (owner, 2026-11-13) **Staging now, production later; Fly Postgres, same kind as today.** This task moves the staging accounts database to Los Angeles as the rehearsal and stops before production. It uses unmanaged Fly Postgres (`fly postgres create`, about 2 dollars a month), not Fly Managed Postgres. The production move, its window and the removal of both old databases are T16460, which the owner schedules after this lands and T16380/T16390 are on staging.
 
 Scope for this task: runbook steps 2 to 7 on staging only (`reel-ballers-db-staging` to a new `reel-ballers-db-staging-lax`, API `reel-ballers-api-staging`). Staging is down for a few minutes during the copy; that is accepted. Keep the old staging database (do not destroy it). Never run a command with `-a reel-ballers-api` or `-a reel-ballers-db-prod`. Write what the rehearsal taught (times, surprises, exact commands) into T16460's file so production follows a tested script. If the container has no Fly credentials, stop with BLOCKED naming what it needs; do not work around it.
+
+(owner, 2026-11-14) "I hereby give full permission to the appropriate container for fly commands." The g-t16410-1 container now has flyctl, the Postgres 17 client tools (pg_dump, pg_restore, psql) and a 48-hour Fly org token in `FLY_API_TOKEN` (every login shell exports it from `~/.fly/token`). The staging-only scope above still holds: never run a command with `-a reel-ballers-api` or `-a reel-ballers-db-prod`.
 
 ## Implementer details
 

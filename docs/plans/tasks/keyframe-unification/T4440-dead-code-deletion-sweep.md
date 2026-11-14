@@ -1,44 +1,29 @@
-# T4440: Dead Keyframe/Timeline Code Deletion Sweep
+# T4440: Delete unused editor code
 
 **Status:** TODO
-**Impact:** 6
+**Impact:** 7
 **Complexity:** 2
 **Created:** 2026-07-03
-**Epic:** [keyframe-unification](EPIC.md) · Audit items C3 + frontend-sync #14/#15 · Absorbs **T3810**
+**Updated:** 2026-11-13
 
-## Problem
+## In plain words
 
-A dead parallel timeline/keyframe stack still absorbs bug fixes and misleads greps. Verified dead (re-prove each with the grep before deleting — paste results in the Progress Log):
+About 1,500 lines in the Frame and Spotlight editors are never run: an old Spotlight timeline, hooks nothing imports, stored values nothing writes, and a second calculation of which video Spotlight should play that disagrees with the real one. They still absorb fixes and mislead the agents. Delete them with proof of no caller for each. Nothing a parent sees changes. Runs after T11260 and T11270, which edit the same files.
 
-| Target | Evidence |
-|--------|----------|
-| `modes/overlay/OverlayTimeline.jsx` (159 L) | No live importer; live path is OverlayContainer → OverlayMode → shared RegionLayer |
-| `modes/overlay/layers/HighlightLayer.jsx` (314 L) | Dead copy-paste sibling of CropLayer; still carries the stale pre-flat-list comment ("permanent keyframe at frame 0") |
-| `components/Timeline.jsx` | Imported by nothing |
-| `modes/overlay/hooks/useHighlight.js` + re-export + test | T3810: exported from overlay/index.js, never instantiated (live system is useHighlightRegions) |
-| Container wrappers `FramingTimeline`/`OverlayTimeline` (`FramingContainer.jsx:995-1065`, `OverlayContainer.jsx:644-718`) | Pure ~30-prop pass-throughs that **name-collide** with the (different!) mode-level components — grep-and-fix lands in the wrong file |
-| `OverlayVideoOverlays` (`OverlayContainer.jsx:629`) | References `regionDetectionData` not in scope — ReferenceError if ever rendered; zero call sites |
-| framingStore corpses: `clipStates` (setClipState zero callers; `utils/editorContext.js:74` reads it and always gets null), `videoFile` (never set), `hasExported`/`exportedStateHash`/`markExported` (markExported never called) + dead selector `OverlayScreen.jsx:95` | frontend-sync audit #14 |
-| `editorStore.annotateHasSelectedClip` + its reactive writer (`AnnotateContainer.jsx:241-243`) | Stored derived flag, zero readers |
+## Implementer details
 
-## Solution
-
-Delete everything above. For the container wrappers: inline the direct `FramingMode`/`OverlayMode` usage at their single render sites; then rename-or-delete the dead mode-level `OverlayTimeline` so no name collision remains. For `editorContext.js:74`: it consumes permanently-null data — fix its logic or remove the branch (read what it's for first).
-
-## Steps
-
-1. [ ] Per target: grep-prove, delete, note in Progress Log.
-2. [ ] Frontend build check (lint skill) after each group — dangling imports surface immediately.
-3. [ ] Full frontend unit tests + a manual smoke of all three editor modes (drive-app-as-user or dev click-through).
-4. [ ] Mark T3810 absorbed (PLAN.md row → DONE-via-T4440 note when this ships).
+- Paths under `src/frontend/src/`. Old timeline stack: `modes/overlay/OverlayTimeline.jsx` (161), `modes/overlay/layers/HighlightLayer.jsx` (314), `components/Timeline.jsx` (244); referenced only by each other and the barrel `modes/overlay/index.js`. Trim the two tests that name them (`config/spotlightVocabulary.test.jsx`, `utils/timeFormat.characterization.test.js`).
+- Container wrappers only re-exported from `containers/index.js`: `FocusTimeline` in `FocusContainer.jsx`, `OverlayVideoOverlays` and `OverlayTimeline` in `OverlayContainer.jsx`.
+- `stores/focusStore.js`: `clipStates`, `setClipState`, `getClipState` (no writers; `utils/editorContext.js` reads null), `videoFile`, `setVideoFile`, and `markExported` (never called, so `hasChangedSinceExport` is constant false and its selector in `OverlayScreen.jsx` is unused).
+- `editorStore.annotateHasSelectedClip` has no reader; delete it and its reactive writer in `AnnotateContainer.jsx`.
+- `hooks/useCurrentVideoState.js` (118), `hooks/useTimeline.js` (106), the dead half of `modes/overlay/hooks/useOverlayState.js` (about 100 lines used only by its own test), `initializeFromClipMetadata` in `useHighlightRegions.js`.
+- Unconsumed `FocusContainer` returns: `getFilteredKeyframesForExport` (a 36-line twin of the one in `FocusScreen.jsx`), `hasFramingEdits`, `currentCropState`, `syncSegmentsToStore` (keep this one if T4470 has not landed and plans to use it).
+- `OverlayContainer`'s Frame-era half: `OverlayScreen.jsx` calls it with dummies (`keyframes: []`, `segments: null`, `segmentSpeeds: {}`, `trimRange: null`, `setEditorMode: () => {}`); the container then computes a constant-false `hasFramingEdits` and a second `effectiveOverlayVideoUrl` and `effectiveOverlayMetadata` that fall back to the source clip, the pairing the screen's `deriveOverlayVideoSource` deliberately refuses. Delete the container's copies and the ten props; the screen's values are the only ones.
+- Grep `src/`, `e2e/` and `scripts/` for each symbol; barrel files hide importers from a plain grep, so check the barrels too. The `*diag` harness pages mount real components with hand-built props and must still build.
+- Knowledge doc: `.claude/knowledge/keyframes-framing.md`; update it in the same PR.
 
 ## Acceptance Criteria
 
-- [ ] All listed targets gone; ~800+ lines removed
-- [ ] No component name collisions between containers/ and modes/
-- [ ] Build + tests green; three modes smoke-tested
-- [ ] Each deletion's caller-grep recorded
-
-## Non-Goals
-
-Extracting shared components (T4450), touching live keyframe logic (T4460). Delete only.
+- [ ] Each listed file, export and store field is gone, with an empty caller search in the PR.
+- [ ] `OverlayContainer` takes no Frame parameters and computes no video source of its own.
+- [ ] The app builds, every `*diag` page builds, and the Frame and Spotlight screen tests pass unchanged apart from deleted cases.

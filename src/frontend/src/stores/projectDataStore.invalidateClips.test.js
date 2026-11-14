@@ -19,14 +19,14 @@ describe('projectDataStore.invalidateClips (T6190)', () => {
     mockApiFetch.mockReset();
     const mod = await import('./projectDataStore');
     useProjectDataStore = mod.useProjectDataStore;
-    useProjectDataStore.setState({ clips: [], _clipsInflight: null, selectedClipId: null });
+    useProjectDataStore.setState({ clips: [], _clipsInflight: null, projectClipId: null });
   });
 
   it('force-fetches fresh clips and replaces the store list (picks up annotate edits)', async () => {
     // Store holds the pre-edit clip (old boundaries).
     useProjectDataStore.setState({
       clips: [{ id: 7, start_time: 1, end_time: 5 }],
-      selectedClipId: 7,
+      projectClipId: 7,
     });
     // Backend returns the post-edit boundaries.
     const fresh = [{ id: 7, start_time: 2, end_time: 9 }];

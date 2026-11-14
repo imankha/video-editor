@@ -62,7 +62,6 @@ function renderView(overrides = {}) {
     // Banner preconditions: a framing source exists and the clip is dirty.
     framingVideoUrl: 'blob:framing',
     hasFramingEdits: true,
-    hasMultipleClips: false,
     ...overrides,
   };
   return render(<OverlayModeView {...props} />);
@@ -84,8 +83,17 @@ describe('OverlayModeView export-required race (T9800)', () => {
     expect(screen.getByText(BANNER)).toBeTruthy();
   });
 
-  it('suppresses the banner for multiple-clips dirtiness while waiting', () => {
-    renderView({ shouldWaitForWorkingVideo: true, hasFramingEdits: false, hasMultipleClips: true });
+  it('T11260: a clean project with no working video yet shows no banner (only framing edits gate it)', () => {
+    renderView({ shouldWaitForWorkingVideo: false, hasFramingEdits: false });
+    expect(screen.queryByText(BANNER)).toBeNull();
+  });
+
+  it('T11260: a legacy multi-clip draft with its working video opens in Spotlight without the banner', () => {
+    renderView({
+      effectiveOverlayVideoUrl: 'blob:concatenated-working-video',
+      effectiveOverlayMetadata: { width: 1080, height: 1920, duration: 30, fps: 30 },
+      hasFramingEdits: true,
+    });
     expect(screen.queryByText(BANNER)).toBeNull();
   });
 });

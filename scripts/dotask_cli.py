@@ -1095,6 +1095,32 @@ def restore_tool_noise(checkout, paths):
         print(f"[dotask] put back tool output the verifier rewrote: {' '.join(paths)}", file=sys.stderr)
 
 
+STALE_INDEX_LOCK_S = 120
+
+
+def restore_staged_only(checkout):
+    """Put back an index the reviewer left staged when its working tree already matches HEAD.
+
+    g-t16380-3 (2026-11-14): the reviewer staged the pre-fix copies to run its checks against broken code,
+    restored the files but not the index, and left a stale .git/index.lock. Nothing in the tree differed from
+    HEAD, yet the loop stopped as "reviewer changed the tree" and sat there overnight. Called after the
+    reviewer's dispatch has ended, so a lock older than STALE_INDEX_LOCK_S has no live owner. A real edit to a
+    file is left alone: that still stops the loop as an untrusted verdict."""
+    lock = Path(checkout) / ".git" / "index.lock"
+    if lock.exists():
+        if time.time() - lock.stat().st_mtime <= STALE_INDEX_LOCK_S:
+            return  # a git process may still hold it; leave the tree for the untrusted-verdict check
+        lock.unlink()
+        print("[dotask] removed a stale .git/index.lock the reviewer left", file=sys.stderr)
+    git = [tool("git"), "-C", str(checkout)]
+    tree_matches_head = run_cmd(git + ["diff", "--quiet", "HEAD", "--"], capture_output=True).returncode == 0
+    index_differs = run_cmd(git + ["diff", "--cached", "--quiet"], capture_output=True).returncode != 0
+    if tree_matches_head and index_differs:
+        run_cmd(git + ["reset", "-q"], capture_output=True, check=True)
+        print("[dotask] unstaged what the reviewer left in the index (the working tree matches HEAD)",
+              file=sys.stderr)
+
+
 def status_word(line):
     """The word after a status line's timestamp. A stop line can quote an earlier RESUMED line
     (g-t16070-3, 2026-11-13), so a substring test read a stop as a restart."""
@@ -1824,6 +1850,7 @@ def review_checks(slug, group, checkout, head, round_number, wanted, results, bu
             break
         print(f"[dotask] reviewer dispatch errored or wrote BLOCKED (attempt {attempt + 1}); retrying", file=sys.stderr)
     ran_out = not finished and not timed_out and out_of_turns(checkout)
+    restore_staged_only(checkout)
     noise, changed = split_tool_noise(tracked_changes(checkout))
     restore_tool_noise(checkout, noise)
     if git_head(checkout) != head or changed:
@@ -2512,7 +2539,9 @@ def status(args):
         # An estimate only means something for a group that is moving: a merged PR is done (its
         # group file outlives it until nuke), and a stopped container runs nothing.
         merged = merged_pr(group.get("branch"))
-        if merged:
+        if merged and pr_reverted(merged):
+            print(f"  eta: done -- PR #{merged} merged, then reverted on master; its tasks are not STAGING")
+        elif merged:
             print(f"  eta: done -- PR #{merged} merged")
             mark_staging(group.get("tasks"))  # PR #734's container was already freed when status ran
             if running == "running":
@@ -2537,8 +2566,8 @@ def status(args):
 # the merge commit, the browser checks the worker committed run against staging, and each failure is filed
 # as a bug task at once (T14980's staging miss and T15360's never-restoring resume point were both found
 # only there). `code` checks prove code, which CI already ran, so they are not repeated.
-STAGING = {"url": os.environ.get("DOTASK_STAGING_URL", "https://staging.reelballers.com"),
-           "api": os.environ.get("DOTASK_STAGING_API", "https://api-staging.reelballers.com/api"),
+STAGING = {"url": os.environ.get("DOTASK_STAGING_URL", "https://reel-ballers-staging.pages.dev"),
+           "api": os.environ.get("DOTASK_STAGING_API", "https://reel-ballers-api-staging.fly.dev/api"),
            # A seeded staging account (e2e/STAGING-GATE.md lane B): dev preset accounts exist only in dev.
            "email": os.environ.get("DOTASK_STAGING_EMAIL", "e2e-gate@test.local")}
 DEPLOY_WORKFLOWS = ("deploy-frontend.yml", "deploy-backend.yml")
@@ -2682,6 +2711,17 @@ def merged_pr(branch):
         return None
     number = result.stdout.strip()
     return number if result.returncode == 0 and number.isdigit() else None
+
+
+def pr_reverted(number, repo=REPO_ROOT, ref="origin/master"):
+    """True when `ref` holds GitHub's revert of PR #number's merge commit.
+
+    g-t16370-1 (2026-11-14): PR #760 was reverted in #765, yet every `status` set T16370 back to STAGING
+    because the group's branch still has a merged PR."""
+    pattern = f'^Revert "Merge pull request #{number} '
+    result = run_cmd([tool("git"), "-C", str(repo), "log", ref, "-1", "--format=%H", "--grep", pattern],
+                     capture_output=True, text=True, check=False)
+    return result.returncode == 0 and bool(result.stdout.strip())
 
 
 def main(argv=None):

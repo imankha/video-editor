@@ -1,9 +1,22 @@
-# T2650: Move Sweep Auto-Export to Modal
+# T2650: Recap encoding off the server
 
 **Status:** TODO
-**Impact:** 7 | **Complexity:** 4 | **Priority:** 1.8
+**Impact:** 7
 **Stack Layers:** Backend, Modal
 **Migration:** [ ]
+**Updated:** 2026-11-13
+
+## In plain words
+
+A recap is the reel of a game's marked plays, made when the game's video is about to expire or when the game is shared. Its video encoding runs on the same single machine that answers every parent's request, and it now runs at full resolution. Move the encode to the GPU service and leave the server to hand out the work and record the result. Needs a GPU redeploy, so the owner is asked first. Worked when no video encoding runs on the server during a nightly sweep or a share.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- `services/sweep_scheduler.py` still runs `asyncio.to_thread(do_sweep)` with a localhost keepalive pinger; `services/auto_export.py` (1,052 lines) encodes recaps at native resolution, crf 18.
+- The same encode runs inside a request (T16470 is the short fix for that).
+- The sweep no longer renders highlights (it stream-copies raw clips), so this is about `_generate_recap` only: one Modal function; `ensure_recap` and `auto_export_game` become orchestration; delete the keepalive. Precedent for packaging: `compose_image` already mounts `app/` into Modal.
 
 ## Problem
 

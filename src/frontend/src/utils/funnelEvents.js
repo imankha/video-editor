@@ -14,9 +14,10 @@
  * or break the app.
  *
  * These are DISTINCT from analytics.js `track()` (Cloudflare + local breadcrumb
- * buffer) and from the one-time quest `recordAchievement()` — a funnel event is
- * repeatable (three renders of one highlight beacon three times; dedup to one
- * ACTIVATED PERSON is a read-time COUNT(DISTINCT user_id), never a write concern).
+ * buffer). A funnel event is repeatable (three renders of one highlight beacon
+ * three times; dedup to one ACTIVATED PERSON is a read-time COUNT(DISTINCT
+ * user_id), never a write concern), except the SESSION_DEDUPED engagement events
+ * T11175 moved here from the quest achievements POST.
  */
 
 import { API_BASE } from '../config';
@@ -37,8 +38,66 @@ export const FUNNEL_EVENTS = Object.freeze({
   // T13330: purchase-funnel tries, fired once per modal open.
   PAYWALL_SHOWN: 'paywall_shown',
   BUY_MODAL_OPENED: 'buy_modal_opened',
+  // T11175: engagement events that rode the retired quest achievements POST,
+  // under the milestone names that bridge stored (admin Journey history).
+  ADD_GAME_OPENED: 'add_game_opened',
+  UPLOAD_FILE_SELECTED: 'upload_file_selected',
+  ADD_CLIP_OPENED: 'add_clip_opened',
+  FRAMING_OPENED: 'framing_opened',
+  OVERLAY_OPENED: 'overlay_opened',
+  GALLERY_VIEWED: 'gallery_viewed',
+  CUSTOM_PROJECT_VIEWED: 'custom_project_viewed',
+  GALLERY_WATCHED_1S: 'gallery_watched_1s',
+  ANNOTATIONS_PLAYED: 'annotations_played',
+  CROP_ADJUSTED: 'crop_adjusted',
+  SPEED_SEGMENT_CREATED: 'speed_segment_created',
+  OVERLAY_PLAYERS_ASSIGNED: 'overlay_players_assigned',
+  OVERLAY_COLOR_SET: 'overlay_color_set',
+  OVERLAY_SHAPE_SET: 'overlay_shape_set',
+  OVERLAY_OFFERED: 'overlay_offered',
+  OVERLAY_DEFERRED: 'overlay_deferred',
+  OVERLAY_DECLINED: 'overlay_declined',
+  PREVIEWED_DRAFT_REEL_1S: 'previewed_draft_reel_1s',
+  WATCHED_ANNOTATE_TUTORIAL: 'watched_annotate_tutorial',
+  WATCHED_FRAMING_TUTORIAL: 'watched_framing_tutorial',
+  WATCHED_OVERLAY_TUTORIAL: 'watched_overlay_tutorial',
+  WATCHED_PUBLISH_TUTORIAL: 'watched_publish_tutorial',
 });
 const _KNOWN = new Set(Object.values(FUNNEL_EVENTS));
+
+// T11175: the rerouted engagement events keep the quest bridge's once-per-session
+// semantics (crop_adjusted fires on every drag; a per-drag count would break the
+// Journey's history). The T10010/T13330 events above stay repeatable.
+const SESSION_DEDUPED = new Set([
+  FUNNEL_EVENTS.ADD_GAME_OPENED,
+  FUNNEL_EVENTS.UPLOAD_FILE_SELECTED,
+  FUNNEL_EVENTS.ADD_CLIP_OPENED,
+  FUNNEL_EVENTS.FRAMING_OPENED,
+  FUNNEL_EVENTS.OVERLAY_OPENED,
+  FUNNEL_EVENTS.GALLERY_VIEWED,
+  FUNNEL_EVENTS.CUSTOM_PROJECT_VIEWED,
+  FUNNEL_EVENTS.GALLERY_WATCHED_1S,
+  FUNNEL_EVENTS.ANNOTATIONS_PLAYED,
+  FUNNEL_EVENTS.CROP_ADJUSTED,
+  FUNNEL_EVENTS.SPEED_SEGMENT_CREATED,
+  FUNNEL_EVENTS.OVERLAY_PLAYERS_ASSIGNED,
+  FUNNEL_EVENTS.OVERLAY_COLOR_SET,
+  FUNNEL_EVENTS.OVERLAY_SHAPE_SET,
+  FUNNEL_EVENTS.OVERLAY_OFFERED,
+  FUNNEL_EVENTS.OVERLAY_DEFERRED,
+  FUNNEL_EVENTS.OVERLAY_DECLINED,
+  FUNNEL_EVENTS.PREVIEWED_DRAFT_REEL_1S,
+  FUNNEL_EVENTS.WATCHED_ANNOTATE_TUTORIAL,
+  FUNNEL_EVENTS.WATCHED_FRAMING_TUTORIAL,
+  FUNNEL_EVENTS.WATCHED_OVERLAY_TUTORIAL,
+  FUNNEL_EVENTS.WATCHED_PUBLISH_TUTORIAL,
+]);
+const _sentThisSession = new Set();
+
+/** Start a new dedup session (profile switch: the next profile's events count again). */
+export function resetFunnelEventSession() {
+  _sentThisSession.clear();
+}
 
 // "Viewed" playback convention (NOT a satisfaction claim) — mirrors
 // is_playback_viewed / VIEWED_* in app/analytics.py verbatim, so the client only
@@ -87,6 +146,10 @@ export function recordFunnelEvent(event, context = {}) {
     if (useAuthStore.getState().impersonator) return;
   } catch {
     /* no store yet — treat as not impersonating */
+  }
+  if (SESSION_DEDUPED.has(event)) {
+    if (_sentThisSession.has(event)) return;
+    _sentThisSession.add(event);
   }
 
   try {

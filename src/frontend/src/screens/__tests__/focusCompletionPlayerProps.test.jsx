@@ -19,8 +19,8 @@ import { act } from 'react';
 
 const testState = vi.hoisted(() => ({
   clips: [],
-  selectedClipId: null,
-  selectedClip: null,
+  projectClipId: null,
+  projectClip: null,
   clipMetadataCache: {},
 }));
 
@@ -28,7 +28,7 @@ vi.mock('../../modes', () => ({ FocusModeView: () => null }));
 vi.mock('../../containers', () => ({
   FocusContainer: () => ({
     clipsWithCurrentState: [],
-    selectedClipEffectiveDuration: 0,
+    clipEffectiveDuration: 0,
     canUndoFraming: false,
     handleCropChange: vi.fn(),
     handleCropComplete: vi.fn(),
@@ -90,7 +90,7 @@ vi.mock('../../hooks/useVideo', () => ({
 }));
 vi.mock('../../hooks/useClipManager', () => ({
   useClipManager: () => ({
-    clips: testState.clips, selectedClipId: testState.selectedClipId, selectedClip: testState.selectedClip,
+    clips: testState.clips, projectClipId: testState.projectClipId, projectClip: testState.projectClip,
     hasClips: testState.clips.length > 0, globalAspectRatio: '9:16', updateClipData: vi.fn(),
   }),
 }));
@@ -202,10 +202,10 @@ vi.mock('../../stores', () => {
 
 import { FocusScreen } from '../FocusScreen';
 
-function setClips(clips, selectedClipId) {
+function setClips(clips, projectClipId) {
   testState.clips = clips;
-  testState.selectedClipId = selectedClipId;
-  testState.selectedClip = clips.find((c) => c.id === selectedClipId) || null;
+  testState.projectClipId = projectClipId;
+  testState.projectClip = clips.find((c) => c.id === projectClipId) || null;
   testState.clipMetadataCache = {};
 }
 
