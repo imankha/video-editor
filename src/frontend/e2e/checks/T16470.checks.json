@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T16470:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python -m pytest tests/test_t16470_share_link_off_loop.py -q -p no:cacheprovider -k test_cheap_request_answers_during_first_share_encode"
+    },
+    "T16470:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python -m pytest tests/test_t16470_share_link_off_loop.py -q -p no:cacheprovider"
+    }
+  }
+}

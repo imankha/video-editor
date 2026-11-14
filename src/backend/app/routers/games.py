@@ -3462,7 +3462,13 @@ async def create_game_link(game_id: int, background_tasks: BackgroundTasks):
     # Stitch-on-share: the TEAM recap must exist before the link is live.
     # status == 'empty' is T5710's zero-team-clips signal -> actionable refusal,
     # NO share row created (explicit state, never an empty share).
-    result = ensure_recap(user_id, profile_id, game_id, RecapLayer.TEAM.value)
+    # T16470: a miss runs the ffmpeg encode + R2 upload; off the event loop so
+    # every other request keeps answering while it runs. The worker thread
+    # inherits the request's user/profile ContextVars (asyncio.to_thread copies
+    # the context; the request-context dict is shared, so write tracking holds).
+    result = await asyncio.to_thread(
+        ensure_recap, user_id, profile_id, game_id, RecapLayer.TEAM.value,
+    )
     if result["status"] == "empty":
         raise HTTPException(
             status_code=409,
@@ -3479,7 +3485,8 @@ async def create_game_link(game_id: int, background_tasks: BackgroundTasks):
     # Public link has no recipient -> store the sharer's own email (the
     # self-share convention; recipient_email is NOT NULL).
     recipient_email = sharer["email"] if sharer else user_id
-    rail = _build_team_clip_rail(user_id, game_id, result["mapping_key"])
+    # R2 GET of the recap mapping + SQLite read: blocking I/O, same offload.
+    rail = await asyncio.to_thread(_build_team_clip_rail, user_id, game_id, result["mapping_key"])
 
     share = create_game_share(
         game_id=game_id,
