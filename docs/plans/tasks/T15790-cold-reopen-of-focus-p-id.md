@@ -1,6 +1,6 @@
 # T15790: Cold-reopen of /focus/p/<id> from a closed tab still does not load the Frame editor within 10s
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10

@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T16010:C1": {
+      "kind": "code",
+      "command": "bash scripts/check_staging_spec_passes.sh e2e/checks/T15740.check.spec.js 'T15740:C2'"
+    }
+  }
+}

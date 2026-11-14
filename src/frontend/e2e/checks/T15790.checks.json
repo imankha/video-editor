@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T15790:C1": {
+      "kind": "code",
+      "command": "bash scripts/check_spec_on_preview_build.sh e2e/checks/T15790.check.spec.js 'T15790:C1'"
+    }
+  }
+}

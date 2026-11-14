@@ -579,7 +579,7 @@ class DotaskCliTest(unittest.TestCase):
         self.assertEqual(args[2:], ["resume", "g-t1-1"])
         self.assertTrue(env["DOTASK_WAVE_ID"].startswith("g-t1-1-"))
         self.assertEqual(env["DOTASK_PHASE"], "implementation")
-        self.assertIn("eta: PR about", out.getvalue())  # every relay carries an ETA
+        self.assertIn("eta: ready for your test about", out.getvalue())  # every relay carries an ETA
         log_path = self.tasks_root / "profiles" / "g-t1-1" / "run.log"
         self.assertTrue(log_path.parent.is_dir())
         group = json.loads((self.tasks_root / "g-t1-1" / dotask_cli.GROUP_FILE).read_text())
@@ -791,7 +791,9 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("2 task(s) x 30 min", basis)
         self.assertIn("verify up to 30 min", basis)
         self.assertIn("medians of 4 timed dispatch(es)", basis)
-        self.assertIn("eta: PR about 11:38 (12:38 with one fix round)", dotask_cli.eta_line(group, checkout, now))
+        self.assertIn("eta: ready for your test about 11:30 (12:30 with one fix round)", dotask_cli.eta_line(group, checkout, now))
+        with patch.object(dotask_cli, "OWNER_TEST", False):
+            self.assertIn("eta: PR about 11:38 (12:38 with one fix round)", dotask_cli.eta_line(group, checkout, now))
 
     def test_eta_never_counts_verification_past_the_budget_left(self):
         now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
@@ -860,7 +862,7 @@ class DotaskCliTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(dotask_cli.main(["status"]), 0)
         self.assertIn("g-x\tT1,T2,T3\trunning", out.getvalue())
-        self.assertIn("  eta: PR about", out.getvalue())
+        self.assertIn("  eta: ready for your test about", out.getvalue())
 
     def test_status_gives_no_eta_for_a_stopped_or_merged_group(self):
         # A merged group's file outlived its PR, and a stopped container's PUSHREADY was weeks old:
@@ -1177,6 +1179,22 @@ class StagingDeployWaitTest(unittest.TestCase):
             runs["deploy-backend.yml"].pop(0)  # no later success: still a failure
             self.assertEqual(dotask_cli.wait_for_staging_deploy("a", interval=0), "failed: deploy-backend.yml")
 
+    def test_a_failed_deploy_waits_for_a_redeploy_still_running(self):
+        polls = []
+        runs = {"deploy-frontend.yml": [{"headSha": "c", "status": "in_progress", "conclusion": None},
+                                        {"headSha": "a", "status": "completed", "conclusion": "failure"}],
+                "deploy-backend.yml": [{"headSha": "a", "status": "completed", "conclusion": "success"}]}
+
+        def fake_run(cmd, **kwargs):
+            workflow = cmd[cmd.index("--workflow") + 1]
+            polls.append(workflow)
+            if len(polls) > 2:  # the redeploy finishes on the second poll
+                runs["deploy-frontend.yml"][0].update(status="completed", conclusion="success")
+            return SimpleNamespace(returncode=0, stdout=json.dumps(runs[workflow]), stderr="")
+
+        with patch.object(dotask_cli.subprocess, "run", fake_run), patch.object(dotask_cli.time, "sleep", lambda s: None):
+            self.assertEqual(dotask_cli.wait_for_staging_deploy("a", interval=0), "deployed")
+
 
 class VerifyBudgetOverrideTest(unittest.TestCase):
     def test_a_budget_saved_on_the_group_beats_the_default(self):
@@ -1185,7 +1203,7 @@ class VerifyBudgetOverrideTest(unittest.TestCase):
 
 
 class EnsureSonnetDefault(unittest.TestCase):
-    """D7: every task container's Claude defaults to the sonnet alias."""
+    """D7: every task container's Claude defaults to the opus alias (owner rule 2026-11-13)."""
 
     def test_merges_sonnet_default_keeping_bypass_and_other_keys(self):
         import ensure_sonnet_default
@@ -1195,7 +1213,7 @@ class EnsureSonnetDefault(unittest.TestCase):
         path.write_text(json.dumps({"permissions": {"defaultMode": "bypassPermissions"}, "other": "keepme"}))
         ensure_sonnet_default.merge(path)
         data = json.loads(path.read_text())
-        self.assertEqual(data["model"], "sonnet")
+        self.assertEqual(data["model"], "opus")
         self.assertEqual(data["permissions"]["defaultMode"], "bypassPermissions")
         self.assertEqual(data["other"], "keepme")
 
@@ -1206,7 +1224,7 @@ class EnsureSonnetDefault(unittest.TestCase):
         path = Path(tmp.name) / "nested" / "settings.json"
         ensure_sonnet_default.merge(path)
         data = json.loads(path.read_text())
-        self.assertEqual(data["model"], "sonnet")
+        self.assertEqual(data["model"], "opus")
         self.assertEqual(data["permissions"]["defaultMode"], "bypassPermissions")
         ensure_sonnet_default.merge(path)  # idempotent re-run
         data2 = json.loads(path.read_text())
@@ -1277,6 +1295,14 @@ class PrelandCheckTest(unittest.TestCase):
             self.assertIn(f"{relpath}: proof.json stays local", out)
             git_c(self.repo, "rm", "-q", relpath)
             git_c(self.repo, "commit", "-qm", "T1: untrack")
+
+    def test_browser_check_calling_a_test_seam_fails_naming_the_path(self):
+        # T16100: /api/test/ routes 404 on staging, so T16090:C3 failed its staging check at setup
+        spec = "src/frontend/e2e/checks/T1.check.spec.js"
+        self._commit(spec, "await page.request.post(checkApi('/test/seed-published-highlight'), {});\n")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"{spec}: calls an /api/test/ route", out)
 
     def test_untracking_proof_json_passes(self):
         git(self.repo, "checkout", "-q", "-B", "base", "origin/master")
@@ -1461,12 +1487,16 @@ class ContainerDefaultsTest(unittest.TestCase):
     def test_the_stack_watches_the_bind_mount_by_polling(self):
         stack = (dotask_cli.REPO_ROOT / ".devcontainer" / "container-stack.sh").read_text(encoding="utf-8")
         self.assertIn("export CHOKIDAR_USEPOLLING=true", stack)
+        # 100 ms polling starved Node's disk threads: pages took 11-40 s (2026-11-13)
+        self.assertIn("export CHOKIDAR_INTERVAL=1000", stack)
+        self.assertIn("export UV_THREADPOOL_SIZE=16", stack)
 
 
 class AutolandBase(unittest.TestCase):
     """verify -> fix -> verify until clean or out of rounds. Dispatches are faked: no model, no Docker."""
     TASK_TEXT = ("# T1: Fix the thing\n\n**Status:** WIP\n\n## Acceptance Criteria\n\n"
                  "- [ ] First\n- [x] Second\n\n## Context\n\nnothing\n")
+    OWNER_TEST = False  # most tests cover verify -> land; OwnerTestBeforePrTest covers the stop before the PR
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -1498,6 +1528,7 @@ class AutolandBase(unittest.TestCase):
                             ("dispatch", self._dispatch), ("bring_up_stack", lambda slug: "http://x"),
                             ("warm_stack", lambda slug: None),
                             ("git_head", lambda checkout: self.head), ("land", self.land),
+                            ("OWNER_TEST", self.OWNER_TEST),
                             ("tracked_changes", lambda checkout: self.dirty),
                             ("run_preland_check", lambda checkout: self.preland[0])):
             patcher = patch.object(dotask_cli, name, value)
@@ -1922,7 +1953,7 @@ class AutolandTest(AutolandBase):
         self.assertIn("Old menu glitch", filed.read_text())
         plan = self.plan.read_text()
         self.assertIn("| T1240 | [Old menu glitch](tasks/T1240-old-menu-glitch.md) |", plan)
-        self.assertLess(plan.index(dotask_cli.BUG_SECTION), plan.index("## Environment Configuration"))
+        self.assertLess(plan.index(dotask_cli.BUG_SECTION), plan.index("| ID | Task |\n|---|---|"))  # at the top
         self.assertIsNone(dotask_cli.file_unrelated_bug(bug, {"slug": "g"}, "abc"))
         self.assertEqual(self.plan.read_text().count("Old menu glitch"), 1)
 
@@ -2007,6 +2038,153 @@ class AutolandTest(AutolandBase):
         (tasks / "T7-x.md").write_text("# T7\n\n## Acceptance Criteria\n\nprose only\n")
         with patch.object(dotask_cli, "task_file_in", return_value=tasks / "T7-x.md"):
             self.assertEqual(dotask_cli.criterion_line(self.root, "T7:C1"), "")
+
+
+class PlanOrderTest(unittest.TestCase):
+    """Owner rule 2026-11-13: work in flight first, then /dotask's bugs, then everything else."""
+    PLAN = ("# Plan\n\n## Current Focus\n\n### Staging QA\n\n| ID | Task |\n|---|---|\n| T5 | [Five](tasks/T5.md) |\n\n"
+            "## Roadmap\n\n### 9. Retention\n\n| ID | Task | Impact | Cmplx | Pri | Status |\n|---|---|---|---|---|---|\n"
+            "|  | **[Epic](tasks/e/EPIC.md)** | 8 | 5 | 1.6 |  |\n| T7 | ↳ [Seven](tasks/e/T7.md) | 9 | 3 | 3.0 | TODO |\n"
+            "| T8 | ↳ [Eight](tasks/e/T8.md) | 9 | 3 | 3.0 | TODO |\n\n## Environment Configuration\n\nx\n")
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.plan = Path(tmp.name) / "PLAN.md"
+        self.plan.write_bytes(self.PLAN.replace("\n", "\r\n").encode())
+
+    def test_starting_a_task_pulls_its_row_to_the_top_once(self):
+        dotask_cli.pull_to_top(self.plan, ["T7"])
+        dotask_cli.pull_to_top(self.plan, ["T7"])  # already there: nothing moves
+        text = self.plan.read_bytes().decode()
+        self.assertNotIn("\n\n", text.replace("\r\n", "\r"))  # CRLF kept, no bare LF
+        text = text.replace("\r\n", "\n")
+        top = text.index(dotask_cli.IN_PROGRESS_SECTION)
+        self.assertLess(text.index("## Current Focus"), top)
+        self.assertLess(top, text.index("| T7 | [Seven]"))  # ↳ dropped, the epic is in its link
+        self.assertLess(text.index("| T7 | [Seven]"), text.index("### Staging QA"))
+        self.assertEqual(text.count("Seven"), 1)
+        self.assertIn("| T8 | ↳ [Eight]", text)  # the epic's other child stays put
+
+    def test_the_bug_section_is_created_under_the_work_in_flight(self):
+        lines = self.PLAN.split("\n")
+        dotask_cli.pull_to_top(self.plan, ["T7"])
+        lines = self.plan.read_bytes().decode().replace("\r\n", "\n").split("\n")
+        at = dotask_cli.ensure_top_section(lines, dotask_cli.BUG_SECTION, "intro", after=dotask_cli.IN_PROGRESS_SECTION)
+        dotask_cli.append_row(lines, at, "| T9 | [Nine](tasks/T9.md) |")
+        text = "\n".join(lines)
+        self.assertLess(text.index("| T7 | [Seven]"), text.index(dotask_cli.BUG_SECTION))
+        self.assertLess(text.index("| T9 | [Nine]"), text.index("### Staging QA"))
+
+
+class ProcessStartRetryTest(unittest.TestCase):
+    """g-t16340-2 (2026-11-13): `git rev-parse HEAD` exited 0xC0000142 (never started) and killed the loop."""
+
+    def _results(self, *codes):
+        return [subprocess.CompletedProcess(["git"], code, "out", "") for code in codes]
+
+    def test_a_process_that_failed_to_start_is_run_again(self):
+        with patch.object(dotask_cli.subprocess, "run", side_effect=self._results(0xC0000142, 0)) as run, \
+                patch.object(dotask_cli.time, "sleep"):
+            result = dotask_cli.run_cmd(["git", "rev-parse", "HEAD"], check=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(run.call_count, 2)
+
+    def test_a_process_that_ran_and_failed_is_not_retried(self):
+        with patch.object(dotask_cli.subprocess, "run", side_effect=self._results(128)) as run:
+            with self.assertRaises(subprocess.CalledProcessError):
+                dotask_cli.run_cmd(["git", "rev-parse", "HEAD"], check=True)
+        self.assertEqual(run.call_count, 1)
+
+    def test_retries_stop_and_the_failure_is_raised(self):
+        codes = [0xC0000142] * (dotask_cli.PROCESS_START_RETRIES + 1)
+        with patch.object(dotask_cli.subprocess, "run", side_effect=self._results(*codes)) as run, \
+                patch.object(dotask_cli.time, "sleep"):
+            with self.assertRaises(subprocess.CalledProcessError):
+                dotask_cli.run_cmd(["git"], check=True)
+        self.assertEqual(run.call_count, dotask_cli.PROCESS_START_RETRIES + 1)
+
+
+class QuotedResumedTest(AutolandBase):
+    def test_a_stop_line_quoting_resumed_is_still_a_stop_and_a_restart_marks_itself(self):
+        stop = "t VERIFY_BLOCKED round 1: reviewer did not finish: t RESUMED autoland verify: restarted"
+        self.status.write_text(f"t STAGE_DONE T1 commit \"x\"\n{stop}\n")
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertIsNone(dotask_cli.estimate({**group, "slug": "g-t1-1"}, self.checkout)[0])
+        self.verdicts = [None]  # the restart stops again; what matters is the line it wrote first
+        self._run()
+        self.assertIn("RESUMED autoland verify", self.status.read_text().splitlines()[2])
+
+
+class OwnerTestBeforePrTest(AutolandBase):
+    """Owner rule 2026-11-13: a clean verdict brings up the stack and waits for the owner; approve lands."""
+    OWNER_TEST = True
+
+    def _approve(self):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return dotask_cli.approve(SimpleNamespace(slug="g-t1-1"))
+
+    def test_a_clean_verdict_stops_at_ready_to_test_with_a_guide_and_opens_no_pr(self):
+        self.verdicts = [self._verdict()]
+        self.assertEqual(self._run(), 0)
+        self.land.assert_not_called()
+        self.assertIn("READY_TO_TEST", self._last())
+        self.assertIn("http://x/?dev_account=full", self._last())
+        self.assertIn("/dotask approve g-t1-1", self._last())
+        guide = dotask_cli.test_guide_path("g-t1-1").read_text()
+        self.assertIn("## T1: Fix the thing", guide)
+        self.assertIn("**T1:C1** First", guide)
+        group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual(group["tested_head"], self.head)
+        best, _fix, basis = dotask_cli.estimate({**group, "slug": "g-t1-1"}, self.checkout)
+        self.assertIsNone(best)
+        self.assertIn("waiting on your test", basis)
+
+    def test_approve_lands_the_tested_head_without_re_verifying(self):
+        self.verdicts = [self._verdict()]
+        self._run()
+        reviews = len(self.dispatches)
+        self.assertEqual(self._approve(), 0)
+        self.land.assert_called_once()
+        self.assertEqual(len(self.dispatches), reviews)  # no second reviewer
+        self.assertIn("LANDED", self._last())
+
+    def test_owner_changes_run_a_fix_round_for_the_owning_task_then_wait_for_a_new_test(self):
+        self.verdicts = [self._verdict()]
+        self._run()
+        tested = self.head
+        recheck = self._verdict()
+        del recheck["head"]  # made on the fixed HEAD
+        self.verdicts = [recheck]
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = dotask_cli.changes(SimpleNamespace(slug="g-t1-1", finding=[["T1", "Make the chart big"]]))
+        self.assertEqual(code, 0)
+        fixes = [text for phase, text in self.dispatches if phase == "implementation"]
+        self.assertEqual(len(fixes), 1)
+        self.assertIn("Owner change: Make the chart big", fixes[0])
+        self.assertNotEqual(self.head, tested)
+        self.assertIn("OWNER_CHANGES", self.status.read_text())
+        self.assertIn("READY_TO_TEST", self._last())
+        self.land.assert_not_called()
+
+    def test_approve_refuses_when_head_moved_after_the_test_stack(self):
+        self.verdicts = [self._verdict()]
+        self._run()
+        self.head = "b" * 40
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            self._approve()
+        self.land.assert_not_called()
+
+    def test_red_ci_after_approval_fixes_and_comes_back_for_another_test(self):
+        second = self._verdict()
+        del second["head"]  # made on the fixed HEAD
+        self.verdicts = [self._verdict(), second]
+        self._run()
+        self.land.return_value = dotask_cli.CI_RED
+        with patch.object(dotask_cli, "ci_failure_report", lambda branch, head: "job x failed"):
+            self.assertEqual(self._approve(), 0, self.status.read_text())
+        self.land.assert_called_once()
+        self.assertIn("READY_TO_TEST", self._last())  # the fixed HEAD waits for the owner again
 
 
 class StallGapsTest(AutolandBase):

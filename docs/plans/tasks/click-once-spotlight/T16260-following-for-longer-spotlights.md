@@ -43,7 +43,7 @@ Following the whole highlight up front would be simpler, but most of it would be
 ## For the implementer
 
 ### Design notes
-- Owner question recorded in the epic: if new spotlights should start at four seconds, that is a change of the default region length only; this task is written so that either answer works.
+- Owner decision 2026-11-12: a new spotlight stays two seconds long. Do not change the default region length.
 - Continue from the last followed box rather than re-running from the first tap; the T16220 job takes any start frame and box. Backwards following is the same job on a reversed frame range; confirm the stock predictor's `reverse=True` path before building anything custom.
 - The prototype's `common.py` has `TRACK_SECONDS`; raise it and re-extract frames to measure 6 to 10 seconds. Ground truth past two seconds is agreement between trackers plus eye checks, as in the prototype.
 - Region resize is an existing gesture (the region levers); the follow request hangs off the release of that gesture. See `T5649` for how detections are re-sliced on resize today.

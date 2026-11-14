@@ -1,6 +1,6 @@
 # T16000: Staging check failed: T15740:C1 The toast never overlaps the action bar or the chat
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-10

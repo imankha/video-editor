@@ -140,13 +140,10 @@ function ToastItem({ toast, onDismiss }) {
               toast.action.onClick?.();
               handleDismiss();
             }}
-            className="mt-2 inline-flex items-center gap-1 text-sm text-purple-400 hover:text-purple-300 transition-colors coarse-pointer:min-h-11"
+            className="mt-2 inline-flex items-center gap-1 coarse-pointer:min-h-[44px] text-sm text-purple-400 hover:text-purple-300 transition-colors"
           >
             {toast.action.label}
-            {(() => {
-              const ActionIcon = toast.action.icon || ExternalLink;
-              return <ActionIcon size={14} />;
-            })()}
+            <ExternalLink size={14} />
           </button>
         )}
       </div>
@@ -155,7 +152,7 @@ function ToastItem({ toast, onDismiss }) {
       <button
         onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
         aria-label="Dismiss"
-        className="flex-shrink-0 p-2 -m-1 text-gray-500 hover:text-white rounded transition-colors coarse-pointer:min-w-11 coarse-pointer:min-h-11"
+        className="flex-shrink-0 p-2 -m-1 coarse-pointer:min-w-11 coarse-pointer:min-h-11 flex items-center justify-center text-gray-500 hover:text-white rounded transition-colors"
       >
         <X size={16} />
       </button>
@@ -175,7 +172,7 @@ export function ToastContainer({ stacked = false }) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className={`${stacked ? '' : `fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-4 ${Z.NOTICE}`} flex flex-col gap-2 sm:w-full max-w-sm pointer-events-none`}>
+    <div className={`${stacked ? '' : `fixed bottom-4 right-4 ${Z.NOTICE}`} flex flex-col gap-2 max-w-xs w-full pointer-events-none`}>
       {toasts.map((t) => (
         <div key={t.id} className="pointer-events-auto">
           <ToastItem toast={t} onDismiss={removeToast} />

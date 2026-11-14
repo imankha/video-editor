@@ -1,0 +1,45 @@
+{
+  "label": "teamB-600-900-run1",
+  "team": "B",
+  "kit_words": "white shirts with dark shoulder trim, navy blue shorts, dark socks",
+  "picture": "team_only/kits/team_b_white.png",
+  "video": "breakers-20min.mp4",
+  "model": "gemini-4-hydrogen",
+  "start": 600,
+  "end": 900,
+  "attempts": 1,
+  "ok": true,
+  "status": "completed",
+  "seconds": 71.9,
+  "interaction_id": "v1_ChdTNlAyYXVfS0dQTG96N0lQNE9UV2dRZxIXUzZQMmF1X0tHUExvejdJUDRPVFdnUWc",
+  "usage": {
+    "initial_input_tokens": 35705,
+    "input_tokens_by_modality": [
+      {
+        "modality": "text",
+        "tokens": 4332
+      },
+      {
+        "modality": "image",
+        "tokens": 1066
+      },
+      {
+        "modality": "video",
+        "tokens": 30307
+      }
+    ],
+    "output_tokens_by_modality": [
+      {
+        "modality": "text",
+        "tokens": 1392
+      }
+    ],
+    "total_cached_tokens": 0,
+    "total_input_tokens": 35705,
+    "total_output_tokens": 1392,
+    "total_thought_tokens": 9104,
+    "total_tokens": 46201,
+    "total_tool_use_tokens": 0
+  },
+  "plays": 8
+}

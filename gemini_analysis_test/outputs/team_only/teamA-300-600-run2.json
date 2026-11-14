@@ -1,0 +1,328 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "navy blue"
+    },
+    "team_1": {
+      "color": "white"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:05",
+      "end": "00:18",
+      "summary": "After white attacks down our right flank, our goalkeeper rushes out to smother the dangerous low cross in the box and clear the danger.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Step up earlier to close down the winger and deny the angle for the pass into the box instead of dropping off too deep."
+          },
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Decisive sweeper-keeper intervention off the line, reading the danger early and clearing cleanly just like Manuel Neuer."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:39",
+      "end": "00:52",
+      "summary": "Our defender blocks the opponent's free kick on the far side and launches a long forward pass for our left winger to chase down the touchline.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Sharp anticipation to cut out the set piece and immediately turn defense into attack, reminiscent of Andrew Robertson."
+          },
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Control"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Look to take a positive first touch inside toward goal so the defender cannot trap you against the touchline."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:11",
+      "end": "01:26",
+      "summary": "Our striker presses the white defenders aggressively on the right side, forcing them to retreat and play all the way back to their goalkeeper.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Relentless high pressing and angling of the run to cut off forward options, just like Roberto Firmino leading the press from the front."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:29",
+      "end": "01:41",
+      "summary": "Our team wins the ball high up the pitch off the opponent's build-up and creates a quick chance in the box that loops just over the crossbar.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Interception",
+              "Tackle",
+              "Pass"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Intelligent high-press turnover to win possession in the final third and release quickly, similar to Sadio Mane."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Quick vertical vision to slip the runner into space before the defense recovers, much like Kevin De Bruyne."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Great movement to get on the end of the through ball; try to keep your chest over the finish next time to keep the shot under the bar."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "02:03",
+      "end": "02:17",
+      "summary": "After restarting from a midfield free kick, our midfielders combine smoothly before feeding the left winger, who drives into the box and forces a corner.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Build-Up",
+              "Pass",
+              "Control"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Composed short passing under pressure to retain possession and switch the tempo, like Toni Kroos."
+          },
+          {
+            "jersey_number": null,
+            "position": "attacking midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Well-timed pass into the wide channel to isolate the full-back, reminiscent of David Silva."
+          },
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Direct 1v1 running at pace to beat the defender and get a shot away, just like Vinicius Junior."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "02:39",
+      "end": "02:49",
+      "summary": "Our corner kick is whipped dangerously into the six-yard box, where an attacker meets it with a close-range effort that forces a goalmouth clearance.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "corner-kick taker",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Accurate, driven delivery right into the danger area of the six-yard box, similar to Trent Alexander-Arnold."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Attack the ball decisively in the air, and aim downward toward the corners to give the goalkeeper no chance to parry."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "04:00",
+      "end": "04:11",
+      "summary": "Our midfield threads a clever through ball into the left channel for our striker, who drives into the box and fires a low shot saved by the goalkeeper.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Incisive line-breaking through ball weighted perfectly into the runner's stride, just like Luka Modric."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Explosive forward run and composed strike across goal under defensive pressure, reminiscent of Karim Benzema."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "04:34",
+      "end": "04:44",
+      "summary": "Another dangerous corner kick into the six-yard box leads to a close-range scramble and shot attempt before the white goalkeeper smothers the ball.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "corner-kick taker",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Consistent, threatening corner delivery putting the goalkeeper under immediate pressure, like Kieran Trippier."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Good instincts to attack the second ball in the scramble; try to get a cleaner first-time toe-poke or lift it over the diving keeper."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "04:54",
+      "end": "04:59",
+      "summary": "Our midfielder reads white's forward pass out of the back and steps in front to make a clean interception in midfield.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Control"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Sharp anticipation to read the pass and step ahead of the attacker cleanly, just like N'Golo Kante."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"criteria": {"T15620:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/config/displayNames.deviceCopy.test.js src/components/GameFootagePicker.deviceCopy.test.jsx"}}}

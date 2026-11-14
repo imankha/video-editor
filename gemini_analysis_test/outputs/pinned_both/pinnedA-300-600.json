@@ -1,0 +1,871 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "navy blue"
+    },
+    "team_1": {
+      "color": "white"
+    }
+  },
+  "plays": [
+    {
+      "start": "05:00",
+      "end": "05:04",
+      "summary": "A white midfielder wins a bouncing ball in the right half and switches play diagonally toward the left flank near halfway.",
+      "team_0": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Should step closer to challenge the first contact and prevent an easy switch across midfield."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Toni Kroos, quickly spots the open space on the weak side and switches play cleanly."
+          }
+        ]
+      }
+    },
+    {
+      "start": "05:04",
+      "end": "05:08",
+      "summary": "The white left-back controls the diagonal ball on the halfway line under pressure and threads a clean pass down the left touchline.",
+      "team_0": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Angle the pressing run to cut off the outside line rather than overcommitting inside."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Andrew Robertson, cushions the bouncing ball cleanly and plays forward into stride along the touchline."
+          }
+        ]
+      }
+    },
+    {
+      "start": "05:08",
+      "end": "05:18",
+      "summary": "White recycles possession back through their defense to the goalkeeper, whose long clearance under pressure bounces out of play on the far touchline.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Good pressing effort to force the goalkeeper into a rushed long kick; curve the run slightly earlier to block the central lane."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Smartly retains possession by turning back inside rather than forcing a low-percentage duel."
+          },
+          {
+            "jersey_number": null,
+            "position": "left centre-back",
+            "tags": [
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Keep head up before playing back so a midfield option can be found instead of putting the goalkeeper under pressure."
+          },
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Distribution"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Aim the clearance further inside the touchline to keep the ball in play for the wingers."
+          }
+        ]
+      }
+    },
+    {
+      "start": "05:18",
+      "end": "05:40",
+      "summary": "Play pauses as the assistant referee signals a throw-in on the far side and players reset their positions.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "05:40",
+      "end": "05:52",
+      "summary": "Navy takes the throw-in on the far side, white clears upfield, and navy recovers possession near the far touchline at midfield.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Deliver the throw-in cleanly to a teammate's feet or space behind the pressing defender."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Control"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Reads the second ball well to regain possession near midfield."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Compete firmly on the throw-in, but look for a composed midfield pass rather than clearing blindly."
+          }
+        ]
+      }
+    },
+    {
+      "start": "05:52",
+      "end": "06:08",
+      "summary": "White intercepts navy's build-up near the far touchline and launches a long ball into the navy penalty area that the navy goalkeeper claims cleanly.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Check over the shoulder before passing inside so the ball is not turned over in midfield."
+          },
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Alisson Becker, commands the penalty area decisively and claims the bouncing through ball ahead of the striker."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Great anticipation to win possession; take a fraction off the long pass so the striker can reach it before the goalkeeper."
+          }
+        ]
+      }
+    },
+    {
+      "start": "06:08",
+      "end": "06:14",
+      "summary": "The navy goalkeeper rolls the ball out to his centre-back to start a patient build-up from the back.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Distribution",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Calmly starts play short to keep possession rather than kicking long unnecessarily."
+          },
+          {
+            "jersey_number": null,
+            "position": "right centre-back",
+            "tags": [
+              "Control",
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Opens body to receive and moves the ball smoothly toward the right-back."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "06:14",
+      "end": "06:28",
+      "summary": "A white forward presses intensely down the right touchline, forcing the navy right-back to shield under heavy pressure before composing himself and playing back to his goalkeeper.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Kyle Walker, stays composed under a fierce touchline press and uses his body well to protect possession and reset."
+          },
+          {
+            "jersey_number": null,
+            "position": "right centre-back",
+            "tags": [
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Provides a clean backpass angle to help his right-back escape the press."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Relentless pressing effort to pin the defender near the touchline; hold position slightly closer to block the backpass lane next time."
+          }
+        ]
+      }
+    },
+    {
+      "start": "06:28",
+      "end": "06:33",
+      "summary": "The navy goalkeeper switches the ball out to his left-back, whose pass forward along the far flank is cut out in midfield.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Distribution",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Smartly switches the point of attack away from the touchline press."
+          },
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Scan inside options before playing blindly down the line into an outnumbered area."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": []
+      }
+    },
+    {
+      "start": "06:33",
+      "end": "06:41",
+      "summary": "White intercepts in midfield and works the ball wide for an accurate cross that a white striker heads on target, forcing a clean catch from the navy goalkeeper.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Thibaut Courtois, tracks the cross well, sets his feet early, and holds the header cleanly with zero rebound."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Like Luka Modric, reads the loose pass immediately and releases the winger in space."
+          },
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Like Trent Alexander-Arnold, whips an inviting early cross into the danger zone for the striker."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Olivier Giroud, attacks the cross bravely and directs a firm header on target."
+          }
+        ]
+      }
+    },
+    {
+      "start": "06:41",
+      "end": "06:59",
+      "summary": "The navy goalkeeper waits for his team to push up before punting long upfield, where the second ball goes out of play on the far touchline.",
+      "team_0": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Distribution"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Direct the long punt slightly closer to the central forward rather than toward the touchline."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "06:59",
+      "end": "07:12",
+      "summary": "White restarts with a throw-in on the far side and patiently passes around navy's midfield block to advance toward the attacking third.",
+      "team_0": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Stay compact as a unit and force white backward rather than diving into challenges."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Starts play cleanly from the throw-in into midfield."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Moves the ball briskly with crisp touches to probe for an opening."
+          }
+        ]
+      }
+    },
+    {
+      "start": "07:12",
+      "end": "07:18",
+      "summary": "A white attacker drives down the far right channel and fires an angled shot that is deflected behind for a corner kick.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left centre-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Tracks the runner well and gets a crucial deflection to prevent a clean shot across goal."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Mohamed Salah, accelerates into the right channel and gets a dangerous strike away under pressure to win a corner."
+          }
+        ]
+      }
+    },
+    {
+      "start": "07:18",
+      "end": "07:38",
+      "summary": "White prepares to take a corner kick from the far right as both teams organize their marking inside the navy penalty area.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "07:38",
+      "end": "07:47",
+      "summary": "White swings a dangerous corner kick into the six-yard box, sparking a goalmouth scramble where the navy goalkeeper and defense block a close-range effort and clear.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like David Raya, stays brave in a crowded six-yard box and blocks the close-range effort."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Reacted first to the loose ball in front of goal to clear the immediate danger."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Kevin De Bruyne, delivers a menacing corner right into the six-yard corridor of uncertainty."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Good movement to attack the delivery, though needed a slightly cleaner contact to beat the goalkeeper."
+          }
+        ]
+      }
+    },
+    {
+      "start": "07:47",
+      "end": "07:58",
+      "summary": "Navy clears the rebound long upfield, and the ball bounces past halfway and out over the far touchline.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Clears decisively with height and distance to relieve pressure after the corner."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": []
+      }
+    },
+    {
+      "start": "07:58",
+      "end": "08:24",
+      "summary": "Play pauses for a throw-in on the far side while players walk into position and coaches shout instructions.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "08:24",
+      "end": "08:32",
+      "summary": "White launches a long throw-in down the far flank that is flicked on, but a navy defender wins the bouncing ball and clears it out for another throw.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left centre-back",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Virgil van Dijk, reads the flick-on early and clears decisively before the white striker can latch onto it."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 4,
+            "note": "Delivers a long throw-in that puts navy's backline under immediate aerial pressure."
+          },
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Good flick-on attempt, though try to angle it further inside toward the supporting striker."
+          }
+        ]
+      }
+    },
+    {
+      "start": "08:32",
+      "end": "09:01",
+      "summary": "Play stops near the far touchline as substitutions and coaching instructions take place before white prepares to throw in.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "09:01",
+      "end": "09:11",
+      "summary": "From a white throw-in, a midfielder threads a sharp through ball into the right channel for the white striker, whose low shot is parried behind by the navy goalkeeper for a corner.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left centre-back",
+            "tags": [],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Track the striker's diagonal run earlier so he cannot get behind the backline from a simple throw-in."
+          },
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Jan Oblak, narrows the angle quickly and makes a strong parry to push the shot behind for a corner."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Martin Odegaard, takes the ball cleanly off the throw-in and splits the defense with a perfectly weighted through ball."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Like Erling Haaland, times the run behind the defense well and strikes cleanly across goal to test the keeper."
+          }
+        ]
+      }
+    },
+    {
+      "start": "09:11",
+      "end": "09:33",
+      "summary": "Both teams crowd into the navy penalty area as white sets up for a corner kick from the far right.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "09:33",
+      "end": "09:44",
+      "summary": "White whips a corner kick into the crowded six-yard box where a white attacker finishes from close range to score a goal.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Command the six-yard box aggressively on inswinging corners or organize defenders on the posts to prevent close-range finishes."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Stay body-to-body with attackers inside the six-yard box and attack the first ball decisively."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Pass",
+              "Chance Creation",
+              "Assist"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Bukayo Saka, delivers a pinpoint corner kick right into the dangerous six-yard area to create the goal."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Goal"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Like Gabriel Magalhaes, attacks the six-yard box with determination and buries the finish through traffic."
+          }
+        ]
+      }
+    },
+    {
+      "start": "09:44",
+      "end": "09:54",
+      "summary": "Players jog back to their halves as navy sets up for the kickoff following white's goal.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "09:54",
+      "end": "09:59",
+      "summary": "Navy restarts from the center circle, passes back to defense, and launches a long diagonal pass up the left wing contested near the touchline as the clip ends.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Cleanly lays the kickoff back to build an immediate response."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Build-Up"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Looks to stretch white quickly with a long diagonal, though a slightly softer loft would give the winger an easier first touch."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Closes down the diagonal ball quickly to contest possession near the touchline."
+          }
+        ]
+      }
+    }
+  ]
+}

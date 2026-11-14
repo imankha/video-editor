@@ -1,6 +1,6 @@
 # T15620: Device-wrong copy: phone wording on desktop and iPad, desktop wording on phones
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-09

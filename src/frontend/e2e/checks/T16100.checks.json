@@ -1,0 +1,4 @@
+{"criteria": {
+  "T16100:C1": {"kind": "browser"},
+  "T16100:C2": {"kind": "code", "command": "python3 -m pytest scripts/test_dotask_cli.py -q -k test_browser_check_calling_a_test_seam_fails_naming_the_path"}
+}}

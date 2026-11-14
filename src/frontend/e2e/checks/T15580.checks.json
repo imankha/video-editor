@@ -1,0 +1,1 @@
+{"criteria": {"T15580:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/stores/authStore.test.js -t T15580"}}}

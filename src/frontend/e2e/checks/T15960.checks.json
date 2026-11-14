@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T15960:C1": {
+      "kind": "human",
+      "why": "Owner ruling 2026-11-10: check problem, not a product bug. The staging failure was a dev-only login (404, fixed by loginForCheck in faca6a4fb); after that the browser check skips because headless Chromium never enters real phone fullscreen. T15750:C1 is a human check (c84d632c4): on a real iPhone, open a game in Annotate, enter fullscreen in portrait, open Edit play, and confirm the picture is at least half the screen width."
+    }
+  }
+}

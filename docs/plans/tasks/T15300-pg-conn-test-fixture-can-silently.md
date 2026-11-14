@@ -1,6 +1,6 @@
 # T15300: pg_conn test fixture can silently drop and empty the shared dev Postgres analytics tables
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-08

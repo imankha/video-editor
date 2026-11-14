@@ -2,46 +2,40 @@
 
 ## In plain words
 
-After reels exist, a model can suggest which highlights to include, in what order, with a title and section cards, for about a cent per reel. The parent still edits and finishes. Before it is on by default we compare its suggestions with ten reels you build by hand.
-
+Once the reel builder exists, a parent can join highlights (finished short clips) into a reel (one video for a college coach), but they still have to choose which ones, the order and the section headings, and most parents do not know what a coach wants. Competitors sell "AI picks the best". With this change the Reels tab gains one button, Suggest a reel. A language model reads the facts we hold about each of the athlete's highlights, with the expert instructions built from our research, and the builder opens already filled in: picks, order, section cards and a title. The model reads text only and never watches video, so a suggestion costs about a cent. The parent edits anything and nothing is exported until they press Finish. Done when a parent with five or more highlights gets a sensible suggested recruiting reel in under twenty seconds, and the suggestions have been compared with ten reels the owner built by hand.
 
 **Status:** TODO
-**Impact:** 6
+**Impact:** 7
 **Complexity:** 4
 **Created:** 2026-11-09
-**Updated:** 2026-11-09
-**Milestone:** Roadmap 6, Highlight reels and recruiting kit (see PLAN.md). After T11300 and T15880.
+**Updated:** 2026-11-13
 
-## The problem
+Epic: [ai-reel-builder/EPIC.md](ai-reel-builder/EPIC.md). Epic task 3 of 3. This file is an outline; its detail is written after the Highlight reel builder ships.
 
-Assembling a reel is a chore: which highlights, what order, what the section cards say. Competitors
-sell "AI picks the best" (Klap, NextPlay). The cost is negligible: per-play metadata plus 1 fps
-thumbnails for a 10-highlight reel is 20 to 30k tokens, about $0.003 to $0.01 on Haiku 5.5 or Gemini
-Flash-Lite.
+## Outline
 
-## What we will do
-
-1. "Suggest a reel" on the Reels tab: the model receives each finished highlight's rating, tag, sport,
-   duration, game date and three thumbnails, and returns an ordered pick list with a one-line reason
-   per pick, a reel title and section-card text, in a JSON schema with reasoning before scores.
-2. The result opens the Arrange step pre-filled; the parent edits as usual. Nothing is exported
-   without the parent's Finish.
-3. Rank is a rank, not a probability; the Best-first default (T11300 decision 3) stays available.
-4. Evaluate on labelled reels: 10 reels the owner would build by hand against the suggestion, scored
-   by overlap and order agreement, before the button ships by default.
+1. **Suggest a reel** on the Reels tab. The server gathers the athlete's highlight facts in one read (T16205), adds the expert instructions (T16330) and asks the model once.
+2. **The answer fills the builder.** Picks and order become the running order, each section becomes a section card, the title fills the title card. The parent sees one line of reasoning beside each pick and edits as usual.
+3. **Honest about thin data.** Highlights with no AI note are judged on tags, star rating, comparison-game standing and any typed note. When most of an athlete's highlights are like that, the suggestion says it is working from little.
+4. **Recruiting reels only** in the first version.
+5. **Checked against the owner.** Ten reels the owner would build by hand are compared with the suggestions, by overlap of picks and agreement of order, before the button is shown to everyone.
+6. **Measured.** How many reels start from a suggestion, how many of those are exported, and the cost of each call.
 
 ## How we will know it worked
 
-- [ ] Suggest a reel returns an ordered list with title and section cards for an account with 5 or more finished highlights in under 20 s, on phone and desktop.
-- [ ] The owner's 10 hand-built reels overlap the suggestion by at least 70% of picks on average (recorded in the task file).
-- [ ] Model name and prompt are config; cost per call is logged.
+- [ ] Suggest a reel fills the builder with picks, order, section cards and a title for an account with five or more finished highlights in under twenty seconds, on phone and desktop.
+- [ ] No video or picture is sent to the model.
+- [ ] The owner's ten hand-built reels share at least 70% of their picks with the suggestions on average; the result is recorded in this file.
+- [ ] The model name and the instructions are settings, and the cost of each call is recorded.
+- [ ] The owner can read how many reels were started from a suggestion and how many of those were exported.
 
 ## For the implementer
 
 ### Related Tasks
-T11300, T15880, T16150 (shares the model config), T3600 to T3640 (collections ranking).
+- Depends on: T11300 and T16300 (the builder and its section cards), T16205, T16330.
 
 ### Relevant Files (REQUIRED)
 - `src/backend/app/routers/reels.py` (new in T11300)
-- `src/backend/app/routers/collections.py` (ranking, Glicko order)
+- `src/backend/app/services/highlight_facts.py` (new in T16205)
+- `src/backend/app/routers/collections.py` (comparison-game order)
 - `src/frontend/src/components/reels/` (new in T11300)

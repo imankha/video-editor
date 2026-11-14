@@ -294,9 +294,14 @@ export const useAuthStore = create((set, get) => ({
     clearProfileHeader();
     const point = body.resume_point || null;
     const landingUrl = buildImpersonationLandingUrl(point);
+    // T15580: snapshot ANY point the backend returned, even one whose profile
+    // didn't resolve (buildImpersonationLandingUrl then falls back to '/' for
+    // safety) -- the banner's own render-time call to buildImpersonationLandingUrl
+    // applies that same fallback, so storing it is never unsafe. Only a truly
+    // absent point (nothing to reopen) clears the key.
     try {
-      if (landingUrl === '/') sessionStorage.removeItem(IMPERSONATION_LANDING_KEY);
-      else sessionStorage.setItem(IMPERSONATION_LANDING_KEY, JSON.stringify(point));
+      if (point) sessionStorage.setItem(IMPERSONATION_LANDING_KEY, JSON.stringify(point));
+      else sessionStorage.removeItem(IMPERSONATION_LANDING_KEY);
     } catch { /* storage blocked: the banner summary is best-effort */ }
     window.location.href = landingUrl;
   },

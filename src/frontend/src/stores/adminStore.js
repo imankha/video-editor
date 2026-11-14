@@ -119,6 +119,12 @@ export const useAdminStore = create((set, get) => ({
   bySportData: null, bySportLoading: false, bySportError: null,
   // T13931: R2 usage by source (on-demand -- never on mount; the backend caches 10 min).
   r2UsageData: null, r2UsageLoading: false, r2UsageError: null,
+  // T7430: retention chart (triangle + WAU + return-after-gap), on-demand -- never on mount.
+  retentionChartData: null, retentionChartLoading: false, retentionChartError: null,
+  retentionChartAction: '',
+  retentionChartBin: 'week', // weekly/monthly signup-cohort bin (Cohorts grouping only)
+  // T7420: activation report (export/share <=14d per Dimension-pill group), on-demand.
+  activationData: null, activationLoading: false, activationError: null,
 
   // T14000: `build` is the 4th dimension value; omitting it clears the build, so a
   // campaign/cohort pick replaces a build pick. The platform breakdown follows the build
@@ -157,6 +163,11 @@ export const useAdminStore = create((set, get) => ({
   setDimension: (dimension) => {
     set({ dimension });
     const state = get();
+    // T7430 (ruling 2026-11-13): the Retention chart compares whatever the pill selects,
+    // so a chart already on screen reloads with the new grouping; one nobody loaded stays unloaded.
+    if (state.retentionChartData) state.fetchRetentionChart();
+    // T7420 (same ruling): so does the Activation report.
+    if (state.activationData) state.fetchActivation();
     if (dimension === 'campaigns' && !state.channelsData && !state.channelsLoading) {
       state.fetchChannels();
     } else if (dimension === 'cohorts' && !state.cohortsData && !state.cohortsLoading) {
@@ -804,6 +815,49 @@ export const useAdminStore = create((set, get) => ({
       set({ packMixData: await res.json(), packMixLoading: false });
     } catch (err) {
       set({ packMixLoading: false, packMixError: err.message });
+    }
+  },
+
+  // T7430: retention chart (curves grouped by the Dimension pill, WAU/MAU + low-volume
+  // shading, return-after-gap, action-level toggle). On-demand -- never on mount.
+  setRetentionChartAction: (action) => set({ retentionChartAction: action }),
+  setRetentionChartBin: (bin) => {
+    set({ retentionChartBin: bin });
+    if (get().retentionChartData) get().fetchRetentionChart();
+  },
+  fetchRetentionChart: async () => {
+    set({ retentionChartLoading: true, retentionChartError: null });
+    try {
+      const { excludeTest, dimension, retentionChartBin } = get();
+      const params = new URLSearchParams({ exclude_test: excludeTest, group: dimension, cohort_bin: retentionChartBin });
+      const action = get().retentionChartAction;
+      if (action) params.set('action', action);
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/retention-chart?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ retentionChartData: await res.json(), retentionChartLoading: false });
+    } catch (err) {
+      set({ retentionChartLoading: false, retentionChartError: err.message });
+    }
+  },
+
+  // T7420: activation report -- export_completed/share_completed <=14d per group of
+  // the Dimension pill, with benchmarks. On-demand, never on mount.
+  fetchActivation: async () => {
+    set({ activationLoading: true, activationError: null });
+    try {
+      const { excludeTest, dimension } = get();
+      const params = new URLSearchParams({ exclude_test: excludeTest, group: dimension });
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/activation?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ activationData: await res.json(), activationLoading: false });
+    } catch (err) {
+      set({ activationLoading: false, activationError: err.message });
     }
   },
 

@@ -1,0 +1,803 @@
+{
+  "teams": {
+    "team_0": {
+      "color": "white shirts with dark shoulder trim, navy blue shorts, dark socks"
+    },
+    "team_1": {
+      "color": "navy blue shirts with white trim, navy blue shorts, dark socks"
+    }
+  },
+  "plays": [
+    {
+      "start": "00:00",
+      "end": "00:10",
+      "summary": "team_0 works the ball down the far left flank into the attacking third before team_1's centre-back steps in to intercept near the penalty area.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Dribble",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Scan earlier for central support before driving into traffic so the final pass is not telegraphed."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Check away from the defender before receiving so the first touch opens a shooting or passing lane."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Clean reading of the passing lane to step in front of the striker, reminiscent of Virgil van Dijk."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:10",
+      "end": "00:25",
+      "summary": "team_1 wins possession in midfield and launches a fast counter-attack down the right channel, ending with their striker cutting inside and shooting wide.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Drop off a step earlier when the midfielder opens up to hit the long ball so you are not beaten in behind."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle",
+              "Build-Up",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Quick ball recovery followed by an early vertical ball in behind, like Kevin De Bruyne launching a counter."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Great direct running to get into a scoring zone; keep your head steady over the ball on the finish to hit the target."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:25",
+      "end": "00:34",
+      "summary": "Dead-ball restart as team_0's goalkeeper sets up and plays a short goal kick to his defender on the left.",
+      "team_0": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Distribution",
+              "Build-Up"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Composed short restart to keep possession rather than kicking long under no pressure."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "00:34",
+      "end": "00:44",
+      "summary": "team_0 builds up along the far touchline into midfield before the ball goes out of play for a throw-in.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Use inside passing angles to midfield when the touchline becomes congested."
+          },
+          {
+            "jersey_number": null,
+            "position": "left midfielder",
+            "tags": [
+              "Control",
+              "Dribble"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Keep a tighter touch along the line to avoid running the ball out of play."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right midfielder",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Good disciplined pressing angle to trap the ball carrier against the touchline."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:44",
+      "end": "00:49",
+      "summary": "Stoppage for a throw-in on the far side, which team_1 uses to send their right winger chasing into space.",
+      "team_0": {
+        "relevance": 1,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 1,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Smart quick throw into space to turn the opposing full-back."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:49",
+      "end": "00:56",
+      "summary": "team_1's right winger races down the flank toward the box, but team_0's left-back recovers stride-for-stride and wins possession cleanly.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Tackle",
+              "Interception"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Disciplined recovery speed and body positioning to win the ball without fouling, like Ashley Cole."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Dribble"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Cut back or look for an early cross once the defender matches your pace rather than running into a dead end."
+          }
+        ]
+      }
+    },
+    {
+      "start": "00:56",
+      "end": "01:15",
+      "summary": "team_0 calmly plays out of pressure in their defensive half, switching the ball across the backline before hitting a long clearance upfield.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Composed under pressure to recycle possession cleanly, reminiscent of Sergio Busquets."
+          },
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Good composure to switch the point of attack away from the press."
+          },
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "When open space is ahead, consider driving forward a few yards before playing the long ball."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Coordinate the press with your wingers so the opponent cannot easily switch play across the back."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:15",
+      "end": "01:27",
+      "summary": "team_0's attacker brings down the high clearance with a clean first touch in midfield, drives forward, and draws a foul near the attacking third.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "attacking midfielder",
+            "tags": [
+              "Control",
+              "Dribble",
+              "Pass"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Velvet first touch out of the air straight into a forward dribble to draw the foul, like Lionel Messi."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 2,
+            "execution_score": 1,
+            "note": "Stay on your feet and delay the ball carrier rather than diving in and conceding a dangerous free kick."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:27",
+      "end": "01:32",
+      "summary": "Dead-ball stoppage as team_0 lines up a free kick in the attacking half.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "01:32",
+      "end": "01:41",
+      "summary": "team_0 lofts the free kick into the left side of the penalty area, where team_1's defence clears the ball away.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Aim the delivery slightly higher toward the back post so attackers can attack it on the run."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Strong first contact to clear the danger and push the line up immediately."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:41",
+      "end": "01:51",
+      "summary": "team_1 tries to counter down the right flank, but team_0 intercepts in midfield and sends a high ball back into the middle.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Good anticipation to break up the transition; try to find a teammate's feet instead of lifting it high."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Weight the pass firmer into space so the midfielder does not get caught on the bounce."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:51",
+      "end": "01:58",
+      "summary": "team_1 collects the loose ball in midfield and battles to keep possession along the far touchline under pressure.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Keep body contact fair and stay between the opponent and your goal."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left midfielder",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Good shield of the ball under pressure to keep possession alive."
+          }
+        ]
+      }
+    },
+    {
+      "start": "01:58",
+      "end": "02:11",
+      "summary": "team_1's midfielder wins a midfield duel and hits an incisive diagonal through ball to the right winger, whose drive into the box is blocked out for a corner by team_0's recovering defender.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Tackle",
+              "Interception"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Important recovery sprint and block to prevent a clean shot, though check your shoulder earlier for the diagonal run."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Tackle",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Winning the ball and immediately splitting the defence with a diagonal pass, like Toni Kroos."
+          },
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Control",
+              "Dribble"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Positive first touch into stride to attack the box; look for an earlier strike before the defender closes."
+          }
+        ]
+      }
+    },
+    {
+      "start": "02:11",
+      "end": "02:35",
+      "summary": "Extended dead-ball stoppage while players walk over for the corner kick and a stray ball crosses the pitch.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "02:35",
+      "end": "02:42",
+      "summary": "team_1 takes a short corner routine on the near right side, but team_0's defender intercepts the entry pass to start a break.",
+      "team_0": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Interception",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Alert positioning to read the short corner and clear straight into a counter-attack."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 3,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right winger",
+            "tags": [
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Deliver the corner into the danger zone more quickly before the defence resets its shape."
+          }
+        ]
+      }
+    },
+    {
+      "start": "02:42",
+      "end": "02:52",
+      "summary": "team_0 counters rapidly down the left channel into the penalty area, where team_1's defender tracks back to block the attacking move.",
+      "team_0": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Dribble",
+              "Pass",
+              "Chance Creation"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Strong progressive carry through midfield and timely pass into the channel, like Martin Odegaard."
+          },
+          {
+            "jersey_number": null,
+            "position": "left winger",
+            "tags": [
+              "Control",
+              "Goal"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Good run into the box; take the shot a fraction earlier before the defender recovers to block."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 4,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Interception",
+              "Tackle"
+            ],
+            "decision_score": 5,
+            "execution_score": 4,
+            "note": "Vital tracking run and recovery challenge inside the box to deny a clear chance, like Kyle Walker."
+          }
+        ]
+      }
+    },
+    {
+      "start": "02:52",
+      "end": "03:01",
+      "summary": "team_1 wins the second ball outside their box and shields it along the near touchline under heavy pressure until it goes out for a team_0 throw-in.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right midfielder",
+            "tags": [
+              "Tackle"
+            ],
+            "decision_score": 4,
+            "execution_score": 3,
+            "note": "Good aggressive pressing along the touchline to force the turnover."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "right-back",
+            "tags": [
+              "Control",
+              "Dribble"
+            ],
+            "decision_score": 2,
+            "execution_score": 2,
+            "note": "Clear upfield or play back to the goalkeeper sooner rather than dribbling into a two-player trap."
+          }
+        ]
+      }
+    },
+    {
+      "start": "03:01",
+      "end": "03:33",
+      "summary": "Dead-ball stoppage as team_0 number 11 retrieves the ball and waits for teammates to organize before taking the throw-in.",
+      "team_0": {
+        "relevance": 0,
+        "players": [
+          {
+            "jersey_number": 11,
+            "position": "left-back",
+            "tags": [],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Look for a quick throw-in option before the opponent settles defensively."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "03:33",
+      "end": "03:41",
+      "summary": "team_0 number 11 throws the ball toward the left edge of the box, and after a brief scramble the referee awards a free kick to team_1.",
+      "team_0": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": 11,
+            "position": "left-back",
+            "tags": [
+              "Pass"
+            ],
+            "decision_score": 3,
+            "execution_score": 3,
+            "note": "Good long throw distance into the attacking third; aim slightly closer to the attacker's chest."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 2,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [
+              "Interception"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Solid aerial presence to stand your ground and draw the foul."
+          }
+        ]
+      }
+    },
+    {
+      "start": "03:41",
+      "end": "03:51",
+      "summary": "Dead-ball setup as team_1's defender places the ball for a free kick in their defensive third.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    },
+    {
+      "start": "03:51",
+      "end": "04:06",
+      "summary": "team_1's defender launches a long free kick upfield that is flicked on to their attacking midfielder, who threads a pass into the box for the striker to finish past the goalkeeper for a goal.",
+      "team_0": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "centre-back",
+            "tags": [],
+            "decision_score": 2,
+            "execution_score": 1,
+            "note": "Track the runner into the box and communicate across the backline instead of watching the ball."
+          },
+          {
+            "jersey_number": null,
+            "position": "goalkeeper",
+            "tags": [
+              "Save"
+            ],
+            "decision_score": 3,
+            "execution_score": 2,
+            "note": "Once you commit to closing the striker down, stay big and low to block the angle."
+          }
+        ]
+      },
+      "team_1": {
+        "relevance": 5,
+        "players": [
+          {
+            "jersey_number": null,
+            "position": "left-back",
+            "tags": [
+              "Build-Up",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 5,
+            "note": "Accurate long free kick over the midfield line to spark the goal."
+          },
+          {
+            "jersey_number": null,
+            "position": "central midfielder",
+            "tags": [
+              "Control",
+              "Pass"
+            ],
+            "decision_score": 4,
+            "execution_score": 4,
+            "note": "Smart flick-on in midfield to keep the attack moving forward at pace."
+          },
+          {
+            "jersey_number": null,
+            "position": "attacking midfielder",
+            "tags": [
+              "Dribble",
+              "Pass",
+              "Chance Creation",
+              "Assist"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Driving at the backline and slipping a perfectly weighted through ball, like Luka Modric."
+          },
+          {
+            "jersey_number": null,
+            "position": "striker",
+            "tags": [
+              "Control",
+              "Goal"
+            ],
+            "decision_score": 5,
+            "execution_score": 5,
+            "note": "Composed touch in the box and clinical finish past the advancing keeper, like Erling Haaland."
+          }
+        ]
+      }
+    },
+    {
+      "start": "04:06",
+      "end": "05:00",
+      "summary": "team_1 celebrates the goal and both teams walk back into position for the center kickoff, which has not yet been taken when the video ends.",
+      "team_0": {
+        "relevance": 0,
+        "players": []
+      },
+      "team_1": {
+        "relevance": 0,
+        "players": []
+      }
+    }
+  ]
+}

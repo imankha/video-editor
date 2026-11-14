@@ -81,6 +81,10 @@ for spec in $checks; do
   if grep -qE "import\((['\"\`])/src/" "$spec" && ! grep -q "E2E_BASE_URL" "$spec"; then
     fail "$spec: import('/src/...') only works on the dev server; skip on a deployed target (test.skip(!!process.env.E2E_BASE_URL, ...)) or use a code/human check"
   fi
+  # T16100: test seams (routers/test_seams.py) 404 on staging; T16090:C3 failed its staging check at setup
+  if grep -qE "checkApi\((['\"\`])/test/|/api/test/" "$spec"; then
+    fail "$spec: calls an /api/test/ route, which does not exist on staging; set the state up through the app's own routes"
+  fi
 done
 
 # 5. CI routing

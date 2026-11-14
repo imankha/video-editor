@@ -17,10 +17,9 @@ const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
  * strip can reuse it verbatim. `menuPlacement` picks which edge the popup
  * opens from -- 'up' (default) keeps the windowed/bottom-bar behavior,
  * 'left' is for the 72px right strip, where a menu opening further right
- * would run off the screen. `className` lets a caller (the cockpit strip)
- * size the trigger button to its own 44px touch-target floor -- the shared
- * `Button` component's coarse-pointer floor only applies to `iconOnly`
- * buttons, and this one shows a text label ("1x"), so it gets none by default.
+ * would run off the screen. `className` lets a caller add a width floor --
+ * `Button`'s coarse-pointer height floor applies to every size, but a
+ * short label like "1x" still needs an explicit `min-w` from the caller.
  */
 export function SpeedControl({ speed, onSpeedChange, menuPlacement = 'up', className = '' }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -308,8 +307,11 @@ export function AnnotateControls({
           />
         </div>
 
-        {/* Speed control */}
-        <SpeedControl speed={playbackSpeed} onSpeedChange={onSpeedChange} />
+        {/* Speed control -- T15600: "1x" is too short a label to clear the
+            44px width floor from Button's text-button height-only fix, so
+            this call site adds the width explicitly (cockpit already did,
+            via its own `h-11 w-16` className). */}
+        <SpeedControl speed={playbackSpeed} onSpeedChange={onSpeedChange} className="coarse-pointer:min-w-11" />
 
         {/* Zoom — desktop only, same gate the old settings rail used */}
         {showZoomControls && !simplified && (

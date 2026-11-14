@@ -1086,7 +1086,9 @@ export const FOCUS_HINTS = {
   // Portrait nudge — a slim bar directly under the stage, shown while the clip
   // still has no focus points. Dismissed by its 44px X (a named gesture).
   // T11700/T11710: rephrased so rotating reads as optional, not required.
-  ROTATE_TITLE: 'Optional: rotate your phone for a larger video',
+  // T15620: "device", not "phone" -- useIsMobile (and so this nudge) also
+  // matches a touch tablet, where "phone" read wrong.
+  ROTATE_TITLE: 'Optional: rotate your device for a larger video',
   // T11710 merge-order note (now resolved): held at the old value until T11740
   // (which removes the portrait horizontal overflow) merged -- it has, so
   // "nothing scrolls" is honest and the subtitle switches here.
@@ -1432,7 +1434,9 @@ export const UPLOAD = {
   EXTENSION_NOTE: (days) => `Adds ${days} days of storage.`,
   // T14810: the Upload game modal's disclosure for a parent with no game video
   // on this device (the biggest Add footage loss, prod Journey 2026-11-03).
-  NO_VIDEO_TOGGLE: "Don't have the game video on this phone?",
+  // T15620: this toggle renders in the Upload game modal on every device,
+  // desktop included, so "phone" was wrong there.
+  NO_VIDEO_TOGGLE: "Don't have the game video on this device?",
   NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here. A highlights zip works too.",
   NO_VIDEO_STEPS_LINK: 'See the steps for your camera',
   NO_VIDEO_SWITCH: 'Upload a play instead',

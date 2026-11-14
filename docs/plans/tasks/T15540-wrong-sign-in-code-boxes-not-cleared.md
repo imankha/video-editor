@@ -1,6 +1,6 @@
 # T15540: Wrong sign-in code: boxes not cleared and a Verify tap double-submits, burning attempts
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-09
@@ -21,6 +21,7 @@ Viewports: iPhone 14, iPad, desktop.
 
 - [ ] After an invalid code the boxes clear and focus the first box.
 - [ ] Each code is submitted exactly once.
+- [ ] The T15540 browser check passes on a cold stack: the first sign-in screen wait tolerates a cold page compile (up to 90 s), and a failure names the locator that timed out.
 
 ## Context
 
@@ -40,3 +41,7 @@ T15240
 
 ### Relevant Files (REQUIRED)
 - To be found.
+
+## Ruling
+
+**B** (owner, 2026-11-12): the VERIFY_NEEDS_USER stop on T15540:C1/C2 is treated as a cold-start flake, not a code defect (passed 6 of 8 runs; both failures followed a 240 s stack warm-up timeout). Harden the check (C3) rather than accept the unverified criteria; staging is cold often and the owner does not want to keep dealing with this. Verify budget raised to 60 min for this group.

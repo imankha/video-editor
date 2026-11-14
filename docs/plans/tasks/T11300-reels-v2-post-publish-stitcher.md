@@ -2,14 +2,15 @@
 
 ## In plain words
 
-Parents want one assembled reel for college recruiting, and a reel that grows across the season is the only in-product reason to come back next weekend: 18 parents already have two or more highlights, and only 17 of 402 returned after a week. The first version is deliberately small: pick finished highlights, put them in order, add one title card, join them with hard cuts, and export. Fancier transitions, drag reordering and section cards come later once real reels show what matters. One warning: most highlights are portrait and coaches watch widescreen, so the Where will you share it question (T14770) should steer recruiting parents to landscape before they build a reel.
+Parents want one assembled reel for college recruiting, and a reel that grows across the season is the only in-product reason to come back next weekend: 18 parents already have two or more highlights, and only 17 of 402 returned after a week. The first version is deliberately small: pick finished highlights, put them in order, add one title card, join them with hard cuts, and export. A wider transition choice that plays in the preview (T16290) and cards with their own lengths (T16300) follow in the same epic. One warning: most highlights are portrait and coaches watch widescreen, so the Where will you share it question (T14770) should steer recruiting parents to landscape before they build a reel.
 
 
 **Status:** TODO (thawed 2026-10-20; sequenced after the Video Pre-Shrink milestone)
 **Impact:** 8
 **Complexity:** 8
 **Created:** 2026-09-24
-**Updated:** 2026-11-09
+**Updated:** 2026-11-12
+**Milestone:** Highlight reel builder (see [EPIC.md](highlight-reel-builder/EPIC.md)). Task 1 of 6.
 
 ## Problem
 
@@ -85,6 +86,7 @@ Backend
 - Related: season-highlights-spec.md section 3 (collections verbs Play / Share / Video), T11500 (dev account picker's Full preset waits on this reel)
 
 ### Technical Notes
+- **Leave room for the later tasks in this epic (rulings recorded 2026-11-13).** The reel's stored design must already carry: one transition kind (cut, fade through black, crossfade) and one transition length for the whole reel (a slider, 0.2 to 2.0 seconds); a length on each card; a kind on each card (title, section, end); and one optional music track. This version only uses cut or fade and the fixed 2.5 second card, but T16280, T16290, T16300 and T16310 must not need a second change to stored data. See [EPIC.md](highlight-reel-builder/EPIC.md).
 - L-tier, design-gated: the Architect writes `T11300-design.md` covering the `reels` schema
   (members as project ids + stitched `final_video_id` snapshot, order, text frames, transition,
   title card, exported `final_video_id`), the surgical endpoint contract, the fade step, and the

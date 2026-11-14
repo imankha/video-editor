@@ -44,7 +44,7 @@ describe('GameDetailsModal - no-video-on-this-phone disclosure (T14810)', () => 
     expect(details).toBeTruthy();
     expect(details.open).toBe(false);
 
-    fireEvent.click(screen.getByText("Don't have the game video on this phone?"));
+    fireEvent.click(screen.getByText("Don't have the game video on this device?"));
 
     expect(details.open).toBe(true);
     expect(screen.getByText(/Download the game from your camera/)).toBeTruthy();

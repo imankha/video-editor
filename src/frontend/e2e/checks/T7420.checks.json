@@ -1,0 +1,9 @@
+{
+  "criteria": {
+    "T7420:C1": {"kind": "browser"},
+    "T7420:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t7420_activation_report.py::TestMaturingCohort -q"},
+    "T7420:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/admin/activationReportCsv.test.js"},
+    "T7420:C4": {"kind": "code", "command": "! grep -inE 'INSERT|UPDATE |CREATE TABLE|DELETE FROM' src/backend/app/services/analytics_activation.py"},
+    "T7420:C5": {"kind": "browser"}
+  }
+}

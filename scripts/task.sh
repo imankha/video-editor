@@ -300,13 +300,11 @@ seed_creds() {
 drive() {
   local id="$1"; shift || true
   [ -n "$id" ] || die "usage: task drive <id> [-c] \"<instruction>\" (env: DOTASK_WAVE_ID, DOTASK_PHASE, DOTASK_MODEL, DOTASK_EFFORT, DOTASK_DESIGN_REASON, DOTASK_MAX_TURNS, DOTASK_TASK_IDS, DOTASK_TOOLS)"
-  local phase="${DOTASK_PHASE:-implementation}" model="${DOTASK_MODEL:-sonnet}"
+  local phase="${DOTASK_PHASE:-implementation}" model="${DOTASK_MODEL:-opus}"  # owner rule 2026-11-13: workers run Opus, effort medium
   local effort="${DOTASK_EFFORT:-medium}" reason="${DOTASK_DESIGN_REASON:-}" tools="${DOTASK_TOOLS:-}"
   # Cheap host-side checks before waking a container; wave_profile.py re-validates.
   case "$phase" in design|implementation|qa) ;; *) die "DOTASK_PHASE must be design, implementation or qa";; esac
   case "$model" in sonnet|opus) ;; *) die "DOTASK_MODEL must be the alias sonnet or opus";; esac
-  [ "$model" != opus ] || { [ -n "$reason" ] && [ "$phase" = design ]; } \
-    || die "Opus requires DOTASK_PHASE=design and DOTASK_DESIGN_REASON"
   [ -z "$tools" ] || [[ "$tools" =~ ^[A-Za-z]+(,[A-Za-z]+)*$ ]] \
     || die "DOTASK_TOOLS must be a comma list of [A-Za-z]+ tool names (experiment; unset by default)"
   [ -n "${DOTASK_WAVE_ID:-}" ] \

@@ -47,6 +47,15 @@ From the design review:
 23. **No recall check before building.** The model is decided; the first full-game measurements come from the engine's own staging run (T16150).
 24. **Tagging a teammate is the existing flow.** It means entering the player's name and email address, which gives that family the game and the plays in its Team lane. That flow is not changed; it only has to be easy to reach from each player the model mentions ("Right winger", "Player 10").
 25. **The older Suggested plays rows are removed** (T15820, T15830); this epic replaces them.
+26. **Both teams, always.** The analysis covers both teams and the parent picks their colour afterwards. Analysing one team only was tested on 2026-11-12 and dropped. There is no per-player analysis.
+
+For the AI reel builder (owner, 2026-11-13):
+
+27. **Each strong action says what it demonstrates.** For every player's part in a play, the model also records one to three qualities from a fixed list for the sport and one plain sentence saying what the action shows about the player. A quality is what the play shows about the athlete (pace, vision, composure); a tag is what happened (Goal, Tackle). This is in the first version of the prompt, because an analysis is stored once per video and adding it later would mean analysing every stored game again. The list comes from the recruiting reel research (T16320), which runs before the engine.
+28. **Worked backwards from what coaches look for.** The analysis is told to hunt for the things coaches scout, using the visible signs the research writes for each quality. A play in which one of the team's players clearly demonstrates a quality is scoutable.
+29. **Two ways to be Brilliant.** A play is rated Brilliant when the player did better than a good player at that level would be expected to do (owner, 2026-11-13, ruling on T16320). It can clear that bar for scouting, by showing both a strong decision and strong execution and at least one quality from the sport's list, or for social media, by being the kind of play players see in highlight videos of their favorite players. Learning opportunities are found too and keep their lesson, but they are never Brilliant and never reach the reel builder. Both count equally, and a play can be both. Every Brilliant play is always imported. The note and the stored detail say which kind it is, so a recruiting reel can draw on the scoutable ones and a social post on the impressive ones. No other play is rated Brilliant.
+30. **Find as many as possible.** Brilliant plays are what parents pay to turn into highlights, so a missed one is lost revenue and the worst mistake the analysis can make. The prompt hunts for both kinds by name and includes a moment when unsure; the staging check counts the ones it missed.
+31. **Everything the reel builder needs in one read.** The [AI reel builder](../ai-reel-builder/EPIC.md), planned after the reel builder, reads text only. This epic ends by proving that one call returns every fact it needs about an athlete's highlights (T16205).
 
 ## What the prototype already measured
 
@@ -56,6 +65,8 @@ The working prototype is in `gemini_analysis_test/` at the repo root. Read `gemi
 - With all windows in parallel the analysis itself takes about two and a half minutes. Before that, the video has to reach Google and be prepared, which is estimated at five to ten minutes for a full game and has not been measured on a paid key.
 - A window yields 19 to 22 plays, of which 8 to 11 are rated 4 or 5 for one team or the other. So a full game may yield 30 to 80 strong plays for one team.
 - Jersey numbers are almost never readable from a sideline camera (0 to 3 numbered players out of 22 to 47 per run). Players are known by team colour and position only. This is why the parent does the naming.
+
+**One-team test (2026-11-12).** The owner asked whether analysing only the parent's team, chosen by tapping a player first, would be cheaper and better. Ten calls on the 20-minute test video said no: about $2.48 a game instead of $2.84 with only 22 cents of that reliable, half as many plays written per window, and no more strong plays for the chosen team. The same calls showed problems the engine must handle: most answers counted time from the start of the window rather than the video, one answer credited a team with the other's actions, three answers reported a goal that did not happen, and the number of strong plays in one window moved between 4 and 7 across repeats. Details are in `gemini_analysis_test/TEAM_ONLY_RESULTS.md`; the fixes and a human check of the staging game are in T16150.
 
 What is still unmeasured, and will first be seen on T16150's staging run: the real cost and wait for a full game on a paid key, how many strong plays a full game returns per team, and how many real highlights the model misses. Nobody has compared an answer with the video. The admin read-out (T16160) and the threshold and rating constants (T16190) are where these get corrected after launch.
 
@@ -76,7 +87,7 @@ The upper cost of $3.27 allows 15% for windows that have to be watched again. At
 - **One analysis per video, for everyone.** Results are stored in the shared database against the video's fingerprint, the sport and the prompt version. The analysis covers both teams, so parents on either side reuse it.
 - **Per-parent choices stay per parent.** Which team is theirs, which plays were imported, and which players they tagged live in the parent's own data.
 - **Charge.** Credits are reserved when the analysis starts, taken when the result is ready, and released in full if it does not finish. One parent is never charged twice for the same game.
-- **Import.** Plays with relevance 4 or 5 for the chosen team become real plays in the Team lane with tags, note and rating filled in, and a small AI mark until the parent touches them.
+- **Import.** Plays with relevance 4 or 5 for the chosen team, and every Brilliant play (scoutable, or impressive for social media), become real plays in the Team lane with tags, note and rating filled in, and a small AI mark until the parent touches them.
 - **Soccer first.** Only soccer has been tried. The prompt takes its tag list from the sport, and other sports are switched on one at a time.
 - **Safety switches.** A kill switch, a daily spend cap, a per-account daily cap and a maximum video length.
 - **Feedback.** Every state, every string and every layout is defined in [UX-FEEDBACK.md](UX-FEEDBACK.md), written by the UX designer and approved by the owner. Its section 9 holds the owner's rulings and wins where it differs from earlier text. UI tasks build from it and do not invent copy.
@@ -93,8 +104,9 @@ The upper cost of $3.27 allows 15% for windows that have to be watched again. At
 | T16180 | [AI marking for uploaded games](T16180-ai-marking-for-uploaded-games.md) | TODO |
 | T16190 | [Team colour and play import](T16190-team-colour-and-play-import.md) | TODO |
 | T16200 | [Tag players in AI plays](T16200-tag-players-in-ai-plays.md) | TODO |
+| T16205 | [Highlight facts in one read](T16205-highlight-facts-in-one-read.md) | TODO |
 
-T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind one feature flag and are switched on together.
+T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind one feature flag and are switched on together. T16150 waits for the quality list from the recruiting reel research ([T16320](../ai-reel-builder/T16320-recruiting-reel-research.md)).
 
 ## Needed from the owner
 
@@ -107,7 +119,9 @@ T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind on
 - [ ] A parent without enough credits can buy more without losing their upload.
 - [ ] A second account uploading the same video is charged and receives the stored result with no new model calls.
 - [ ] Every progress state shown matches what the server is doing; an analysis that does not finish releases the credits.
+- [ ] On the staging game a person has compared six windows with the video, and the owner has seen how many plays were credited to the wrong team and how many reported goals were not real, before the feature is switched on.
 - [ ] The admin read-out shows credits charged against model cost per analysis, and the total is positive.
 - [ ] Imported plays carry tags, note and rating, sit in the Team lane, and can be moved to My athlete or have a teammate tagged by name and email from the tagging screen on a phone.
 - [ ] A teammate tagged from the tagging screen receives the game and its Team plays exactly as they would today.
+- [ ] A play marked by the AI, assigned to the parent's athlete and made into a highlight, returns its qualities and its sentence in the one read of highlight facts.
 - [ ] The Journey shows how many game uploaders bought an analysis and how many of them reached a first highlight.

@@ -17,6 +17,10 @@ Viewports: iPhone 14 and iPad gen 7 (Playwright WebKit on Windows); real devices
 
 **Actual:** Console: 'Preflight response is not successful. Status code: 403' and 'Credentials flag is true, but Access-Control-Allow-Credentials is not true'. The video request is a 302 from the API to an R2 URL and the fetch fails. Two other testers saw WebKit fail to open the 1080p game file ('This file isn't a video we can open') and the upload tester saw 'Preflight ... 403' on iPhone (T15710). May be a Playwright-WebKit-on-Windows artifact; if real Safari does the same, iPhone users cannot edit at all.
 
+## Ruling
+
+**Owner, 2026-11-13: verification waits on T16370.** The owner has no iPhone, and Safari cannot stay signed in to staging today (see T15450's ruling), so no screen with video can be reached in Safari there. Once T16370 puts staging on reelballers.com, the criteria below are checked by a WebKit iPhone 14 browser check instead of a real iPhone.
+
 ## Acceptance Criteria
 
 - [ ] On a real iPhone (Safari) against staging, Annotate, Frame, Spotlight and the Finished player all play video.

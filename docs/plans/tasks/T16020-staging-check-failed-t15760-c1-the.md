@@ -1,6 +1,6 @@
 # T16020: Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-11

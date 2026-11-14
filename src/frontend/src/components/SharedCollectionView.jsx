@@ -169,7 +169,7 @@ export function SharedCollectionView({ token }) {
           <div className="flex items-center gap-2">
             <button
               onClick={handleReshare}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 coarse-pointer:min-h-[44px] bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
             >
               {copied ? <Check size={16} className="text-green-400" /> : <Share2 size={16} />}
               {copied ? SHARE_COPY.LINK_COPIED : 'Share'}
@@ -177,7 +177,7 @@ export function SharedCollectionView({ token }) {
             {/* T13620: saves only the highlight now playing (no public whole-reel route), so the label says so. */}
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 coarse-pointer:min-h-[44px] bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
             >
               <Download size={16} aria-hidden="true" />
               Download this highlight

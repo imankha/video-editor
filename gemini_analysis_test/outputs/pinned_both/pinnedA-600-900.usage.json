@@ -1,0 +1,45 @@
+{
+  "label": "pinnedA-600-900",
+  "team": "A",
+  "kit_words": "navy blue shirts, navy blue shorts, dark socks",
+  "picture": "team_only/kits/team_a_navy.png",
+  "video": "breakers-20min.mp4",
+  "model": "gemini-4-hydrogen",
+  "start": 600,
+  "end": 900,
+  "attempts": 1,
+  "ok": true,
+  "status": "completed",
+  "seconds": 82.4,
+  "interaction_id": "v1_ChdQYWYyYXV5a0tkZUdxdHNQak16T2tBcxIXUGFmMmF1eWtLZGVHcXRzUGpNek9rQXM",
+  "usage": {
+    "initial_input_tokens": 35605,
+    "input_tokens_by_modality": [
+      {
+        "modality": "text",
+        "tokens": 4218
+      },
+      {
+        "modality": "image",
+        "tokens": 1080
+      },
+      {
+        "modality": "video",
+        "tokens": 30307
+      }
+    ],
+    "output_tokens_by_modality": [
+      {
+        "modality": "text",
+        "tokens": 3559
+      }
+    ],
+    "total_cached_tokens": 0,
+    "total_input_tokens": 35605,
+    "total_output_tokens": 3559,
+    "total_thought_tokens": 9251,
+    "total_tokens": 48415,
+    "total_tool_use_tokens": 0
+  },
+  "plays": 18
+}

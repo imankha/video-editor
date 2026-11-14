@@ -275,6 +275,16 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 6');
   });
 
+  it('T15990: box positions that arrive after mount collapse the shape picker to the chip, and switching asks first', () => {
+    const { rerender } = render(<Harness initial={{ keyframes: [] }} />);
+    expect(screen.getByTestId('focus-shape-option-landscape')).toBeTruthy();
+    // Positions loaded (or placed by the parent's drag) after the view mounted.
+    rerender(<Harness initial={{ keyframes: [kf(10)] }} />);
+    expect(screen.queryByTestId('focus-shape-option-landscape')).toBeNull();
+    fireEvent.click(screen.getByTestId('focus-shape-chip'));
+    expect(screen.getByTestId('focus-shape-switch-confirm')).toBeTruthy();
+  });
+
   it('ignores trim-origin keyframes when deciding the drag step is done', () => {
     render(<Harness initial={{ keyframes: [kf(300, 'trim')] }} />);
     fireEvent.click(screen.getByTestId('focus-shape-option-portrait'));

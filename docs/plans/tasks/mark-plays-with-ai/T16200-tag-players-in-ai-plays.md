@@ -48,6 +48,7 @@ Asking the parent to tap their child in the video and tracking them through the 
 - No change to sharing. The acceptance test is that a teammate tagged from a chip ends in the same stored state, and triggers the same share, as one tagged from the play editor today. If the existing flow collects the email in a later step than the name, the chip follows that order; it may shorten the path to that step but not replace it.
 - Existing rule (T5725): switching a play to My athlete clears its teammate tags. Keep it. The pass therefore asks "is one of these your athlete?" first and offers teammate tagging on plays that stay in the Team lane.
 - Each tap is one surgical write, the same one the existing control sends: `{my_athlete: true, tagged_teammates: []}` for "This is [athlete]", or the teammate tags alone for a name. No effect-driven saves, no saving the whole play list.
+- "This is [athlete]" from a chip also marks that one mention as the athlete's (`ai_source.mentions[].assigned`), in the same write. The AI reel builder's read of highlight facts (T16205) uses this mark to take the right player's qualities and note, so a play moved to My athlete with the plain switch, without a chip, has no marked mention and that is correct.
 - Position memory is derived from this game's plays (`ai_source.mentions[].assigned`), not stored separately.
 - Plays shared in from another parent are locked to the Team lane today; chips on them offer teammate tagging only.
 - Phone first: 44 px targets, the clip and the chips visible together at 390 px without scrolling; desktop shows the chips beside the clip.
@@ -60,6 +61,7 @@ Asking the parent to tap their child in the video and tracking them through the 
 
 - [ ] An imported play shows one chip per player mention with position, or "Player N" when a number was read, and that player's tags.
 - [ ] "This is [athlete]" moves the play to My athlete with the same write the existing switch sends; the play's tags, rating and note are unchanged.
+- [ ] After "This is [athlete]" on a chip, exactly that player's mention is stored as the athlete's, and Undo clears it.
 - [ ] Tagging a teammate from a chip takes a name and an email address through the existing flow, and the tagged account receives the game and its Team plays exactly as when tagged from the play editor.
 - [ ] A name given to a position is offered first on the next chip with that position in the same game, and is never applied without a tap.
 - [ ] No play changes lane or gains a name without a tap on that play.

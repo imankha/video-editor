@@ -12,6 +12,7 @@ Commands (see scripts/dotask.sh, the thin bash entry point):
   python scripts/dotask_cli.py land <slug> --after-test  # push, PR, CI, evidence (HEAD must be the tested one)
   python scripts/dotask_cli.py autoland <slug> [--no-land]  # verify -> fix -> verify, then push (headless runs this itself)
   python scripts/dotask_cli.py resume <slug> [--no-land]    # continue a headless group: build what is left, then autoland
+  python scripts/dotask_cli.py approve <slug>               # the owner tested READY_TO_TEST's stack: push, PR, CI
   python scripts/dotask_cli.py status                       # one line per live group, with its ETA
   python scripts/dotask_cli.py nextup [--limit N]          # TODO tasks bundled by shared code area
 """
@@ -99,7 +100,7 @@ def cname(slug):
 
 def container_running(slug):
     try:
-        result = subprocess.run([tool("docker"), "inspect", "-f", "{{.State.Running}}", cname(slug)],
+        result = run_cmd([tool("docker"), "inspect", "-f", "{{.State.Running}}", cname(slug)],
                                 capture_output=True, text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
@@ -203,14 +204,14 @@ def merged_commits(task_id):
     # so a filing PR's merge looks like work. The branch's own commits are still checked one by one.
     # --grep also matches body lines, and a wrapped list of task ids can open one (5c669996f), so the
     # subject decides: only a subject that starts with the id is that task's work.
-    result = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--no-merges", "--grep",
+    result = run_cmd([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--no-merges", "--grep",
                              f"^{task_id}[: ]", "--format=%H %s", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
                             capture_output=True, text=True, timeout=60, check=False)
     if result.returncode:
         return []
     # A commit undone by a `git revert` on master is not work done: T15220 was reverted out of PR #717
     # and its restart was refused for the reverted commits (2026-11-08).
-    reverts = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--grep",
+    reverts = run_cmd([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--grep",
                               "This reverts commit", "--format=%B"],
                              capture_output=True, text=True, timeout=60, check=False)
     reverted = set(re.findall(r"This reverts commit ([0-9a-f]{40})", reverts.stdout))
@@ -244,6 +245,28 @@ def tool(name):
     return found
 
 
+# Windows exit codes for a process that never started (0xC0000142 STATUS_DLL_INIT_FAILED, seen when the desktop
+# heap runs low with several task containers up). The command did nothing, so running it again is safe.
+# g-t16340-2's loop died on one from a plain `git rev-parse HEAD` (2026-11-13).
+PROCESS_START_FAILURES = {0xC0000142}
+PROCESS_START_RETRIES = 3
+
+
+def run_cmd(*args, **kwargs):
+    """subprocess.run, retrying a process that failed to START (never one that ran and failed)."""
+    check = kwargs.pop("check", False)
+    for attempt in range(PROCESS_START_RETRIES + 1):
+        result = subprocess.run(*args, **kwargs)
+        if result.returncode not in PROCESS_START_FAILURES or attempt == PROCESS_START_RETRIES:
+            break
+        print(f"[dotask] process failed to start (0x{result.returncode:X}); retrying in {2 * (attempt + 1)}s",
+              file=sys.stderr)
+        time.sleep(2 * (attempt + 1))
+    if check and result.returncode:
+        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+    return result
+
+
 def bash():
     """Git Bash from PATH. A bare "bash" on Windows resolves System32\bash.exe (WSL) first."""
     found = shutil.which("bash")
@@ -255,7 +278,7 @@ def bash():
 def task_sh(*args, check=True, capture_output=False):
     # Paths handed to bash use forward slashes: Git Bash on Windows reads 'C:\x' backslashes as escapes.
     env = {**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT)}
-    return subprocess.run([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), *args],
+    return run_cmd([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), *args],
                           env=env, check=check, text=True, capture_output=capture_output)
 
 
@@ -291,7 +314,7 @@ def task_files_off_base(paths):
     and the worker found no spec. Returns (missing, differs): rel paths absent from the base, and rel
     paths present there whose local copy differs (e.g. a ruling committed but not pushed)."""
     base = os.environ.get("TASK_BASE") or "master"
-    fetch = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "fetch", "-q", "origin", base],
+    fetch = run_cmd([tool("git"), "-C", str(MAIN_REPO), "fetch", "-q", "origin", base],
                            capture_output=True, text=True, timeout=120, check=False)
     if fetch.returncode:
         print(f"WARNING: could not fetch origin/{base} ({fetch.stderr.strip()[:120]}); checking task files "
@@ -299,7 +322,7 @@ def task_files_off_base(paths):
     missing, differs = [], []
     for path in paths:
         rel = Path(path).resolve().relative_to(Path(MAIN_REPO).resolve()).as_posix()
-        shown = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "show", f"origin/{base}:{rel}"],
+        shown = run_cmd([tool("git"), "-C", str(MAIN_REPO), "show", f"origin/{base}:{rel}"],
                                capture_output=True, timeout=60, check=False)
         if shown.returncode:
             missing.append(rel)
@@ -409,6 +432,8 @@ def flip_plan_status(task_ids, status="WIP", only_from=None):
             changed = True
     if changed:
         plan_path.write_text("".join(lines), encoding="utf-8")
+    if status == "WIP":
+        pull_to_top(plan_path, task_ids)
     for task_id in task_ids:
         matches = task_file_matches(MAIN_REPO, task_id)
         if len(matches) != 1:  # start's preflight already refused these; on merge, one bad id skips only itself
@@ -420,6 +445,70 @@ def flip_plan_status(task_ids, status="WIP", only_from=None):
         if current != status and allowed(current):
             path.write_text(re.sub(r"\*\*Status:\*\*\s*\S.*", f"**Status:** {status}", text, count=1),
                             encoding="utf-8")
+
+
+# Owner rule 2026-11-13: PLAN.md opens with the work in flight, then the bugs /dotask found (bugs always
+# outrank features), then everything else. Starting a task pulls its row up into IN_PROGRESS_SECTION.
+CURRENT_FOCUS = "## Current Focus"
+IN_PROGRESS_SECTION = "### In progress (a task's row moves here when work on it starts)"
+TABLE_HEAD = ["| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |",
+              "|------|------|------|------|------|------|------|------|"]
+
+
+def section_end(lines, heading_at):
+    """Index of the next heading after heading_at (or len(lines))."""
+    at = heading_at + 1
+    while at < len(lines) and not lines[at].startswith("#"):
+        at += 1
+    return at
+
+
+def ensure_top_section(lines, heading, intro, after=None):
+    """Index of `heading`, creating it with an empty table right under `after` (a section heading) or
+    under CURRENT_FOCUS. Never moves an existing section."""
+    if heading in lines:
+        return lines.index(heading)
+    if after in lines:
+        at = section_end(lines, lines.index(after))
+    else:
+        at = lines.index(CURRENT_FOCUS) + 1 if CURRENT_FOCUS in lines else 0
+        while at < len(lines) and not lines[at].strip():
+            at += 1
+    lines[at:at] = [heading, "", intro, "", *TABLE_HEAD, ""]
+    return at
+
+
+def append_row(lines, heading_at, row):
+    """Add row at the end of the table under the heading at heading_at."""
+    at = section_end(lines, heading_at)
+    while not lines[at - 1].strip():
+        at -= 1
+    lines[at:at] = [row]
+
+
+def pull_to_top(plan_path, task_ids):
+    """Move each task's row into IN_PROGRESS_SECTION (an epic child loses its ↳: its epic is in the link)."""
+    raw = Path(plan_path).read_bytes().decode("utf-8")  # read_text would turn CRLF into LF
+    newline = "\r\n" if "\r\n" in raw else "\n"
+    lines = raw.replace("\r\n", "\n").split("\n")
+    heading_at = ensure_top_section(lines, IN_PROGRESS_SECTION, "Rows here are WIP or waiting on the owner; a "
+                                    "merged row stays until it is DONE and archived.")
+    end = section_end(lines, heading_at)
+    moved = []
+    for i, line in enumerate(lines):
+        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.startswith("|") else []
+        if cells and cells[0] in task_ids and not heading_at < i < end:
+            moved.append(i)
+    if not moved:
+        return
+    rows = [re.sub(r"\|\s*↳\s*", "| ", lines[i], count=1) if "↳" in lines[i].split("|")[2] else lines[i]
+            for i in moved]
+    for i in reversed(moved):
+        del lines[i]
+    heading_at = lines.index(IN_PROGRESS_SECTION)
+    for row in rows:
+        append_row(lines, heading_at, row)
+    Path(plan_path).write_bytes(newline.join(lines).encode("utf-8"))
 
 
 # A merged task is STAGING (CLAUDE.md Task Status Rule): merging deploys staging, which is the test phase.
@@ -487,7 +576,7 @@ def start(args):
 
     wave_env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
     task_flags = [flag for task_id in task_ids for flag in ("--task", task_id)]
-    subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "init", "--wave", wave_id,
+    run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "init", "--wave", wave_id,
                    *task_flags, "--plan", str(MAIN_REPO / "docs" / "plans" / "PLAN.md"),
                    "--mode", "headless" if args.headless else "window"],
                   env=wave_env, check=True)
@@ -543,7 +632,7 @@ def render_pr_body(group):
 def wait_for_ci(branch, head, interval=30, cap_minutes=30):
     deadline = time.time() + cap_minutes * 60
     while True:
-        result = subprocess.run([tool("gh"), "run", "list", "--workflow", "Branch CI", "--branch", branch,
+        result = run_cmd([tool("gh"), "run", "list", "--workflow", "Branch CI", "--branch", branch,
                                  "--limit", "20", "--json", "databaseId,headSha,status,conclusion"],
                                 capture_output=True, text=True, check=True)
         runs = [r for r in json.loads(result.stdout or "[]") if r.get("headSha") == head]
@@ -561,16 +650,16 @@ def ci_failure_report(branch, head, log_lines=120):
     """The failed jobs of the Branch CI run for `head` and the tail of their failed-step logs, for a fix
     worker to start from. Never raises: a report it cannot fetch says so and names the command."""
     try:
-        runs = json.loads(subprocess.run(
+        runs = json.loads(run_cmd(
             [tool("gh"), "run", "list", "--workflow", "Branch CI", "--branch", branch, "--limit", "20",
              "--json", "databaseId,headSha"], capture_output=True, text=True, check=True).stdout or "[]")
         run_id = next(r["databaseId"] for r in runs if r.get("headSha") == head)
-        jobs = json.loads(subprocess.run([tool("gh"), "run", "view", str(run_id), "--json", "jobs"],
+        jobs = json.loads(run_cmd([tool("gh"), "run", "view", str(run_id), "--json", "jobs"],
                                          capture_output=True, text=True, check=True).stdout or "{}")
         failed = [j["name"] for j in jobs.get("jobs", []) if j.get("conclusion") == "failure"]
         # CI logs carry ANSI and unicode that Windows' default code page cannot decode; text=True then
         # returned stdout=None and the AttributeError below killed g-t15400-4's loop (PR #739, 2026-11-10).
-        log = subprocess.run([tool("gh"), "run", "view", str(run_id), "--log-failed"],
+        log = run_cmd([tool("gh"), "run", "view", str(run_id), "--log-failed"],
                              capture_output=True, text=True, encoding="utf-8", errors="replace",
                              check=False).stdout or ""
     except (OSError, subprocess.SubprocessError, ValueError, StopIteration, KeyError) as exc:
@@ -582,7 +671,7 @@ def ci_failure_report(branch, head, log_lines=120):
 def ingest_transcripts(slug, group):
     dest_root = TASKS_ROOT / "profiles" / sanitize(slug) / "transcripts"
     dest_root.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run([tool("docker"), "cp", f"{cname(slug)}:/home/dev/.claude/projects/-workspace",
+    result = run_cmd([tool("docker"), "cp", f"{cname(slug)}:/home/dev/.claude/projects/-workspace",
                              str(dest_root)], capture_output=True, text=True, check=False)
     copied = dest_root / "-workspace"
     if result.returncode != 0 or not copied.is_dir():
@@ -592,7 +681,7 @@ def ingest_transcripts(slug, group):
     out_dir = TASKS_ROOT / "waves" / group["wave_id"] / "profiles"
     tasks_csv = ",".join(group["tasks"])
     for session in sorted(copied.glob("*.jsonl")):
-        subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "ingest",
+        run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "ingest",
                        "--directory", str(out_dir), "--identity", f"worker-{session.stem}", "--wave",
                        group["wave_id"], "--tasks", tasks_csv, "--role", "worker", "--phase", "implementation",
                        "--transcript", str(session)], env=env, check=False)
@@ -605,7 +694,7 @@ def ingest_transcripts(slug, group):
             except (OSError, ValueError):
                 pass
         identity = f"worker-{agent.parent.parent.stem}-{agent.stem}"
-        subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "ingest",
+        run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "ingest",
                        "--directory", str(out_dir), "--identity", identity, "--wave", group["wave_id"],
                        "--tasks", tasks_csv, "--role", role, "--phase", "implementation",
                        "--transcript", str(agent)], env=env, check=False)
@@ -618,10 +707,10 @@ def maybe_capture_and_gate(group, checkout, evidence_path):
     store = LANDING_ROOT / "receipts"
     common = ["--checkout", str(checkout), "--evidence", str(evidence_path), "--store", str(store)]
     gate = str(REPO_ROOT / "scripts" / "landing_gate.py")
-    subprocess.run([sys.executable, gate, "capture", "--role", "reviewer", *common], check=True, cwd=str(controller))
-    subprocess.run([sys.executable, gate, "capture", "--role", "proof-verifier", *common], check=True, cwd=str(controller))
-    subprocess.run([sys.executable, gate, "check", *common], check=True, cwd=str(controller))
-    result = subprocess.run([sys.executable, gate, "land", *common], capture_output=True, text=True,
+    run_cmd([sys.executable, gate, "capture", "--role", "reviewer", *common], check=True, cwd=str(controller))
+    run_cmd([sys.executable, gate, "capture", "--role", "proof-verifier", *common], check=True, cwd=str(controller))
+    run_cmd([sys.executable, gate, "check", *common], check=True, cwd=str(controller))
+    result = run_cmd([sys.executable, gate, "land", *common], capture_output=True, text=True,
                             cwd=str(controller), check=False)
     return result.stdout.strip() or ("landed" if result.returncode == 0 else "blocked")
 
@@ -670,7 +759,7 @@ def warm_stack(slug):
     raises: a failed warm-up only means the first verifier pays the compile cost."""
     started = time.time()
     try:
-        result = subprocess.run([tool("docker"), "exec", cname(slug), "node", "-e", WARM_STACK_SCRIPT],
+        result = run_cmd([tool("docker"), "exec", cname(slug), "node", "-e", WARM_STACK_SCRIPT],
                                 capture_output=True, text=True, timeout=WARM_STACK_SECONDS)
         outcome = "ok" if result.returncode == 0 else f"failed: {result.stderr.strip()[:300]}"
     except (OSError, subprocess.SubprocessError) as exc:
@@ -684,7 +773,7 @@ def stack(args):
 
 
 def git_head(checkout):
-    return subprocess.run([tool("git"), "-C", str(checkout), "rev-parse", "HEAD"],
+    return run_cmd([tool("git"), "-C", str(checkout), "rev-parse", "HEAD"],
                           capture_output=True, text=True, check=True).stdout.strip()
 
 
@@ -693,15 +782,15 @@ def mark_committed_tasks_completed(checkout, group):
     every task with a `T<id>:` commit on the branch is completed work."""
     env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
     for task_id in group["tasks"]:
-        found = subprocess.run([tool("git"), "-C", str(checkout), "log", "--oneline", "origin/master..HEAD",
+        found = run_cmd([tool("git"), "-C", str(checkout), "log", "--oneline", "origin/master..HEAD",
                                 "--grep", f"^{task_id}[: ]"], capture_output=True, text=True, check=False).stdout
         if found.strip():
-            subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "task", "--wave",
+            run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "task", "--wave",
                             group["wave_id"], "--id", task_id, "--status", "completed"], env=env, check=False)
 
 
 def run_preland_check(checkout):
-    return subprocess.run([bash(), (REPO_ROOT / "scripts" / "dotask_preland_check.sh").as_posix(), bash_path(checkout)],
+    return run_cmd([bash(), (REPO_ROOT / "scripts" / "dotask_preland_check.sh").as_posix(), bash_path(checkout)],
                           capture_output=True, text=True, check=False)
 
 
@@ -742,7 +831,7 @@ def land(args):
     with tempfile.TemporaryDirectory(prefix="dotask-pr-") as scratch:
         body_file = Path(scratch) / "body.md"
         body_file.write_text(render_pr_body(group), encoding="utf-8")
-        pr_result = subprocess.run([tool("gh"), "pr", "create", "--title", title, "--body-file", str(body_file),
+        pr_result = run_cmd([tool("gh"), "pr", "create", "--title", title, "--body-file", str(body_file),
                                     "--head", branch, "--base", "master"], cwd=str(checkout),
                                    capture_output=True, text=True)
     if pr_result.returncode == 0:
@@ -753,7 +842,7 @@ def land(args):
         # the PR for this head branch already exists, and `gh pr create` refuses. Reuse it
         # instead of dying here, which skipped the CI verdict, evidence, notes and profile
         # steps (T13280 landing, 2026-10-22).
-        existing = subprocess.run([tool("gh"), "pr", "view", branch, "--json", "url", "-q", ".url"],
+        existing = run_cmd([tool("gh"), "pr", "view", branch, "--json", "url", "-q", ".url"],
                                   cwd=str(checkout), capture_output=True, text=True)
         pr_url = existing.stdout.strip().splitlines()[-1] if existing.stdout.strip() else ""
         if existing.returncode != 0 or not pr_url:
@@ -785,7 +874,7 @@ def land(args):
     mark_committed_tasks_completed(checkout, group)
 
     env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
-    subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "report",
+    run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "report",
                    "--wave", group["wave_id"]], env=env, check=False)
     profile_path = TASKS_ROOT / "waves" / group["wave_id"] / "profile.json"
     print(f"profile: {profile_path}")
@@ -842,7 +931,8 @@ ACCEPTANCE_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+\[[ xX]\]")
 # (g-t15380-1, 2026-11-09). Plain items count only when the section has no checkbox items at all.
 ACCEPTANCE_PLAIN_ITEM = re.compile(r"^(?:[-*]|\d+\.)\s+")
 BUG_SECTION = "### Bugs found by /dotask verify"
-PLAN_TAIL_HEADING = "## Environment Configuration"
+BUG_SECTION_INTRO = ("Filed by /dotask verify and the staging check. Bugs outrank every feature (owner rule "
+                     "2026-11-13), so this section sits at the top, right under the work in flight.")
 REVIEW_INSTRUCTION = """You review the acceptance checks of this group, verify round {round}. You did not write this code or these checks.
 Do NOT edit tracked files, commit, or change qa/proof.json. Scripts of your own go under /tmp. HEAD is {head}.
 
@@ -971,7 +1061,7 @@ def tracked_changes(checkout):
     # rstrip, never strip: porcelain's first column is a space for an unstaged change, and stripping it
     # shifted the first path by one character, so " D qa/x.log" read as "a/x.log" and escaped the
     # TOOL_NOISE rule (g-t15260-1, 2026-11-08: "verifier changed the tree: D qa/red-...log").
-    return subprocess.run([tool("git"), "-C", str(checkout), "status", "--porcelain", "--untracked-files=no"],
+    return run_cmd([tool("git"), "-C", str(checkout), "status", "--porcelain", "--untracked-files=no"],
                           capture_output=True, text=True, check=True).stdout.rstrip()
 
 
@@ -1000,9 +1090,16 @@ def split_tool_noise(changes):
 
 def restore_tool_noise(checkout, paths):
     if paths:
-        subprocess.run([tool("git"), "-C", str(checkout), "checkout", "--", *paths],
+        run_cmd([tool("git"), "-C", str(checkout), "checkout", "--", *paths],
                        capture_output=True, text=True, check=False)
         print(f"[dotask] put back tool output the verifier rewrote: {' '.join(paths)}", file=sys.stderr)
+
+
+def status_word(line):
+    """The word after a status line's timestamp. A stop line can quote an earlier RESUMED line
+    (g-t16070-3, 2026-11-13), so a substring test read a stop as a restart."""
+    parts = line.split()
+    return parts[1] if len(parts) > 1 else ""
 
 
 def last_status(checkout):
@@ -1047,13 +1144,13 @@ def stop_dispatch(slug, process):
     """Kill a timed-out dispatch on both sides: the host process tree (task.sh, docker exec) and the
     `claude -p` run inside the container, which outlives a killed `docker exec`."""
     if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, check=False)
+        run_cmd(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, check=False)
     else:
         process.kill()
     with contextlib.suppress(subprocess.SubprocessError):
         process.wait(timeout=30)
     with contextlib.suppress(OSError, subprocess.SubprocessError, SystemExit):
-        subprocess.run([tool("docker"), "exec", cname(slug), "bash", "-c", KILL_DISPATCH_SCRIPT],
+        run_cmd([tool("docker"), "exec", cname(slug), "bash", "-c", KILL_DISPATCH_SCRIPT],
                        capture_output=True, check=False, timeout=60)
 
 
@@ -1107,7 +1204,7 @@ def handoff_note(checkout, label, record):
     """What a fresh conversation needs to pick up work a dispatch left uncommitted when it ran out of
     turns: the uncommitted files and a pointer to the worker's own progress checklist."""
     try:
-        changes = subprocess.run([tool("git"), "-C", str(checkout), "status", "--porcelain"],
+        changes = run_cmd([tool("git"), "-C", str(checkout), "status", "--porcelain"],
                                  capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         changes = "(git status unavailable)"
@@ -1358,7 +1455,7 @@ def stash_unfinished(checkout, label):
     the work stays in `git stash list` under the label."""
     if not tracked_changes(checkout):
         return None
-    subprocess.run([tool("git"), "-C", str(checkout), "stash", "push", "-m", f"dotask: unfinished {label}"],
+    run_cmd([tool("git"), "-C", str(checkout), "stash", "push", "-m", f"dotask: unfinished {label}"],
                    capture_output=True, text=True, check=False)
     return f"stashed as 'dotask: unfinished {label}'"
 
@@ -1466,17 +1563,8 @@ def file_unrelated_bug(bug, group, head, found_by=None):
     source = "staging check" if found_by else "verify"
     row = f"| {task_id} | [{title}](tasks/{name}) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask {source}. |"
     lines = plan.replace("\r\n", "\n").split("\n")
-    if BUG_SECTION in lines:
-        at = lines.index(BUG_SECTION) + 1
-        while at < len(lines) and (not lines[at].strip() or lines[at].startswith("|")):
-            at += 1
-        while not lines[at - 1].strip():
-            at -= 1
-        lines[at:at] = [row]
-    else:
-        at = lines.index(PLAN_TAIL_HEADING) if PLAN_TAIL_HEADING in lines else len(lines)
-        lines[at:at] = [BUG_SECTION, "", "| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |",
-                        "|---|---|---|---|---|---|---|---|", row, ""]
+    # Bugs outrank features (owner rule 2026-11-13): the section sits at the top, under the work in flight.
+    append_row(lines, ensure_top_section(lines, BUG_SECTION, BUG_SECTION_INTRO, after=IN_PROGRESS_SECTION), row)
     plan_was_dirty = git_paths_dirty(MAIN_REPO, [plan_path])
     plan_path.write_bytes(newline.join(lines).encode("utf-8"))
     commit_filed_bug(task_id, title, [plan_path, tasks_dir / name], plan_was_dirty)
@@ -1484,7 +1572,7 @@ def file_unrelated_bug(bug, group, head, found_by=None):
 
 
 def git_paths_dirty(repo, paths):
-    result = subprocess.run([tool("git"), "-C", str(repo), "status", "--porcelain", "--", *map(str, paths)],
+    result = run_cmd([tool("git"), "-C", str(repo), "status", "--porcelain", "--", *map(str, paths)],
                             capture_output=True, text=True, check=False)
     return result.returncode != 0 or bool(result.stdout.strip())
 
@@ -1495,7 +1583,7 @@ def commit_filed_bug(task_id, title, paths, plan_was_dirty):
     plan commit swept the filed file in under an unrelated subject. A PLAN.md that already held
     someone's uncommitted edit is left alone: committing it would publish their half-done change."""
     repo = str(MAIN_REPO)
-    branch = subprocess.run([tool("git"), "-C", repo, "rev-parse", "--abbrev-ref", "HEAD"],
+    branch = run_cmd([tool("git"), "-C", repo, "rev-parse", "--abbrev-ref", "HEAD"],
                             capture_output=True, text=True, check=False)
     why = None
     if branch.returncode != 0:
@@ -1505,8 +1593,8 @@ def commit_filed_bug(task_id, title, paths, plan_was_dirty):
     elif plan_was_dirty:
         why = "PLAN.md already had uncommitted edits"
     if why is None:
-        subprocess.run([tool("git"), "-C", repo, "add", "--", *map(str, paths)], capture_output=True, check=False)
-        done = subprocess.run([tool("git"), "-C", repo, "commit", "-m",
+        run_cmd([tool("git"), "-C", repo, "add", "--", *map(str, paths)], capture_output=True, check=False)
+        done = run_cmd([tool("git"), "-C", repo, "commit", "-m",
                                f"{task_id}: file {title} (found by /dotask verify)", "--", *map(str, paths)],
                               capture_output=True, text=True, check=False)
         if done.returncode == 0:
@@ -1547,7 +1635,7 @@ def container_run(slug, command, timeout, env=None, keep=2000):
     `keep` chars, or all of it with keep=None (a file read back, e.g. a Playwright JSON report)."""
     argv = [tool("docker"), "exec"] + [f"-e{k}={v}" for k, v in (env or {}).items()] + [cname(slug), "bash", "-lc", command]
     try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        result = run_cmd(argv, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return None, f"timed out after {timeout:.0f}s"
     except OSError as exc:
@@ -1807,7 +1895,7 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
 
 
 def is_ancestor(checkout, older, newer):
-    return subprocess.run(["git", "-C", str(checkout), "merge-base", "--is-ancestor", older, newer],
+    return run_cmd(["git", "-C", str(checkout), "merge-base", "--is-ancestor", older, newer],
                           capture_output=True).returncode == 0
 
 
@@ -1837,6 +1925,161 @@ def skipped_ids(verdict):
     return [c.get("id") for c in verdict.get("criteria", []) if c.get("status") == "skipped"]
 
 
+# --- owner test before the PR ------------------------------------------------------
+# Owner rule 2026-11-13: a clean verdict no longer opens the PR by itself. The loop brings the group's stack
+# up on the verified HEAD, writes a test guide (each task's criteria, how each was checked), stops at
+# READY_TO_TEST, and `approve` pushes that exact HEAD. Red CI after approval still goes to a fix round, and the
+# new HEAD comes back for another test.
+READY_TO_TEST = "READY_TO_TEST"
+OWNER_TEST = os.environ.get("DOTASK_OWNER_TEST", "1") != "0"  # 0: a clean verdict opens the PR at once (old flow)
+CHECK_KIND_NOTE = {"browser": "a browser check passed on the dev stack", "code": "a code check passed",
+                   "human": "nobody has checked this yet: look for it yourself"}
+
+
+def test_guide_path(slug):
+    return TASKS_ROOT / "profiles" / sanitize(slug) / "test-guide.md"
+
+
+def write_test_guide(slug, group, checkout, head, frontend):
+    """A guide the owner can read cold: where to go and what each criterion promises. The chat relaying
+    READY_TO_TEST adds the clicks to reach each screen from the task files (dotask SKILL, Test guide)."""
+    staging = {c["id"] for c in group.get("staging_checks", [])}
+    skipped = {c["id"] for c in group.get("skipped_checks", [])}
+    lines = [f"# Test {slug} before its PR", "",
+             f"App: {frontend}/?dev_account=full (HEAD {head[:9]}, branch {group['branch']})", "",
+             f"When it works: `/dotask approve {slug}`. If something is wrong, say what, and it goes back to a fix round.",
+             ""]
+    for task_id in group["tasks"]:
+        task_file = task_file_in(checkout, task_id)
+        manifest = check_manifest(checkout, task_id)
+        lines += [f"## {task_id}: {task_title(task_file)}", ""]
+        items = acceptance_items(task_file)
+        if not items:  # T16070 (2026-11-13) has no Acceptance Criteria section: list its checks instead
+            lines += ["The task file has no Acceptance Criteria section; read its plain-words section. Its checks:"]
+            lines += [f"- [ ] **{cid}** ({entry.get('kind', '?')}) {entry.get('why', '')}".rstrip()
+                      for cid, entry in manifest.items()]
+        for number, text in enumerate(items, 1):
+            cid = f"{task_id}:C{number}"
+            if cid in skipped:
+                how = "not verified: the verify budget ran out before it was checked"
+            elif cid in staging:
+                how = CHECK_KIND_NOTE["human"]
+            else:
+                how = CHECK_KIND_NOTE.get(manifest.get(cid, {}).get("kind"), "checked")
+            lines += [f"- [ ] **{cid}** {text}", f"  - {how}"]
+        lines.append("")
+    path = test_guide_path(slug)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_lf(path, "\n".join(lines))
+    return path
+
+
+def ready_to_test(slug, group, checkout, head):
+    try:
+        frontend = bring_up_stack(slug)
+    except subprocess.CalledProcessError as exc:
+        append_status(checkout, f"VERIFY_BLOCKED {head[:9]}: clean verdict, but the test stack did not start "
+                                f"(exit {exc.returncode}); /dotask resume {slug} retries")
+        return 1
+    group["tested_head"] = head
+    save_group(checkout, group)
+    guide = write_test_guide(slug, group, checkout, head, frontend)
+    append_status(checkout, f"{READY_TO_TEST} {head[:9]}: test {frontend}/?dev_account=full with {guide.as_posix()}, "
+                            f"then /dotask approve {slug}")
+    return 0
+
+
+def approved_verdict(checkout, group, head):
+    """The clean verdict `approve` lands on, or None (verify as usual)."""
+    if group.get("approved_head") != head:
+        return None
+    try:
+        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if verdict.get("head") != head or verdict_has_findings(checkout):
+        return None
+    return verdict
+
+
+OWNER_CHANGES_RECHECK_MIN = 15
+
+
+def tested_or_plans_only(checkout, tested, head):
+    """HEAD is the tested one, or moved only by commits under docs/plans (the owner's ruling recorded in a
+    task file before `changes`, g-t16070-3 2026-11-13): the code the owner tested is unchanged."""
+    if not tested or tested == head:
+        return tested == head
+    diff = run_cmd([tool("git"), "-C", str(checkout), "diff", "--name-only", tested, head],
+                          capture_output=True, text=True, check=False)
+    paths = [p for p in diff.stdout.splitlines() if p.strip()]
+    return diff.returncode == 0 and is_ancestor(checkout, tested, head) and all(p.startswith("docs/plans/") for p in paths)
+
+
+def owner_changes_verdict(checkout, group, head):
+    """The verdict a `changes` request turns into a fix round: the clean verdict on this HEAD plus the owner's
+    findings as group bugs, written where the fix workers read it. None when no request waits on this HEAD."""
+    request = group.get("owner_changes")
+    if not request or request.get("head") != head:
+        return None
+    try:
+        verdict = json.loads((Path(checkout) / VERIFY_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        verdict = {"criteria": []}
+    verdict = {**verdict, "head": head, "bugs": [*verdict.get("bugs", []), *request["bugs"]]}
+    write_lf(Path(checkout) / VERIFY_FILE, json.dumps(verdict, indent=2) + "\n")
+    group.pop("owner_changes")
+    save_group(checkout, group)
+    return verdict
+
+
+def changes(args):
+    """The owner tested READY_TO_TEST's stack and wants changes (g-t16070-3, 2026-11-13): each finding becomes a
+    group bug owned by its task, and autoland runs a fix round, a re-check and a new READY_TO_TEST. Record any
+    criterion the owner changed in the task file (## Ruling) first: fix workers never edit criteria."""
+    slug = args.slug
+    checkout = TASKS_ROOT / sanitize(slug)
+    group_path = checkout / GROUP_FILE
+    if not group_path.is_file():
+        die(f"no group file at {group_path}; is {slug} a live /dotask group?")
+    group = json.loads(group_path.read_text(encoding="utf-8"))
+    head = git_head(checkout)
+    if READY_TO_TEST not in last_status(checkout) or not tested_or_plans_only(checkout, group.get("tested_head"), head):
+        die(f"{slug} is not waiting on a test of HEAD {head[:9]} (last status: {last_status(checkout)[:120]})")
+    bugs = []
+    for task_id, text in args.finding:
+        if task_id not in group["tasks"]:
+            die(f"{task_id} is not in {slug} ({' '.join(group['tasks'])})")
+        bugs.append({"scope": "group", "task": task_id, "title": f"Owner change: {text[:90]}",
+                     "steps": f"The owner tested HEAD {head[:9]} on the local stack. Read {task_id}'s task file, "
+                              "including any ## Ruling, before changing code.",
+                     "expected": text, "actual": "Not built this way at the tested HEAD."})
+    group["owner_changes"] = {"head": head, "bugs": bugs}
+    # The owner re-tests anyway, but the re-check of their changes should not start with no budget left.
+    budget = group.get("verify_budget_min", VERIFY_BUDGET_MINUTES)
+    group["verify_spent_s"] = min(group.get("verify_spent_s", 0), (budget - OWNER_CHANGES_RECHECK_MIN) * 60)
+    save_group(checkout, group)
+    append_status(checkout, f"OWNER_CHANGES {head[:9]}: {len(bugs)} change(s) for "
+                            f"{' '.join(sorted({b['task'] for b in bugs}))}; fix round next")
+    return autoland(SimpleNamespace(slug=slug, no_land=False))
+
+
+def approve(args):
+    slug = args.slug
+    checkout = TASKS_ROOT / sanitize(slug)
+    group_path = checkout / GROUP_FILE
+    if not group_path.is_file():
+        die(f"no group file at {group_path}; is {slug} a live /dotask group?")
+    group = json.loads(group_path.read_text(encoding="utf-8"))
+    head = git_head(checkout)
+    if READY_TO_TEST not in last_status(checkout) or group.get("tested_head") != head:
+        die(f"{slug} is not waiting on a test of HEAD {head[:9]} (last status: {last_status(checkout)[:120]})")
+    group["approved_head"] = head
+    save_group(checkout, group)
+    append_status(checkout, f"APPROVED {head[:9]}: owner tested the stack; pushing and opening the PR")
+    return autoland(SimpleNamespace(slug=slug, no_land=False))
+
+
 def autoland(args):
     slug = args.slug
     checkout = TASKS_ROOT / sanitize(slug)
@@ -1859,7 +2102,7 @@ def autoland(args):
         group["verify_budget_min"] = float(os.environ["DOTASK_VERIFY_BUDGET_MIN"])
         save_group(checkout, group)
     last_line = (status_text.strip().splitlines() or [""])[-1]
-    if any(f" {word} " in f" {last_line} " for word in STOP_WORDS) and " RESUMED " not in last_line:
+    if any(f" {word} " in f" {last_line} " for word in STOP_WORDS) and status_word(last_line) != "RESUMED":
         # `status` read the old stop line as current while the restarted loop ran (g-t15540-4, 2026-11-12).
         append_status(checkout, "RESUMED autoland verify: restarted after a stop, re-checking")
 
@@ -1883,7 +2126,9 @@ def autoland(args):
                 {"scope": "group", "title": "pre-land check failed", "actual": check.stdout + check.stderr}]}, indent=2) + "\n")
         else:
             try:
-                verdict = verify_once(slug, group, checkout, head, round_number, focus)
+                # `approve` re-enters here: the clean verdict on this exact HEAD stands, nothing is re-checked.
+                verdict = (approved_verdict(checkout, group, head) or owner_changes_verdict(checkout, group, head)
+                           or verify_once(slug, group, checkout, head, round_number, focus))
             except UntrustedVerdict as exc:
                 append_status(checkout, f"VERIFY_BLOCKED round {round_number}: {exc}")
                 return 1
@@ -1924,6 +2169,9 @@ def autoland(args):
                 append_status(checkout, f"VERIFY_PASS {head[:9]} round {round_number}{staging_note}")
                 if args.no_land:
                     return 0
+                if OWNER_TEST and group.get("approved_head") != head:
+                    # Owner rule 2026-11-13: no PR until the owner has seen the work on a local stack.
+                    return ready_to_test(slug, group, checkout, head)
                 code = land(SimpleNamespace(slug=slug, after_test=True, fix_on_red=True))
                 if code != CI_RED:
                     if code == 0:  # without this a finished group looks like a dead loop to `status`
@@ -2116,15 +2364,17 @@ def estimate(group, checkout, now=None):
     fix_round = fix_work + verify
     fix_parts = [f"fix {len(owners)} task(s) x {impl:.0f} min", f"re-check up to {verify:.0f} min (verify budget left)"]
     parts, verify_ahead = [], True
-    if "VERIFY_PASS" in last:
+    if READY_TO_TEST in last:
+        return None, None, f"waiting on your test, then about {ci:.0f} min of CI after /dotask approve: {last[:160]}"
+    if "VERIFY_PASS" in last or " APPROVED " in last:
         minutes, verify_ahead = ci, False
         parts.append(f"CI {ci:.0f} min")
-    elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and " RESUMED " not in last:
+    elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and status_word(last) != "RESUMED":
         return None, None, f"stopped, needs a restart or a ruling: {last[:140]}"
-    elif " RESUMED " in last and "autoland verify" in last:
+    elif status_word(last) == "RESUMED" and "autoland verify" in last:
         minutes = verify + ci
         parts += [f"re-check up to {verify:.0f} min", f"CI {ci:.0f} min"]
-    elif " RESUMED " in last and "fix round" in last.lower():
+    elif status_word(last) == "RESUMED" and "fix round" in last.lower():
         # A fix dispatch restarted after running out of turns: the rest of the round, then the re-check.
         minutes = fix_round + ci
         parts += ["fix round (restarted)", *fix_parts, f"CI {ci:.0f} min"]
@@ -2180,6 +2430,15 @@ def eta_line(group, checkout, now=None):
     best, with_fix, basis = estimate(group, checkout, now)
     if best is None:
         return f"eta: none ({basis})"
+    if OWNER_TEST and " APPROVED " not in last_status(checkout):
+        # The owner's test comes before the push, so the next milestone is the test stack, not the PR.
+        ci = dt.timedelta(minutes=DEFAULT_MINUTES["ci"])
+        best, with_fix = best - ci, (with_fix - ci if with_fix else None)
+        basis = basis.replace(f", CI {DEFAULT_MINUTES['ci']} min", "").replace(f"CI {DEFAULT_MINUTES['ci']} min", "")
+        line = f"eta: ready for your test about {clock(best, now)}"
+        if with_fix:
+            line += f" ({clock(with_fix, now)} with one fix round)"
+        return f"{line} -- {basis}; PR about {DEFAULT_MINUTES['ci']} min after you approve"
     line = f"eta: PR about {clock(best, now)}"
     if with_fix:
         line += f" ({clock(with_fix, now)} with one fix round)"
@@ -2239,7 +2498,7 @@ def status(args):
                   f"`task.sh nuke {slug}` clears it)")
         elif loop_not_running(group_path.parent) and not any(
                 f" {word} " in f" {last_status(group_path.parent)} " or f" {word}" in last_status(group_path.parent)
-                for word in (*STOP_WORDS, "LANDED")):
+                for word in (*STOP_WORDS, "LANDED", READY_TO_TEST)):
             # Its container is up but nothing drives it: a reboot or a kill, or a crash from before
             # LOOP_CRASHED. Worded like the other stops so a watcher keyed on "(stopped" relaunches it.
             print(f"  eta: none (stopped, no loop is running for this group; `bash scripts/dotask.sh resume {slug}` "
@@ -2263,7 +2522,7 @@ STAGING_DONE, STAGING_STARTED = "STAGING_CHECK ", "STAGING_CHECK_STARTED "
 
 
 def merge_commit(pr_number):
-    result = subprocess.run([tool("gh"), "pr", "view", str(pr_number), "--json", "mergeCommit", "-q", ".mergeCommit.oid"],
+    result = run_cmd([tool("gh"), "pr", "view", str(pr_number), "--json", "mergeCommit", "-q", ".mergeCommit.oid"],
                             capture_output=True, text=True, check=False)
     return result.stdout.strip() if result.returncode == 0 else ""
 
@@ -2276,7 +2535,7 @@ def wait_for_staging_deploy(sha, cap_minutes=40, appear_minutes=5, interval=30):
     while True:
         runs = {}
         for workflow in DEPLOY_WORKFLOWS:
-            listed = subprocess.run([tool("gh"), "run", "list", "--workflow", workflow, "--branch", "master", "--limit", "30",
+            listed = run_cmd([tool("gh"), "run", "list", "--workflow", workflow, "--branch", "master", "--limit", "30",
                                      "--json", "headSha,status,conclusion"], capture_output=True, text=True, check=False)
             entries = json.loads(listed.stdout or "[]") if listed.returncode == 0 else []
             mine = [r for r in entries if r.get("headSha") == sha]
@@ -2288,6 +2547,9 @@ def wait_for_staging_deploy(sha, cap_minutes=40, appear_minutes=5, interval=30):
                 newer = entries[:entries.index(mine[0])]
                 if any(r.get("status") == "completed" and r.get("conclusion") == "success" for r in newer):
                     mine = [next(r for r in newer if r.get("conclusion") == "success")]
+                elif any(r.get("status") != "completed" for r in newer):
+                    # A redeploy is running (PR #750's re-dispatch, 2026-11-13): wait for it, do not fail now.
+                    mine = [next(r for r in newer if r.get("status") != "completed")]
             runs[workflow] = mine[0] if mine else None
         found = [r for r in runs.values() if r]
         waited = (time.time() - started) / 60
@@ -2390,7 +2652,7 @@ def merged_pr(branch):
     if not branch:
         return None
     try:
-        result = subprocess.run([tool("gh"), "pr", "list", "--head", branch, "--state", "merged", "--json", "number",
+        result = run_cmd([tool("gh"), "pr", "list", "--head", branch, "--state", "merged", "--json", "number",
                                  "--jq", ".[0].number"], capture_output=True, text=True, timeout=60, check=False)
     except (OSError, subprocess.SubprocessError, SystemExit):
         return None
@@ -2429,6 +2691,16 @@ def main(argv=None):
     auto.add_argument("slug")
     auto.add_argument("--no-land", action="store_true", help="stop after a clean verdict; push nothing")
 
+    ok = sub.add_parser("approve", help="the owner tested READY_TO_TEST's stack: push that HEAD, open the PR, "
+                                        "wait for CI (red CI goes to a fix round and back to a test)")
+    ok.add_argument("slug")
+
+    redo = sub.add_parser("changes", help="the owner tested READY_TO_TEST's stack and wants changes: a fix round, "
+                                          "a re-check, then a new READY_TO_TEST")
+    redo.add_argument("slug")
+    redo.add_argument("--finding", nargs=2, action="append", required=True, metavar=("TASK", "TEXT"),
+                      help="a change the owner wants, owned by one task of the group (repeatable)")
+
     app = sub.add_parser("stack")
     app.add_argument("slug")
 
@@ -2443,7 +2715,7 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
     try:
-        return {"start": start, "land": land, "autoland": locked(autoland), "resume": locked(resume), "stack": stack,
+        return {"start": start, "land": land, "autoland": locked(autoland), "resume": locked(resume), "approve": locked(approve), "changes": locked(changes),"stack": stack,
                 "status": status, "nextup": nextup, "staging-check": staging_check}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)

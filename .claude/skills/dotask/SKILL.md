@@ -33,6 +33,7 @@ below.
 | `/dotask T1 T2 ... --capture` | `bash scripts/dotask.sh start --capture T1 T2 ...` | Same, plus: this group's `land` will run captured review/proof automatically. |
 | `/dotask autoland <slug>` | `bash scripts/dotask.sh autoland <slug>` | Runs the [verify loop](#automatic-landing-headless-default) by hand: a `--window` group, or a headless run that stopped. `--no-land` stops after a clean verdict. Relay the last status line. |
 | `/dotask resume <slug>` | `bash scripts/dotask.sh resume <slug>` | Continue a headless group that stopped (a BLOCKED question answered, a CONFLICT ruled, a crash, a reboot): the build loop for every task without a commit line, then autoland, which itself resumes a fix round's focused re-check. The first headless launch runs this same command. Stop a loop still running for the group first. Relay the `eta:` line. |
+| `/dotask approve <slug>` | `bash scripts/dotask.sh approve <slug>` | The owner tested a `READY_TO_TEST` stack and it works: push that exact HEAD, open the PR, wait for CI (red CI goes to a fix round and back to a test). Relay the PR URL. |
 | `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Step 1 of 2. First runs `scripts/dotask_preland_check.sh` on the checkout (whitespace, non-evidence files under `qa/`, ruff/eslint growth, `ci_policy` routing) and refuses, naming the paths, while it fails. Then restarts the group's app stack and returns only once the frontend + backend `/api/health` answer. Relay the URL (`http://localhost:<5173+offset>`) WITH a test guide (see [Test guide](#test-guide-required-with-every-localhost-link)) and STOP: the human tests the app. Nothing is pushed and no PR exists yet. Records the tested HEAD. On a timeout it exits non-zero with the log paths; relay them. |
 | `/dotask land <slug> --after-test` | `bash scripts/dotask.sh land <slug> --after-test` | Step 2, only after the user says the test passed. Refuses if HEAD moved since step 1 (re-run step 1). Pushes, opens the PR, waits for CI, builds evidence scoped to the group's tasks (another group's `qa/proof.json` entries never block it), marks committed tasks completed in the wave profile. Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
 | `/dotask stack <slug>` | `bash scripts/dotask.sh stack <slug>` | Same stack (re)start + wait as land step 1, without recording a tested HEAD. Relay the URL with a test guide. |
@@ -65,8 +66,9 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   which is what `/nextup` (`dotask.sh nextup`) bundles for.
 - **The work happens in a NEW VS Code window attached to that container**
   (`task.sh code <slug> --prompt-file <kickoff>`, run by `dotask.sh start`). The user talks to
-  that Claude session directly -- it IS the worker, running on Sonnet (every task container's
-  settings default to the `sonnet` alias; see `.devcontainer/task-bootstrap.sh`). This chat
+  that Claude session directly -- it IS the worker, running on Opus (owner rule 2026-11-13: every
+  task container's settings default to the `opus` alias, see `.devcontainer/task-bootstrap.sh`; headless
+  dispatches run `opus` at effort `medium` in every phase, `DOTASK_MODEL`/`DOTASK_EFFORT` override). This chat
   does not relay turns to or from it.
   Once the container has the Claude extension (about a minute on a first attach), `task.sh code`
   opens `vscode://anthropic.claude-code/open?prompt=...`, which prefills the kickoff line in the
@@ -162,10 +164,18 @@ runs on the dev stack and on staging), `code` (one command: a grep or one target
    next reviewer gets the fixer's evidence and re-examines the finding fresh (one that also fails on
    origin/master becomes an `unrelated` bug). Only a finding that reviewer still upholds stops the loop,
    with `VERIFY_NEEDS_USER` naming both sides (g-t14940-1, 2026-11-08, needed the owner for a flake).
-4. Clean verdict: `VERIFY_PASS`, then push, PR, CI, evidence (`land --after-test`). Merging stays with the user.
-   Red Branch CI on that head is a finding too: `CI_RED`, and the failed jobs and the tail of their logs
-   become a `group` bug for a fix round, then the re-check and a new push to the same PR (PRs #720, #722,
-   #723 waited on a person for this, 2026-11-08). It counts against `MAX_FIX_ROUNDS`.
+4. Clean verdict: `VERIFY_PASS`, then **the owner tests before any PR** (owner rule 2026-11-13). The loop
+   brings the group's stack up on that HEAD, writes `profiles/<slug>/test-guide.md` (each task's criteria
+   and how each was checked: browser, code, nobody yet, or not verified), and stops at
+   `READY_TO_TEST <head>: test <url> with <guide>, then /dotask approve <slug>`. Relay the URL with a
+   [test guide](#test-guide-required-with-every-localhost-link) built from that file and the task files. The
+   owner says it works: `bash scripts/dotask.sh approve <slug>` (refuses if HEAD moved) pushes that HEAD, opens
+   the PR, waits for CI, builds evidence, `LANDED`. The owner says something is wrong: write it into the task
+   file's notes or a criterion, then `/dotask resume <slug>`. `DOTASK_OWNER_TEST=0` restores the old
+   push-on-clean-verdict flow. Merging stays with the user.
+   Red Branch CI after approval is a finding too: `CI_RED`, and the failed jobs and the tail of their logs
+   become a `group` bug for a fix round, then the re-check and a new `READY_TO_TEST` for the new HEAD (PRs #720,
+   #722, #723 waited on a person for this, 2026-11-08). It counts against `MAX_FIX_ROUNDS`.
 
 **One verify budget per group: 30 minutes** (owner rule 2026-11-09; `DOTASK_VERIFY_BUDGET_MIN` overrides),
 shared by every round's stack start, checks and review (`verify_spent_s` in the group file, so a restart keeps
