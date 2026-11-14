@@ -1498,6 +1498,72 @@ def record_session_exit(
         logger.warning("[Analytics] SQLite sync failed for session-exit breadcrumb user=%s", user_id)
 
 
+# T16400: bounds for an app-load timing row. A load longer than an hour, or a count
+# past these, is a broken client clock or payload, not a load to explain.
+APP_LOAD_MAX_MS = 3_600_000
+APP_LOAD_MAX_COUNT = 100
+
+
+def record_app_load(
+    user_id: str,
+    ready_ms: int,
+    first_answer_ms: int | None,
+    me_attempts: int,
+    retries: int,
+):
+    """T16400: write how long this app load took to become usable to the user's own log.
+
+    ``ready_ms``: page start to the loading screen gone. ``first_answer_ms``: page
+    start to the first answer from /api/auth/me. ``me_attempts``: /me requests sent.
+    ``retries``: Retry presses on the "Still connecting" screen. One row per load in
+    ``user_action_log`` (user.sqlite, synced to R2), so a slow load can still be
+    explained after the server's log buffer has rolled over. Sent once by the app
+    when it becomes usable (the page load is the trigger, not a state watch). Same
+    impersonation guard as record_session_exit. Never raises.
+    """
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.debug("[Analytics] Skipped app-load timing for %s during impersonation by %s", user_id, impersonator)
+        return
+
+    in_range = (
+        0 <= ready_ms <= APP_LOAD_MAX_MS
+        and (first_answer_ms is None or 0 <= first_answer_ms <= APP_LOAD_MAX_MS)
+        and 0 <= me_attempts <= APP_LOAD_MAX_COUNT
+        and 0 <= retries <= APP_LOAD_MAX_COUNT
+    )
+    if not in_range:
+        logger.warning(
+            "[Analytics] app-load timing out of range, not recorded: user=%s ready_ms=%s first_answer_ms=%s "
+            "me_attempts=%s retries=%s", user_id, ready_ms, first_answer_ms, me_attempts, retries,
+        )
+        return
+
+    log_context = {
+        "ready_ms": ready_ms, "first_answer_ms": first_answer_ms,
+        "me_attempts": me_attempts, "retries": retries,
+    }
+    try:
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection(user_id) as conn:
+            now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            conn.execute(
+                "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
+                ("app_load", json.dumps(log_context), now),
+            )
+            conn.commit()
+        logger.info("[Analytics] App load: user=%s ready_ms=%d first_answer_ms=%s me_attempts=%d retries=%d",
+                    user_id, ready_ms, first_answer_ms, me_attempts, retries)
+    except MigrationBlocked as e:
+        logger.critical(
+            "[Migration] ANALYTICS_WRITE_DROPPED user=%s action=app_load reason=%s — "
+            "user.sqlite is below head on this machine; the row was NOT written",
+            user_id, e.reason,
+        )
+    except Exception:
+        logger.warning("[Analytics] SQLite write failed for app-load timing user=%s", user_id)
+
+
 def share_view_counts(sharer_user_id: str, tokens: list[str]) -> dict[str, int] | None:
     """Per-link `share_viewed` counts for the T5740 admin funnel (read-only).
 
