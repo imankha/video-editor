@@ -73,7 +73,7 @@ from ..profiling import (
     profile_on_breach_enabled,
 )
 from ..r2_usage import route_source, set_r2_source
-from ..services.auth_db import validate_session
+from ..services.auth_db import remembered_session, validate_session
 from ..session_init import user_session_init
 from ..storage import APP_ENV, R2_ENABLED
 from ..user_context import (
@@ -958,7 +958,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 # Bare to_thread is safe here: this runs BEFORE set_current_user_id
                 # (below) and validate_session reads no request contextvar (it takes
                 # session_id explicitly and resolves via the thread-safe PG pool).
-                session = await asyncio.wait_for(
+                # T16380: a remembered session is a dict read, answered on the loop
+                # without a thread hop (the hop alone cost 2-3 ms in a burst).
+                session = remembered_session(session_id) or await asyncio.wait_for(
                     asyncio.to_thread(validate_session, session_id), SESSION_CHECK_TIMEOUT_S,
                 )
             except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.pool.PoolError) as e:

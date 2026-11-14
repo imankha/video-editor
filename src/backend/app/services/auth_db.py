@@ -194,7 +194,9 @@ def clear_session_cache() -> None:
         _session_cache.clear()
 
 
-def _remembered_session(session_id: str) -> dict | None:
+def remembered_session(session_id: str) -> dict | None:
+    """The remembered row for a session, or None. Never touches Postgres, so the
+    request middleware calls it on the event loop before offloading a lookup."""
     with _session_cache_lock:
         entry = _session_cache.get(session_id)
         if entry is None:
@@ -220,13 +222,13 @@ def validate_session(session_id: str) -> dict | None:
     T16380: answered from process memory when this session was validated in the
     last SESSION_CACHE_TTL_SECONDS; only valid sessions are remembered.
     """
-    row = _remembered_session(session_id)
+    row = remembered_session(session_id)
     if row is not None:
         return row
     with _session_cache_lock:
         lookup_lock = _session_lookup_locks.setdefault(session_id, threading.Lock())
     with lookup_lock:
-        row = _remembered_session(session_id)
+        row = remembered_session(session_id)
         if row is not None:
             return row
         with _session_cache_lock:

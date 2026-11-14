@@ -8,6 +8,11 @@ at once, and an entry is never served past the session's own expiry or its
 impersonation time limit.
 """
 
+import logging
+import os
+import re
+import socket
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -83,6 +88,86 @@ def test_c1_middleware_second_request_skips_postgres(client, lookups):
     with patch.object(auth_db, "update_last_seen"):
         assert client.get("/api/version").status_code == 200
     assert len(lookups) == 0, "a repeat request with the same cookie asked Postgres again"
+
+
+POSTGRES_LATENCY_S = 0.4  # added to every Postgres session lookup in the burst test
+BURST_LIMIT_S = 0.5
+
+
+@pytest.fixture()
+def server(users, tmp_path):
+    """The app served by a real uvicorn server, as in production (T16400 pattern)."""
+    import uvicorn
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
+         patch.dict(os.environ, {"APP_ENV": "production"}):
+        from app.main import app
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        srv = uvicorn.Server(uvicorn.Config(
+            app, host="127.0.0.1", port=port, lifespan="off", log_level="warning",
+        ))
+        thread = threading.Thread(target=srv.run, daemon=True)
+        thread.start()
+        deadline = time.monotonic() + 10
+        while not srv.started and time.monotonic() < deadline:
+            time.sleep(0.05)
+        yield f"http://127.0.0.1:{port}"
+        srv.should_exit = True
+        thread.join(30)
+
+
+def test_c1_burst_of_twelve_signed_in_requests_each_under_half_a_second(
+    server, monkeypatch, caplog
+):
+    """12 simultaneous signed-in GETs to a do-nothing endpoint on a real server,
+    with every Postgres session lookup slowed: each answers in under 0.5 s and the
+    timing log shows the session check at 0 ms after the first request."""
+    import httpx
+
+    real = auth_db.get_auth_db
+
+    def slow_lookup():
+        time.sleep(POSTGRES_LATENCY_S)
+        return real()
+
+    sid = auth_db.create_session(USER_ID)
+    monkeypatch.setattr(auth_db, "get_auth_db", slow_lookup)
+    caplog.set_level(logging.INFO, logger="app.middleware.db_sync")
+    cookies = {"rb_session": sid}
+
+    with httpx.Client(base_url=server, cookies=cookies, timeout=30) as c:
+        assert c.get("/api/auth/me").status_code == 200  # the first request
+    caplog.clear()
+
+    barrier = threading.Barrier(12)
+
+    def one(_):
+        with httpx.Client(base_url=server, cookies=cookies, timeout=30) as c:
+            barrier.wait()
+            t0 = time.monotonic()
+            r = c.get("/api/version")
+            return r.status_code, time.monotonic() - t0
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        results = list(pool.map(one, range(12)))
+
+    assert [code for code, _ in results] == [200] * 12
+    slow = [round(t, 2) for _, t in results if t >= BURST_LIMIT_S]
+    assert not slow, f"requests over {BURST_LIMIT_S}s: {slow} (all: {[round(t, 2) for _, t in results]})"
+
+    deadline = time.monotonic() + 5
+    while True:
+        timings = [m for m in caplog.messages
+                   if m.startswith("[REQ_TIMING] GET /api/version") and f"user={USER_ID}" in m]
+        if len(timings) >= 12 or time.monotonic() > deadline:
+            break
+        time.sleep(0.05)
+    assert len(timings) == 12, f"expected 12 timing lines, got {len(timings)}"
+    auth_ms = [int(re.search(r"auth_ms=(\d+)", m).group(1)) for m in timings]
+    assert auth_ms == [0] * 12, f"session check ms after the first request: {auth_ms}"
 
 
 def test_c2_logout_refuses_old_cookie_at_once(client, lookups):
