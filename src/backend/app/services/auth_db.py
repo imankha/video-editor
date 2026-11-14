@@ -15,6 +15,7 @@ import secrets
 import threading
 import time
 import uuid
+from concurrent.futures import Future
 from datetime import UTC, datetime, timedelta
 
 from app.user_context import get_current_impersonator_id
@@ -168,8 +169,13 @@ _session_cache_lock = threading.Lock()
 # Bumped by every forget; a lookup that started before a forget never stores its
 # (possibly already deleted) row.
 _session_cache_generation = 0
-# Single-flight: concurrent misses for the same sid wait for one Postgres lookup.
-_session_lookup_locks: dict[str, threading.Lock] = {}
+# Single-flight: concurrent misses for the same sid share one Postgres lookup and
+# its answer, an invalid session (None) included. T16390: waiting on a per-sid lock
+# instead made 12 requests with the same invalid cookie query one after another,
+# since an invalid session is never remembered.
+_session_lookups: dict[str, tuple[Future, int]] = {}  # sid -> (lookup, generation)
+# A shared lookup is bounded by pg.py's connect limits; this is a backstop.
+_SHARED_LOOKUP_WAIT_S = 10.0
 
 
 def forget_session(session_id: str) -> None:
@@ -222,30 +228,55 @@ def validate_session(session_id: str) -> dict | None:
     T16380: answered from process memory when this session was validated in the
     last SESSION_CACHE_TTL_SECONDS; only valid sessions are remembered.
     """
-    row = remembered_session(session_id)
-    if row is not None:
-        return row
-    with _session_cache_lock:
-        lookup_lock = _session_lookup_locks.setdefault(session_id, threading.Lock())
-    with lookup_lock:
+    while True:
         row = remembered_session(session_id)
         if row is not None:
             return row
         with _session_cache_lock:
-            generation = _session_cache_generation
+            in_flight = _session_lookups.get(session_id)
+            if in_flight is None:
+                lookup, generation = Future(), _session_cache_generation
+                _session_lookups[session_id] = (lookup, generation)
+        if in_flight is None:
+            found = _lead_session_lookup(session_id, lookup, generation)
+            return dict(found[0]) if found is not None else None
+        lookup, generation = in_flight
+        found, error = None, None
         try:
-            found = _validate_session_in_db(session_id)
-        finally:
-            with _session_cache_lock:
-                _session_lookup_locks.pop(session_id, None)
+            found = lookup.result(timeout=_SHARED_LOOKUP_WAIT_S)
+        except Exception as e:  # the leader's error (or the backstop timeout)
+            error = e
         with _session_cache_lock:
+            stale = generation != _session_cache_generation
+        if stale:
+            continue  # a forget ran meanwhile: that answer may be stale
+        if error is not None:
+            raise error
+        return dict(found[0]) if found is not None else None
+
+
+def _lead_session_lookup(
+    session_id: str, lookup: Future, generation: int
+) -> tuple[dict, datetime] | None:
+    """Run the Postgres lookup other threads are waiting on and hand them its answer."""
+    found = None
+    try:
+        found = _validate_session_in_db(session_id)
+    except BaseException as e:
+        lookup.set_exception(e)
+        raise
+    finally:
+        with _session_cache_lock:
+            _session_lookups.pop(session_id, None)
             if found is not None and generation == _session_cache_generation:
                 row, expires_at = found
                 now_mono = time.monotonic()
                 for sid in [s for s, (until, _, _) in _session_cache.items() if until <= now_mono]:
                     del _session_cache[sid]
                 _session_cache[session_id] = (now_mono + SESSION_CACHE_TTL_SECONDS, row, expires_at)
-    return dict(found[0]) if found is not None else None
+        if not lookup.done():
+            lookup.set_result(found)
+    return found
 
 
 def _validate_session_in_db(session_id: str) -> tuple[dict, datetime] | None:
