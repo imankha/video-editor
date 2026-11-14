@@ -45,6 +45,17 @@ via a background task scheduled AFTER the ledger row's transaction commits, neve
 payment) and T8630's `account_deleted_at` stamp (`payments_ledger.stamp_account_deleted`, NULL-gated).
 **T8630 (2026-09-24) added a DB-level trigger enforcing the same invariant structurally, in
 addition to the grep** -- see "Account deletion contract (T8630)" below.
+**T16080 (2026-11-13) added a thank-you email, which IS gated on `result["applied"]`** (the
+opposite of the ledger insert below) at the same 4 purchase sites, via
+`_queue_payment_thank_you_email(user_id, reference_id, background_tasks)` in `routers/payments.py`:
+`applied=True` fires at most once per reference_id (session_id for the checkout/verify pair, PI id
+for the confirm-intent/PI-webhook pair), so exactly one of each racing pair sends it. Fire-and-forget
+via `BackgroundTasks.add_task` where the handler has one (`confirm_payment_intent`, `verify_session`),
+else `poster_warmer.fire_and_forget` for the webhook (same split as `schedule_charge_id_fill`).
+Resend `Idempotency-Key` = `payment-thank-you:{reference_id}` is a second guard. Body/sender/dev-mode
+contract mirror `send_welcome_email` (T12610) -- `send_payment_thank_you_email` +
+`payment_thank_you_email_body` in `email.py`, `PAYMENT_THANK_YOU_FROM_NAME`="Iman at ReelBallers".
+
 **The ledger insert is deliberately NOT gated on `result["applied"]`** -- it runs on every
 observation of a succeeded/paid payment at all 4 purchase sites (`confirm_payment_intent`, webhook
 `checkout.session.completed`, webhook `payment_intent.succeeded`, `verify_session`) and the refund

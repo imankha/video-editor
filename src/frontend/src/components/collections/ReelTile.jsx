@@ -15,6 +15,7 @@ import { IntroCardPicker } from '../introcards/IntroCardPicker';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
 import { RESULT_SURFACE, HOME_TILE, SHARE_COPY, RANKING_COPY } from '../../config/displayNames';
 import { useGuidePulse } from '../instructions/GuideScope';
+import { Button } from '../shared/Button';
 
 // T7100: compact byte readout for the in-flight download scrim row (mirrors
 // CollectionHeader's formatBytes, minus the GB rung a single reel never needs).
@@ -404,7 +405,8 @@ export function ReelTile({
           // sheet rendered INSIDE the card and its items never settled (T13880 iphone).
           createPortal(
           <div ref={menuRef} className="fixed inset-0 z-50 flex flex-col">
-            <div className="flex-1 bg-black/40" onClick={() => setMenuOpen(false)} />
+            {/* T11510 D4: the backdrop is inert (house rule); the Cancel row below closes the sheet. */}
+            <div data-testid="reel-tile-menu-backdrop" className="flex-1 bg-black/40" />
             <div className="bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto">
               <div className="flex items-center justify-center pt-2 pb-1">
                 <div className="h-1 w-10 bg-gray-600 rounded-full" />
@@ -416,9 +418,11 @@ export function ReelTile({
                     : <Download size={20} className="text-gray-300 flex-shrink-0" />}
                   <span className="text-gray-200">Download</span>
                 </button>
-                {/* T6300: the removed inline chip was the only mobile path to
-                    onWebShare (native share sheet) — restored here so coarse
-                    pointers keep that capability, not just Copy Link. */}
+                {/* T13120: onWebShare now opens ShareModal (visibility choice
+                    + Copy link), not a native share sheet -- ShareModal has
+                    no navigator.share/file-sharing code at all. The comment
+                    this replaced (T6300, "restores native share sheet
+                    capability") was stale (T11510 audit, 2026-11-13). */}
                 <button onClick={(e) => { onWebShare(e, download); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
                   <Share2 size={20} className="text-gray-300 flex-shrink-0" />
                   <span className="text-gray-200">Share</span>
@@ -462,6 +466,9 @@ export function ReelTile({
                   <Trash2 size={20} className="text-red-400 flex-shrink-0" />
                   <span className="text-red-400">Delete</span>
                 </button>
+                <Button variant="secondary" fullWidth className="min-h-11" onClick={() => setMenuOpen(false)}>
+                  {HOME_TILE.MENU_CANCEL}
+                </Button>
               </div>
             </div>
           </div>,

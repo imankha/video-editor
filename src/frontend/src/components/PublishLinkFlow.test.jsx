@@ -90,17 +90,58 @@ describe('PublishLinkFlow (T10180)', () => {
     await act(async () => { resolveCopy(); await Promise.resolve(); });
   });
 
-  it('ready phase (coarse pointer) shows "Share link..." instead of the selectable input', () => {
+  // T11510 (D6): LINK_ONLY (canShareFile false, the default) collapses to a
+  // single full-width "Share link" button -- no "Share video" sits beside it
+  // since the device can't share a file. The link card (LinkReadyCard) also
+  // shows on mobile now, not just the native share button.
+  it('ready phase (coarse pointer, LINK_ONLY) shows the link card and a single "Share link" button, no "Share video"', () => {
     renderFlow('ready', {
       shareUrl: 'https://reelballers.com/shared/tok123',
       isMobile: true,
+      canShareFile: false,
     });
 
-    const shareBtn = screen.getByRole('button', { name: 'Share link...' });
+    expect(screen.getByDisplayValue('https://reelballers.com/shared/tok123')).toBeTruthy();
+    const shareBtn = screen.getByRole('button', { name: 'Share link' });
     fireEvent.click(shareBtn);
     expect(baseProps.onNativeShare).toHaveBeenCalledTimes(1);
-    // Fine-pointer selectable input must not also render on coarse pointer.
-    expect(screen.queryByDisplayValue('https://reelballers.com/shared/tok123')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Share video' })).toBeNull();
+  });
+
+  // T11510 (D6, AC): a FULL-capability coarse pointer gets BOTH actions side
+  // by side, each wired to its own intent-named handler -- a file share and a
+  // link share are never the same button under two different labels.
+  it('ready phase (coarse pointer, FULL) shows Share link and Share video side by side, each firing its own handler', () => {
+    const onShareVideo = vi.fn();
+    renderFlow('ready', {
+      shareUrl: 'https://reelballers.com/shared/tok123',
+      isMobile: true,
+      canShareFile: true,
+      onShareVideo,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share link' }));
+    expect(baseProps.onNativeShare).toHaveBeenCalledTimes(1);
+    expect(onShareVideo).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share video' }));
+    expect(onShareVideo).toHaveBeenCalledTimes(1);
+    expect(baseProps.onNativeShare).toHaveBeenCalledTimes(1);
+  });
+
+  // T11510 (D6): the 'ready-capable' case (alreadyPublished, no link minted
+  // yet) renders the same layout minus the link card -- Share video works at
+  // once with no token.
+  it('ready phase (coarse pointer) with a null shareUrl shows no link card but still shows Share link/Share video', () => {
+    renderFlow('ready', {
+      shareUrl: null,
+      isMobile: true,
+      canShareFile: true,
+    });
+
+    expect(screen.queryByDisplayValue(/reelballers\.com/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Share link' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Share video' })).toBeTruthy();
   });
 
   // T12190: 'Link ready' must not sit over a 'Get Link' button (qa-32).

@@ -139,7 +139,7 @@ export function TrimTimeField({ value, edge, otherValue, mediaBounds, onCommit, 
   ) : (
     <button
       type="button"
-      className="font-mono text-white hover:text-purple-300 transition-colors"
+      className="font-mono text-white hover:text-purple-300 transition-colors coarse-pointer:min-w-11 coarse-pointer:min-h-11"
       onClick={(e) => { e.stopPropagation(); startEditing(); }}
       onFocus={startEditing}
       data-testid={`trim-field-${edge}`}

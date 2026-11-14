@@ -302,7 +302,7 @@ export function CollectionsTab({
               onClick={() => setGroupBy(axis)}
               aria-pressed={activeAxis === axis}
               className={[
-                'text-xs font-medium px-2.5 py-1 rounded-full transition-colors',
+                'text-xs font-medium px-2.5 py-1 rounded-full transition-colors coarse-pointer:min-h-11',
                 activeAxis === axis
                   ? `${REEL.bg} text-white`
                   : 'bg-gray-800 text-gray-300 hover:bg-gray-700',

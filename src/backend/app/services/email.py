@@ -487,6 +487,66 @@ async def send_welcome_email(to_email: str, *, idempotency_key: str) -> bool:
     return True
 
 
+# T16080: transactional thank-you for every completed credit purchase. Same
+# voice/links/copy-rules as the welcome email (T12610); no unsubscribe footer
+# since this is purchase-triggered, not marketing (T7250 only covers that).
+PAYMENT_THANK_YOU_SUBJECT = "Thank you for your purchase"
+PAYMENT_THANK_YOU_FROM_NAME = "Iman at ReelBallers"
+
+
+def payment_thank_you_email_body() -> str:
+    """Markdown body (rendered by body_markdown_to_html) for the T16080 thank-you email."""
+    discord_url = dict(SOCIAL_LINKS)["Discord"]
+    return f"""Hi there,
+
+Thank you for buying credits on ReelBallers! Credits are what you spend to turn your raw game video into a finished highlight, so you're all set to get one made.
+
+If anything goes wrong or confuses you, I will help you personally. Just reply to this email and tell me where you got stuck.
+
+For hands-on help, [join our Discord]({discord_url}) and chat with us directly. If you haven't seen it yet, our [short tutorial]({TUTORIAL_URL}) walks through the whole flow, from uploading game video to downloading a finished highlight.
+
+Thanks again,
+
+Iman Khabazian
+ReelBallers"""
+
+
+async def send_payment_thank_you_email(to_email: str, *, idempotency_key: str) -> bool:
+    """Send the T16080 thank-you email for one completed credit purchase.
+
+    One attempt, no retry: the caller fires this from a background task after
+    the payment response, so it must never hold up anything. The Resend
+    Idempotency-Key is the caller's per-purchase reference (Stripe session or
+    PaymentIntent id), so a duplicate send for the same purchase is a no-op.
+    Dev-mode (no RESEND_API_KEY): log only and return True, like the other
+    lifecycle emails.
+    """
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.warning(f"[Email] DEV MODE -- payment thank-you email to {to_email}")
+        return True
+
+    html_body = _build_update_email(
+        PAYMENT_THANK_YOU_SUBJECT, body_markdown_to_html(payment_thank_you_email_body()), show_heading=False
+    )
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        resp = await client.post(
+            RESEND_API_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Idempotency-Key": idempotency_key},
+            json={
+                "from": f"{PAYMENT_THANK_YOU_FROM_NAME} <{ADMIN_FROM_EMAIL}>",
+                "to": [to_email],
+                "subject": PAYMENT_THANK_YOU_SUBJECT,
+                "html": html_body,
+            },
+        )
+    if resp.status_code not in (200, 201):
+        logger.warning(f"[Email] Payment thank-you email to {to_email} failed: {resp.status_code} {resp.text}")
+        return False
+    logger.info(f"[Email] Payment thank-you email sent to {to_email}")
+    return True
+
+
 def _resolve_sender_name(sharer_email: str) -> str:
     local_part = sharer_email.split("@")[0] if "@" in sharer_email else sharer_email
     name = local_part.replace(".", " ").replace("_", " ").replace("-", " ")

@@ -243,6 +243,34 @@ def _get_or_create_customer(user_id: str) -> str:
     return customer_id
 
 
+def _queue_payment_thank_you_email(user_id: str, reference_id: str, background_tasks: BackgroundTasks = None) -> None:
+    """Queue T16080's thank-you email for a newly-applied credit grant.
+
+    Call ONLY when `_grant_or_503`'s result["applied"] is True, so exactly one
+    of the two observers racing on the same payment (confirm-intent/webhook or
+    verify/webhook -- both key on the same reference_id) sends it. Fire-and-
+    forget, same split as `schedule_charge_id_fill`: FastAPI BackgroundTasks
+    when the handler has one, else poster_warmer.fire_and_forget for the
+    webhook handler. Never blocks or fails the payment response.
+    """
+    async def _send() -> None:
+        email = _receipt_email_for(user_id)
+        if not email:
+            return
+        from ..services.email import send_payment_thank_you_email
+        try:
+            await send_payment_thank_you_email(email, idempotency_key=f"payment-thank-you:{reference_id}")
+        except Exception:
+            logger.warning(f"[Payments] thank-you email failed for {user_id} ({reference_id})", exc_info=True)
+
+    if background_tasks is not None:
+        background_tasks.add_task(_send)
+        return
+
+    from ..services.poster_warmer import fire_and_forget
+    fire_and_forget(_send())
+
+
 def _receipt_email_for(user_id: str) -> str | None:
     """Look up the user's account email server-side for Stripe's receipt_email.
 
@@ -427,6 +455,7 @@ async def confirm_payment_intent(request: ConfirmIntentRequest, background_tasks
             "amount": credits, "cents": pack_info["price_cents"] if pack_info else 0,
             "sport": get_default_profile_sport(user_id) or "no_sport",
         })
+        _queue_payment_thank_you_email(user_id, pi_id, background_tasks)
 
     # Site A: ledger insert runs on EVERY observation, not gated on `applied`
     # (design §4, ruling 4). amount_cents from Stripe's captured amount, never
@@ -538,6 +567,7 @@ async def stripe_webhook(request: Request):
             "amount": credits, "cents": pack_info["price_cents"] if pack_info else 0,
             "sport": get_default_profile_sport(user_id) or "no_sport",
         })
+            _queue_payment_thank_you_email(user_id, session_id)
 
         # Site B: ledger insert runs on EVERY observation, not gated on
         # `applied` (design §4, ruling 4). Amount from session.amount_total
@@ -615,6 +645,7 @@ async def stripe_webhook(request: Request):
             "amount": credits, "cents": pack_info["price_cents"] if pack_info else 0,
             "sport": get_default_profile_sport(user_id) or "no_sport",
         })
+            _queue_payment_thank_you_email(user_id, pi_id)
 
         # Site C: ledger insert runs on EVERY observation, not gated on
         # `applied` (design §4, ruling 4). Amount from intent["amount_received"]
@@ -957,6 +988,7 @@ async def verify_session(request: Request, background_tasks: BackgroundTasks = N
             "amount": credits, "cents": pack_info["price_cents"] if pack_info else 0,
             "sport": get_default_profile_sport(user_id) or "no_sport",
         })
+        _queue_payment_thank_you_email(user_id, session_id, background_tasks)
 
     # Site D: ledger insert runs on EVERY observation, not gated on `applied`
     # (design §4, ruling 4). Amount from session.amount_total (already

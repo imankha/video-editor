@@ -103,6 +103,20 @@ describe('T6300 ReelTile persistent actions', () => {
     expect(document.body.contains(menu)).toBe(true);
   });
 
+  // T11510 C8 (restated by the 2026-11-13 ruling: no ActionSheet): the house rule is
+  // that a sheet never closes on a backdrop tap; it closes through an explicit
+  // bottom Cancel control instead.
+  it('T11510:C8 COARSE pointer: a backdrop tap leaves the kebab sheet open; Cancel closes it', () => {
+    coarsePointer = true;
+    renderTile();
+    fireEvent.click(kebabBtn());
+    fireEvent.click(screen.getByTestId('reel-tile-menu-backdrop'));
+    expect(screen.queryByTestId('reel-tile-menu')).not.toBeNull();
+    const cancel = within(screen.getByTestId('reel-tile-menu')).getByRole('button', { name: 'Cancel' });
+    fireEvent.click(cancel);
+    expect(screen.queryByTestId('reel-tile-menu')).toBeNull();
+  });
+
   it('FINE pointer: clicking the kebab opens the desktop popover with Share + Copy link', () => {
     coarsePointer = false;
     renderTile();
