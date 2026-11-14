@@ -1,6 +1,6 @@
 # T16470: Share link creation freezes the server
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-11-13

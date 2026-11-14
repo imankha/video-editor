@@ -1,6 +1,6 @@
 # T16490: New sign-in signs out the old device
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-13

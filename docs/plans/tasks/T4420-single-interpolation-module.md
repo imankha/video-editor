@@ -1,6 +1,6 @@
 # T4420: Spotlight circle follows the curved crop
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-07-03
