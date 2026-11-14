@@ -375,10 +375,21 @@ Right after import, the status card becomes a summary card, in the same place:
 
 - On the timeline, AI plays sit in the team plays lane in the usual amber. Until the parent touches one, it has a dashed outline instead of a solid one. Shape carries the meaning, not color alone.
 - In the play list, the row shows a small grey pill with the letters "AI" before the play name. The pill has the tooltip and screen-reader label "Marked by AI, not checked yet".
-- In the play editor, a quiet line under the title reads "Marked by AI. Check the start, end and rating." with a small button "Looks right".
+- In the play editor, a quiet line under the title reads "Marked by AI. Check the start, end and rating." with two small buttons: "Looks right" and "Wrong team" (see "Wrong team on one play" below).
 - The play arrives filled in: start and end, the one-sentence summary as its name, tags, rating, and the coaching notes in the notes field. The player chips from section 7 sit under "Who is this play about?".
 - The AI mark and the dashed outline go away, for that play, the moment the parent edits anything, taps "Looks right", tags a player on it, or moves it to their athlete's plays. From then on it is simply their play.
 - The play list gets one extra filter chip, "AI, not checked ({n})", shown only while there are some.
+
+### Wrong team on one play
+
+The AI sometimes gives a play to the wrong team, so an opponent's play can show up among the parent's. "Switch team" is the wrong tool for that, because the rest of the plays are right.
+
+- "Wrong team" sits beside "Looks right" on the AI line in the play editor, in the same quiet style. It is not red: it is a correction, not a warning.
+- One tap removes the play. There is no confirm step; a toast says "Play removed. Thanks, we noted it was the other team's." with an "Undo" action for ten seconds. Undo puts the play back exactly as it was, AI mark included.
+- What the editor shows next is whatever it shows today after a play is deleted.
+- The play stays gone. "Add the AI plays again" and switching team and back do not return it.
+- The button is there only while the play still carries its AI mark. Once the parent has edited the play or tapped "Looks right" it is simply their play, and they delete it the usual way.
+- In the Tag players pass (section 7) the same button is offered on each play, so a parent who meets an opponent's play there can drop it without leaving the pass.
 
 ### Undo
 
@@ -395,6 +406,7 @@ Buttons: "Remove 41 plays" (red) and "Keep them". After removal a toast says "41
 - Layer control stays `modes/annotate/components/LayerSegmentedControl.jsx`. Ratings from `components/shared/clipConstants.js` (`RATING_ADJECTIVES`); "Needs work" in the summary merges ratings 1 and 2.
 - Filter chip joins the existing borderless filter row. Filter state is view-only and never stored.
 - Destructive confirm uses the existing two-step pattern; removal is one server call scoped to untouched AI plays.
+- "Wrong team" is one gesture and one server call that removes the play and records it on the parent's game (T16190). It sends the event `ai_play_wrong_team`. No two-step confirm: one play, with Undo.
 
 ---
 
@@ -682,6 +694,9 @@ Every failure message has three parts in this order: what happened, what happene
 | AI_EDITOR_LINE | Marked by AI. Check the start, end and rating. |
 | AI_CONFIRM | Looks right |
 | AI_FILTER | AI, not checked ({n}) |
+| AI_WRONG_TEAM | Wrong team |
+| AI_WRONG_TEAM_LABEL | This play is the other team's. Remove it. |
+| AI_WRONG_TEAM_TOAST | Play removed. Thanks, we noted it was the other team's. |
 | UNDO_MENU | Remove AI plays I have not touched |
 | UNDO_CONFIRM | Remove {n} AI plays you have not touched? The {m} you edited, tagged or moved stay. You can add the AI plays back for free. |
 | UNDO_YES | Remove {n} plays |
@@ -746,6 +761,7 @@ All screens in this file were approved by the owner on 2026-11-12. Where a rulin
 5. Position memory is a suggestion for this game only, and the parent can always change the answer.
 6. Free cancel until the upload finishes; no cancel after the analysis starts.
 7. Tagging a teammate from a chip is the app's existing teammate tagging: the parent enters the player's name and email address, and that family gets the game and the plays in the Team lane, as today. That flow is not changed. This feature only makes it one tap away from each chip ("Right winger", "Player 10"): the chip opens the existing name entry with names already used in this game offered first, and the existing step that collects the email address and shares.
+8. (2026-11-13) The AI sometimes mixes the teams up, so every untouched AI play carries a "Wrong team" button that removes that one play and records the miss. See "Wrong team on one play" in section 6. This was added after the screens were approved and has no approved mock-up; it follows the "Looks right" button's style.
 
 ---
 

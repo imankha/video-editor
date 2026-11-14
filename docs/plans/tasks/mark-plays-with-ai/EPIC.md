@@ -57,6 +57,10 @@ For the AI reel builder (owner, 2026-11-13):
 30. **Find as many as possible.** Brilliant plays are what parents pay to turn into highlights, so a missed one is lost revenue and the worst mistake the analysis can make. The prompt hunts for both kinds by name and includes a moment when unsure; the staging check counts the ones it missed.
 31. **Everything the reel builder needs in one read.** The [AI reel builder](../ai-reel-builder/EPIC.md), planned after the reel builder, reads text only. This epic ends by proving that one call returns every fact it needs about an athlete's highlights (T16205).
 
+For team mix-ups (owner, 2026-11-13):
+
+32. **One play can be marked as the other team's.** The model sometimes credits a play to the wrong team. Switching the whole game (decision 10) fixes a wrong colour choice, not a single wrong play, so each AI play the parent has not touched carries a "Wrong team" button that removes it, keeps it from coming back, and counts the miss (T16190).
+
 ## What the prototype already measured
 
 The working prototype is in `gemini_analysis_test/` at the repo root. Read `gemini_analysis_test/HANDOFF_PROMPT.md` before any code: it holds the API facts, the prompt, the JSON Schema, the cost model and the list of problems the prototype did not solve. The numbers this epic is built on:
@@ -122,6 +126,7 @@ T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind on
 - [ ] On the staging game a person has compared six windows with the video, and the owner has seen how many plays were credited to the wrong team and how many reported goals were not real, before the feature is switched on.
 - [ ] The admin read-out shows credits charged against model cost per analysis, and the total is positive.
 - [ ] Imported plays carry tags, note and rating, sit in the Team lane, and can be moved to My athlete or have a teammate tagged by name and email from the tagging screen on a phone.
+- [ ] A parent can mark one AI play as the other team's; it is removed and does not come back, and the count of such plays is visible to the owner.
 - [ ] A teammate tagged from the tagging screen receives the game and its Team plays exactly as they would today.
 - [ ] A play marked by the AI, assigned to the parent's athlete and made into a highlight, returns its qualities and its sentence in the one read of highlight facts.
 - [ ] The Journey shows how many game uploaders bought an analysis and how many of them reached a first highlight.

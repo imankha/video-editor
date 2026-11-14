@@ -2,14 +2,14 @@
 
 ## In plain words
 
-When an analysis finishes it holds every play (a marked moment) for both teams, named only by kit colour, because the same result serves parents on either side. Nothing is in the parent's game yet. We will ask the parent one question, which colour their team wears, and then bring in only the plays the model rated as strong for that team, a few dozen for a full game. They arrive on the Team lane (the app's lane for plays that are not specifically the parent's own child) with tags, a short note and a star rating already filled in, and a small AI mark until the parent touches them. Bringing in everything would bury the parent in routine passes, and the owner asked for high relevance only. Done when a parent picks a colour and sees that team's strong plays on the Team lane with tags, note and rating, can switch team without paying again, and can remove the AI plays they have not touched.
+When an analysis finishes it holds every play (a marked moment) for both teams, named only by kit colour, because the same result serves parents on either side. Nothing is in the parent's game yet. We will ask the parent one question, which colour their team wears, and then bring in only the plays the model rated as strong for that team, a few dozen for a full game. They arrive on the Team lane (the app's lane for plays that are not specifically the parent's own child) with tags, a short note and a star rating already filled in, and a small AI mark until the parent touches them. Bringing in everything would bury the parent in routine passes, and the owner asked for high relevance only. Done when a parent picks a colour and sees that team's strong plays on the Team lane with tags, note and rating, can switch team without paying again, can mark a single play as the other team's, and can remove the AI plays they have not touched.
 
 **Status:** TODO
 **Impact:** 9
 **Complexity:** 6
 **Tier:** L (per-profile schema change, new import path, Annotate surfaces; Migration agent)
 **Created:** 2026-11-12
-**Updated:** 2026-11-12
+**Updated:** 2026-11-13
 
 Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 6 of 7.
 
@@ -34,9 +34,10 @@ Build sections 5 ("Pick your team colour") and 6 ("What arrives in Annotate") of
 4. **Summary.** "46 plays added to the Team lane", then the call to action into tagging (T16200).
    The parent can change any of these afterwards with the play editor, exactly as for a play they marked themselves.
 5. **Switch team.** Free, because the stored result already holds both teams and no new analysis runs. Removes the old team's untouched AI plays and imports the other team's. Plays the parent edited, tagged or moved stay.
-6. **Undo.** "Remove AI plays I have not touched."
-7. **Sharing.** No change: Team-lane plays are shared as they are today, with tags, note and rating.
-8. **Measure.** `ai_team_chosen` and `ai_plays_imported` with the count.
+6. **Wrong team on one play** (owner, 2026-11-13). The model sometimes credits a play to the wrong team, so an opponent's play can arrive among the parent's. Switching the whole game does not fix that: the rest of the plays are right. Each AI play the parent has not touched yet carries a "Wrong team" button beside "Looks right". One tap removes that play from the game, with an Undo for ten seconds, and remembers the answer: the play does not come back when the AI plays are added again or the team is switched and switched back. Each tap is counted, so we can see how often the model mixes the teams on real games. The stored analysis is not changed, because other parents share it. The other half of the mix-up, a play of the parent's own team that the model gave to the opponent and so never imported, is not handled here.
+7. **Undo.** "Remove AI plays I have not touched."
+8. **Sharing.** No change: Team-lane plays are shared as they are today, with tags, note and rating.
+9. **Measure.** `ai_team_chosen`, `ai_plays_imported` with the count, and `ai_play_wrong_team` for each play marked as the other team's.
 
 ## Why this and not something else
 
@@ -51,12 +52,13 @@ Putting AI plays in the existing suggestions list (the Veo import's rate-to-keep
 | `games` | `ai_analysis_id` | INTEGER NULL | `game_analyses.id` of the purchased analysis (first video; per-video ids in `game_videos` if the Architect prefers) |
 | `games` | `ai_team_key` | TEXT NULL | `team_0` or `team_1`; NULL until chosen |
 | `games` | `ai_team_color` | TEXT NULL | the colour string shown to the parent |
+| `games` | `ai_wrong_team_plays` | BLOB NULL (msgpack list) | `[{team_key, play_index}]` for plays the parent marked "Wrong team"; import skips these |
 | `raw_clips` | `ai_source` | BLOB NULL (msgpack, like `tags`) | `{analysis_id, play_index, team_key, relevance, touched, brilliant_for:["scouting","social"], mentions:[{position, jersey_number, tags, qualities, shows, social, social_reason, decision_score, execution_score, note, assigned}]}`; NULL for plays the parent made |
 
 Import inserts through the existing clip save path with `my_athlete=0` and empty `tagged_teammates`. `touched` flips to true on any edit gesture on that play (rating, tags, notes, range, lane, teammate tags). Copies made by sharing drop `ai_source` (materialization copies named columns only; confirm).
 
 ### Relevant Files (REQUIRED)
-- `src/backend/app/routers/analysis.py`: `POST /api/games/{id}/analysis/import` (body: team key), `DELETE /api/games/{id}/analysis/plays?untouched=1`
+- `src/backend/app/routers/analysis.py`: `POST /api/games/{id}/analysis/import` (body: team key), `DELETE /api/games/{id}/analysis/plays?untouched=1`, `POST /api/games/{id}/analysis/plays/{clip_id}/wrong-team` and its undo
 - `src/backend/app/services/analysis_import.py` (new: threshold, mapping, overlap rule; pure functions with table-driven tests)
 - `src/backend/app/routers/clips.py` (`save_raw_clip`, update path sets `touched`), `app/database.py` (`ensure_database` schema), `app/migrations/profile_db/v{next}_ai_plays.py`
 - `src/backend/app/services/auto_export.py` and anything keyed on rating 5 or `auto_project_id`: prove bulk import triggers nothing
@@ -70,7 +72,8 @@ Import inserts through the existing clip save path with `my_athlete=0` and empty
 - The import is one gesture (choosing the team) and one server call that writes all plays; the frontend never loops per play.
 - Recap, watch and counts treat AI plays as ordinary Team-lane plays. Check the coach guide's play-count rules do not congratulate the parent on 46 plays they did not mark.
 - Teams are matched by slot (`team_0`, `team_1`), never by comparing colour text; the colour name shown is the one stored on the analysis.
-- The prototype saw the model credit a play to the wrong team and report goals that did not happen (T16150 records how often on a full game). The AI mark, the play editor and "Remove AI plays I have not touched" are the parent's remedy; do not add automatic highlight creation or congratulation on AI plays.
+- The prototype saw the model credit a play to the wrong team and report goals that did not happen (T16150 records how often on a full game). The AI mark, the play editor, "Wrong team" on a single play and "Remove AI plays I have not touched" are the parent's remedy; do not add automatic highlight creation or congratulation on AI plays.
+- "Wrong team" is one gesture and one server call: it deletes the play and appends its `(team_key, play_index)` to `games.ai_wrong_team_plays` in the same write. Undo is the reverse call and restores the play as it was, AI mark included. The button shows only while the play is untouched; after that it is the parent's play and is deleted the usual way. The list is per parent and never written back to the shared analysis.
 - Threshold and rating rule are named constants in `analysis_import.py`, so they can be tuned once real games have been through.
 
 ### Related Tasks
@@ -88,8 +91,11 @@ Import inserts through the existing clip save path with `my_athlete=0` and empty
 - [ ] A hand-marked play overlapping an AI play by half or more is kept and the AI play is not imported.
 - [ ] Importing twice adds no plays.
 - [ ] Switching team charges nothing, replaces untouched AI plays, and keeps plays the parent touched.
+- [ ] "Wrong team" on an untouched AI play removes that play and no other, and Undo within ten seconds puts it back with its AI mark.
+- [ ] A play marked "Wrong team" does not return when the AI plays are added again, or when the team is switched and switched back.
+- [ ] Marking a play "Wrong team" in one account changes nothing for a second account that imports the same stored analysis.
 - [ ] "Remove AI plays I have not touched" removes exactly those.
 - [ ] Editing an AI play removes its AI mark.
 - [ ] Importing 60 plays, several rated 5, creates no highlight project and no credit charge.
 - [ ] A shared game delivers imported Team-lane plays to the recipient with tags, note and rating.
-- [ ] `ai_team_chosen` and `ai_plays_imported` appear in the admin Journey inspector.
+- [ ] `ai_team_chosen`, `ai_plays_imported` and `ai_play_wrong_team` appear in the admin Journey inspector.
