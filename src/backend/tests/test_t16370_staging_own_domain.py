@@ -43,3 +43,23 @@ def test_no_code_workflow_or_doc_names_the_old_staging_hosts():
         cwd=REPO, capture_output=True, text=True,
     )
     assert found.returncode == 1, f"old staging hosts still named:\n{found.stdout}{found.stderr}"
+
+
+# A host built at runtime from the Fly app name (an f-string "{app}" before the fly host) reaches the old
+# staging host for --env staging without ever spelling it out, so the scan above misses it.
+RUNTIME_FLY_HOST = r"\{[A-Za-z_]+\}\.fly" + r"\.dev"
+OPS_SCRIPTS = ["scripts/reset-test-user.py", "scripts/delete_user.py", "scripts/edit-user-db.py"]
+
+
+def test_no_code_builds_a_fly_dev_host_from_the_app_name():
+    found = subprocess.run(
+        ["git", "grep", "-n", "-I", "-E", RUNTIME_FLY_HOST, "--", ".", *HISTORY],
+        cwd=REPO, capture_output=True, text=True,
+    )
+    assert found.returncode == 1, f"fly.dev host built from an app name:\n{found.stdout}{found.stderr}"
+
+
+def test_ops_scripts_warm_staging_through_the_reelballers_api_host():
+    for script in OPS_SCRIPTS:
+        text = (REPO / script).read_text()
+        assert f'"staging": "{STAGING_API}"' in text, f"{script} does not warm {STAGING_API}"
