@@ -1200,6 +1200,24 @@ def auth_lost(checkout):
     return latest_run(checkout).get("outcome_class") == "auth_failed"
 
 
+# task.sh's sign-in check retries for about a minute, then writes AUTH_DEAD. g-t16090-1 sat on one for an
+# hour (2026-11-12 00:44 UTC) until a manual resume passed the check at once: every AUTH_DEAD so far cleared
+# on a plain redispatch, so the loop waits these minutes and redispatches before it stops (T16110).
+AUTH_DEAD_WAITS_MIN = tuple(float(m) for m in os.environ.get("DOTASK_AUTH_DEAD_WAITS_MIN", "2,5,10").split(","))
+
+
+def wait_out_auth_dead(checkout, label, waited):
+    """After a dispatch that ended on AUTH_DEAD with a wait left: write a status line, wait, and return
+    True (the caller redispatches; task.sh re-seeds the host login). Otherwise False."""
+    if status_word(last_status(checkout)) != "AUTH_DEAD" or waited >= len(AUTH_DEAD_WAITS_MIN):
+        return False
+    minutes = AUTH_DEAD_WAITS_MIN[waited]
+    append_status(checkout, f"RESUMED {label} sign-in wait {waited + 1} of {len(AUTH_DEAD_WAITS_MIN)}: AUTH_DEAD, "
+                            f"redispatching in {minutes:g} min (the next drive re-seeds the host login)")
+    time.sleep(minutes * 60)
+    return True
+
+
 def handoff_note(checkout, label, record):
     """What a fresh conversation needs to pick up work a dispatch left uncommitted when it ran out of
     turns: the uncommitted files and a pointer to the worker's own progress checklist."""
@@ -1228,13 +1246,16 @@ def dispatch_with_restarts(slug, group, checkout, label, instruction, task_ids=N
     restart gets a handoff note and the resume hint. Returns the last dispatch's result (True only if
     it ended on PUSHREADY, as `dispatch` reports)."""
     finished = False
-    attempt = auth_retries = 0
+    attempt = auth_retries = auth_dead_waits = 0
     while True:
         text = instruction + (RESUME_HINT if attempt or auth_retries else "")
         if task_ids is None:
             finished = dispatch(slug, group, "implementation", text)
         else:
             finished = dispatch(slug, group, "implementation", text, task_ids)
+        if wait_out_auth_dead(checkout, label, auth_dead_waits):
+            auth_dead_waits += 1  # the sign-in check failed before the worker started: nothing to hand off
+            continue
         if auth_lost(checkout) and auth_retries < AUTH_RETRIES:
             # A token refresh anywhere on the host revokes the token every container copied, mid-dispatch:
             # g-t15400-4 and g-t15410-4 died the same second the host refreshed (2026-11-09 00:46 UTC)
@@ -2369,6 +2390,9 @@ def estimate(group, checkout, now=None):
     if "VERIFY_PASS" in last or " APPROVED " in last:
         minutes, verify_ahead = ci, False
         parts.append(f"CI {ci:.0f} min")
+    elif status_word(last) == "AUTH_DEAD":
+        return None, None, (f"stopped: sign-in failed after every wait, needs a person; "
+                            f"`bash scripts/dotask.sh resume {group['slug']}` continues it: {last[:140]}")
     elif any(f" {word} " in f" {last} " or f" {word}" in last for word in STOP_WORDS) and status_word(last) != "RESUMED":
         return None, None, f"stopped, needs a restart or a ruling: {last[:140]}"
     elif status_word(last) == "RESUMED" and "autoland verify" in last:
