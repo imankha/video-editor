@@ -29,3 +29,18 @@ Epic: [ai-reel-builder/EPIC.md](EPIC.md). Epic task 2 of 3. This file is an outl
 
 ### Related Tasks
 - Depends on: T16320 (research), T16205 (the facts the instructions refer to). Blocks: T15890.
+
+## From the recruiting reel research (owner accepted 2026-11-13)
+
+Findings: `docs/plans/research/recruiting-reel-research-2026-11.md`, sections 8a, 8c and 8d. The owner repeated that the instructions are general first: nothing in the general part names a sport, and each sport's reel notes, quality names and wording are strings stored with that sport (`getSportStrings` in `tagRegistry.js`) and added for athletes of that sport.
+
+The general part must say:
+
+- Use only highlights from Brilliant plays and from plays the parent rated well. Never use a learning opportunity.
+- Open with the athlete's three to five strongest highlights whatever their type, then group the rest into two to four sections named from the sport's quality names.
+- Aim for about 3 minutes and 12 to 20 highlights. Never go past 5 minutes. With few highlights, a shorter reel is better than a padded one.
+- Rank by what counts for scouting: plays under pressure and against a set opponent beat the same action unopposed. Do not pick a play only because it is Brilliant for social media.
+- Show range for the position; do not repeat one kind of play.
+- Prefer landscape highlights, highlights where the athlete is pointed out, and recent games.
+
+Each sport's reel notes are drafted in section 8c of the findings for all eleven sports. Baseball and softball carry a note to the parent that coaches in those sports expect a staged skills video. Flag football and rugby have almost no published guidance and run on the general part.

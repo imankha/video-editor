@@ -100,7 +100,7 @@ def cname(slug):
 
 def container_running(slug):
     try:
-        result = subprocess.run([tool("docker"), "inspect", "-f", "{{.State.Running}}", cname(slug)],
+        result = run_cmd([tool("docker"), "inspect", "-f", "{{.State.Running}}", cname(slug)],
                                 capture_output=True, text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
@@ -204,14 +204,14 @@ def merged_commits(task_id):
     # so a filing PR's merge looks like work. The branch's own commits are still checked one by one.
     # --grep also matches body lines, and a wrapped list of task ids can open one (5c669996f), so the
     # subject decides: only a subject that starts with the id is that task's work.
-    result = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--no-merges", "--grep",
+    result = run_cmd([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--no-merges", "--grep",
                              f"^{task_id}[: ]", "--format=%H %s", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
                             capture_output=True, text=True, timeout=60, check=False)
     if result.returncode:
         return []
     # A commit undone by a `git revert` on master is not work done: T15220 was reverted out of PR #717
     # and its restart was refused for the reverted commits (2026-11-08).
-    reverts = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--grep",
+    reverts = run_cmd([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--grep",
                               "This reverts commit", "--format=%B"],
                              capture_output=True, text=True, timeout=60, check=False)
     reverted = set(re.findall(r"This reverts commit ([0-9a-f]{40})", reverts.stdout))
@@ -245,6 +245,28 @@ def tool(name):
     return found
 
 
+# Windows exit codes for a process that never started (0xC0000142 STATUS_DLL_INIT_FAILED, seen when the desktop
+# heap runs low with several task containers up). The command did nothing, so running it again is safe.
+# g-t16340-2's loop died on one from a plain `git rev-parse HEAD` (2026-11-13).
+PROCESS_START_FAILURES = {0xC0000142}
+PROCESS_START_RETRIES = 3
+
+
+def run_cmd(*args, **kwargs):
+    """subprocess.run, retrying a process that failed to START (never one that ran and failed)."""
+    check = kwargs.pop("check", False)
+    for attempt in range(PROCESS_START_RETRIES + 1):
+        result = subprocess.run(*args, **kwargs)
+        if result.returncode not in PROCESS_START_FAILURES or attempt == PROCESS_START_RETRIES:
+            break
+        print(f"[dotask] process failed to start (0x{result.returncode:X}); retrying in {2 * (attempt + 1)}s",
+              file=sys.stderr)
+        time.sleep(2 * (attempt + 1))
+    if check and result.returncode:
+        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+    return result
+
+
 def bash():
     """Git Bash from PATH. A bare "bash" on Windows resolves System32\bash.exe (WSL) first."""
     found = shutil.which("bash")
@@ -256,7 +278,7 @@ def bash():
 def task_sh(*args, check=True, capture_output=False):
     # Paths handed to bash use forward slashes: Git Bash on Windows reads 'C:\x' backslashes as escapes.
     env = {**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT)}
-    return subprocess.run([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), *args],
+    return run_cmd([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), *args],
                           env=env, check=check, text=True, capture_output=capture_output)
 
 
@@ -292,7 +314,7 @@ def task_files_off_base(paths):
     and the worker found no spec. Returns (missing, differs): rel paths absent from the base, and rel
     paths present there whose local copy differs (e.g. a ruling committed but not pushed)."""
     base = os.environ.get("TASK_BASE") or "master"
-    fetch = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "fetch", "-q", "origin", base],
+    fetch = run_cmd([tool("git"), "-C", str(MAIN_REPO), "fetch", "-q", "origin", base],
                            capture_output=True, text=True, timeout=120, check=False)
     if fetch.returncode:
         print(f"WARNING: could not fetch origin/{base} ({fetch.stderr.strip()[:120]}); checking task files "
@@ -300,7 +322,7 @@ def task_files_off_base(paths):
     missing, differs = [], []
     for path in paths:
         rel = Path(path).resolve().relative_to(Path(MAIN_REPO).resolve()).as_posix()
-        shown = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "show", f"origin/{base}:{rel}"],
+        shown = run_cmd([tool("git"), "-C", str(MAIN_REPO), "show", f"origin/{base}:{rel}"],
                                capture_output=True, timeout=60, check=False)
         if shown.returncode:
             missing.append(rel)
@@ -554,7 +576,7 @@ def start(args):
 
     wave_env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
     task_flags = [flag for task_id in task_ids for flag in ("--task", task_id)]
-    subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "init", "--wave", wave_id,
+    run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "init", "--wave", wave_id,
                    *task_flags, "--plan", str(MAIN_REPO / "docs" / "plans" / "PLAN.md"),
                    "--mode", "headless" if args.headless else "window"],
                   env=wave_env, check=True)
@@ -610,7 +632,7 @@ def render_pr_body(group):
 def wait_for_ci(branch, head, interval=30, cap_minutes=30):
     deadline = time.time() + cap_minutes * 60
     while True:
-        result = subprocess.run([tool("gh"), "run", "list", "--workflow", "Branch CI", "--branch", branch,
+        result = run_cmd([tool("gh"), "run", "list", "--workflow", "Branch CI", "--branch", branch,
                                  "--limit", "20", "--json", "databaseId,headSha,status,conclusion"],
                                 capture_output=True, text=True, check=True)
         runs = [r for r in json.loads(result.stdout or "[]") if r.get("headSha") == head]
@@ -628,16 +650,16 @@ def ci_failure_report(branch, head, log_lines=120):
     """The failed jobs of the Branch CI run for `head` and the tail of their failed-step logs, for a fix
     worker to start from. Never raises: a report it cannot fetch says so and names the command."""
     try:
-        runs = json.loads(subprocess.run(
+        runs = json.loads(run_cmd(
             [tool("gh"), "run", "list", "--workflow", "Branch CI", "--branch", branch, "--limit", "20",
              "--json", "databaseId,headSha"], capture_output=True, text=True, check=True).stdout or "[]")
         run_id = next(r["databaseId"] for r in runs if r.get("headSha") == head)
-        jobs = json.loads(subprocess.run([tool("gh"), "run", "view", str(run_id), "--json", "jobs"],
+        jobs = json.loads(run_cmd([tool("gh"), "run", "view", str(run_id), "--json", "jobs"],
                                          capture_output=True, text=True, check=True).stdout or "{}")
         failed = [j["name"] for j in jobs.get("jobs", []) if j.get("conclusion") == "failure"]
         # CI logs carry ANSI and unicode that Windows' default code page cannot decode; text=True then
         # returned stdout=None and the AttributeError below killed g-t15400-4's loop (PR #739, 2026-11-10).
-        log = subprocess.run([tool("gh"), "run", "view", str(run_id), "--log-failed"],
+        log = run_cmd([tool("gh"), "run", "view", str(run_id), "--log-failed"],
                              capture_output=True, text=True, encoding="utf-8", errors="replace",
                              check=False).stdout or ""
     except (OSError, subprocess.SubprocessError, ValueError, StopIteration, KeyError) as exc:
@@ -649,7 +671,7 @@ def ci_failure_report(branch, head, log_lines=120):
 def ingest_transcripts(slug, group):
     dest_root = TASKS_ROOT / "profiles" / sanitize(slug) / "transcripts"
     dest_root.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run([tool("docker"), "cp", f"{cname(slug)}:/home/dev/.claude/projects/-workspace",
+    result = run_cmd([tool("docker"), "cp", f"{cname(slug)}:/home/dev/.claude/projects/-workspace",
                              str(dest_root)], capture_output=True, text=True, check=False)
     copied = dest_root / "-workspace"
     if result.returncode != 0 or not copied.is_dir():
@@ -659,7 +681,7 @@ def ingest_transcripts(slug, group):
     out_dir = TASKS_ROOT / "waves" / group["wave_id"] / "profiles"
     tasks_csv = ",".join(group["tasks"])
     for session in sorted(copied.glob("*.jsonl")):
-        subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "ingest",
+        run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "ingest",
                        "--directory", str(out_dir), "--identity", f"worker-{session.stem}", "--wave",
                        group["wave_id"], "--tasks", tasks_csv, "--role", "worker", "--phase", "implementation",
                        "--transcript", str(session)], env=env, check=False)
@@ -672,7 +694,7 @@ def ingest_transcripts(slug, group):
             except (OSError, ValueError):
                 pass
         identity = f"worker-{agent.parent.parent.stem}-{agent.stem}"
-        subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "ingest",
+        run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "ingest",
                        "--directory", str(out_dir), "--identity", identity, "--wave", group["wave_id"],
                        "--tasks", tasks_csv, "--role", role, "--phase", "implementation",
                        "--transcript", str(agent)], env=env, check=False)
@@ -685,10 +707,10 @@ def maybe_capture_and_gate(group, checkout, evidence_path):
     store = LANDING_ROOT / "receipts"
     common = ["--checkout", str(checkout), "--evidence", str(evidence_path), "--store", str(store)]
     gate = str(REPO_ROOT / "scripts" / "landing_gate.py")
-    subprocess.run([sys.executable, gate, "capture", "--role", "reviewer", *common], check=True, cwd=str(controller))
-    subprocess.run([sys.executable, gate, "capture", "--role", "proof-verifier", *common], check=True, cwd=str(controller))
-    subprocess.run([sys.executable, gate, "check", *common], check=True, cwd=str(controller))
-    result = subprocess.run([sys.executable, gate, "land", *common], capture_output=True, text=True,
+    run_cmd([sys.executable, gate, "capture", "--role", "reviewer", *common], check=True, cwd=str(controller))
+    run_cmd([sys.executable, gate, "capture", "--role", "proof-verifier", *common], check=True, cwd=str(controller))
+    run_cmd([sys.executable, gate, "check", *common], check=True, cwd=str(controller))
+    result = run_cmd([sys.executable, gate, "land", *common], capture_output=True, text=True,
                             cwd=str(controller), check=False)
     return result.stdout.strip() or ("landed" if result.returncode == 0 else "blocked")
 
@@ -737,7 +759,7 @@ def warm_stack(slug):
     raises: a failed warm-up only means the first verifier pays the compile cost."""
     started = time.time()
     try:
-        result = subprocess.run([tool("docker"), "exec", cname(slug), "node", "-e", WARM_STACK_SCRIPT],
+        result = run_cmd([tool("docker"), "exec", cname(slug), "node", "-e", WARM_STACK_SCRIPT],
                                 capture_output=True, text=True, timeout=WARM_STACK_SECONDS)
         outcome = "ok" if result.returncode == 0 else f"failed: {result.stderr.strip()[:300]}"
     except (OSError, subprocess.SubprocessError) as exc:
@@ -751,7 +773,7 @@ def stack(args):
 
 
 def git_head(checkout):
-    return subprocess.run([tool("git"), "-C", str(checkout), "rev-parse", "HEAD"],
+    return run_cmd([tool("git"), "-C", str(checkout), "rev-parse", "HEAD"],
                           capture_output=True, text=True, check=True).stdout.strip()
 
 
@@ -760,15 +782,15 @@ def mark_committed_tasks_completed(checkout, group):
     every task with a `T<id>:` commit on the branch is completed work."""
     env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
     for task_id in group["tasks"]:
-        found = subprocess.run([tool("git"), "-C", str(checkout), "log", "--oneline", "origin/master..HEAD",
+        found = run_cmd([tool("git"), "-C", str(checkout), "log", "--oneline", "origin/master..HEAD",
                                 "--grep", f"^{task_id}[: ]"], capture_output=True, text=True, check=False).stdout
         if found.strip():
-            subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "task", "--wave",
+            run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "task", "--wave",
                             group["wave_id"], "--id", task_id, "--status", "completed"], env=env, check=False)
 
 
 def run_preland_check(checkout):
-    return subprocess.run([bash(), (REPO_ROOT / "scripts" / "dotask_preland_check.sh").as_posix(), bash_path(checkout)],
+    return run_cmd([bash(), (REPO_ROOT / "scripts" / "dotask_preland_check.sh").as_posix(), bash_path(checkout)],
                           capture_output=True, text=True, check=False)
 
 
@@ -809,7 +831,7 @@ def land(args):
     with tempfile.TemporaryDirectory(prefix="dotask-pr-") as scratch:
         body_file = Path(scratch) / "body.md"
         body_file.write_text(render_pr_body(group), encoding="utf-8")
-        pr_result = subprocess.run([tool("gh"), "pr", "create", "--title", title, "--body-file", str(body_file),
+        pr_result = run_cmd([tool("gh"), "pr", "create", "--title", title, "--body-file", str(body_file),
                                     "--head", branch, "--base", "master"], cwd=str(checkout),
                                    capture_output=True, text=True)
     if pr_result.returncode == 0:
@@ -820,7 +842,7 @@ def land(args):
         # the PR for this head branch already exists, and `gh pr create` refuses. Reuse it
         # instead of dying here, which skipped the CI verdict, evidence, notes and profile
         # steps (T13280 landing, 2026-10-22).
-        existing = subprocess.run([tool("gh"), "pr", "view", branch, "--json", "url", "-q", ".url"],
+        existing = run_cmd([tool("gh"), "pr", "view", branch, "--json", "url", "-q", ".url"],
                                   cwd=str(checkout), capture_output=True, text=True)
         pr_url = existing.stdout.strip().splitlines()[-1] if existing.stdout.strip() else ""
         if existing.returncode != 0 or not pr_url:
@@ -852,7 +874,7 @@ def land(args):
     mark_committed_tasks_completed(checkout, group)
 
     env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
-    subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "report",
+    run_cmd([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "report",
                    "--wave", group["wave_id"]], env=env, check=False)
     profile_path = TASKS_ROOT / "waves" / group["wave_id"] / "profile.json"
     print(f"profile: {profile_path}")
@@ -1039,7 +1061,7 @@ def tracked_changes(checkout):
     # rstrip, never strip: porcelain's first column is a space for an unstaged change, and stripping it
     # shifted the first path by one character, so " D qa/x.log" read as "a/x.log" and escaped the
     # TOOL_NOISE rule (g-t15260-1, 2026-11-08: "verifier changed the tree: D qa/red-...log").
-    return subprocess.run([tool("git"), "-C", str(checkout), "status", "--porcelain", "--untracked-files=no"],
+    return run_cmd([tool("git"), "-C", str(checkout), "status", "--porcelain", "--untracked-files=no"],
                           capture_output=True, text=True, check=True).stdout.rstrip()
 
 
@@ -1068,7 +1090,7 @@ def split_tool_noise(changes):
 
 def restore_tool_noise(checkout, paths):
     if paths:
-        subprocess.run([tool("git"), "-C", str(checkout), "checkout", "--", *paths],
+        run_cmd([tool("git"), "-C", str(checkout), "checkout", "--", *paths],
                        capture_output=True, text=True, check=False)
         print(f"[dotask] put back tool output the verifier rewrote: {' '.join(paths)}", file=sys.stderr)
 
@@ -1122,13 +1144,13 @@ def stop_dispatch(slug, process):
     """Kill a timed-out dispatch on both sides: the host process tree (task.sh, docker exec) and the
     `claude -p` run inside the container, which outlives a killed `docker exec`."""
     if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, check=False)
+        run_cmd(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, check=False)
     else:
         process.kill()
     with contextlib.suppress(subprocess.SubprocessError):
         process.wait(timeout=30)
     with contextlib.suppress(OSError, subprocess.SubprocessError, SystemExit):
-        subprocess.run([tool("docker"), "exec", cname(slug), "bash", "-c", KILL_DISPATCH_SCRIPT],
+        run_cmd([tool("docker"), "exec", cname(slug), "bash", "-c", KILL_DISPATCH_SCRIPT],
                        capture_output=True, check=False, timeout=60)
 
 
@@ -1182,7 +1204,7 @@ def handoff_note(checkout, label, record):
     """What a fresh conversation needs to pick up work a dispatch left uncommitted when it ran out of
     turns: the uncommitted files and a pointer to the worker's own progress checklist."""
     try:
-        changes = subprocess.run([tool("git"), "-C", str(checkout), "status", "--porcelain"],
+        changes = run_cmd([tool("git"), "-C", str(checkout), "status", "--porcelain"],
                                  capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         changes = "(git status unavailable)"
@@ -1433,7 +1455,7 @@ def stash_unfinished(checkout, label):
     the work stays in `git stash list` under the label."""
     if not tracked_changes(checkout):
         return None
-    subprocess.run([tool("git"), "-C", str(checkout), "stash", "push", "-m", f"dotask: unfinished {label}"],
+    run_cmd([tool("git"), "-C", str(checkout), "stash", "push", "-m", f"dotask: unfinished {label}"],
                    capture_output=True, text=True, check=False)
     return f"stashed as 'dotask: unfinished {label}'"
 
@@ -1550,7 +1572,7 @@ def file_unrelated_bug(bug, group, head, found_by=None):
 
 
 def git_paths_dirty(repo, paths):
-    result = subprocess.run([tool("git"), "-C", str(repo), "status", "--porcelain", "--", *map(str, paths)],
+    result = run_cmd([tool("git"), "-C", str(repo), "status", "--porcelain", "--", *map(str, paths)],
                             capture_output=True, text=True, check=False)
     return result.returncode != 0 or bool(result.stdout.strip())
 
@@ -1561,7 +1583,7 @@ def commit_filed_bug(task_id, title, paths, plan_was_dirty):
     plan commit swept the filed file in under an unrelated subject. A PLAN.md that already held
     someone's uncommitted edit is left alone: committing it would publish their half-done change."""
     repo = str(MAIN_REPO)
-    branch = subprocess.run([tool("git"), "-C", repo, "rev-parse", "--abbrev-ref", "HEAD"],
+    branch = run_cmd([tool("git"), "-C", repo, "rev-parse", "--abbrev-ref", "HEAD"],
                             capture_output=True, text=True, check=False)
     why = None
     if branch.returncode != 0:
@@ -1571,8 +1593,8 @@ def commit_filed_bug(task_id, title, paths, plan_was_dirty):
     elif plan_was_dirty:
         why = "PLAN.md already had uncommitted edits"
     if why is None:
-        subprocess.run([tool("git"), "-C", repo, "add", "--", *map(str, paths)], capture_output=True, check=False)
-        done = subprocess.run([tool("git"), "-C", repo, "commit", "-m",
+        run_cmd([tool("git"), "-C", repo, "add", "--", *map(str, paths)], capture_output=True, check=False)
+        done = run_cmd([tool("git"), "-C", repo, "commit", "-m",
                                f"{task_id}: file {title} (found by /dotask verify)", "--", *map(str, paths)],
                               capture_output=True, text=True, check=False)
         if done.returncode == 0:
@@ -1613,7 +1635,7 @@ def container_run(slug, command, timeout, env=None, keep=2000):
     `keep` chars, or all of it with keep=None (a file read back, e.g. a Playwright JSON report)."""
     argv = [tool("docker"), "exec"] + [f"-e{k}={v}" for k, v in (env or {}).items()] + [cname(slug), "bash", "-lc", command]
     try:
-        result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        result = run_cmd(argv, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return None, f"timed out after {timeout:.0f}s"
     except OSError as exc:
@@ -1873,7 +1895,7 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
 
 
 def is_ancestor(checkout, older, newer):
-    return subprocess.run(["git", "-C", str(checkout), "merge-base", "--is-ancestor", older, newer],
+    return run_cmd(["git", "-C", str(checkout), "merge-base", "--is-ancestor", older, newer],
                           capture_output=True).returncode == 0
 
 
@@ -1988,7 +2010,7 @@ def tested_or_plans_only(checkout, tested, head):
     task file before `changes`, g-t16070-3 2026-11-13): the code the owner tested is unchanged."""
     if not tested or tested == head:
         return tested == head
-    diff = subprocess.run([tool("git"), "-C", str(checkout), "diff", "--name-only", tested, head],
+    diff = run_cmd([tool("git"), "-C", str(checkout), "diff", "--name-only", tested, head],
                           capture_output=True, text=True, check=False)
     paths = [p for p in diff.stdout.splitlines() if p.strip()]
     return diff.returncode == 0 and is_ancestor(checkout, tested, head) and all(p.startswith("docs/plans/") for p in paths)
@@ -2500,7 +2522,7 @@ STAGING_DONE, STAGING_STARTED = "STAGING_CHECK ", "STAGING_CHECK_STARTED "
 
 
 def merge_commit(pr_number):
-    result = subprocess.run([tool("gh"), "pr", "view", str(pr_number), "--json", "mergeCommit", "-q", ".mergeCommit.oid"],
+    result = run_cmd([tool("gh"), "pr", "view", str(pr_number), "--json", "mergeCommit", "-q", ".mergeCommit.oid"],
                             capture_output=True, text=True, check=False)
     return result.stdout.strip() if result.returncode == 0 else ""
 
@@ -2513,7 +2535,7 @@ def wait_for_staging_deploy(sha, cap_minutes=40, appear_minutes=5, interval=30):
     while True:
         runs = {}
         for workflow in DEPLOY_WORKFLOWS:
-            listed = subprocess.run([tool("gh"), "run", "list", "--workflow", workflow, "--branch", "master", "--limit", "30",
+            listed = run_cmd([tool("gh"), "run", "list", "--workflow", workflow, "--branch", "master", "--limit", "30",
                                      "--json", "headSha,status,conclusion"], capture_output=True, text=True, check=False)
             entries = json.loads(listed.stdout or "[]") if listed.returncode == 0 else []
             mine = [r for r in entries if r.get("headSha") == sha]
@@ -2630,7 +2652,7 @@ def merged_pr(branch):
     if not branch:
         return None
     try:
-        result = subprocess.run([tool("gh"), "pr", "list", "--head", branch, "--state", "merged", "--json", "number",
+        result = run_cmd([tool("gh"), "pr", "list", "--head", branch, "--state", "merged", "--json", "number",
                                  "--jq", ".[0].number"], capture_output=True, text=True, timeout=60, check=False)
     except (OSError, subprocess.SubprocessError, SystemExit):
         return None

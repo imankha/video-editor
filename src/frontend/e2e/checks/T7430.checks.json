@@ -1,0 +1,10 @@
+{
+  "criteria": {
+    "T7430:C1": {"kind": "browser"},
+    "T7430:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t7430_retention_chart.py::TestLowVolumeDetection tests/test_t7430_retention_chart.py::TestLowVolumeDormantUser -q && cd ../.. && bash scripts/dev-verify.sh e2e/checks/T7430.check.spec.js --reporter=line --grep 'T7430:C2'"},
+    "T7430:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t7430_retention_chart.py::TestTriangleClassicVsUnbounded tests/test_t7430_retention_chart.py::TestReturnAfterGap -q && cd ../.. && bash scripts/dev-verify.sh e2e/checks/T7430.check.spec.js --reporter=line --grep 'T7430:C3'"},
+    "T7430:C4": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t7430_retention_chart.py::TestActionRetention -q && cd ../.. && bash scripts/dev-verify.sh e2e/checks/T7430.check.spec.js --reporter=line --grep 'T7430:C4'"},
+    "T7430:C5": {"kind": "browser"},
+    "T7430:C6": {"kind": "browser"}
+  }
+}

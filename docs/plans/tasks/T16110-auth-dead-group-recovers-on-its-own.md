@@ -1,6 +1,6 @@
 # T16110: A /dotask group stopped by a sign-in failure recovers on its own
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-12

@@ -400,23 +400,28 @@ Analytics: `track('share_initiated', { method, source })`. `method` becomes
   scope.
 - The style guide gains an "Action sheet" entry once this ships and is approved (not before).
 
+## Ruling
+
+**Owner, 2026-11-13: the share chooser (D1-D4, `ActionSheet` / `ShareActionSheet`) is superseded by T13120.** T13120 (owner decision 2026-10-18) made the published highlight player's Share, the tile's card-face Share and the tile's mobile menu Share open `ShareModal`, private by default, on every device. The chooser as written would mint a public link with no visibility choice, the exposure T13120 fixed. So T11510 fixes the mislabelled share where it still exists (the draft link-ready card and the post-export toast), and its criteria below are restated to match: C7 and C13 now say what is true under T13120, and C2, C3 and C8 lose their chooser halves. Sending the video file from a published highlight (Share video for Reels or TikTok) is filed as T16420.
+
 ## Acceptance Criteria
 - [ ] On a coarse-pointer device with file sharing, "Share video" calls `navigator.share` with
       `files` and no `url`, and "Share link" calls it with `url` and no `files`. Unit tests assert
       the exact payload for each.
-- [ ] A LINK_ONLY device shows "Share link" and doesn't show "Share video" on every surface: the
-      chooser and the draft link-ready grid (which collapses to one full-width button).
+- [ ] A LINK_ONLY device shows "Share link" and doesn't show "Share video" on the draft link-ready
+      grid, which collapses to one full-width button (the chooser is superseded, ruling 2026-11-13).
 - [ ] An unpublished highlight never offers Share video or mints a link without the existing
-      "Publish and get link" review (test). A published highlight with no link mints it directly
-      on Share link / Copy link, with no review (T10180 R5).
+      "Publish and get link" review (test). Published highlights share through T13120's ShareModal
+      (ruling 2026-11-13).
 - [ ] No label on any surface names a payload different from the one it sends.
 - [ ] Live-verified on a real phone: Share link -> iMessage shows the chosen cover frame in the
       preview card.
 - [ ] Desktop ShareModal / Copy link behaviour unchanged.
-- [ ] The published highlight player Share, the tile card-face Share and the mobile kebab "Share..." all open the
-      same `ShareActionSheet` on coarse pointers (test).
-- [ ] `ActionSheet` closes only via Cancel/Done or Escape; tapping the backdrop does nothing
-      (test). ReelTile's mobile kebab no longer closes on a backdrop tap and has a Cancel row.
+- [ ] The published highlight player Share, the tile card-face Share and the mobile kebab "Share..." all open
+      T13120's `ShareModal` on coarse pointers, private by default, and none of them sends the video file (test;
+      ruling 2026-11-13: no `ShareActionSheet`).
+- [ ] ReelTile's mobile kebab no longer closes on a backdrop tap and has a Cancel row (test; no
+      `ActionSheet`, ruling 2026-11-13).
 - [ ] The post-export toast on coarse pointers offers no share action (test); desktop toast is
       unchanged.
 - [ ] The draft link-ready phase on mobile shows the link card, Share link (cyan) and Share video
@@ -425,7 +430,7 @@ Analytics: `track('share_initiated', { method, source })`. `method` becomes
       `min-h-11`): the player Share, LinkReadyCard Copy, the toast action, and the PublishLinkFlow
       buttons.
 - [ ] The toast container does not overflow at 360px.
-- [ ] A Share video in progress shows "Preparing video..." with a spinner and disables the other
-      rows; the sheet closes on success or AbortError and stays open on any other error.
+- [ ] Superseded with the share sheet (ruling 2026-11-13): no `ActionSheet` or `ShareActionSheet`
+      component is added (code check). The progress state for Share video moves to T16420.
 - [ ] No user-facing string added or touched by this task calls a single finished highlight a
       "reel".

@@ -64,3 +64,13 @@ A slider is hard to set to an exact value with a thumb. Typing seconds brings up
 - Suggested length: a floor of 1.5 s plus reading time per word, capped at 8 s; the constants live in one place and the design names them.
 - Store whether the length was set by hand, so the suggestion stops overriding it. This is a stored fact about the card, written on the plus or minus gesture.
 - The fixed 2.5 s from T11300 becomes the starting value for cards made before this task.
+
+## From the recruiting reel research (owner accepted 2026-11-13)
+
+Findings: `docs/plans/research/recruiting-reel-research-2026-11.md`.
+
+- Suggested lengths the words-based formula should land on: title card 3 to 4 seconds, section card 1.5 seconds, end card 5 seconds.
+- A recruiting reel gets an end card by default. Its fields: name, graduation year, the athlete's email, and optionally the club coach's name and email. Phone is optional and off by default. There is no field for a parent: coaches say they want to hear from the athlete.
+- A recruiting reel is landscape. A portrait highlight placed in it is centered with bars at the sides, and the builder tells the parent how many of the reel's highlights are portrait.
+- A recruiting reel uses no slow motion, no music by default, and plain cuts.
+- The builder shows how many of the reel's highlights have no spotlight on the athlete. It never blocks the export for this.
