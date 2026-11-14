@@ -4,11 +4,11 @@
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-19
-**Updated:** 2026-11-13
+**Updated:** 2026-11-14
 
 ## In plain words
 
-A game is the uploaded match video. Its thumbnail is made the moment the upload finishes, before any play is marked, so it uses the frame at one minute and is then kept forever. Parents see a random moment even after marking and rating plays. Remake the thumbnail when the game's first play is saved and when its top-rated play changes. Worked when the thumbnail changes after the first play is saved on a fresh upload.
+On the home screen every uploaded game has a small picture on its tile. That picture is meant to show the start of the game's best-rated play. It is made the moment the upload finishes, when no play has been marked yet, so it shows whatever is on screen one minute into the video, often warm-up or an empty field, and it is never made again. Seen on 2026-09-19: a fresh game with a five-star play kept the one-minute picture. Remake the picture when the game's first play is saved and when its best-rated play changes. Worked when a fresh upload's picture changes to the play after the first play is saved.
 
 ## Current facts (checked 2026-11-13)
 

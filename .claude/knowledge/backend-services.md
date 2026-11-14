@@ -847,7 +847,7 @@ anything that is not a plain token, because the value lands on log lines. To rea
 `fly ssh console -a reel-ballers-api -C "sh -c 'grep -h flow_id=<x> /tmp/logs/app.log*'"`.
 `app.log` keeps 7 rotated days, **but only between deploys**: `/tmp/logs` is on the machine's
 ephemeral root filesystem (no `[mounts]` in either fly toml), so a deploy or restart clears it.
-Durable retention is T12890 (archive to R2). `upload_failures` rows survive 90 days regardless.
+That is the wanted behaviour (owner ruling 2026-11-14): logs from an older deploy describe code that is no longer running. `upload_failures` rows survive 90 days regardless.
 
 **A reason-less beacon is never terminal (T15050).** Eight all-None beacons landed on 2026-11-04
 and their source is STILL UNKNOWN: every client call site states a phase and a reason, and neither

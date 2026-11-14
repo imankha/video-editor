@@ -66,3 +66,4 @@ Owner request 2026-11-13: review every row of Chores, Later and the July audit r
 | T4600 | Its premise was wrong: plays may overlap, Spotlight regions may not, and Frame cuts are boundaries. The shared code is tens of lines. |
 | T4580 | The three playback hooks have deliberately diverged (one avoids a bug another has), and the reel builder will define its own playback. |
 | T4630 | Two of the four video proxies already share the faster client and the app mostly plays direct storage links now. The one unused proxy is deleted by T16500. |
+| T12890 | Owner ruling 2026-11-14: logs clearing on every deploy is the wanted behaviour, because logs from an older deploy point at code that is no longer running. |
