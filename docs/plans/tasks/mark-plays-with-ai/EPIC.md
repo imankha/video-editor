@@ -59,7 +59,7 @@ For the AI reel builder (owner, 2026-11-13):
 
 For team mix-ups (owner, 2026-11-13):
 
-32. **One play can be marked as the other team's.** The model sometimes credits a play to the wrong team. Switching the whole game (decision 10) fixes a wrong colour choice, not a single wrong play, so each AI play the parent has not touched carries a "Wrong team" button that removes it, keeps it from coming back, and counts the miss (T16190).
+32. **One play can be flipped to the other team's side.** The model sometimes has the teams the wrong way round on a play. Switching the whole game (decision 10) fixes a wrong colour choice, not a single wrong play. The stored result describes every play twice, once for each team, and a play that is good for one team is bad for the other, so each AI play carries a "Wrong team" button that keeps the play and shows it from the other team's section: new tags, rating, note and players. Removing the play was ruled out as no more help than deleting it. The flip is remembered and counted (T16190).
 
 ## What the prototype already measured
 
@@ -126,7 +126,7 @@ T16130 has no dependency and can ship on its own. T16150 to T16200 sit behind on
 - [ ] On the staging game a person has compared six windows with the video, and the owner has seen how many plays were credited to the wrong team and how many reported goals were not real, before the feature is switched on.
 - [ ] The admin read-out shows credits charged against model cost per analysis, and the total is positive.
 - [ ] Imported plays carry tags, note and rating, sit in the Team lane, and can be moved to My athlete or have a teammate tagged by name and email from the tagging screen on a phone.
-- [ ] A parent can mark one AI play as the other team's; it is removed and does not come back, and the count of such plays is visible to the owner.
+- [ ] A parent can flip one AI play to the other team's side of it; the play stays, its tags, rating and note change, it stays flipped, and the count of flipped plays is visible to the owner.
 - [ ] A teammate tagged from the tagging screen receives the game and its Team plays exactly as they would today.
 - [ ] A play marked by the AI, assigned to the parent's athlete and made into a highlight, returns its qualities and its sentence in the one read of highlight facts.
 - [ ] The Journey shows how many game uploaders bought an analysis and how many of them reached a first highlight.
