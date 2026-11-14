@@ -217,7 +217,7 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     const before = await page.evaluate(async () => {
       const mod = await import('/src/stores/projectDataStore.js');
       const s = mod.useProjectDataStore.getState();
-      return { projectId: s.selectedClipId != null ? s.clips[0]?.id : null, clips: s.clips.map((c) => ({ id: c.id, start: c.start_time, end: c.end_time })) };
+      return { projectId: s.projectClipId != null ? s.clips[0]?.id : null, clips: s.clips.map((c) => ({ id: c.id, start: c.start_time, end: c.end_time })) };
     });
     console.log('[T6190] framing clips before annotate edit:', JSON.stringify(before.clips));
 

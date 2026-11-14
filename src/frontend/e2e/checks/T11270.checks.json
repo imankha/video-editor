@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T11270:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run --testTimeout=60000 --hookTimeout=60000 src/hooks/useClipManager.projectClip.test.js -t 'projectClipId'"
+    },
+    "T11270:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run --testTimeout=60000 --hookTimeout=60000 src/hooks/useClipManager.projectClip.test.js -t 'selection vocabulary'"
+    }
+  }
+}

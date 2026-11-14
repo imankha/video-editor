@@ -11,8 +11,8 @@ import { render, cleanup } from '@testing-library/react';
 
 const testState = vi.hoisted(() => ({
   clips: [],
-  selectedClipId: null,
-  selectedClip: null,
+  projectClipId: null,
+  projectClip: null,
   clipMetadataCache: {},
   clipsError: null,
   lastModeViewProps: null,
@@ -28,7 +28,7 @@ vi.mock('../../modes', () => ({
 vi.mock('../../containers', () => ({
   FocusContainer: () => ({
     clipsWithCurrentState: [],
-    selectedClipEffectiveDuration: 0,
+    clipEffectiveDuration: 0,
     canUndoFraming: false,
     handleCropChange: vi.fn(),
     handleCropComplete: vi.fn(),
@@ -161,8 +161,8 @@ vi.mock('../../hooks/useVideo', () => ({
 vi.mock('../../hooks/useClipManager', () => ({
   useClipManager: () => ({
     clips: testState.clips,
-    selectedClipId: testState.selectedClipId,
-    selectedClip: testState.selectedClip,
+    projectClipId: testState.projectClipId,
+    projectClip: testState.projectClip,
     hasClips: testState.clips.length > 0,
     globalAspectRatio: '9:16',
     updateClipData: vi.fn(),
@@ -281,8 +281,8 @@ import { FocusScreen } from '../FocusScreen';
 describe('T16040 FocusScreen retries a failed clips fetch instead of treating it as empty forever', () => {
   beforeEach(() => {
     testState.clips = [];
-    testState.selectedClipId = null;
-    testState.selectedClip = null;
+    testState.projectClipId = null;
+    testState.projectClip = null;
     testState.clipMetadataCache = {};
     testState.clipsError = null;
     testState.lastModeViewProps = null;
@@ -315,8 +315,8 @@ describe('T16040 FocusScreen retries a failed clips fetch instead of treating it
   it('never retries when clips loaded successfully (no clipsError)', () => {
     testState.clipsError = null;
     testState.clips = [{ id: 7, project_id: 4, filename: 'clip-7.mp4', crop_data: null, segments_data: null }];
-    testState.selectedClipId = 7;
-    testState.selectedClip = testState.clips[0];
+    testState.projectClipId = 7;
+    testState.projectClip = testState.clips[0];
 
     render(<FocusScreen />);
     vi.advanceTimersByTime(5000);

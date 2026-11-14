@@ -53,7 +53,7 @@ function renderView(overrides = {}) {
     keyframes: [{ frame: 10, x: 0, y: 0, width: 205, height: 365, origin: 'user' }],
     hasClips: true,
     clipsWithCurrentState: [clip],
-    selectedClipEffectiveDuration: 5,
+    clipEffectiveDuration: 5,
     getTimelineScale: () => 1,
     getSegmentExportData: () => ({}),
     getFilteredKeyframesForExport: () => [],

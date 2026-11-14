@@ -126,26 +126,26 @@ function App() {
   const tutorialAssets = openQuestId ? getTutorialAssets(openQuestId) : null;
 
   // Clip data for "Edit in Annotate" button - single source of truth from projectDataStore
-  const selectedClipId = useProjectDataStore(state => state.selectedClipId);
+  const projectClipId = useProjectDataStore(state => state.projectClipId);
   const clips = useProjectDataStore(state => state.clips);
 
   // Derive selected clip - memoized to avoid recalculation
-  const selectedClipForAnnotate = useMemo(() => {
-    if (selectedClipId && clips.length > 0) {
-      const clip = clips.find(c => c.id === selectedClipId);
+  const projectClipForAnnotate = useMemo(() => {
+    if (projectClipId && clips.length > 0) {
+      const clip = clips.find(c => c.id === projectClipId);
       if (clip) return clip;
     }
     // Fall back to first clip if nothing selected
     return clips?.[0] ?? null;
-  }, [selectedClipId, clips]);
+  }, [projectClipId, clips]);
 
   // Source game name for the breadcrumb's middle segment (Clips > Game > Clip).
   const readyGames = useGamesDataStore(state => state.readyGames);
-  const selectedClipGameName = useMemo(() => {
-    if (!selectedClipForAnnotate?.game_id || !readyGames?.length) return null;
-    const game = readyGames.find(g => g.id === selectedClipForAnnotate.game_id);
+  const projectClipGameName = useMemo(() => {
+    if (!projectClipForAnnotate?.game_id || !readyGames?.length) return null;
+    const game = readyGames.find(g => g.id === projectClipForAnnotate.game_id);
     return game?.name || null;
-  }, [selectedClipForAnnotate?.game_id, readyGames]);
+  }, [projectClipForAnnotate?.game_id, readyGames]);
 
   // Project management — Zustand store (reactive to profile switches)
   const selectedProject = useProjectsStore(state => state.selectedProject);
@@ -160,7 +160,7 @@ function App() {
   // this formatter from. null for multi-clip reels (no single in-match instant); that's not
   // a gap, so it's simply hidden rather than guessed.
   const projects = useProjectsStore(state => state.projects);
-  const selectedClipGameClock = useMemo(() => {
+  const projectClipGameClock = useMemo(() => {
     const item = projects.find(p => p.id === selectedProjectId);
     return clipGameClock({ startTime: item?.clip_game_start_time });
   }, [projects, selectedProjectId]);
@@ -638,7 +638,7 @@ function App() {
 
   // Handler for "Edit in Annotate" button - navigates to Annotate mode with clip's game
   const handleEditInAnnotate = useCallback(() => {
-    const gameId = selectedClipForAnnotate?.game_id;
+    const gameId = projectClipForAnnotate?.game_id;
     if (!gameId) return;
 
     setWarmupPriority(WARMUP_PRIORITY.GAMES); // Prioritize game video warming
@@ -647,18 +647,18 @@ function App() {
     // source raw_clip id so AnnotateScreen can re-select it in the Clips sidebar
     // (T3960). A working clip carries raw_clip_id; fall back to source_clip_id in
     // case a final_video/reel shape is ever the source here.
-    const sourceClipId = selectedClipForAnnotate?.raw_clip_id ?? selectedClipForAnnotate?.source_clip_id;
-    setPendingGame(gameId, selectedClipForAnnotate?.start_time, sourceClipId);
+    const sourceClipId = projectClipForAnnotate?.raw_clip_id ?? projectClipForAnnotate?.source_clip_id;
+    setPendingGame(gameId, projectClipForAnnotate?.start_time, sourceClipId);
 
     // Reset video store to clear stale clipOffset/clipDuration from framing mode
     useVideoStore.getState().reset();
 
     // Switch to annotate mode
     setEditorMode(EDITOR_MODES.ANNOTATE);
-  }, [selectedClipForAnnotate, setEditorMode]);
+  }, [projectClipForAnnotate, setEditorMode]);
 
   // Check if we can edit in annotate (clip has game association)
-  const canEditInAnnotate = !!selectedClipForAnnotate?.game_id;
+  const canEditInAnnotate = !!projectClipForAnnotate?.game_id;
 
   // Handle mode change between Framing, Overlay, Annotate, and Project Manager
   const handleModeChange = useCallback((newMode) => {
@@ -708,7 +708,7 @@ function App() {
     if (editorMode === EDITOR_MODES.ANNOTATE && activeProjectId &&
         (newMode === EDITOR_MODES.FRAMING || newMode === EDITOR_MODES.OVERLAY)) {
       // T8050: this invalidateClips call is fire-and-forget, so FocusScreen mounts
-      // before the fetch resolves with selectedClip/videoUrl still null. Without a
+      // before the fetch resolves with projectClip/videoUrl still null. Without a
       // loading flag around it, VideoPlayer's `videoUrl ? ... : isLoading ? spinner
       // : "No video loaded"` chain falls all the way to the empty-state branch for
       // that window -- reads as broken, not loading. setLoading mirrors how
@@ -980,10 +980,10 @@ function App() {
           <UnifiedHeader
             onHomeClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
             breadcrumbType={SECTION_NAMES.CLIPS}
-            breadcrumbGameName={selectedClipGameName}
+            breadcrumbGameName={projectClipGameName}
             onGameNameClick={() => handleModeChange(EDITOR_MODES.ANNOTATE)}
             breadcrumbItemName={getProjectDisplayName(selectedProject)}
-            breadcrumbItemMeta={selectedClipGameClock}
+            breadcrumbItemMeta={projectClipGameClock}
             editorMode={editorMode}
             onModeChange={handleModeChange}
             hasProject={true}
@@ -992,7 +992,7 @@ function App() {
             framingOutOfSync={framingChangedSinceExport && hasOverlayVideo}
             hasAnnotateVideo={canEditInAnnotate}
             isLoadingWorkingVideo={isLoadingWorkingVideo}
-            extraControls={<FramingHeaderStatus editorMode={editorMode} clip={selectedClipForAnnotate} />}
+            extraControls={<FramingHeaderStatus editorMode={editorMode} clip={projectClipForAnnotate} />}
           />
 
           {/* Mode-specific views */}

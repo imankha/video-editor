@@ -18,7 +18,7 @@
  * editor mode immediately; `projectDataStore.fetchClips` only writes `clips`
  * when the response lands and never clears the previous list (`clearClips`
  * exists but is not called on this path). So for that window `FocusScreen`
- * renders the new `projectId` over the old project's `clips`/`selectedClipId`,
+ * renders the new `projectId` over the old project's `clips`/`projectClipId`,
  * and its `[]`-deps mount loader fires on them immediately.
  *
  * Pairing those ids is not merely stale, it is IMPOSSIBLE: the backend matches

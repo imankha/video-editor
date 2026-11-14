@@ -643,7 +643,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   FIRE-AND-FORGET then switches editor mode immediately, and `projectDataStore.fetchClips` only
   writes `clips` when the response lands — nothing calls the existing `clearClips` on that path. So
   for one window `FocusScreen` renders the NEW `projectId` over the PREVIOUS project's `clips` +
-  `selectedClipId`, and its `[]`-deps mount loader fires on them at once. Pairing those ids is not
+  `projectClipId`, and its `[]`-deps mount loader fires on them at once. Pairing those ids is not
   just stale, it is IMPOSSIBLE (`clips.py` matches `WHERE wc.id = ? AND wc.project_id = ?`), so the
   request can only 404. That 404 used to reach `<video>` as a dead src and surface as the FALSE
   "source storage may have expired" (a real 410 renders the T8310 panel and never mounts a player —

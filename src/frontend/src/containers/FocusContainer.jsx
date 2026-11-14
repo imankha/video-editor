@@ -115,8 +115,8 @@ export function FocusContainer({
 
   // Clip state and actions (from useClipManager in App.jsx)
   clips,
-  selectedClipId,
-  selectedClip,
+  projectClipId,
+  projectClip,
   hasClips,
   globalAspectRatio,
   updateClipData,
@@ -136,11 +136,11 @@ export function FocusContainer({
   const clipHasUserEditsRef = useRef(false);
 
   // Latest selected clip id, readable inside async handlers after an await.
-  // Closure-captured selectedClipId goes stale when the user switches clips
+  // Closure-captured projectClipId goes stale when the user switches clips
   // while a backend call is in flight — rollbacks must not touch hook state
   // that now belongs to a different clip.
-  const latestSelectedClipIdRef = useRef(selectedClipId);
-  latestSelectedClipIdRef.current = selectedClipId;
+  const latestProjectClipIdRef = useRef(projectClipId);
+  latestProjectClipIdRef.current = projectClipId;
 
   // T9950 Slice 2: session-scoped Undo for framing edits. Memory only. Used to
   // be cleared on the (now-deleted, T11240) clip-selection gesture; with
@@ -175,7 +175,7 @@ export function FocusContainer({
    * we need to merge the current clip's live state before export.
    */
   const clipsWithCurrentState = useMemo(() => {
-    if (!hasClips || !clips || !selectedClipId) return clips;
+    if (!hasClips || !clips || !projectClipId) return clips;
 
     const convertKeyframesToTime = (kfs, clipFramerate) => {
       if (!kfs || !Array.isArray(kfs)) return [];
@@ -223,7 +223,7 @@ export function FocusContainer({
       // the sidebar reads, so the surfaces never disagree on a freshly-created draft.
       const clipDuration = clipMetadataCache[clip.id]?.duration ?? clipSourceDuration(clip);
 
-      if (clip.id === selectedClipId) {
+      if (clip.id === projectClipId) {
         // Only override cropKeyframes when the hook has initialized.
         // Before useCrop auto-init, getKeyframesForExport() returns [] which
         // would erase the clip's existing crop_data.
@@ -270,7 +270,7 @@ export function FocusContainer({
         framerate: clipFr,
       };
     });
-  }, [clips, selectedClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio, clipMetadataCache]);
+  }, [clips, projectClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio, clipMetadataCache]);
 
   /**
    * DERIVED (T5780): live output length of the SELECTED clip, from the live useSegments
@@ -281,23 +281,23 @@ export function FocusContainer({
    * from the hook and feed it to the one cost calculator. Fail-closed to null when the
    * source duration is unknown (never show a fabricated number).
    */
-  const selectedClipEffectiveDuration = useMemo(() => {
+  const clipEffectiveDuration = useMemo(() => {
     if (!duration || Number.isNaN(duration)) return null;
     const eff = calculateEffectiveDuration({
-      id: selectedClipId,
+      id: projectClipId,
       duration,
       segments: { boundaries: segmentBoundaries, segmentSpeeds, trimRange },
     });
     return (eff == null || Number.isNaN(eff)) ? null : eff;
-  }, [duration, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange]);
+  }, [duration, projectClipId, segmentBoundaries, segmentSpeeds, trimRange]);
 
   /**
    * Save current clip's framing state to backend
    */
   const saveCurrentClipState = useCallback(async () => {
-    if (!selectedClipId || !selectedProjectId) return;
+    if (!projectClipId || !selectedProjectId) return;
 
-    const currentClip = clips.find(c => c.id === selectedClipId);
+    const currentClip = clips.find(c => c.id === projectClipId);
     if (!currentClip?.id) return;
 
     const segmentState = {
@@ -309,7 +309,7 @@ export function FocusContainer({
     try {
       // Save to local clip manager state
       // T280: No timing_data — trimRange lives in segments_data only
-      updateClipData(selectedClipId, {
+      updateClipData(projectClipId, {
         segments_data: segmentState,
         crop_data: keyframes,
       });
@@ -324,14 +324,14 @@ export function FocusContainer({
 
         // If backend created a new version, update local clip's id
         if (result?.newClipId) {
-          updateClipData(selectedClipId, { id: result.newClipId });
+          updateClipData(projectClipId, { id: result.newClipId });
         }
       }
 
     } catch (e) {
       console.error('[FocusContainer] Failed to save framing state:', e);
     }
-  }, [selectedClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits, getKeyframesForExport]);
+  }, [projectClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits, getKeyframesForExport]);
 
   /**
    * Handle crop changes during drag/resize (live preview)
@@ -349,9 +349,9 @@ export function FocusContainer({
   const applyInverseKeyframeState = useCallback(async (frame, data, origin, clipIdAtPush) => {
     // T11240: with exactly one clip there is no more user-driven clip switch to
     // clear the stack on, but an export version bump still changes
-    // selectedClipId — this guard keeps a pre-bump inverse thunk (closed over
+    // projectClipId — this guard keeps a pre-bump inverse thunk (closed over
     // the OLD id's keyframes) from ever replaying against the new id.
-    if (latestSelectedClipIdRef.current !== clipIdAtPush) return;
+    if (latestProjectClipIdRef.current !== clipIdAtPush) return;
     const time = frame / framerate;
     if (data) {
       addOrUpdateKeyframe(time, data, duration, origin || 'user');
@@ -361,7 +361,7 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (!selectedProjectId || !clipId) return;
     if (data) {
       await persistKeyframeEdit({
@@ -375,7 +375,7 @@ export function FocusContainer({
       const result = await focusActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
       if (!result.success) toastEditFailed(ERROR_COPY.UNDO_EDIT, result.error);
     }
-  }, [framerate, duration, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+  }, [framerate, duration, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip]);
 
   /**
    * T9950 Slice 2 -- pops the most recent framing edit (widen, ordinary focus-
@@ -405,12 +405,12 @@ export function FocusContainer({
     // Persisting the raw frame here is what made the store/backend append a
     // near-duplicate the reducer merged — the overlapping-keyframe bug.
     const targetFrame = resolveTargetFrame(keyframes, frame);
-    const callerClipId = selectedClipId;
+    const callerClipId = projectClipId;
 
     // Capture pre-existing keyframe for rollback (may be null if no keyframe at this frame)
     const previousKfData = getCropDataAtTime(currentTime);
     const previousKf = keyframes.find(kf => kf.frame === targetFrame);
-    const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+    const previousStoreKfs = clipCropKeyframes(projectClip) || [];
     // Preserve a permanent boundary's origin when snapping onto it (matches reducer)
     const origin = previousKf?.origin || 'user';
 
@@ -419,18 +419,18 @@ export function FocusContainer({
     onCropChange?.(null);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
-    track('crop_keyframe_add', { frame: targetFrame, clipId: selectedClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
+    track('crop_keyframe_add', { frame: targetFrame, clipId: projectClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
     // T3700: quest_2 "Keep your player in frame" — the user adjusted the crop box
     useQuestStore.getState().recordAchievement('crop_adjusted');
     // T10010 activation funnel: this handler IS the MANUAL framing path (a user
     // drag placing/positioning the crop box). IDs/bucket only, no PII.
     // T9950 landed without reshaping this call site: it still fires from the
     // same point-placement gesture.
-    recordFunnelEvent(FUNNEL_EVENTS.FRAMING_POINT_ADDED, { clip_id: selectedClipId, path: 'manual' });
+    recordFunnelEvent(FUNNEL_EVENTS.FRAMING_POINT_ADDED, { clip_id: projectClipId, path: 'manual' });
 
     // Persist via the shared keyframe-edit path (T3800). The backend key can only
     // be the resolved targetFrame — no raw frame can leak past identity resolution.
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       const result = await persistKeyframeEdit({
         resolution: { targetKey: targetFrame, movedFromKey: null },
@@ -448,7 +448,7 @@ export function FocusContainer({
         // Hook rollback only if the user is still on the same clip — the hook now
         // holds the new clip's keyframes after a switch.
         rollback: () => {
-          if (latestSelectedClipIdRef.current !== callerClipId) return;
+          if (latestProjectClipIdRef.current !== callerClipId) return;
           if (previousKf && previousKfData) {
             addOrUpdateKeyframe(currentTime, previousKfData, duration, previousKf.origin);
           } else {
@@ -475,7 +475,7 @@ export function FocusContainer({
         ));
       }
     }
-  }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData, rotation, clampCropForCurrentRotation, framingHistory, applyInverseKeyframeState]);
+  }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, updateClipData, rotation, clampCropForCurrentRotation, framingHistory, applyInverseKeyframeState]);
 
   /**
    * Handle a horizon-straighten commit (T5640). Mirrors handleCropComplete's
@@ -493,7 +493,7 @@ export function FocusContainer({
    * on failure.
    */
   const handleSetRotation = useCallback(async (deg) => {
-    const callerClipId = selectedClipId;
+    const callerClipId = projectClipId;
     const previousRotation = rotation;
 
     const { rotation: theta } = setRotation(deg);
@@ -506,7 +506,7 @@ export function FocusContainer({
       updateClipData(callerClipId, { rotation: theta });
     }
 
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (!selectedProjectId || !clipId) return;
 
     const result = await focusActions.setRotation(selectedProjectId, clipId, theta);
@@ -516,14 +516,14 @@ export function FocusContainer({
       }
       // Hook rollback only if the user is still on the same clip — the hook now
       // holds a different clip's rotation after a switch.
-      if (latestSelectedClipIdRef.current === callerClipId) {
+      if (latestProjectClipIdRef.current === callerClipId) {
         setRotation(previousRotation);
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
       }
       toastEditFailed(ERROR_COPY.SAVE_ROTATION, result.error);
     }
-  }, [rotation, setRotation, selectedClip, selectedClipId, selectedProjectId, updateClipData, onUserEdit, setFramingChangedSinceExport]);
+  }, [rotation, setRotation, projectClip, projectClipId, selectedProjectId, updateClipData, onUserEdit, setFramingChangedSinceExport]);
 
   /**
    * Coordinated segment trim handler
@@ -552,7 +552,7 @@ export function FocusContainer({
     setFramingChangedSinceExport?.(true);
 
     // Persist to backend with error recovery
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       let hasError = false;
 
@@ -587,8 +587,8 @@ export function FocusContainer({
       }
 
       // Update store so sidebar framing indicator reflects trim
-      if (selectedClipId) {
-        updateClipData(selectedClipId, {
+      if (projectClipId) {
+        updateClipData(projectClipId, {
           segments_data: ({
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
@@ -599,7 +599,7 @@ export function FocusContainer({
         });
       }
     }
-  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, toggleTrimSegment, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, toggleTrimSegment, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for start
@@ -624,7 +624,7 @@ export function FocusContainer({
     setFramingChangedSinceExport?.(true);
 
     // Persist to backend with error recovery
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       let hasError = false;
 
@@ -653,8 +653,8 @@ export function FocusContainer({
       }
 
       // Sync segments to store so sidebar indicator updates
-      if (selectedClipId) {
-        updateClipData(selectedClipId, {
+      if (projectClipId) {
+        updateClipData(projectClipId, {
           segments_data: ({
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
@@ -665,7 +665,7 @@ export function FocusContainer({
         });
       }
     }
-  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for end
@@ -689,7 +689,7 @@ export function FocusContainer({
     setFramingChangedSinceExport?.(true);
 
     // Persist to backend with error recovery
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       let hasError = false;
 
@@ -719,8 +719,8 @@ export function FocusContainer({
       }
 
       // Sync segments to store so sidebar indicator updates
-      if (selectedClipId) {
-        updateClipData(selectedClipId, {
+      if (projectClipId) {
+        updateClipData(projectClipId, {
           segments_data: ({
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
@@ -731,7 +731,7 @@ export function FocusContainer({
         });
       }
     }
-  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Handle keyframe click (seek to keyframe time)
@@ -751,19 +751,19 @@ export function FocusContainer({
     // list falls back to the default centered crop).
     const targetKf = keyframes.find(kf => kf.frame === frame);
 
-    const callerClipId = selectedClipId;
+    const callerClipId = projectClipId;
 
     // Capture keyframe data for rollback
     const deletedKf = targetKf;
     const deletedCropData = getCropDataAtTime(time);
     const deletedOrigin = deletedKf?.origin || 'user';
-    const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+    const previousStoreKfs = clipCropKeyframes(projectClip) || [];
 
     clipHasUserEditsRef.current = true;
     removeKeyframe(time, duration);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
-    track('crop_keyframe_delete', { frame, clipId: selectedClipId }, { debugOnly: true });
+    track('crop_keyframe_delete', { frame, clipId: projectClipId }, { debugOnly: true });
 
     // Sync to clip store so sidebar indicator updates
     if (callerClipId) {
@@ -772,7 +772,7 @@ export function FocusContainer({
     }
 
     // Persist to backend with error recovery
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       const result = await focusActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
       if (!result.success) {
@@ -782,7 +782,7 @@ export function FocusContainer({
         }
         // Hook rollback only if the user is still on the same clip — the hook
         // now holds the new clip's keyframes after a switch
-        if (latestSelectedClipIdRef.current === callerClipId) {
+        if (latestProjectClipIdRef.current === callerClipId) {
           if (deletedCropData) {
             addOrUpdateKeyframe(time, deletedCropData, duration, deletedOrigin);
           }
@@ -801,7 +801,7 @@ export function FocusContainer({
         ));
       }
     }
-  }, [duration, framerate, keyframes, getCropDataAtTime, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData, framingHistory, applyInverseKeyframeState]);
+  }, [duration, framerate, keyframes, getCropDataAtTime, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, updateClipData, framingHistory, applyInverseKeyframeState]);
 
   /**
    * Handle moving a focus point in TIME (T10840 D10 — the cockpit timeline
@@ -824,8 +824,8 @@ export function FocusContainer({
 
     const cropData = { x: sourceKf.x, y: sourceKf.y, width: sourceKf.width, height: sourceKf.height };
     const origin = sourceKf.origin || 'user';
-    const callerClipId = selectedClipId;
-    const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+    const callerClipId = projectClipId;
+    const previousStoreKfs = clipCropKeyframes(projectClip) || [];
 
     clipHasUserEditsRef.current = true;
     removeKeyframe(oldTime, duration);
@@ -840,19 +840,19 @@ export function FocusContainer({
       updateClipData(callerClipId, { crop_data: updatedKfs });
     }
 
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       const result = await focusActions.moveCropKeyframe(selectedProjectId, clipId, oldFrame, newFrame);
       if (!result.success) {
         if (callerClipId) updateClipData(callerClipId, { crop_data: previousStoreKfs });
-        if (latestSelectedClipIdRef.current === callerClipId) {
+        if (latestProjectClipIdRef.current === callerClipId) {
           removeKeyframe(newTime, duration);
           addOrUpdateKeyframe(oldTime, cropData, duration, origin);
         }
         toastEditFailed(ERROR_COPY.MOVE_POSITION, result.error);
       }
     }
-  }, [framerate, keyframes, duration, selectedClipId, selectedClip, selectedProjectId, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, updateClipData]);
+  }, [framerate, keyframes, duration, projectClipId, projectClip, selectedProjectId, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, updateClipData]);
 
   /**
    * Handler for copy crop at current time
@@ -871,12 +871,12 @@ export function FocusContainer({
       const frame = Math.round(time * framerate);
       // Resolve identity (snap) before persisting — see handleCropComplete.
       const targetFrame = resolveTargetFrame(keyframes, frame);
-      const callerClipId = selectedClipId;
+      const callerClipId = projectClipId;
 
       // Capture pre-existing keyframe for rollback
       const previousKfData = getCropDataAtTime(time);
       const previousKf = keyframes.find(kf => kf.frame === targetFrame);
-      const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+      const previousStoreKfs = clipCropKeyframes(projectClip) || [];
       const origin = previousKf?.origin || 'user';
 
       pasteCropKeyframe(time, duration);
@@ -885,7 +885,7 @@ export function FocusContainer({
 
       // Persist via the shared keyframe-edit path (T3800) — same contract as
       // handleCropComplete; only the data source (copiedCrop) differs.
-      const clipId = selectedClip?.id;
+      const clipId = projectClip?.id;
       if (selectedProjectId && clipId) {
         await persistKeyframeEdit({
           resolution: { targetKey: targetFrame, movedFromKey: null },
@@ -900,7 +900,7 @@ export function FocusContainer({
           },
           // Hook rollback only if the user is still on the same clip.
           rollback: () => {
-            if (latestSelectedClipIdRef.current !== callerClipId) return;
+            if (latestProjectClipIdRef.current !== callerClipId) return;
             if (previousKf && previousKfData) {
               addOrUpdateKeyframe(time, previousKfData, duration, previousKf.origin);
             } else {
@@ -914,13 +914,13 @@ export function FocusContainer({
         });
       }
     }
-  }, [videoUrl, currentTime, copiedCrop, duration, framerate, keyframes, getCropDataAtTime, pasteCropKeyframe, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
+  }, [videoUrl, currentTime, copiedCrop, duration, framerate, keyframes, getCropDataAtTime, pasteCropKeyframe, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, updateClipData]);
 
   /**
    * Handle segment boundary add (split)
    */
   const handleAddSplit = useCallback(async (time) => {
-    const callerClipId = selectedClipId;
+    const callerClipId = projectClipId;
     clipHasUserEditsRef.current = true;
     addSegmentBoundary(time);
     onUserEdit?.();
@@ -940,10 +940,10 @@ export function FocusContainer({
     }
 
     // Persist to backend with error recovery
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       const result = await focusActions.splitSegment(selectedProjectId, clipId, time);
-      if (!result.success && selectedClipId === callerClipId) {
+      if (!result.success && projectClipId === callerClipId) {
         removeSegmentBoundary(time);
         if (callerClipId) {
           updateClipData(callerClipId, {
@@ -959,13 +959,13 @@ export function FocusContainer({
         toastEditFailed(ERROR_COPY.SPLIT_SECTION, result.error);
       }
     }
-  }, [addSegmentBoundary, removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
+  }, [addSegmentBoundary, removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
   /**
    * Handle segment boundary remove
    */
   const handleRemoveSplit = useCallback(async (time) => {
-    const callerClipId = selectedClipId;
+    const callerClipId = projectClipId;
     clipHasUserEditsRef.current = true;
     removeSegmentBoundary(time);
     onUserEdit?.();
@@ -984,10 +984,10 @@ export function FocusContainer({
     }
 
     // Persist to backend with error recovery
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       const result = await focusActions.removeSegmentSplit(selectedProjectId, clipId, time);
-      if (!result.success && selectedClipId === callerClipId) {
+      if (!result.success && projectClipId === callerClipId) {
         addSegmentBoundary(time);
         if (callerClipId) {
           updateClipData(callerClipId, {
@@ -1003,25 +1003,25 @@ export function FocusContainer({
         toastEditFailed(ERROR_COPY.REMOVE_SPLIT, result.error);
       }
     }
-  }, [removeSegmentBoundary, addSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
+  }, [removeSegmentBoundary, addSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
   // Helper: sync current segment state to clip store so sidebar indicator updates
   const syncSegmentsToStore = useCallback(() => {
-    if (!selectedClipId) return;
+    if (!projectClipId) return;
     const segmentState = {
       boundaries: segmentBoundaries,
       segmentSpeeds: segmentSpeeds,
       trimRange: trimRange,
     };
-    updateClipData(selectedClipId, { segments_data: segmentState });
-  }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
+    updateClipData(projectClipId, { segments_data: segmentState });
+  }, [projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
   /**
    * Handle segment speed change
    */
   const handleSegmentSpeedChange = useCallback(async (segmentIndex, speed) => {
     const previousSpeed = segmentSpeeds[segmentIndex] ?? 1;
-    const callerClipId = selectedClipId;
+    const callerClipId = projectClipId;
 
     clipHasUserEditsRef.current = true;
     setSegmentSpeed(segmentIndex, speed);
@@ -1048,10 +1048,10 @@ export function FocusContainer({
     }
 
     // Persist to backend with error recovery
-    const clipId = selectedClip?.id;
+    const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       const result = await focusActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed);
-      if (!result.success && selectedClipId === callerClipId) {
+      if (!result.success && projectClipId === callerClipId) {
         setSegmentSpeed(segmentIndex, previousSpeed);
         if (callerClipId) {
           updateClipData(callerClipId, {
@@ -1067,7 +1067,7 @@ export function FocusContainer({
         toastEditFailed(ERROR_COPY.SET_SPEED, result.error);
       }
     }
-  }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
+  }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
   /**
    * Get filtered keyframes for export (handles trim range)
@@ -1140,7 +1140,7 @@ export function FocusContainer({
   // Effect: Reset user edit tracking when clip selection changes
   useEffect(() => {
     clipHasUserEditsRef.current = false;
-  }, [selectedClipId]);
+  }, [projectClipId]);
 
   // NOTE: Auto-save effect removed - gesture-based actions save immediately on each user action
   // saveCurrentClipState is still available for explicit saves (export only)
@@ -1153,7 +1153,7 @@ export function FocusContainer({
     getFilteredKeyframesForExport,
 
     // T5780: live output-length indicator (derived at render, never persisted)
-    selectedClipEffectiveDuration,
+    clipEffectiveDuration,
 
     // T9950 Slice 2: session-scoped Undo state.
     canUndoFraming: framingHistory.canUndo,

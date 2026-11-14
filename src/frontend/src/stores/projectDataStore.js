@@ -32,7 +32,7 @@ export const useProjectDataStore = create((set, get) => ({
   clips: [],
 
   // Currently selected clip ID (backend integer ID)
-  selectedClipId: null,
+  projectClipId: null,
 
   // Video metadata cache: { [clipId]: { duration, width, height, framerate, metadata } }
   clipMetadataCache: {},
@@ -63,7 +63,7 @@ export const useProjectDataStore = create((set, get) => ({
     return { clips: newClips };
   }),
 
-  setSelectedClipId: (selectedClipId) => set({ selectedClipId }),
+  setProjectClipId: (projectClipId) => set({ projectClipId }),
 
   setClipMetadataCache: (clipMetadataCache) => set({ clipMetadataCache }),
 
@@ -81,14 +81,14 @@ export const useProjectDataStore = create((set, get) => ({
 
   clearClips: () => set({
     clips: [],
-    selectedClipId: null,
+    projectClipId: null,
     clipMetadataCache: {},
   }),
 
   // Batch update for loading project clips
   setProjectClips: ({ clips }) => set({
     clips,
-    selectedClipId: clips.length > 0 ? clips[0].id : null,
+    projectClipId: clips.length > 0 ? clips[0].id : null,
   }),
 
   // ========== API Methods ==========
@@ -149,13 +149,13 @@ export const useProjectDataStore = create((set, get) => ({
         // A newer fetchClips call (e.g. invalidateClips) already superseded this one —
         // applying this stale response would clobber the fresher data it raced against.
         if (get()._clipsRequestId !== requestId) return data;
-        const { selectedClipId } = get();
-        const clipStillExists = selectedClipId && data.some(c => c.id === selectedClipId);
+        const { projectClipId } = get();
+        const clipStillExists = projectClipId && data.some(c => c.id === projectClipId);
         set({
           clips: data,
           clipsFetching: false,
           _clipsInflight: null,
-          selectedClipId: clipStillExists ? selectedClipId : (data.length > 0 ? data[0].id : null),
+          projectClipId: clipStillExists ? projectClipId : (data.length > 0 ? data[0].id : null),
         });
         return data;
       })
@@ -282,10 +282,10 @@ export const useProjectDataStore = create((set, get) => ({
 
   hasClips: () => get().clips.length > 0,
 
-  getSelectedClip: () => {
-    const { clips, selectedClipId } = get();
-    if (!selectedClipId) return null;
-    return clips.find((clip) => clip.id === selectedClipId) || null;
+  getProjectClip: () => {
+    const { clips, projectClipId } = get();
+    if (!projectClipId) return null;
+    return clips.find((clip) => clip.id === projectClipId) || null;
   },
 
   getClipById: (clipId) => {
@@ -314,7 +314,7 @@ export const useProjectDataStore = create((set, get) => ({
   // Clear all project data (called when switching projects)
   reset: () => set({
     clips: [],
-    selectedClipId: null,
+    projectClipId: null,
     clipMetadataCache: {},
     clipsFetching: false,
     clipsError: null,
@@ -327,5 +327,5 @@ export const useProjectDataStore = create((set, get) => ({
 
 // Selector hooks
 export const useProjectClips = () => useProjectDataStore(state => state.clips);
-export const useSelectedClipId = () => useProjectDataStore(state => state.selectedClipId);
+export const useProjectClipId = () => useProjectDataStore(state => state.projectClipId);
 export const useWorkingVideo = () => useProjectDataStore(state => state.workingVideo);
