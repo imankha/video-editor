@@ -61,27 +61,30 @@ async function assertAtLeast44(locator, label) {
  *  32px tall, so neighbouring rows' 44px pads -- e.g. KeyframeMarker's -- legitimately
  *  overlap there by a few pixels.) */
 async function assertHitPadTargets(pad, control, label) {
-  // Centre it: the sticky bottom action band covers the lower viewport edge, and a
-  // parent scrolls a control clear of it before tapping.
-  await control.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await assertAtLeast44(pad, label);
-  const box = await pad.boundingBox();
-  const inset = 2;
-  const cy = box.y + box.height / 2;
-  const points = [
-    [box.x + box.width / 2, cy],
-    [box.x + inset, cy],
-    [box.x + box.width - inset, cy],
-  ];
-  for (const [x, y] of points) {
-    const hit = await control.evaluate((el, [px, py]) => {
+  // Centre it: the sticky bottom action band covers the lower viewport edge, and a
+  // parent scrolls a control clear of it before tapping. Re-scroll and re-probe until
+  // the layout settles: on a slow load the video's stage grows after the first scroll
+  // and pushes the timeline back under the band (T16450, staging iPad).
+  await expect.poll(async () => {
+    await control.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    const box = await pad.boundingBox();
+    const inset = 2;
+    const cy = box.y + box.height / 2;
+    const points = [
+      [box.x + box.width / 2, cy],
+      [box.x + inset, cy],
+      [box.x + box.width - inset, cy],
+    ];
+    return control.evaluate((el, pts) => pts.map(([px, py]) => {
       // The playhead lever moves with playback and sits over whichever marker it is
       // parked on; it is not part of the layout this criterion is about, so look past it.
       const top = document.elementsFromPoint(px, py).find((e) => !e.closest('.lever-handle'));
-      return !!top && el.contains(top) ? 'control' : (top ? `${top.tagName}.${top.className}`.slice(0, 120) : 'nothing');
-    }, [x, y]);
-    expect(hit, `${label}: a tap at (${Math.round(x)},${Math.round(y)}) reaches the control`).toBe('control');
-  }
+      const hit = !!top && el.contains(top) ? 'control' : (top ? `${top.tagName}.${top.className}`.slice(0, 120) : 'nothing');
+      return `(${Math.round(px)},${Math.round(py)}) ${hit}`;
+    }), points);
+  }, { message: `${label}: a tap at its centre and both side edges reaches the control`, timeout: 30000 })
+    .toEqual([expect.stringMatching(/ control$/), expect.stringMatching(/ control$/), expect.stringMatching(/ control$/)]);
 }
 
 async function findGameWithPlays(page) {
@@ -108,6 +111,28 @@ async function findFramedProject(page) {
   return projects.find((p) => p.clip_count > 0 && p.has_working_video) || null;
 }
 
+/** A project Frame can edit: its game video still exists. A clip whose source game was
+ *  reclaimed after expiry gets 410 from playback-url and Frame shows "Game video
+ *  expired" with no box to drag (T16450: the staging account's framed projects are all
+ *  on its expired game). Projects with a saved box are tried first. */
+async function findFrameableProject(page) {
+  const projectsRes = await page.request.get(checkApi('/projects'));
+  expect(projectsRes.ok(), `GET /projects -> ${projectsRes.status()}`).toBeTruthy();
+  const body = await projectsRes.json();
+  const projects = (Array.isArray(body) ? body : body.projects || []).filter((p) => p.clip_count > 0);
+  projects.sort((a, b) => Number(b.has_crop_keyframes) - Number(a.has_crop_keyframes));
+  for (const p of projects) {
+    // The project's own (working) clip ids; /projects lists the raw clip ids.
+    const clipsRes = await page.request.get(checkApi(`/clips/projects/${p.id}/clips`));
+    if (!clipsRes.ok()) continue;
+    const [clip] = await clipsRes.json();
+    if (!clip) continue;
+    const res = await page.request.get(checkApi(`/clips/projects/${p.id}/clips/${clip.id}/playback-url`));
+    if (res.ok()) return p;
+  }
+  return null;
+}
+
 for (const vp of VIEWPORTS) {
   test.describe(vp.name, () => {
     test.use({ hasTouch: true, isMobile: true, viewport: { width: vp.width, height: vp.height } });
@@ -129,9 +154,10 @@ for (const vp of VIEWPORTS) {
 
       // Fullscreen Mark play: Annotate's toolbar Mark play renders ONLY in fullscreen
       // (AnnotateControls.jsx: icon-only below sm, labelled from sm up -- one of the two
-      // is visible at each viewport).
+      // is visible at each viewport). With the playhead inside a play the same button
+      // reads "Edit selected play" (T16450: the staging account resumes inside one).
       await page.getByTitle('Fullscreen', { exact: true }).click({ timeout: 60000 });
-      const fsMarkPlay = page.getByTitle('Mark play ending at current time (A)').locator('visible=true');
+      const fsMarkPlay = page.getByTitle(/^(Mark play ending at current time|Edit selected play) \(A\)$/).locator('visible=true');
       await fsMarkPlay.first().waitFor({ timeout: 30000 });
       await assertAtLeast44(fsMarkPlay.first(), 'Annotate fullscreen "Mark play"');
       await page.getByTitle('Exit fullscreen', { exact: true }).locator('visible=true').first().click();
@@ -163,8 +189,8 @@ for (const vp of VIEWPORTS) {
 
     test(`T16210:C1 - Frame: the Portrait/Landscape chip is >=44x44 on ${vp.name}`, async ({ context, page }) => {
       await loginForCheck(context);
-      const project = await findFramedProject(page);
-      expect(project, 'a framed project (saved box positions)').toBeTruthy();
+      const project = await findFrameableProject(page);
+      expect(project, 'a project whose game video Frame can play').toBeTruthy();
 
       // The chip replaces the "Where will you share it?" picker once the highlight has a
       // saved box position when Frame opens (FrameShapeChoice hasPositions = FocusModeView's
@@ -272,7 +298,9 @@ for (const vp of VIEWPORTS) {
       }
 
       await closeSettingsPanel();
-      await assertAtLeast44(deleteSpotlight, 'Spotlight "Delete spotlight"');
+      // The red trash chip stays small on purpose; its coarse-pointer hit pad (T15600,
+      // RegionLayer.jsx) is the tap target, measured like the number chips' pads.
+      await assertHitPadTargets(deleteSpotlight.locator('span[aria-hidden="true"]'), deleteSpotlight, 'Spotlight "Delete spotlight"');
 
       // Toast action + Dismiss: overlayActionStore's "Your edits aren't saving" toast
       // (shared Toast component) from a REAL overlay-actions POST that fails at the
