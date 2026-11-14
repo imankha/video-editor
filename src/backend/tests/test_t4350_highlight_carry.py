@@ -14,9 +14,9 @@ the Implementor creates it.
 Decision matrix under test:
 1. prior_highlights empty/None            -> (detected_regions, None)               [first-export seed]
 2. prior_snapshot == new_snapshot         -> (prior_highlights, None)   VERBATIM     [fast path]
-3. clip_count == 1, snapshots differ      -> (transformed, f"dropped:{n}" or None)   [L2 transform]
-4. clip_count > 1, snapshots differ       -> (detected_regions, "multiclip_reset")   [loud fallback]
-5. clip_count == 1, prior_snapshot is None-> (prior_highlights, "legacy_uncertain")  [legacy carry]
+3. snapshots differ                       -> (transformed, f"dropped:{n}" or None)   [L2 transform]
+4. multi-clip snapshot (T11260)           -> ValueError (legacy multi-clip is never re-framed)
+5. prior_snapshot is None                 -> (prior_highlights, "legacy_uncertain")  [legacy carry]
 """
 
 import copy
@@ -119,7 +119,6 @@ class TestFirstExportSeed:
             prior_snapshot=None,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert result == detected_regions_sentinel
@@ -134,7 +133,6 @@ class TestFirstExportSeed:
             prior_snapshot=None,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert result == detected_regions_sentinel
@@ -162,7 +160,6 @@ class TestFirstExportSeed:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert result == detected_regions_sentinel
@@ -185,7 +182,6 @@ class TestFirstExportSeed:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert [r['id'] for r in result] == ['placed']
@@ -210,7 +206,6 @@ class TestFastPathIdentity:
             prior_snapshot=snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert result == prior_highlights
@@ -244,7 +239,6 @@ class TestSingleClipTransformTrimShift:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert note is None
@@ -278,7 +272,6 @@ class TestSingleClipTransformPreservesMetadata:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
         assert len(result) == 1
         r = result[0]
@@ -309,7 +302,6 @@ class TestSingleClipTransformTrimRemoval:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert note == "dropped:1"
@@ -338,7 +330,6 @@ class TestSingleClipTransformSpeedChange:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert note is None
@@ -358,60 +349,30 @@ class TestSingleClipTransformSpeedChange:
 
 
 # =============================================================================
-# CASE 4: multi-clip loud fallback
+# CASE 4: multi-clip refused (T11260)
 # =============================================================================
 
-class TestMultiClipReset:
-    """T4350 shipped multi-clip as an unconditional loud reset (Gap B). T4355
-    (docs/plans/tasks/T4355-design.md, approved) closes that gap: a multi-clip
-    framing change now transforms per-clip instead of always resetting: see
-    tests/test_t4355_multiclip_carry.py for the full per-clip fixture matrix.
-    `multiclip_reset` survives ONLY as the residual genuinely-unmappable case
-    (a legacy prior snapshot with no `transition` key, on a NEW-side dissolve
-    re-export -- covered by TestDissolveTransition in the T4355 test file, not
-    here). This test is kept to lock the now-CORRECT "trim-only multi-clip
-    change transforms, does not reset" behavior at the `resolve_carried_highlights`
-    entry point, mirroring T4350's own single-clip trim-shift test shape.
-    """
+class TestMultiClipRefused:
+    """T11260: a legacy multi-clip project can never be re-framed (T11220/T11250
+    refuse it), so a multi-clip snapshot reaching the carry is an impossible
+    state -- it raises instead of running per-clip offset math."""
 
-    def test_multiclip_trim_change_transforms_not_resets(
-        self, video_dims, simple_crop_keyframes, detected_regions_sentinel
-    ):
+    def test_multiclip_snapshot_raises(self, video_dims, simple_crop_keyframes, detected_regions_sentinel):
         segs_a = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': None}
         segs_b = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': {'start': 1.0, 'end': 14.0}}
-
         old_snapshot = _snapshot(2, video_dims, [
             _clip_entry(segs_a, simple_crop_keyframes),
             _clip_entry(segs_a, simple_crop_keyframes),
         ])
-        new_snapshot = _snapshot(2, video_dims, [
-            _clip_entry(segs_b, simple_crop_keyframes),
-            _clip_entry(segs_b, simple_crop_keyframes),
-        ])
+        new_snapshot = _snapshot(1, video_dims, [_clip_entry(segs_b, simple_crop_keyframes)])
 
-        prior_highlights = [_region('r1', 2.0, 5.0)]
-
-        result, note = resolve_carried_highlights(
-            prior_highlights=prior_highlights,
-            prior_snapshot=old_snapshot,
-            new_snapshot=new_snapshot,
-            detected_regions=detected_regions_sentinel,
-            clip_count=2,
-        )
-
-        assert note != "multiclip_reset"
-        assert result != detected_regions_sentinel
-        assert len(result) == 1
-        assert result[0]['id'] == 'r1'
-        # Ground truth via the SAME production helpers the transform uses (never
-        # a hardcoded magic number): region is in clip 0 (old offset 0), untouched
-        # by the trim change -> old->raw->new mirrors T4350's own single-clip math.
-        old_canon = canonicalize_segments_data(segs_a, 15.0)
-        new_canon = canonicalize_segments_data(segs_b, 15.0)
-        expected_start = source_time_to_working_time(working_time_to_source_time(2.0, old_canon), new_canon)
-        expected_end = source_time_to_working_time(working_time_to_source_time(5.0, old_canon), new_canon)
-        assert result[0]['start_time'] == pytest.approx(expected_start, abs=0.05)
-        assert result[0]['end_time'] == pytest.approx(expected_end, abs=0.05)
+        with pytest.raises(ValueError, match="single-clip"):
+            resolve_carried_highlights(
+                prior_highlights=[_region('r1', 2.0, 5.0)],
+                prior_snapshot=old_snapshot,
+                new_snapshot=new_snapshot,
+                detected_regions=detected_regions_sentinel,
+            )
 
 
 # =============================================================================
@@ -432,7 +393,6 @@ class TestLegacyUncertain:
             prior_snapshot=None,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert result == prior_highlights
@@ -477,7 +437,6 @@ class TestFromDetectionSurvivesCarry:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert note is None
@@ -506,37 +465,7 @@ class TestFromDetectionSurvivesCarry:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=detected_regions_sentinel,
-            clip_count=1,
         )
 
         assert len(result) == 1
         assert 'fromDetection' not in result[0]['keyframes'][0]
-
-    def test_from_detection_survives_multi_clip_transform(
-        self, video_dims, simple_crop_keyframes, detected_regions_sentinel
-    ):
-        """The multi-clip carry path (T4355) must preserve fromDetection too."""
-        segs_a = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': None}
-        segs_b = {'boundaries': [0.0, 15.0], 'segmentSpeeds': {}, 'trimRange': {'start': 1.0, 'end': 14.0}}
-        old_snapshot = _snapshot(2, video_dims, [
-            _clip_entry(segs_a, simple_crop_keyframes),
-            _clip_entry(segs_a, simple_crop_keyframes),
-        ])
-        new_snapshot = _snapshot(2, video_dims, [
-            _clip_entry(segs_b, simple_crop_keyframes),
-            _clip_entry(segs_b, simple_crop_keyframes),
-        ])
-
-        prior_highlights = [self._region_with_detection('r1', 2.0, 5.0, 2.0, from_detection=True)]
-
-        result, note = resolve_carried_highlights(
-            prior_highlights=prior_highlights,
-            prior_snapshot=old_snapshot,
-            new_snapshot=new_snapshot,
-            detected_regions=detected_regions_sentinel,
-            clip_count=2,
-        )
-
-        assert note != "multiclip_reset"
-        assert len(result) == 1
-        assert result[0]['keyframes'][0].get('fromDetection') is True

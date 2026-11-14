@@ -82,7 +82,6 @@ export function OverlayContainer({
   selectedProject,
 
   // Clips state
-  clips,
   hasClips,
 
   // Editor mode
@@ -149,21 +148,18 @@ export function OverlayContainer({
     return hasCropEdits || hasTrimEdits || hasSpeedEdits || hasSegmentSplits;
   }, [keyframes, trimRange, segmentSpeeds, segmentBoundaries]);
 
-  // Check if we have multiple clips (requires export before overlay)
-  const hasMultipleClips = clips.length > 1;
-
   // DERIVED STATE: Effective overlay video (pass-through or rendered)
   const effectiveOverlayVideoUrl = useMemo(() => {
     if (overlayVideoUrl) return overlayVideoUrl;
-    if (!hasMultipleClips && !hasFramingEdits && framingVideoUrl) return framingVideoUrl;
+    if (!hasFramingEdits && framingVideoUrl) return framingVideoUrl;
     return null;
-  }, [overlayVideoUrl, hasMultipleClips, hasFramingEdits, framingVideoUrl]);
+  }, [overlayVideoUrl, hasFramingEdits, framingVideoUrl]);
 
   const effectiveOverlayMetadata = useMemo(() => {
     if (overlayVideoMetadata) return overlayVideoMetadata;
-    if (!hasMultipleClips && !hasFramingEdits && framingMetadata) return framingMetadata;
+    if (!hasFramingEdits && framingMetadata) return framingMetadata;
     return null;
-  }, [overlayVideoMetadata, hasMultipleClips, hasFramingEdits, framingMetadata]);
+  }, [overlayVideoMetadata, hasFramingEdits, framingMetadata]);
 
   const effectiveOverlayFile = useMemo(() => {
     // T4270: there is no framing-file pass-through -- raw clips carry no File object
@@ -669,7 +665,6 @@ export function OverlayContainer({
 
     // Derived state
     hasFramingEdits,
-    hasMultipleClips,
 
     // Spotlight loop playback (T5370)
     spotlightSpan,

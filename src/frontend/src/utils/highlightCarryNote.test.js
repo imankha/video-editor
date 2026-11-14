@@ -23,10 +23,6 @@ describe('describeHighlightCarryNote (T4350)', () => {
     expect(describeHighlightCarryNote('dropped:x')).toBeNull();
   });
 
-  it('describes the multi-clip reset', () => {
-    expect(describeHighlightCarryNote('multiclip_reset')).toMatch(/reset because your plays changed/);
-  });
-
   it('describes the legacy-uncertain case', () => {
     expect(describeHighlightCarryNote('legacy_uncertain')).toMatch(/Check where your spotlights land/);
   });

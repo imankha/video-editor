@@ -1,7 +1,7 @@
 // T5225 -- pure snapping math for the Overlay text layer's range levers.
 //
 // Design: docs/plans/tasks/T5225-design.md §3.2 (epic decision 4). Free drag
-// that SNAPS to clip boundaries within a PIXEL threshold, converted to time at
+// that SNAPS to the start/end within a PIXEL threshold, converted to time at
 // drag time (zoom-invariant), mirroring RegionLayer.jsx's existing 15px
 // click-to-add snap. Decoupled from any DOM/pointer plumbing so it's trivially
 // unit-testable and shareable (TextLayer today; RegionLayer could adopt it
@@ -14,7 +14,7 @@
  *
  * @param {number} rawTime - the raw computed time under the pointer (seconds).
  * @param {number[]} boundaries - candidate snap targets (seconds), e.g.
- *   [0, ...clip_boundaries, totalDuration].
+ *   [0, totalDuration].
  * @param {number} thresholdPx - snap radius in PIXELS (e.g. 10).
  * @param {number} pxPerSecond - the track's current px-per-second scale.
  * @returns {number} the snapped boundary time, or `rawTime` unchanged.

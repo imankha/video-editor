@@ -6,9 +6,10 @@ import { TEXT_COPY } from '../../config/displayNames';
 
 // T5225 -- Overlay text range layer. A near-clone of RegionLayer's
 // pointer-event drag mechanics (design §3.1) -- NOT a new drag idiom. The one
-// addition is clip-boundary SNAPPING on the edge levers (design §3.2, epic
-// decision 4): a drag ending within SNAP_PX of a clip boundary (or the reel
-// start/end) snaps onto it; otherwise it free-parks at the raw time.
+// addition is SNAPPING on the edge levers (design §3.2, epic decision 4): a drag
+// ending within SNAP_PX of the start or end snaps onto it; otherwise it
+// free-parks at the raw time. (T11260: one clip per highlight, so there are no
+// interior clip boundaries to snap to.)
 //
 // T6630 round 4 -- MODEL REFRAME: each block on this lane is now a REGION (a
 // time span) that can CONTAIN MULTIPLE ELEMENTS, all rendering simultaneously
@@ -41,7 +42,6 @@ export default function TextLayer({
   regions = [],
   duration,
   visualDuration,
-  clipBoundaries = [],
   selectedRegionId = null,
   onAddRegion,
   onMoveTextStart,
@@ -89,9 +89,10 @@ export default function TextLayer({
     return effectiveDuration > 0 ? usableWidth / effectiveDuration : 0;
   }, [edgePadding, effectiveDuration]);
 
-  const snapCandidates = [0, ...clipBoundaries, effectiveDuration];
+  // T11260: one clip per highlight, so the only snap targets are its start and end.
+  const snapCandidates = [0, effectiveDuration];
 
-  // Snap an arbitrary TIME to the nearest clip boundary within SNAP_PX (the same
+  // Snap an arbitrary TIME to the start or end within SNAP_PX (the same
   // math the levers use, just decoupled from a clientX so the body drag can snap
   // either edge). Returns the raw time unchanged when nothing is within range.
   const snapTimeToBoundary = useCallback((time) => {

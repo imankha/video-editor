@@ -9,8 +9,7 @@ import { SPOTLIGHT_COPY } from '../config/displayNames';
 //
 // Codes (keep in sync with app/services/highlight_carry.py):
 //   null              -> nothing to surface (carried cleanly / verbatim)
-//   "dropped:N"       -> N single-clip highlights fell outside the new trim
-//   "multiclip_reset" -> a multi-clip framing change reset highlights to auto-detected
+//   "dropped:N"       -> N highlights fell outside the new trim
 //   "legacy_uncertain"-> re-exported without a prior framing snapshot; positions unverified
 
 export function describeHighlightCarryNote(note) {
@@ -23,8 +22,6 @@ export function describeHighlightCarryNote(note) {
   }
 
   switch (note) {
-    case 'multiclip_reset':
-      return SPOTLIGHT_COPY.CARRY_RESET;
     case 'legacy_uncertain':
       return SPOTLIGHT_COPY.CARRY_CHECK;
     default:

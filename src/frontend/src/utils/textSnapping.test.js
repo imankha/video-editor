@@ -8,7 +8,7 @@ import { snapToBoundary } from './textSnapping';
  * Design intent (docs/plans/tasks/T5225-design.md §3.2):
  *   - Threshold is PIXEL-based, converted to time at drag time (zoom-invariant),
  *     mirroring the 15px click-to-add snap in RegionLayer.jsx:202-211.
- *   - Candidates = [0, ...clip_boundaries, totalDuration].
+ *   - Candidates = [0, totalDuration].
  *   - A drag ending within SNAP_PX (~10px) of a boundary reports that boundary's
  *     EXACT time (snap). Outside the threshold, reports the raw computed time
  *     (free park) so "first 3 seconds mid-clip" stays expressible.

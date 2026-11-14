@@ -58,7 +58,6 @@ function renderLayer(overrides = {}) {
     <TextLayer
       regions={[REGION]}
       duration={DURATION}
-      clipBoundaries={[]}
       onMoveTextStart={onMoveTextStart}
       onMoveTextEnd={onMoveTextEnd}
       onMoveTextBody={onMoveTextBody}
@@ -135,32 +134,29 @@ describe('TextLayer — pointer-draggable edge levers (T5225)', () => {
     expect(onMoveTextStart).toHaveBeenCalledTimes(1);
   });
 
-  it('a drag ending near a clip boundary reports the boundary exact time (snap)', () => {
+  it('a drag ending near the start reports exactly 0 (snap)', () => {
     // Track is mocked to 1000px wide, edgePadding 20 -> usable 960px over 10s => 96px/s.
-    // Put a clip boundary at 5.0s -> pixel x = 20 + (5.0/10)*960 = 500.
-    const { onMoveTextStart } = renderLayer({ clipBoundaries: [5.0] });
+    // The start sits at pixel x = 20.
+    const { onMoveTextStart } = renderLayer();
     const start = screen.getByTestId('text-lever-start-0');
 
     fireEvent.pointerDown(start, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 20 });
-    // Drag to within a few px of the boundary's pixel position (500).
-    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'touch', clientX: 505, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'touch', clientX: 25, clientY: 20 });
 
     const [, newTime] = onMoveTextStart.mock.calls.at(-1);
-    expect(newTime).toBeCloseTo(5.0, 5);
+    expect(newTime).toBe(0);
   });
 
-  it('a drag ending far from any clip boundary free-parks at the raw computed time', () => {
-    const { onMoveTextStart } = renderLayer({ clipBoundaries: [5.0] });
+  it('a drag ending mid-track free-parks at the raw computed time (T11260: no interior snap)', () => {
+    const { onMoveTextStart } = renderLayer();
     const start = screen.getByTestId('text-lever-start-0');
 
     fireEvent.pointerDown(start, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 20 });
-    // Drag to clientX=700 -- far (200px) from the boundary pixel (500).
-    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'touch', clientX: 700, clientY: 20 });
+    // x=503 is ~5.03s: where a 2-clip reel's cut used to snap. Nothing to snap to now.
+    fireEvent.pointerMove(window, { pointerId: 1, pointerType: 'touch', clientX: 503, clientY: 20 });
 
     const [, newTime] = onMoveTextStart.mock.calls.at(-1);
-    // Raw time at x=700: (700-20)/960*10 ≈ 7.083s -- NOT snapped to 5.0.
-    expect(newTime).not.toBeCloseTo(5.0, 1);
-    expect(newTime).toBeCloseTo(((700 - 20) / 960) * 10, 2);
+    expect(newTime).toBeCloseTo(((503 - 20) / 960) * 10, 5);
   });
 });
 

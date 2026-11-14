@@ -1322,7 +1322,6 @@ export const SPOTLIGHT_COPY = {
   NO_SPOTLIGHT_HELP: 'Add a spotlight to change its color, shape and how much the rest of the video is dimmed.',
   STALE_FRAMING: "You changed this play's start or end after framing. Your spotlight still uses the old framing.",
   REDO_FRAMING: 'Redo framing',
-  NEEDS_SHARPEN_MANY: `This highlight has more than one play. Sharpen it in ${MODE_NAMES.FRAMING}, then add a spotlight.`,
   NEEDS_SHARPEN_EDITS: 'You changed your framing. Sharpen your highlight, then add a spotlight.',
   GO_TO_FRAME: `Go to ${MODE_NAMES.FRAMING}`,
   LOADING_VIDEO: 'Loading video...',
@@ -1331,7 +1330,6 @@ export const SPOTLIGHT_COPY = {
   carryDropped: (n) => (n === 1
     ? '1 spotlight fell outside your new trim. Place it again in Spotlight.'
     : `${n} spotlights fell outside your new trim. Place them again in Spotlight.`),
-  CARRY_RESET: 'Your spotlights were reset because your plays changed. Place them again in Spotlight.',
   CARRY_CHECK: 'Sharpening changed the timing. Check where your spotlights land in Spotlight.',
   // Save failures. Success stays quiet about saving (style rule 7).
   RETRY_DONE: 'Your spotlight changes are in.',

@@ -128,7 +128,7 @@ def upsert_working_video(
     schema default), matching their exact pre-existing behavior byte-for-byte.
 
     T4350: ``highlights_data`` is the FRESHLY-DETECTED regions (the first-export
-    seed / multi-clip fallback). When ``new_framing_snapshot`` (a DECODED framing
+    seed). When ``new_framing_snapshot`` (a DECODED framing
     snapshot dict of what THIS export rendered with) is supplied, the INSERT branch
     reads the PRIOR working video's user-edited highlights + framing snapshot and
     runs ``resolve_carried_highlights`` to CARRY/transform them forward instead of
@@ -222,7 +222,6 @@ def upsert_working_video(
                     prior_snapshot=prior_snapshot,
                     new_snapshot=new_framing_snapshot,
                     detected_regions=detected_regions,
-                    clip_count=int(new_framing_snapshot.get("clip_count", 1) or 1),
                 )
                 insert_highlights = encode_data(final_regions)
                 snapshot_blob = encode_data(new_framing_snapshot)
