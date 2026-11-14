@@ -1,6 +1,6 @@
 # T16410: Accounts database next to the server
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-11-13
