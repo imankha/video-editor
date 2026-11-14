@@ -1,6 +1,6 @@
 # T16430: An "admin" choice in the dev sign-in presets
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-13
@@ -18,6 +18,10 @@
 
 **How we will know it worked.** Opening `http://localhost:<port>/?dev_account=admin` on a fresh task stack shows the admin panel with its sections loading, and the same link on a production build does nothing.
 
+## Ruling
+
+(owner, 2026-11-13) "?dev_account=full doesnt work ... just logs in as normal user currently, no access to admin panel. please fix." The owner expects the existing preset links to reach `/admin`, so there is no fourth preset: every account the dev picker creates (`empty`, `upload`, `full`) is an admin on a dev stack. `auth_db.is_admin` answers yes for a user who is flagged `is_test_account` AND whose email matches the picker's grammar AND whose backend runs a dev env (`storage._test_seams_enabled()`, the same gate that mounts the picker). Staging and production never widen. No `admin_users` rows are written, so there is nothing to clean up, and accounts picked before the change gain admin too. Side effect: on a dev stack an admin cannot impersonate a dev-picker account (impersonation refuses admin targets).
+
 ## Implementer details
 
 - Presets: `DevAccountPreset` and `_PRESET_INFO` in `src/backend/app/routers/dev_accounts.py`; the frontend reads `?dev_account=` in `src/frontend/src/utils/devAccounts.js` and `src/frontend/src/stores/editorStore.js` (test: `editorStore.devAccountParam.test.js`).
@@ -27,6 +31,6 @@
 
 ## Acceptance criteria
 
-- [ ] C1: `?dev_account=admin` on a task stack signs in as an admin and opens `/admin`, proven by a browser check.
-- [ ] C2: The preset is refused wherever the other presets are refused (production), proven by a backend test.
-- [ ] C3: The READY_TO_TEST test guide links the admin preset when a group's changes touch the admin screen.
+- [x] C1: An account from `?dev_account=<preset>` passes the admin check on a dev stack (backend test, `test_dev_picker_account_is_an_admin_on_a_dev_stack`).
+- [x] C2: The same account is never an admin on staging or production, and a picker-shaped email without the test flag is never an admin (backend tests).
+- [ ] C3: On a task stack, `?dev_account=full` opens the admin panel (owner, after merge).
