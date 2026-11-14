@@ -50,7 +50,7 @@ The authoritative machine-readable inventory is `helpers/targetEnv.js`
 # Order matters: a live (or suspended) machine re-uploads its stale profile.sqlite
 # over a fresh copy (local-ahead guard).
 #   0a. fly machine stop <id> -a reel-ballers-api-staging     # STOP, not suspend
-#   0b. fly proxy 15432:5432 -a reel-ballers-db-staging       # staging PG proxy
+#   0b. fly proxy 15432:5432 -a reel-ballers-db-staging-lax       # staging PG proxy
 #   0c. seed all 3 accounts (idempotent; resets gate-run drift and guarantees the
 #       export spec a framed draft) — commands in FIXTURE-CONTRACT.md § Seeding
 #   0d. fly machine start <id> -a reel-ballers-api-staging
