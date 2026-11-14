@@ -50,7 +50,6 @@ from ...services.image_extractor import (
 )
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
 from ...services.poster import (
-    clip_boundary_offsets,
     first_slowmo_section,
     generate_poster_at_export,
     get_project_poster_marker_time,
@@ -2103,13 +2102,6 @@ async def get_overlay_data(project_id: int):
         poster_marker_time = get_project_poster_marker_time(project_id)
         poster_slowmo_section = first_slowmo_section(load_project_clip_segments(project_id))
 
-        # T5225: interior clip cut-points on the concatenated timeline, for the
-        # Overlay text layer's range-snapping. Read-only, additive, no migration
-        # (design SS2.2). Degrades to [] rather than 500 when clip data can't be
-        # resolved (e.g. a published reel whose working_clips were pruned) --
-        # clip_boundary_offsets never raises (O2, binding).
-        clip_boundaries = clip_boundary_offsets(project_id)
-
         # T6380/T6510: hydrate the overlay cover state. poster_source on the
         # project's CURRENT final video tells the client whether a custom upload
         # is the cover actually served, so a reload restores "Custom image in
@@ -2153,12 +2145,11 @@ async def get_overlay_data(project_id: int):
             'fill_enabled': fill_enabled,
             'fill_opacity': fill_opacity,
             'dim_strength': dim_strength,
-            'highlight_carry_note': highlight_carry_note,  # T4350: null | "dropped:N" | "multiclip_reset" | "legacy_uncertain"
+            'highlight_carry_note': highlight_carry_note,  # T4350: null | "dropped:N" | "legacy_uncertain"
             'poster_marker_time': poster_marker_time,
             'poster_slowmo_section': list(poster_slowmo_section) if poster_slowmo_section else None,
             'poster_source': poster_source,
             'poster_filename': poster_filename,
-            'clip_boundaries': clip_boundaries,
         })
 
 

@@ -15,8 +15,8 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  * completes the publish gesture, no second tap) + Edit framing, plus a quiet
  * Save-draft link OUTSIDE the card grid (was "Add Spotlight Later"). Each still
  * records its own analytics event (overlay_offered/overlay_deferred/
- * overlay_declined) via POST /api/quests/achievements/{key}
- * (questStore.recordAchievement). Save draft also shows an explainer toast
+ * overlay_declined) via POST /api/telemetry/funnel-event
+ * (recordFunnelEvent, T11175). Save draft also shows an explainer toast
  * routed by is_auto_created (T8360's split).
  *
  * T8530 (unchanged by T8390): once the OVERLAY (final) export completes,
@@ -51,8 +51,8 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
  *
  * What's real in both harnesses: CollectionPlayer, FocusPublishActionBar,
  * DraftReelPreview, Button, usePublishProject (real POST to
- * /api/downloads/publish/{id}), questStore.recordAchievement (real POST to
- * /api/quests/achievements/{key}), usePublishIntentStore. What's synthetic:
+ * /api/downloads/publish/{id}), recordFunnelEvent (real POST to
+ * /api/telemetry/funnel-event), usePublishIntentStore. What's synthetic:
  * the "an export just finished" premise that seeds each harness's props/store,
  * and the video source (data: URI, no real stream).
  *
@@ -69,8 +69,9 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
   test('preview mounts immediately (no decision first); the hierarchy + quiet Save draft present; data-tutorial-target once; each path fires its event', async ({ page }) => {
     const achievementCalls = [];
     page.on('request', (req) => {
-      const m = req.url().match(/\/api\/quests\/achievements\/(overlay_\w+)/);
-      if (m) achievementCalls.push(m[1]);
+      if (!req.url().includes('/api/telemetry/funnel-event')) return;
+      const event = JSON.parse(req.postData() || '{}').event || '';
+      if (event.startsWith('overlay_')) achievementCalls.push(event);
     });
 
     await page.goto('/t8520diag.html');
@@ -156,7 +157,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     expect(achievementCalls).toContain('overlay_offered');
     expect(achievementCalls).toContain('overlay_deferred');
     expect(achievementCalls).toContain('overlay_declined');
-    console.log('[T8390] achievement network calls observed:', achievementCalls);
+    console.log('[T8390] funnel-event network calls observed:', achievementCalls);
   });
 
   test('X / Escape maps to Refocus (not a silent dismiss, no Add-Spotlight-Later side effects)', async ({ page }) => {
@@ -211,8 +212,8 @@ test.describe('T8530: draft preview publish surface', () => {
     await page.route('**/api/projects**', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
     );
-    await page.route('**/api/quests/achievements/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    await page.route('**/api/telemetry/funnel-event', (route) =>
+      route.fulfill({ status: 204 })
     );
     // Stream endpoint for the fake final_video_id: a tiny valid-enough response
     // so <video> doesn't error-spam; the player renders regardless of playback.

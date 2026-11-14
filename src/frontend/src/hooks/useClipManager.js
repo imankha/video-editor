@@ -15,9 +15,9 @@ import { useProjectDataStore, useProjectsStore } from '../stores';
 export function useClipManager() {
   const {
     clips,
-    selectedClipId,
+    projectClipId,
     clipMetadataCache,
-    setSelectedClipId,
+    setProjectClipId,
     updateClip: updateClipInStore,
   } = useProjectDataStore();
 
@@ -30,9 +30,9 @@ export function useClipManager() {
   /**
    * Get the currently selected clip object, merged with metadata cache
    */
-  const selectedClip = useMemo(() => {
-    if (!selectedClipId) return null;
-    const clip = clips.find(c => c.id === selectedClipId);
+  const projectClip = useMemo(() => {
+    if (!projectClipId) return null;
+    const clip = clips.find(c => c.id === projectClipId);
     if (!clip) return null;
     const meta = clipMetadataCache[clip.id];
     if (!meta) return clip;
@@ -44,16 +44,16 @@ export function useClipManager() {
       framerate: meta.framerate || 30,
       metadata: meta.metadata,
     };
-  }, [clips, selectedClipId, clipMetadataCache]);
+  }, [clips, projectClipId, clipMetadataCache]);
 
   /**
    * Effect to ensure the first clip is always selected when clips exist
    */
   useEffect(() => {
-    if (clips.length > 0 && !selectedClipId) {
-      setSelectedClipId(clips[0].id);
+    if (clips.length > 0 && !projectClipId) {
+      setProjectClipId(clips[0].id);
     }
-  }, [clips, selectedClipId]);
+  }, [clips, projectClipId]);
 
   /**
    * Update data for the clip (merges into raw clip data)
@@ -67,8 +67,8 @@ export function useClipManager() {
   return {
     // State
     clips,
-    selectedClipId,
-    selectedClip,
+    projectClipId,
+    projectClip,
     hasClips,
     globalAspectRatio,
 

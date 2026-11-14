@@ -18,7 +18,7 @@ describe('loadAndOfferFocusCompletion (T11970)', () => {
 
     loadAndOfferFocusCompletion({
       projectId: 7, refreshProject, resolvePreviewUrl,
-      openMode: 'framing', jobId: 'j1', openPreview: vi.fn(), recordAchievement: vi.fn(),
+      openMode: 'framing', jobId: 'j1', openPreview: vi.fn(), recordFunnelEvent: vi.fn(),
     });
 
     expect(refreshProject).toHaveBeenCalledTimes(1);
@@ -32,7 +32,7 @@ describe('loadAndOfferFocusCompletion (T11970)', () => {
       projectId: 7,
       refreshProject: () => refresh.promise,
       resolvePreviewUrl: () => Promise.resolve('https://r2/x.mp4'),
-      openMode: 'framing', jobId: 'j1', openPreview, recordAchievement: vi.fn(),
+      openMode: 'framing', jobId: 'j1', openPreview, recordFunnelEvent: vi.fn(),
     });
     await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
     expect(openPreview).toHaveBeenCalledWith({ projectId: 7, previewUrl: 'https://r2/x.mp4', openMode: 'framing', jobId: 'j1' });
@@ -48,7 +48,7 @@ describe('loadAndOfferFocusCompletion result (T11970)', () => {
       projectId: 7,
       refreshProject: () => Promise.resolve(),
       resolvePreviewUrl: () => Promise.resolve(null),
-      openMode: 'framing', jobId: 'j1', openPreview, recordAchievement: vi.fn(),
+      openMode: 'framing', jobId: 'j1', openPreview, recordFunnelEvent: vi.fn(),
     });
     expect(opened).toBe(false);
     expect(openPreview).not.toHaveBeenCalled();
@@ -59,7 +59,7 @@ describe('loadAndOfferFocusCompletion result (T11970)', () => {
       projectId: 7,
       refreshProject: () => Promise.resolve(),
       resolvePreviewUrl: () => Promise.resolve('https://r2/x.mp4'),
-      openMode: 'framing', jobId: 'j1', openPreview: vi.fn(), recordAchievement: vi.fn(),
+      openMode: 'framing', jobId: 'j1', openPreview: vi.fn(), recordFunnelEvent: vi.fn(),
     });
     expect(opened).toBe(true);
   });

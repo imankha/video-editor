@@ -4,7 +4,6 @@ Export router package.
 This package organizes export endpoints into logical sub-modules:
 - framing: Crop, upscale, and working video exports
 - overlay: Highlight overlays and final video exports
-- multi_clip: Multi-clip concatenation with transitions
 
 Each sub-module handles a specific aspect of the export workflow.
 
@@ -17,7 +16,6 @@ from fastapi import APIRouter
 
 from .before_after import router as before_after_router
 from .framing import router as framing_router
-from .multi_clip import router as multi_clip_router
 from .overlay import router as overlay_router
 
 # Create main export router
@@ -26,7 +24,6 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 # Include all sub-routers
 router.include_router(framing_router)
 router.include_router(overlay_router)
-router.include_router(multi_clip_router)
 router.include_router(before_after_router)
 
 __all__ = ['router']

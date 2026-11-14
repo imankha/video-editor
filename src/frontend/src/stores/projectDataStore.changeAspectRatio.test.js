@@ -18,7 +18,7 @@ describe('projectDataStore.changeAspectRatio (T3910)', () => {
     mockApiFetch.mockReset();
     const mod = await import('./projectDataStore');
     useProjectDataStore = mod.useProjectDataStore;
-    useProjectDataStore.setState({ clips: [], _clipsInflight: null, selectedClipId: null });
+    useProjectDataStore.setState({ clips: [], _clipsInflight: null, projectClipId: null });
   });
 
   it('POSTs the new ratio and refreshes clips', async () => {

@@ -8,21 +8,22 @@ outcome:
   overlay_deferred — "Add Spotlight Later" / X (no render started)
   overlay_declined — "Finish Now" (final render, no spotlight)
 
-They are analytics-only achievements (NOT quest steps): they ride the existing
-recordAchievement -> POST /api/quests/achievements/{key} bridge into the
-user_actions aggregate via ACHIEVEMENT_TO_MILESTONE, with no daily_counters
-column and no migration.
+They are client funnel beacons (T11175): the browser sends them through
+recordFunnelEvent -> POST /api/telemetry/funnel-event -> record_funnel_event into
+the user_actions aggregate under the same milestone names the retired quest
+achievements bridge used, with no daily_counters column and no migration.
 
 Guards the frontend emit chain end-to-end:
-  achievement key -> ACHIEVEMENT_TO_MILESTONE -> FLOW_EVENTS milestone.
+  CLIENT_FUNNEL_EVENTS -> record_funnel_event -> FLOW_EVENTS milestone -> user_actions.
 """
 
-from app.analytics import FLOW_EVENTS
-from app.routers.quests import (
-    _STEP_ACHIEVEMENT_KEYS,
-    ACHIEVEMENT_TO_MILESTONE,
-    KNOWN_ACHIEVEMENT_KEYS,
-)
+import uuid
+from unittest.mock import patch
+
+from app.analytics import CLIENT_FUNNEL_EVENTS, FLOW_EVENTS, record_funnel_event
+from app.services import pg as pg_service
+from app.services.auth_db import create_user
+from tests.conftest import register_test_user_ids
 
 # key == milestone name for all three (identity bridge).
 OFFER_EVENTS = ("overlay_offered", "overlay_deferred", "overlay_declined")
@@ -52,32 +53,28 @@ class TestOverlayOfferEventRegistration:
                 "requires a pg migration this task deliberately avoided"
             )
 
-    def test_bridged_from_frontend_achievement(self):
-        # The only frontend->milestone transport is the achievement POST bridge:
-        # key must be known AND map to a milestone (here, the same string).
+    def test_client_beaconable(self):
+        # The frontend->milestone transport is the funnel beacon: a name outside
+        # CLIENT_FUNNEL_EVENTS is rejected server-side and never recorded.
         for event in OFFER_EVENTS:
-            assert event in KNOWN_ACHIEVEMENT_KEYS, (
-                f"{event} not in KNOWN_ACHIEVEMENT_KEYS — the POST would 400"
-            )
-            assert event in ACHIEVEMENT_TO_MILESTONE, (
-                f"{event} not in ACHIEVEMENT_TO_MILESTONE — the milestone bridge "
-                "would silently no-op"
-            )
-            assert ACHIEVEMENT_TO_MILESTONE[event] == event
-
-    def test_achievement_targets_are_valid_flow_events(self):
-        # The load-bearing chain guard: every one of these achievement keys must
-        # bridge to a milestone that exists in FLOW_EVENTS, or record_milestone
-        # drops it as "Unknown event" and the funnel never sees it.
-        for event in OFFER_EVENTS:
-            milestone = ACHIEVEMENT_TO_MILESTONE[event]
-            assert milestone in FLOW_EVENTS, (
-                f"{event} bridges to milestone '{milestone}' which is absent "
-                "from FLOW_EVENTS"
+            assert event in CLIENT_FUNNEL_EVENTS, (
+                f"{event} not in CLIENT_FUNNEL_EVENTS -- the beacon would be dropped"
             )
 
-    def test_not_quest_steps(self):
-        # Analytics-only: they must NOT ride the quest-step batched query, so a
-        # non-quest achievement never affects quest progress.
+
+class TestOverlayOfferEventTransport:
+    def test_each_beacon_lands_in_user_actions(self, pg_conn):
+        user_id = f"t11175-offer-{uuid.uuid4().hex[:8]}"
+        register_test_user_ids(user_id)
+        create_user(user_id, email=f"{user_id}@test.local")
         for event in OFFER_EVENTS:
-            assert event not in _STEP_ACHIEVEMENT_KEYS
+            with patch("app.analytics.get_current_user_id", return_value=user_id):
+                record_funnel_event(event)
+            with pg_service.get_pg() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT COALESCE(SUM(count), 0) AS n FROM user_actions "
+                    "WHERE user_id = %s AND action = %s",
+                    (user_id, event),
+                )
+                assert cur.fetchone()["n"] == 1, event

@@ -7,12 +7,9 @@ Bugs:
      success path -> the whole recovered-export finalization always fell into the
      `except` and returned {"finalized": False}.
   2. games_upload used generate_presigned_url_global without importing it.
-  3. export/multi_clip._run_multi_clip_background used canonicalize_segments_data
-     (a function-local import present in a *different* function) without importing
-     it in this function -> NameError whenever a clip carried segments_data.
+  3. (an undefined name in the multi-clip export background runner; T11250
+     deleted that function along with its test.)
 """
-import ast
-from pathlib import Path
 
 import pytest
 
@@ -57,23 +54,3 @@ def test_games_upload_imports_generate_presigned_url_global():
     from app.routers import games_upload
 
     assert callable(games_upload.generate_presigned_url_global)
-
-
-def test_multi_clip_background_imports_canonicalize():
-    """Bug 3: _run_multi_clip_background must import canonicalize_segments_data
-    within its own body (the sibling function's import does not reach it)."""
-    src = Path(__file__).resolve().parents[1] / "app" / "routers" / "export" / "multi_clip.py"
-    tree = ast.parse(src.read_text(encoding="utf-8"))
-
-    fn = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_run_multi_clip_background"
-    )
-    imported = {
-        alias.name
-        for node in ast.walk(fn)
-        if isinstance(node, ast.ImportFrom)
-        for alias in node.names
-    }
-    assert "canonicalize_segments_data" in imported

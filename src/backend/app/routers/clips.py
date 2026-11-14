@@ -15,10 +15,9 @@ import json
 import logging
 import os
 import sqlite3
-import uuid
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -42,14 +41,12 @@ from app.services.credit_ledger import credit_key, debit, get_credit_balance
 from app.services.default_crop import refit_crop_keyframes
 from app.services.media_probe import probe_r2_video
 from app.services.pg import get_pg
-from app.services.poster import invalidate_draft_poster
 from app.services.storage_credits import calculate_storage_cost
 from app.services.upload_failures import record_upload_failure_from_payload
 from app.storage import (
     generate_presigned_url,
     presigned_r2_http_client,
     r2_head_object,
-    upload_bytes_to_r2,
 )
 from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
@@ -1127,6 +1124,10 @@ def _get_dims_from_raw_clip(cursor, raw_clip_id: int) -> tuple[int | None, int |
     return (row['video_width'], row['video_height'], row['fps'])
 
 
+class SecondClipRefused(ValueError):
+    """T11250: a project holds exactly one clip; adding another is refused."""
+
+
 def _insert_working_clip_with_dims(
     cursor,
     project_id: int,
@@ -1139,7 +1140,21 @@ def _insert_working_clip_with_dims(
     T1500: INSERT a working_clips row with width/height/fps copied from the parent
     game_video. Returns the new working_clip id. Dims may be NULL if the parent
     game_video hasn't been backfilled yet — frontend probe fallback handles those.
+
+    T11250: this inserts a project's FIRST clip (create, the auto-export sweep and
+    v021 rebuilds). A project that already has a working clip refuses with
+    SecondClipRefused. New versions of the existing clip go through the clip PUT,
+    not here. Signature frozen: migration v021 calls it.
     """
+    existing = cursor.execute(
+        "SELECT id FROM working_clips WHERE project_id = ? LIMIT 1", (project_id,)
+    ).fetchone()
+    if existing:
+        logger.error(
+            f"[T11250] REFUSED second clip: project {project_id} already has working "
+            f"clip {existing[0]}; raw_clip {raw_clip_id} not added"
+        )
+        raise SecondClipRefused(f"Project {project_id} already has a clip")
     width, height, fps = _get_dims_from_raw_clip(cursor, raw_clip_id)
     cursor.execute("""
         INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, raw_clip_version, width, height, fps)
@@ -2232,127 +2247,6 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
     return result
 
 
-@router.post("/projects/{project_id}/clips", response_model=WorkingClipResponse)
-async def add_clip_to_project(
-    project_id: int,
-    raw_clip_id: int | None = Form(None),
-    background_tasks: BackgroundTasks = None
-):
-    """
-    Add a library clip to a project.
-
-    T8370 Slice D: the `file=` direct-upload branch (Path 2) is RETIRED — it
-    had no live frontend caller (`addClipFromLibrary` only ever sent
-    `raw_clip_id`) and wrote to a `uploads/{name}` prefix that
-    `multi_clip.py`/`orphan_raw_clips.py` never read (D2, the prefix
-    mismatch this removal closes). Any pre-existing `working_clips.
-    uploaded_filename` rows from before this change are UNAFFECTED — this
-    only removes the write side; `GET .../file` still reads them.
-    """
-    from fastapi import BackgroundTasks as BT
-    if background_tasks is None:
-        background_tasks = BT()
-
-    if raw_clip_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Choose a play first."
-        )
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Verify project exists
-        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
-
-        # Prevent duplicate raw_clip_id in the same project
-        cursor.execute(
-            "SELECT id FROM working_clips WHERE project_id = ? AND raw_clip_id = ?",
-            (project_id, raw_clip_id)
-        )
-        if cursor.fetchone():
-            raise HTTPException(status_code=409, detail="That play is already in this highlight.")
-
-        # Get next sort order
-        cursor.execute("""
-            SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order
-            FROM working_clips
-            WHERE project_id = ?
-        """, (project_id,))
-        next_order = cursor.fetchone()['next_order']
-
-        uploaded_filename = None
-
-        # Adding from library
-        cursor.execute("""
-            SELECT rc.id, rc.filename, rc.end_time
-            FROM raw_clips rc
-            WHERE rc.id = ?
-        """, (raw_clip_id,))
-        raw_clip = cursor.fetchone()
-        if not raw_clip:
-            raise HTTPException(status_code=404, detail="We couldn't find that play.")
-
-        raw_filename = raw_clip['filename']
-        end_time = raw_clip['end_time']
-
-        # Get next version for clips with THIS specific end_time
-        cursor.execute("""
-            SELECT COALESCE(MAX(wc.version), 0) + 1 as next_version
-            FROM working_clips wc
-            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            WHERE wc.project_id = ? AND rc.end_time = ?
-        """, (project_id, end_time))
-        next_version = cursor.fetchone()['next_version']
-
-        # T1500: copies width/height/fps from the parent game_video
-        _insert_working_clip_with_dims(
-            cursor,
-            project_id=project_id,
-            raw_clip_id=raw_clip_id,
-            sort_order=next_order,
-            version=next_version,
-        )
-
-        conn.commit()
-        clip_id = cursor.lastrowid
-
-        logger.info(f"Added clip {clip_id} to project {project_id}")
-
-    # T5671: clip composition changed -> the draft's first clip (and thus its
-    # poster thumbnail) may have changed; drop the cached poster so the next GET
-    # regenerates. Best-effort -- never fails the clip action.
-    invalidate_draft_poster(project_id)
-
-    # T5683: Warm the draft poster at gesture (non-blocking background task).
-    # Best-effort -- never fails the clip action. get_current_user_id is
-    # already imported at module level -- do NOT re-import it locally: two of
-    # these four call sites (add_clip_to_project, upload_clip_with_metadata)
-    # call it EARLIER in the same function, and a local import makes the name
-    # local to the WHOLE function, breaking that earlier call with
-    # UnboundLocalError (confirmed by the full backend test suite).
-    from app.profile_context import get_current_profile_id
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
-    fire_and_forget(
-        warm_draft_poster_background(
-            get_current_user_id(), get_current_profile_id(), project_id
-        )
-    )
-
-    return WorkingClipResponse(
-        id=clip_id,
-        project_id=project_id,
-        raw_clip_id=raw_clip_id,
-        uploaded_filename=uploaded_filename,
-        filename=raw_filename or uploaded_filename,
-        exported_at=None,
-        sort_order=next_order
-    )
-
-
-
 def _ensure_unique_name(cursor, name: str, game_id) -> str:
     """
     Ensure name is unique within the same game (or among no-game clips).
@@ -2606,160 +2500,6 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
         })
 
     return {"results": results, "charged": charged, "balance": balance}
-
-
-@router.post("/projects/{project_id}/clips/upload-with-metadata", response_model=WorkingClipResponse)
-async def upload_clip_with_metadata(
-    project_id: int,
-    file: UploadFile = File(...),
-    name: str = Form(""),
-    rating: int = Form(3),
-    tags: str = Form("[]"),
-    notes: str = Form("")
-):
-    """
-    Upload a clip to a project with metadata.
-
-    Creates a raw_clip entry first (with game_id=NULL since it's a direct upload),
-    then adds as working_clip to the project. This ensures:
-    - Consistency: All clips have a raw_clip entry
-    - Reusability: Uploaded clips can be added to other projects from library
-    - Metadata storage: Name, rating, tags, notes are preserved
-    """
-    # Parse tags
-    try:
-        tags_list = json.loads(tags) if tags else []
-    except json.JSONDecodeError:
-        tags_list = []
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Verify project exists
-        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
-
-        # Ensure unique name within no-game clips
-        unique_name = _ensure_unique_name(cursor, name, None)
-
-        # Upload file directly to R2 (no local storage, no temp file)
-        ext = os.path.splitext(file.filename)[1] or '.mp4'
-        clip_filename = f"{uuid.uuid4().hex}{ext}"
-        user_id = get_current_user_id()
-
-        # Upload directly from memory to R2
-        content = await file.read()
-        if not upload_bytes_to_r2(user_id, f"raw_clips/{clip_filename}", content):
-            logger.warning("Failed to upload clip to R2")
-            raise HTTPException(status_code=500, detail="We couldn't upload your video. Try again.")
-
-        logger.info(f"Uploaded clip to R2: {clip_filename}")
-
-        # Create raw_clip entry (game_id=NULL for direct uploads).
-        # T10300: source='upload' so idempotency/natural-key/cascade treat it as
-        # an uploaded clip, matching the batch /clips/upload path.
-        cursor.execute("""
-            INSERT INTO raw_clips (filename, rating, tags, name, notes, game_id, source)
-            VALUES (?, ?, ?, ?, ?, NULL, 'upload')
-        """, (
-            clip_filename,
-            rating,
-            encode_data(tags_list),
-            unique_name,
-            notes
-        ))
-        raw_clip_id = cursor.lastrowid
-
-        # Get next sort order for project
-        cursor.execute("""
-            SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order
-            FROM working_clips
-            WHERE project_id = ?
-        """, (project_id,))
-        next_order = cursor.fetchone()['next_order']
-
-        # Add as working_clip to project
-        cursor.execute("""
-            INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version)
-            VALUES (?, ?, ?, 1)
-        """, (project_id, raw_clip_id, next_order))
-        working_clip_id = cursor.lastrowid
-
-        conn.commit()
-
-        logger.info(f"Created raw_clip {raw_clip_id} and working_clip {working_clip_id} for project {project_id}")
-
-        response = WorkingClipResponse(
-            id=working_clip_id,
-            project_id=project_id,
-            raw_clip_id=raw_clip_id,
-            uploaded_filename=None,
-            filename=clip_filename,
-            name=derive_clip_name(unique_name, tags_list, notes or '',
-                                 _compute_tfidf_title(notes or '', _get_notes_corpus(cursor)) if not unique_name and not tags_list and notes else ''),
-            notes=notes,
-            exported_at=None,
-            sort_order=next_order
-        )
-
-    # T5671: a new clip changes composition (and may become the first clip) ->
-    # invalidate the draft poster. Best-effort (never fails the action).
-    invalidate_draft_poster(project_id)
-
-    # T5683: Warm the draft poster at gesture (non-blocking background task).
-    # Best-effort -- never fails the clip action. get_current_user_id is
-    # already imported at module level -- do NOT re-import it locally: two of
-    # these four call sites (add_clip_to_project, upload_clip_with_metadata)
-    # call it EARLIER in the same function, and a local import makes the name
-    # local to the WHOLE function, breaking that earlier call with
-    # UnboundLocalError (confirmed by the full backend test suite).
-    from app.profile_context import get_current_profile_id
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
-    fire_and_forget(
-        warm_draft_poster_background(
-            get_current_user_id(), get_current_profile_id(), project_id
-        )
-    )
-
-    return response
-
-
-@router.put("/projects/{project_id}/clips/reorder")
-async def reorder_clips(project_id: int, clip_ids: list[int]):
-    """Reorder clips by providing the new order of clip IDs."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        for index, clip_id in enumerate(clip_ids):
-            cursor.execute("""
-                UPDATE working_clips
-                SET sort_order = ?
-                WHERE id = ? AND project_id = ?
-            """, (index, clip_id, project_id))
-
-        conn.commit()
-
-    # T5671: reordering can change which clip is first -> invalidate the draft
-    # poster so the next GET regenerates. Best-effort (never fails the action).
-    invalidate_draft_poster(project_id)
-
-    # T5683: Warm the draft poster at gesture (non-blocking background task).
-    # Best-effort -- never fails the clip action. get_current_user_id is
-    # already imported at module level -- do NOT re-import it locally: two of
-    # these four call sites (add_clip_to_project, upload_clip_with_metadata)
-    # call it EARLIER in the same function, and a local import makes the name
-    # local to the WHOLE function, breaking that earlier call with
-    # UnboundLocalError (confirmed by the full backend test suite).
-    from app.profile_context import get_current_profile_id
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
-    fire_and_forget(
-        warm_draft_poster_background(
-            get_current_user_id(), get_current_profile_id(), project_id
-        )
-    )
-
-    return {"success": True}
 
 
 @router.get("/projects/{project_id}/clips/{clip_id}/file")
@@ -3353,49 +3093,6 @@ async def update_working_clip(
 
         # No refresh needed - client already has the data they just sent
         return {"success": True, "refresh_required": False}
-
-
-@router.delete("/projects/{project_id}/clips/{clip_id}")
-async def remove_clip_from_project(project_id: int, clip_id: int):
-    """Remove a clip from a project."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT id FROM working_clips
-            WHERE id = ? AND project_id = ?
-        """, (clip_id, project_id))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="We couldn't find that play.")
-
-        # Delete the clip from the database
-        cursor.execute("""
-            DELETE FROM working_clips WHERE id = ?
-        """, (clip_id,))
-        conn.commit()
-
-        logger.info(f"Removed clip {clip_id} from project {project_id}")
-
-    # T5671: removing a clip can change the draft's first clip -> invalidate the
-    # cached poster so the next GET regenerates. Best-effort (never fails).
-    invalidate_draft_poster(project_id)
-
-    # T5683: Warm the draft poster at gesture (non-blocking background task).
-    # Best-effort -- never fails the clip action. get_current_user_id is
-    # already imported at module level -- do NOT re-import it locally: two of
-    # these four call sites (add_clip_to_project, upload_clip_with_metadata)
-    # call it EARLIER in the same function, and a local import makes the name
-    # local to the WHOLE function, breaking that earlier call with
-    # UnboundLocalError (confirmed by the full backend test suite).
-    from app.profile_context import get_current_profile_id
-    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
-    fire_and_forget(
-        warm_draft_poster_background(
-            get_current_user_id(), get_current_profile_id(), project_id
-        )
-    )
-
-    return {"success": True}
 
 
 # --- T2800: Teammate tag/email endpoints ---

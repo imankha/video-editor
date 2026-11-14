@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../../../utils/funnelEvents';
 import { buildVirtualTimeline } from './useVirtualTimeline';
-import { useQuestStore } from '../../../stores/questStore';
 
 /**
  * Default playback rate for annotated clips.
@@ -281,7 +281,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       // Record quest achievement after 2s of watching
       if (!hasRecordedPlaybackAchievementRef.current && vt >= 0.5) {
         hasRecordedPlaybackAchievementRef.current = true;
-        useQuestStore.getState().recordAchievement('played_annotations');
+        recordFunnelEvent(FUNNEL_EVENTS.ANNOTATIONS_PLAYED);
       }
 
       rafIdRef.current = requestAnimationFrame(tick);

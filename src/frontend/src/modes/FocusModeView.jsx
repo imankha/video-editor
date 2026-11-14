@@ -320,7 +320,7 @@ export function FocusModeView({
   // Clips
   hasClips,
   clipsWithCurrentState,
-  selectedClipEffectiveDuration = null,
+  clipEffectiveDuration = null,
   globalAspectRatio,
   onAspectRatioChange,
 
@@ -679,8 +679,8 @@ export function FocusModeView({
   // T5780: emphasize the selected clip's output chip only when it differs from the
   // source-timeline length the playback timer shows (slow-mo or trim present).
   const sourceLength = duration || clipDuration || 0;
-  const outputDiffersFromSource = selectedClipEffectiveDuration != null &&
-    Math.abs(selectedClipEffectiveDuration - sourceLength) > 0.05;
+  const outputDiffersFromSource = clipEffectiveDuration != null &&
+    Math.abs(clipEffectiveDuration - sourceLength) > 0.05;
 
   // T10830: the framing timeline block, built once and rendered by whichever of
   // the two mutually-exclusive layouts is active (ordinary vs mobile-fullscreen).
@@ -775,7 +775,7 @@ export function FocusModeView({
         onRetryVideo={onRetryVideo}
         clipTitle={clipTitle}
         clipGameName={clipGameName}
-        selectedClipEffectiveDuration={selectedClipEffectiveDuration}
+        clipEffectiveDuration={clipEffectiveDuration}
         globalAspectRatio={globalAspectRatio}
         currentTime={currentTime}
         duration={duration}
@@ -1102,10 +1102,10 @@ export function FocusModeView({
               </div>
               {/* T5780: output length. The reel aspect ratio is NOT repeated here — it
                   lives in the controls bar above the video at every width (T7130). */}
-              {selectedClipEffectiveDuration != null && (
+              {clipEffectiveDuration != null && (
                 <div className="shrink-0">
                   <OutputLengthChip
-                    seconds={selectedClipEffectiveDuration}
+                    seconds={clipEffectiveDuration}
                     emphasized={outputDiffersFromSource}
                   />
                 </div>
@@ -1333,11 +1333,11 @@ export function FocusModeView({
             {/* T9480 review fix: the clip's source duration is a LENGTH -- rounds, not floors. */}
             <span>{formatLength(duration || clipDuration, PRECISION.SECOND, { style: 'clock' })}</span>
           </>
-          {selectedClipEffectiveDuration != null && (
+          {clipEffectiveDuration != null && (
             <>
               <span className="text-gray-700">•</span>
               <OutputLengthChip
-                seconds={selectedClipEffectiveDuration}
+                seconds={clipEffectiveDuration}
                 emphasized={outputDiffersFromSource}
               />
             </>

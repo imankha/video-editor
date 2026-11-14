@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T11260:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t11260_single_clip_carry.py -k golden -q -p no:cacheprovider"
+    },
+    "T11260:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t11260_single_clip_carry.py -k 'LegacyMulticlipDraftOpensInSpotlight or legacy_multiclip_prior_snapshot or renders_and_publishes' -q -p no:cacheprovider && cd ../frontend && npx vitest run --testTimeout=60000 --hookTimeout=60000 src/hooks/useProjectLoader.reframeGuard.test.jsx src/screens/__tests__/overlayScreenLoadTrace.test.jsx -t T11260"
+    },
+    "T11260:C3": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t11260_single_clip_carry.py -k zero_references -q -p no:cacheprovider"
+    }
+  }
+}

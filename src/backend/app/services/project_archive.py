@@ -252,6 +252,20 @@ def restore_project(project_id: int, user_id: str | None = None) -> bool:
         if archive is None:
             return False
 
+        # T11250: a project holds exactly one clip. Version rows of that clip share
+        # its identity (raw_clip_id, or uploaded_filename for an uploaded clip);
+        # two identities mean a legacy multi-clip project, which is refused.
+        clip_identities = {
+            (clip.get("raw_clip_id"), None if clip.get("raw_clip_id") is not None else clip.get("uploaded_filename"))
+            for clip in archive.get("working_clips", [])
+        }
+        if len(clip_identities) > 1:
+            logger.error(
+                f"[Restore] REFUSED project {project_id}: archive holds "
+                f"{len(clip_identities)} different clips; a project holds one"
+            )
+            return False
+
         # 2. Insert data back into DB
         with get_db_connection() as conn:
             cursor = conn.cursor()

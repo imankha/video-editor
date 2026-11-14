@@ -69,9 +69,9 @@ export default function useHighlightRegions(videoMetadata) {
   const [videoDetections, setVideoDetections] = useState(null);
 
   // T4350: the carry note stamped on the current working video when a re-export
-  // dropped/reset carried highlights ("dropped:N" | "multiclip_reset" |
-  // "legacy_uncertain" | null). Memory-only hold set from the /overlay-data
-  // response (never persisted from here); surfaced as a dismissible banner.
+  // dropped carried highlights ("dropped:N" | "legacy_uncertain" | null).
+  // Memory-only hold set from the /overlay-data response (never persisted from
+  // here); surfaced as a dismissible banner.
   const [highlightCarryNote, setHighlightCarryNote] = useState(null);
 
   // Get highlight color from store for new highlights

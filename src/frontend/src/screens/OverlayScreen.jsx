@@ -29,7 +29,6 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useFocusStore } from '../stores/focusStore';
 import { useExportStore } from '../stores/exportStore';
 import { startLoadTrace } from '../utils/loadTrace';
-import { useQuestStore } from '../stores/questStore';
 import * as overlayActions from '../api/overlayActions';
 import { dispatchOverlayAction, useOverlayActionStore } from '../stores/overlayActionStore';
 import { track } from '../utils/analytics';
@@ -479,11 +478,6 @@ export function OverlayScreen({
     restoreTextOverlays,
   } = useTextOverlays();
 
-  // Interior clip cut-points on the concatenated timeline, for text-range
-  // snapping (design §2). Read-only, hydrated from /overlay-data alongside
-  // the rest of the restore payload -- never written back.
-  const [clipBoundaries, setClipBoundaries] = useState([]);
-
   // =========================================
   // ZOOM HOOKS
   // =========================================
@@ -818,12 +812,11 @@ export function OverlayScreen({
             data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
           );
 
-          // T5225: restore text blocks + clip boundaries. Read-only hydration
+          // T5225: restore text blocks. Read-only hydration
           // (design §5.1) -- no write-back; runs while overlaySyncState is
           // still 'loading' (set above), so canSyncActions is false and none
           // of these local sets can fire a surgical POST.
           restoreTextOverlays(data.text_overlays || [], videoDuration);
-          setClipBoundaries(data.clip_boundaries || []);
 
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -915,10 +908,9 @@ export function OverlayScreen({
             data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
           );
 
-          // T5225: restore text blocks + clip boundaries (read-only, see the
+          // T5225: restore text blocks (read-only, see the
           // fresh-export effect above for the write-back-safety rationale).
           restoreTextOverlays(data.text_overlays || [], effectiveDuration);
-          setClipBoundaries(data.clip_boundaries || []);
 
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -1112,7 +1104,7 @@ export function OverlayScreen({
     track('overlay_settings_change', { field: 'highlightColor', value: color }, { debugOnly: true });
     setHighlightColor(color);
     // T3700: quest_3 "Pick your highlight color"
-    useQuestStore.getState().recordAchievement('overlay_color_set');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_COLOR_SET);
     setOverlayChangedSinceExport(true);
     if (!canSyncActions) return;
     if (highlightColorTimerRef.current) clearTimeout(highlightColorTimerRef.current);
@@ -1161,7 +1153,7 @@ export function OverlayScreen({
     track('overlay_settings_change', { field: 'highlightShape', value: val }, { debugOnly: true });
     setHighlightShape(val);
     // T3700: quest_3 "Choose the spotlight shape" (Body/Ground)
-    useQuestStore.getState().recordAchievement('overlay_shape_set');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_SHAPE_SET);
     if (canSyncActions) {
       dispatchOverlayAction('setHighlightShape', () => overlayActions.setHighlightShape(projectId, val));
     }
@@ -1438,8 +1430,6 @@ export function OverlayScreen({
     return false;
   }, [hasClips, clips]);
 
-  const hasMultipleClips = clips.length > 1;
-
   const overlay = OverlayContainer({
     videoRef,
     currentTime,
@@ -1457,7 +1447,6 @@ export function OverlayScreen({
     trimRange: null,
     selectedProjectId: projectId,
     selectedProject: project,
-    clips,
     hasClips,
     editorMode: 'overlay',
     setEditorMode: () => {},
@@ -1916,7 +1905,6 @@ export function OverlayScreen({
       // Mode switching
       onSwitchToFraming={handleSwitchToFraming}
       hasFramingEdits={hasFramingEdits}
-      hasMultipleClips={hasMultipleClips}
       framingVideoUrl={framingVideoUrl}
       // T740: Outdated framing warning
       framingOutdated={framingOutdated}
@@ -1924,7 +1912,6 @@ export function OverlayScreen({
       settingsDisabled={isOverlayExporting}
       // T5225 / T6630 round 4: Overlay text REGIONS (each containing N elements)
       textOverlays={textOverlaysWithLayout}
-      clipBoundaries={clipBoundaries}
       selectedRegionId={selectedRegionId}
       selectedElementId={selectedElementId}
       // T6980: inline text-edit (double-click canvas / two-tap touch / panel focus).

@@ -26,10 +26,8 @@ from app.highlight_transform import (
     transform_keyframe_to_working,
 )
 from app.services.highlight_carry import (
-    _transform_multi_clip,
     resolve_carried_highlights,
 )
-
 
 # =============================================================================
 # SHARED FIXTURES (mirror test_t4350_highlight_carry.py / test_t4355 conventions)
@@ -117,7 +115,6 @@ class TestSingleClipCropChangePreservesFromDetection:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=[],
-            clip_count=1,
         )
         assert len(result) == 1
         kfs = result[0]['keyframes']
@@ -138,7 +135,6 @@ class TestSingleClipCropChangePreservesFromDetection:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=[],
-            clip_count=1,
         )
         assert len(result) == 1
         kfs = result[0]['keyframes']
@@ -163,7 +159,6 @@ class TestAdditiveOnlyNoFalsePositive:
             prior_snapshot=old_snapshot,
             new_snapshot=new_snapshot,
             detected_regions=[],
-            clip_count=1,
         )
         assert len(result) == 1
         assert 'fromDetection' not in result[0]['keyframes'][0]
@@ -184,7 +179,6 @@ class TestUntransformedPathsUnaffected:
             prior_snapshot=snapshot,
             new_snapshot=snapshot,  # identical -> verbatim fast path
             detected_regions=[],
-            clip_count=1,
         )
         assert note is None
         assert result[0]['keyframes'][0].get('fromDetection') is True
@@ -198,36 +192,9 @@ class TestUntransformedPathsUnaffected:
             prior_snapshot=None,  # no old snapshot -> legacy_uncertain, verbatim carry
             new_snapshot=new_snapshot,
             detected_regions=[],
-            clip_count=1,
         )
         assert note == 'legacy_uncertain'
         assert result[0]['keyframes'][0].get('fromDetection') is True
-
-
-# =============================================================================
-# Multi-clip carry preserves the marker too (same transform seam).
-# =============================================================================
-
-
-class TestMultiClipPreservesFromDetection:
-    def test_multiclip_crop_change_preserves_from_detection(
-        self, video_dims, simple_crop_keyframes, shifted_crop_keyframes
-    ):
-        old_snapshot = _snapshot(
-            2, video_dims,
-            [_clip_entry(NO_MODS, simple_crop_keyframes), _clip_entry(NO_MODS, simple_crop_keyframes)],
-        )
-        new_snapshot = _snapshot(
-            2, video_dims,
-            [_clip_entry(NO_MODS, shifted_crop_keyframes), _clip_entry(NO_MODS, shifted_crop_keyframes)],
-        )
-        # region in the SECOND clip (concat offset 15s)
-        region = _region('r1', 18.0, 20.0, kf_time=18.0, from_detection=True)
-
-        transformed, dropped = _transform_multi_clip([region], old_snapshot, new_snapshot)
-        assert dropped == 0
-        assert len(transformed) == 1
-        assert transformed[0]['keyframes'][0].get('fromDetection') is True
 
 
 # =============================================================================

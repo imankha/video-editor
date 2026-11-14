@@ -11,6 +11,8 @@ import { renderHook, act } from '@testing-library/react';
 // hit the mock instead of the network. `useAnnotateState` is wrapped so
 // `annotateGameId` is set WITHOUT driving the full upload/load flow.
 
+// T11175: the Add Clip beacon is a funnel event; keep it off the mocked apiFetch.
+vi.mock('../utils/funnelEvents', async (orig) => ({ ...(await orig()), recordFunnelEvent: vi.fn() }));
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 
 vi.mock('../modes/annotate', async (importOriginal) => {

@@ -199,6 +199,9 @@ FLOW_EVENTS = {
     "overlay_players_assigned":     {"label": "Players Spotlighted",        "daily_col": None},
     "overlay_color_set":            {"label": "Highlight Color Set",        "daily_col": None},
     "overlay_shape_set":            {"label": "Highlight Shape Set",        "daily_col": None},
+    # T11175: the T6840 draft-preview watch was bridged here but never registered,
+    # so record_milestone dropped it as "Unknown event". Registered with the move.
+    "previewed_draft_reel_1s":      {"label": "Previewed Draft 1s",         "daily_col": None},
     # T7510: attempt/outcome/failure taxonomy. Every funnel action gets an
     # ATTEMPT (gesture-time) and, at its durable completion point, EITHER a
     # _succeeded OR a _failed carrying a machine-readable reason (see MILESTONE_REASONS).
@@ -358,6 +361,32 @@ CLIENT_FUNNEL_EVENTS = frozenset({
     "result_reopened",
     "paywall_shown",      # T13330: InsufficientCreditsModal opened
     "buy_modal_opened",   # T13330: BuyCreditsModal opened
+    # T11175: engagement events that used to ride the quest achievements POST
+    # (ACHIEVEMENT_TO_MILESTONE), kept under the same milestone names so the
+    # admin Journey history stays continuous. The client sends each once per
+    # session (funnelEvents.js SESSION_DEDUPED).
+    "add_game_opened",
+    "upload_file_selected",
+    "add_clip_opened",
+    "framing_opened",
+    "overlay_opened",
+    "gallery_viewed",
+    "custom_project_viewed",
+    "gallery_watched_1s",
+    "annotations_played",
+    "crop_adjusted",
+    "speed_segment_created",
+    "overlay_players_assigned",
+    "overlay_color_set",
+    "overlay_shape_set",
+    "overlay_offered",
+    "overlay_deferred",
+    "overlay_declined",
+    "previewed_draft_reel_1s",
+    "watched_annotate_tutorial",
+    "watched_framing_tutorial",
+    "watched_overlay_tutorial",
+    "watched_publish_tutorial",
 })
 
 # Privacy guardrail (acceptance criterion 4): the ONLY context keys a funnel

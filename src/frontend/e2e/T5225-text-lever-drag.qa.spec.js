@@ -3,7 +3,7 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5225 — REAL BROWSER (chromium) proof that the Overlay text layer's begin/end
- * range levers are draggable (mouse + touch), SNAP to clip boundaries within
+ * range levers are draggable (mouse + touch), SNAP to the start and end within
  * threshold, free-park otherwise, and that add/delete/toggle work — driven
  * through a dev-only harness (/textdiag.html) that mounts the REAL TextLayer +
  * the REAL useTextOverlays hook. Mirrors T5644's harness pattern exactly
@@ -99,7 +99,7 @@ test.describe('T5225 text levers — coarse (touch)', () => {
     await waitForBlock(page);
     const before = await readStatus(page);
 
-    await touchDrag(page, page.locator(END_LEVER), 250, 0); // drag well past the 5.0s clip boundary
+    await touchDrag(page, page.locator(END_LEVER), 250, 0); // drag well to the right
 
     const after = await readStatus(page);
     expect(after.end, 'touch drag moved the end boundary right').toBeGreaterThan(before.end + 0.5);
@@ -129,29 +129,29 @@ async function timeToPageX(page, t) {
   return r.x + EDGE_PADDING + (t / REEL_DURATION) * usable;
 }
 
-test.describe('T5225 text levers — fine (mouse) — clip-boundary SNAPPING', () => {
+test.describe('T5225 text levers — fine (mouse) — start/end SNAPPING', () => {
   skipOnDeployedTarget(test, 'drives the dev-only /textdiag.html harness page, which does not exist in a production BUILD');
 
-  test('dragging the END lever near the clip boundary (5.0s) SNAPS onto it', async ({ page }) => {
+  test('dragging the END lever near the reel end (10s) SNAPS onto it', async ({ page }) => {
     await page.goto(HARNESS);
     await waitForBlock(page);
 
-    // The clip boundary sits at 5.0s. Drag the end lever to 5px past that
-    // boundary's true pixel position -- inside SNAP_PX=10, so it must snap.
+    // Drag the end lever to 5px short of the reel end's true pixel position --
+    // inside SNAP_PX=10, so it must snap onto the end.
     const end = page.locator(END_LEVER);
     const box = await end.boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    const boundaryX = await timeToPageX(page, 5.0);
-    await page.mouse.move(boundaryX + 5, box.y + box.height / 2, { steps: 5 });
+    const reelEndX = await timeToPageX(page, REEL_DURATION);
+    await page.mouse.move(reelEndX - 5, box.y + box.height / 2, { steps: 5 });
     await page.mouse.up();
     await page.waitForTimeout(60);
 
     const after = await readStatus(page);
-    expect(after.end, 'end snapped exactly onto the 5.0s clip boundary').toBeCloseTo(5.0, 1);
+    expect(after.end, 'end snapped exactly onto the reel end').toBeCloseTo(REEL_DURATION, 2);
   });
 
-  test('dragging the END lever FAR from the clip boundary free-parks (no snap)', async ({ page }) => {
+  test('dragging the END lever FAR from the start and end free-parks (no snap)', async ({ page }) => {
     await page.goto(HARNESS);
     await waitForBlock(page);
 
@@ -159,14 +159,13 @@ test.describe('T5225 text levers — fine (mouse) — clip-boundary SNAPPING', (
     const box = await end.boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    // Drag to 7.0s -- far from both the 5.0s boundary and the 10s reel end.
+    // Drag to 7.0s -- far from the 10s reel end.
     const parkX = await timeToPageX(page, 7.0);
     await page.mouse.move(parkX, box.y + box.height / 2, { steps: 5 });
     await page.mouse.up();
     await page.waitForTimeout(60);
 
     const after = await readStatus(page);
-    expect(after.end, 'free-parked away from the boundary').not.toBeCloseTo(5.0, 1);
     // Free-parked at the raw dragged time, not pulled to a boundary.
     expect(after.end).toBeCloseTo(7.0, 1);
   });

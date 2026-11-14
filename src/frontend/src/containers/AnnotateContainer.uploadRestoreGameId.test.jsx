@@ -8,6 +8,8 @@ import { renderHook, act } from '@testing-library/react';
 // holds the guide (and the first-run chrome) until a game id exists, so the
 // screen showed no guidance at all while the game uploaded.
 
+// T11175: the Add Clip beacon is a funnel event; keep it off the mocked apiFetch.
+vi.mock('../utils/funnelEvents', async (orig) => ({ ...(await orig()), recordFunnelEvent: vi.fn() }));
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 vi.mock('../utils/videoMetadata', async (importOriginal) => ({
   ...(await importOriginal()),

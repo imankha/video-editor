@@ -4,7 +4,6 @@ import { recordWrite } from '../utils/syncTrace';
 import { API_BASE } from '../config';
 import { SECTION_NAMES, ERROR_COPY } from '../config/displayNames';
 import { useGalleryStore } from '../stores/galleryStore';
-import { useQuestStore } from '../stores/questStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { toast } from '../components/shared/Toast';
@@ -22,7 +21,7 @@ import { serverError, userErrorMessage } from '../utils/userError';
  * - 503 sync_failed -> stash the gesture args in `publishRetry` (same gesture,
  *   one-click Retry), NO refetch, NO optimistic removal
  * - success -> fetchCount(force) + notifyCollectionsChanged() + fetchProjects(force)
- *   (card removal reflects backend state, never optimistic) + recordAchievement
+ *   (card removal reflects backend state, never optimistic)
  *   + galleryStore.setJustPublished (T11580 Published-tab spotlight card)
  * - the [Publish] console tracing that correlates a real attempt with the backend
  *   [Publish]/[SYNC] lines
@@ -132,7 +131,7 @@ export function usePublishProject(project) {
       // guessed/wrong game. Still isolated in its own try/catch (defense in
       // depth, unrelated failure modes) so it can never take down the
       // critical effects below (fetchCount/notifyCollectionsChanged/
-      // fetchProjects/recordAchievement), which must run unconditionally on
+      // fetchProjects), which must run unconditionally on
       // every successful publish (Branch CI run 37040668288 caught a prior
       // version of this sharing the outer catch).
       try {
@@ -160,8 +159,6 @@ export function usePublishProject(project) {
       }
       console.log(`[Publish] project=${targetId} refetching projects (card removal reflects backend state)`);
       useProjectsStore.getState().fetchProjects({ force: true, reason: 'publish' });
-      // quest_4 "Move to My Reels" step — the publish gesture completes it.
-      useQuestStore.getState().recordAchievement('moved_to_my_reels');
       if (openGallery) {
         useGalleryStore.getState().open();
       }

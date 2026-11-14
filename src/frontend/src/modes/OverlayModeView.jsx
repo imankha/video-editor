@@ -204,7 +204,6 @@ export function OverlayModeView({
 
   // T5225 / T6630 round 4: Overlay text REGIONS (each containing N elements)
   textOverlays = [],
-  clipBoundaries = [],
   selectedRegionId = null,
   selectedElementId = null,
   // T6980: inline text-edit state + setters (view-state only, no write path).
@@ -287,7 +286,6 @@ export function OverlayModeView({
   // Mode switching
   onSwitchToFraming,
   hasFramingEdits,
-  hasMultipleClips,
   framingVideoUrl,
   // T9800: true during the transient window after a successful export while the
   // new working video is still hydrating into the store. Gates showExportRequired
@@ -303,7 +301,7 @@ export function OverlayModeView({
   // T9800: !shouldWaitForWorkingVideo suppresses the banner during the transient
   // post-export hydration window (effectiveOverlayVideoUrl is momentarily falsy
   // while the new working video loads); the neutral loading state shows instead.
-  const showExportRequired = !effectiveOverlayVideoUrl && !shouldWaitForWorkingVideo && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
+  const showExportRequired = !effectiveOverlayVideoUrl && !shouldWaitForWorkingVideo && framingVideoUrl && hasFramingEdits;
   const isMobile = useIsMobile();
   // T15340: `/overlay/p/{id}?t=37` resume seek -- one shot, once the player has a
   // real duration to clamp against (same T10750 guard Annotate relies on). Drops
@@ -1229,7 +1227,6 @@ export function OverlayModeView({
             isExportInFlight={settingsDisabled}
             isThumbnailTabActive={activeTab === 'thumbnail'}
             textOverlays={textOverlays}
-            clipBoundaries={clipBoundaries}
             selectedRegionId={selectedRegionId}
             onAddTextRegion={onAddRegion}
             onMoveTextStart={onMoveTextStart}
@@ -1326,7 +1323,6 @@ export function OverlayModeView({
                         isExportInFlight={settingsDisabled}
                         isThumbnailTabActive={activeTab === 'thumbnail'}
                         textOverlays={textOverlays}
-                        clipBoundaries={clipBoundaries}
                         selectedRegionId={selectedRegionId}
                         onAddTextRegion={onAddRegion}
                         onMoveTextStart={onMoveTextStart}
@@ -1369,9 +1365,7 @@ export function OverlayModeView({
               {MODE_SWITCHER_LOCKED.SPOTLIGHT_NEEDS_HIGHLIGHT}
             </p>
             <p className="text-purple-300/70 text-sm mb-4">
-              {hasMultipleClips
-                ? SPOTLIGHT_COPY.NEEDS_SHARPEN_MANY
-                : SPOTLIGHT_COPY.NEEDS_SHARPEN_EDITS}
+              {SPOTLIGHT_COPY.NEEDS_SHARPEN_EDITS}
             </p>
             <button
               onClick={onSwitchToFraming}

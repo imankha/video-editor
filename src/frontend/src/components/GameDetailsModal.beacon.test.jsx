@@ -6,9 +6,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // user who picks a file but abandons the details form / hits the T7590 dead-end is
 // distinguishable from one who never picked a file (task acceptance criterion).
 
-const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
+const { recordFunnelEventSpy } = vi.hoisted(() => ({ recordFunnelEventSpy: vi.fn() }));
+// T11175: the beacon travels through the funnel transport, not the quest store.
+vi.mock('../utils/funnelEvents', async (orig) => ({
+  ...(await orig()),
+  recordFunnelEvent: (...args) => recordFunnelEventSpy(...args),
+}));
 vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: recordAchievementSpy };
+  const state = { recordAchievement: vi.fn() };
   const useQuestStore = (sel) => (sel ? sel(state) : state);
   useQuestStore.getState = () => state;
   return { useQuestStore };
@@ -50,7 +55,7 @@ import { GameDetailsModal } from './GameDetailsModal';
 
 describe('GameDetailsModal — T7890 upload_file_selected beacon', () => {
   beforeEach(() => {
-    recordAchievementSpy.mockClear();
+    recordFunnelEventSpy.mockClear();
   });
 
   function renderModal() {
@@ -67,7 +72,7 @@ describe('GameDetailsModal — T7890 upload_file_selected beacon', () => {
     const file = new File(['x'], 'clip.mp4', { type: 'video/mp4' });
     fireEvent.change(input, { target: { files: [file] } });
 
-    expect(recordAchievementSpy).toHaveBeenCalledWith('upload_file_selected');
+    expect(recordFunnelEventSpy).toHaveBeenCalledWith('upload_file_selected');
   });
 
   it('does NOT fire before any file is chosen (opening the picker alone is not a selection)', () => {
@@ -75,6 +80,6 @@ describe('GameDetailsModal — T7890 upload_file_selected beacon', () => {
     // Modal is open (its own gesture add_game_opened is ProjectManager's job), but
     // no file picked yet -> no File Selected footprint.
     expect(screen.getByRole('heading', { name: 'Upload game' })).toBeTruthy();
-    expect(recordAchievementSpy).not.toHaveBeenCalled();
+    expect(recordFunnelEventSpy).not.toHaveBeenCalled();
   });
 });

@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { createRoot } from 'react-dom/client';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { ToastContainer, toast } from '../components/shared/Toast';
 import { FOCUS_PUBLISH_LATER_TOAST } from '../config/displayNames';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
-import { useQuestStore } from '../stores/questStore';
 import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset classes need it
 
 /**
@@ -17,9 +17,9 @@ import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset classes ne
  *
  * Mounts the REAL CollectionPlayer + REAL FocusPublishActionBar with the same
  * `actionBar` wiring FocusScreen uses, including REAL
- * `useQuestStore.getState().recordAchievement(...)` calls and a REAL
+ * `recordFunnelEvent(...)` calls (T11175) and a REAL
  * `usePublishIntentStore` stake on Publish (Focus's one-tap-publish flag) — so
- * a Playwright spec asserting the achievement POST / flag state is asserting
+ * a Playwright spec asserting the funnel-event POST / flag state is asserting
  * the real gesture-handler code path, not a mock.
  *
  * Diag params (via location.hash): `#projectId=<n>` sets the staked project id.
@@ -28,8 +28,8 @@ import '../index.css'; // Tailwind — CollectionPlayer's fixed/inset classes ne
  *
  * What's synthetic: the premise "an export just finished" (no real Focus
  * render ran) and the video source (a data: URI, no real stream). What's
- * real: CollectionPlayer, FocusPublishActionBar, Button, questStore.
- * recordAchievement's fetch, publishIntentStore.
+ * real: CollectionPlayer, FocusPublishActionBar, Button, recordFunnelEvent's
+ * fetch, publishIntentStore.
  */
 // T8390: read the hash stashed by t8520diag.html's inline script, NOT
 // location.hash directly -- by the time this module's top-level code runs,
@@ -53,7 +53,7 @@ function FocusPublishExitDiagHarness() {
   // the toast to the single SINGLE_CLIP copy).
   const handleAddSpotlightLater = useCallback(() => {
     setOpen(false);
-    useQuestStore.getState().recordAchievement('overlay_deferred');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_DEFERRED);
     const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
     toast.success(copy.title, { message: copy.message, duration: 10000 });
     setLastAction('add-spotlight-later');
@@ -65,7 +65,7 @@ function FocusPublishExitDiagHarness() {
   // contract this harness exists to prove).
   const handlePublish = useCallback(() => {
     setOpen(false);
-    useQuestStore.getState().recordAchievement('overlay_declined');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_DECLINED);
     usePublishIntentStore.getState().set(PROJECT_ID);
     setLastAction('publish');
   }, []);
@@ -78,7 +78,7 @@ function FocusPublishExitDiagHarness() {
   }, []);
 
   const reopen = useCallback(() => {
-    useQuestStore.getState().recordAchievement('overlay_offered');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_OFFERED);
     setOpen(true);
     setLastAction('none');
   }, []);
