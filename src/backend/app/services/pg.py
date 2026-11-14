@@ -30,6 +30,14 @@ _pool: ThreadedConnectionPool | None = None
 # this same number) closes that gap: threads WAIT for a free connection instead of
 # racing getconn past the ceiling. Sized from the one constant so pool capacity and
 # the gate can never drift apart.
+#
+# T16390: the pool also keeps all of them OPEN (minconn == maxconn). psycopg2 opens a
+# missing connection inside getconn() while holding the pool lock, and putconn()
+# closes any connection returned while the free list already holds minconn. With
+# minconn=2 every burst past two requests re-opened connections one after another
+# (prod 2026-11-13: 12 parallel requests took 2.0 s each, +0.17 s per extra request,
+# because each connect is several round trips LA -> Chicago). Startup now pays the
+# ten connects once; a burst finds them ready.
 _MAX_POOL_CONN = 10
 
 # Bounds concurrent pool checkouts to _MAX_POOL_CONN so getconn is never called
@@ -673,7 +681,7 @@ def init_pg_pool():
         raise RuntimeError("DATABASE_URL environment variable is required")
     try:
         _pool = ThreadedConnectionPool(
-            minconn=2, maxconn=_MAX_POOL_CONN, dsn=dsn, cursor_factory=RealDictCursor,
+            minconn=_MAX_POOL_CONN, maxconn=_MAX_POOL_CONN, dsn=dsn, cursor_factory=RealDictCursor,
             keepalives=1, keepalives_idle=30, keepalives_interval=5, keepalives_count=3,
         )
     except psycopg2.OperationalError:
@@ -681,7 +689,7 @@ def init_pg_pool():
                            "(container reel-ballers-postgres-dev)") from None
     # T6200: gate concurrent checkouts to the pool's capacity — see _MAX_POOL_CONN.
     _checkout_gate = threading.BoundedSemaphore(_MAX_POOL_CONN)
-    logger.info("[PG] Connection pool initialized (min=2, max=%d, keepalive=30s, checkout gate=%d)",
+    logger.info("[PG] Connection pool initialized (min=max=%d, keepalive=30s, checkout gate=%d)",
                 _MAX_POOL_CONN, _MAX_POOL_CONN)
 
 
