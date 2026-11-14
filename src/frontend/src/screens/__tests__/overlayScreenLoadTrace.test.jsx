@@ -16,7 +16,8 @@ const testState = vi.hoisted(() => ({
 
 const overlayState = vi.hoisted(() => ({ overlaySyncState: 'idle', overlayLoadedProjectId: null }));
 
-vi.mock('../../modes', () => ({ OverlayModeView: () => null }));
+const { modeViewSpy } = vi.hoisted(() => ({ modeViewSpy: vi.fn(() => null) }));
+vi.mock('../../modes', () => ({ OverlayModeView: modeViewSpy }));
 vi.mock('../../containers', () => ({ OverlayContainer: () => ({}) }));
 
 vi.mock('../../modes/overlay', () => ({
@@ -211,5 +212,18 @@ describe('T16050 OverlayScreen (Spotlight) [LOAD] trace wiring', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(infoLines().some((l) => l.includes('[LOAD] Spotlight video empty'))).toBe(true);
+  });
+
+  it('T11260:C2 a legacy two-clip draft opens in Spotlight: OverlayModeView mounts with a video source', async () => {
+    testState.clips = [{ id: 1, project_id: 42 }, { id: 2, project_id: 42 }];
+    modeViewSpy.mockClear();
+
+    render(<OverlayScreen />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(modeViewSpy).toHaveBeenCalled();
+    const props = modeViewSpy.mock.calls.at(-1)[0];
+    expect(props.effectiveOverlayVideoUrl).toBeTruthy();
+    expect(props.projectId).toBe(PROJECT_ID);
   });
 });

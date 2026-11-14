@@ -24,6 +24,7 @@ from app.services.export_finalize import upsert_working_video
 from app.session_init import _init_cache
 from app.user_context import set_current_user_id
 from app.utils.encoding import decode_data, encode_data
+from tests.test_t4050_publish_restore_roundtrip import env  # noqa: F401  (fixture)
 
 TEST_USER_ID = f"test_t11260_carry_{uuid.uuid4().hex[:8]}"
 TEST_PROFILE_ID = "testdefault"
@@ -204,6 +205,72 @@ class TestLegacyMulticlipDraftOpensInSpotlight:
         body = resp.json()
         assert [r["id"] for r in body["highlights_data"]] == ["a", "b", "c", "d"]
         assert "clip_boundaries" not in body
+
+
+@pytest.mark.asyncio
+async def test_legacy_multiclip_draft_renders_and_publishes_in_spotlight(env, monkeypatch):  # noqa: F811
+    """T11260:C2 publish half: a legacy two-clip draft (seeded directly; no insert
+    path can create one any more) runs the Spotlight render's real finalize and
+    then the publish gesture, ending as a published final video."""
+    from app.routers.downloads import publish_to_my_reels
+    from app.routers.export import overlay as ov
+    from app.services.export_helpers import insert_export_job_if_none_active
+    from app.user_context import get_current_user_id
+
+    user_id = get_current_user_id()
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('T11260 legacy', '9:16')")
+        project_id = cur.lastrowid
+        for i in range(2):
+            cur.execute(
+                "INSERT INTO raw_clips (filename, rating, start_time, end_time, video_sequence) "
+                "VALUES (?, 5, 0.0, 15.0, 1)", (f"raw_{i}.mp4",))
+            cur.execute(
+                "INSERT INTO working_clips (project_id, raw_clip_id, uploaded_filename, sort_order, "
+                "version, segments_data) VALUES (?, ?, ?, ?, 1, ?)",
+                (project_id, cur.lastrowid, f"wc_{i}.mp4", i, encode_data(NO_MODS)))
+        cur.execute(
+            "INSERT INTO working_videos (project_id, filename, version, duration, highlights_data) "
+            "VALUES (?, 'concat.mp4', 1, 30.0, ?)", (project_id, encode_data(PRIOR)))
+        cur.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (cur.lastrowid, project_id))
+        cur.execute("SELECT COUNT(*) FROM working_clips WHERE project_id = ?", (project_id,))
+        assert cur.fetchone()[0] == 2
+        conn.commit()
+
+    export_id = f"exp_t11260_{uuid.uuid4().hex[:8]}"
+    assert insert_export_job_if_none_active(export_id, project_id, "overlay")
+
+    async def fake_modal_overlay_auto(**kwargs):
+        return {"status": "success", "gpu_seconds": 1.0, "modal_function": "test_stub"}
+
+    async def fake_generate_poster(*a, **k):
+        return None
+
+    monkeypatch.setattr(ov, "call_modal_overlay_auto", fake_modal_overlay_auto)
+    monkeypatch.setattr(ov, "generate_poster_at_export", fake_generate_poster)
+    monkeypatch.setattr(ov, "_rasterize_text_layers", lambda *a, **k: [])
+
+    await ov._run_overlay_export_background(
+        export_id=export_id, project_id=project_id, project_name="T11260 legacy",
+        user_id=user_id, profile_id="testdefault", working_filename="concat.mp4",
+        highlight_regions=[{**r, "keyframes": []} for r in PRIOR if r.get("enabled", True)],
+        effect_type="dark_overlay", video_duration=30.0,
+    )
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT status FROM export_jobs WHERE id = ?", (export_id,))
+        assert cur.fetchone()["status"] == "complete"
+        cur.execute("SELECT final_video_id FROM projects WHERE id = ?", (project_id,))
+        final_video_id = cur.fetchone()["final_video_id"]
+        assert final_video_id is not None
+
+    result = await publish_to_my_reels(project_id)
+    assert result["newly_published"] is True
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT published_at FROM final_videos WHERE id = ?", (final_video_id,))
+        assert cur.fetchone()["published_at"] is not None
 
 
 REMOVED_SYMBOLS = [
