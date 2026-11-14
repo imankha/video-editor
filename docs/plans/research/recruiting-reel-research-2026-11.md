@@ -245,16 +245,20 @@ A quality is what a play shows about the athlete. A tag is what happened. A scou
 
 | Stored name | Meaning | Counts when you see | Routine, does not count |
 |---|---|---|---|
-| Pace | Covers ground faster than the opponent. | The player wins a race against an opponent who started level or ahead. | Nobody was racing them. |
+| Separation | Beats an opponent with speed, quickness or jump. | The gap between the player and an opponent changes because of the player's speed, quickness or jump: the player pulls away from one, catches one who started ahead, or gets higher than one in a contested jump. | No opponent was close enough to compare against, or the opponent was not trying. |
 | Strength | Wins or keeps possession through contact. | In body contact with an opponent, the player stays balanced and comes away in control. | No opponent touched them. |
-| Composure | Stays calm and in control when pressed. | Under close pressure from one or more opponents, the player keeps control and makes a clean next action instead of a hurried one. | Time and space, nobody near. |
-| Vision | Sees a teammate or a space others do not. | The player looks around first, then finds a teammate or a space that was not the obvious option. | The nearest, obvious option. |
-| Decision Making | Chooses the better option, quickly. | Two or more options were visible and the player took the one that hurt the opponent most, or acted before the pressure arrived. | Only one option was on. |
-| Anticipation | Reads the play and arrives first. | The player moves before the opponent acts and gets there first: cuts out a pass, steps in front, or covers for a beaten teammate. | The play came straight to them. |
-| Work Rate | Chases back or presses to win possession. | A long sprint or repeated efforts off the play that win possession back or stop an attack. | Jogging back into position. |
-| Off-Ball Movement | Gets free without possession. | A timed move without possession loses the marker, and a teammate finds the player. | Standing in space and receiving. |
+| Composure | Keeps control while opponents close in. | Under close pressure from one or more opponents, the player keeps control and makes a clean next action instead of giving possession away. | Time and space, nobody near. |
+| Vision | Finds a teammate or a space that takes opponents out of the play. | The player delivers to a teammate or into a space that was not the nearest option, and it leaves one or more opponents behind the play. | The nearest, obvious option. |
+| Decision Making | Chooses the better option before the opponent can react. | Two or more options were visible and the player took the one that hurt the opponent most, or released before the nearest opponent could reach them. | Only one option was on. |
+| Anticipation | Moves early and arrives before the opponent. | The player moves before the opponent acts and gets there first: cuts out a pass, steps in front, or covers for a beaten teammate. | The play came straight to them. |
+| Work Rate | Out-works the players around them to win possession back. | While teammates and opponents nearby slow down or jog, the player keeps sprinting or makes repeated efforts off the play, and it wins possession back or stops an attack. | Jogging back into position with everyone else. |
+| Getting Open | Gets free of a marker without possession. | A timed move without possession leaves the marker behind or on the wrong side, and a teammate finds the player. | Standing in space and receiving. |
 | 1v1 Attacking | Beats a defender alone. | Facing a set defender, the player gets past alone and the move leads to a scoring chance or advances the play. | The defender was out of position or not engaged. |
 | 1v1 Defending | Stops an attacker alone. | Isolated against an attacker, the player stops them cleanly without help. | Help was already there and the attacker had slowed. |
+
+**Relative, and visible on video (owner ruling, 2026-11-13).** Coaches say "pace" [Q5][Q9], and this list first used that word. The owner ruled that pace cannot be determined from video and is not a word every sport uses. What video does show is one player against another: the athlete gets away from an opponent with speed or quickness, catches up to one who started ahead, or jumps higher than one. That is "separation", and it reads the same in any sport. Every quality in the table is held to the same standard: its sign describes what the player does relative to another player in the frame, and none depends on a distance, a speed, or what the player sees or feels. Under that standard Pace became Separation. Off-Ball Movement became Getting Open, because the old name assumed a ball. Vision lost "looks around first" and Composure lost "stays calm", since a wide sideline camera that cannot read a jersey number cannot show a glance or a mood; both are now judged by what happens to the opponents. Work Rate is judged against the players nearby instead of by the length of a sprint. Strength, Anticipation, Decision Making and the two 1v1 qualities already met the standard. The names coaches use were kept wherever the sign could be made relative; only the two names above changed. Soccer's wording below lost its yard counts for the same reason.
+
+Separation overlaps on purpose with two others. A recovery run that catches an attacker shows Separation (the athletic output) and may also show Work Rate (the effort when others had stopped). A jump that beats an opponent shows Separation, and in soccer also Aerial Ability when the header itself is won and directed.
 
 How the list was built: the terms recur across the U.S. Soccer "Key Qualities of a Player" [Q5], the survey of 178 NCAA coaches [Q9], a real college camp evaluation report [Q8], and coach interviews [Q1][Q10], and each is a word coaches in other team sports also use. A term stayed only if a person can see it in one play on wide sideline footage. Left out on purpose because a single play cannot show them: coachability, communication, leadership, endurance and response to a mistake. Coaches say they judge these from full games and in person [Q9][Q11][Q12].
 
@@ -279,7 +283,7 @@ The "does not count" column has almost no direct support from coaches. Sources s
 | Stored name | Meaning | Counts when you see | Routine, does not count |
 |---|---|---|---|
 | First Touch | Receives so the next action is easy. | A driven or bouncing ball, or one received under pressure, is controlled in one touch that moves it away from the defender and into the next pass, shot or dribble. | A slow pass with nobody near; a touch that needs two more to tidy. |
-| Passing Range | Hits long or firm passes accurately. | A pass of 30 yards or more that reaches a teammate's feet or stride; or a firm ground pass that goes between two defenders to a teammate. | Short sideways or backward passes under no pressure. |
+| Passing Range | Hits long or firm passes accurately. | A long pass that clears one or more lines of opponents and reaches a teammate's feet or stride; or a firm ground pass that goes between two defenders to a teammate. | Short sideways or backward passes under no pressure. |
 | Finishing | Scores or tests the goalkeeper with technique. | A shot placed in a corner or past a set goalkeeper, a volley or header on target, a calm finish one against one, or a goal from outside the penalty area. | A tap-in to an empty net; a shot straight at the goalkeeper. |
 | Delivery | Puts crosses and set pieces where teammates can score. | A cross, corner or free kick that reaches a teammate in the penalty area and leads to a shot or header. | Cleared by the first defender, or out of play. |
 | Aerial Ability | Wins the ball in the air. | The player jumps against an opponent and wins the header, to a teammate, clear of danger or on target. | An unchallenged header. |
@@ -291,14 +295,14 @@ The "does not count" column has almost no direct support from coaches. Sources s
 
 | General quality | In soccer |
 |---|---|
-| Pace | Wins a race of 15 yards or more to the ball or into space, with or without the ball. |
+| Separation | Runs away from a defender with or without the ball, catches an attacker who had a head start, or out-jumps an opponent for a header. |
 | Strength | Shoulder to shoulder, stays up and comes away with the ball; or holds a defender off with the back to goal and plays a teammate in. |
-| Composure | Pressed within about two yards, keeps the ball and passes or carries out instead of clearing it. |
-| Vision | Checks over the shoulder before receiving, then plays through or over a line of defenders into a run, or switches play to the free side. |
+| Composure | With a defender within reach, keeps the ball and passes or carries out instead of clearing it. |
+| Vision | Plays through or over a line of defenders into a teammate's run, or switches play to the free side. |
 | Decision Making | Squares to an unmarked teammate instead of shooting from a tight angle; releases in one or two touches before the press arrives. |
 | Anticipation | Steps in to intercept the pass, or covers the space behind a beaten teammate before the attacker gets there. |
-| Work Rate | Sprints 20 yards or more after the ball is lost to win it back; presses two or three times in a row and forces a turnover. |
-| Off-Ball Movement | A run behind the last defender that stays onside and is found; an overlapping run that receives the pass. |
+| Work Rate | After the ball is lost, sprints past jogging players to win it back or catch the attack; presses two or three times in a row and forces a turnover. |
+| Getting Open | A run behind the last defender that stays onside and is found; an overlapping run that receives the pass. |
 | 1v1 Attacking | Goes past a set defender with a change of speed or direction or a feint, and it leads to a shot, cross or pass. |
 | 1v1 Defending | Stays on their feet, forces the attacker wide or backward, and wins the ball or blocks the cross or shot. |
 
@@ -323,7 +327,7 @@ Two things the research found that the ruling settles by its wording: a child's 
 |---|---|---|
 | A calm pass out of pressure from the back | Values it: Composure | Scrolls past |
 | An interception from reading the pass early | Values it: Anticipation | Scrolls past |
-| A 25-yard recovery run and clean tackle | Values it: Work Rate, 1v1 Defending | Scrolls past |
+| A recovery run that catches the attacker, and a clean tackle | Values it: Separation, Work Rate, 1v1 Defending | Scrolls past |
 | A trick that beats nobody and leads to nothing | Discounts it: "not just flashy tactics" [6] | May stop |
 | A volley into the top corner from the edge of the area | Finishing | Stops |
 | A dribble past two defenders and a finish | 1v1 Attacking, Finishing | Stops |

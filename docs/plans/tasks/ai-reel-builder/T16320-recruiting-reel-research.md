@@ -38,7 +38,7 @@ Research, then write three things.
 
 For each answer, say how strong the evidence is: agreed by many sources, said by a few, or disputed.
 
-**2. The quality list for soccer.** A quality is what a play shows about the athlete, such as pace, vision or composure under pressure; a tag is what happened, such as Goal or Tackle. The list is fixed, short enough for a model to choose from reliably (about twelve to twenty), covers every position including goalkeeper, uses the words coaches use, and each entry has a one-line meaning. It also marks which qualities apply to any sport and which are soccer's own, so later sports reuse the general ones.
+**2. The quality list for soccer.** A quality is what a play shows about the athlete, such as separation from an opponent, vision or composure under pressure; a tag is what happened, such as Goal or Tackle. The list is fixed, short enough for a model to choose from reliably (about twelve to twenty), covers every position including goalkeeper, uses the words coaches use, and each entry has a one-line meaning. It also marks which qualities apply to any sport and which are soccer's own, so later sports reuse the general ones.
 
 Each quality also gets its signs: what a person watching a sideline video would actually see when a player demonstrates it at a level a college coach cares about, and what a routine version looks like that does not count. The owner asked on 2026-11-13 for the game analysis to be worked backwards from what coaches look for, so that the plays it marks as highlights are the scoutable ones. These signs are what the analysis is told to look for (T16150), so they must describe things visible in the footage, in a sentence or two each.
 
@@ -88,10 +88,11 @@ The owner ruled on 2026-11-13, after reading the findings and the decision page.
   - Decision 8, shape: a recruiting reel is landscape and prefers landscape highlights; portrait ones are used only when needed, with bars at the sides, and the parent is told how many. No slow motion, no music by default, plain cuts.
   - Decision 9, sports: all eleven run on the general part; baseball and softball carry a note that coaches expect a skills video.
   - Decision 10: this task keeps the number T16320; the admin sign-in task became T16430.
+- **Relative, and visible on video (owner, later on 2026-11-13).** The research found that scouts look for "pace". The owner ruled that pace cannot be determined from video and does not apply to every sport, and that the better word is "separation": the athlete gets away from an opponent with speed or quickness, catches up to one, or jumps higher than one. "Relative athletic outputs between the focused player and other players in the frame" are both general purpose and detectable from video. The owner asked for every other quality to be held to the same standard. What changed: Pace became Separation; Off-Ball Movement became Getting Open, because the old name assumed a ball; Vision no longer asks the model to see a player look around, and Composure no longer asks it to judge calm; Work Rate is judged against the players nearby; soccer's wording lost its yard counts. Strength, Anticipation, Decision Making and the two 1v1 qualities already met the standard and kept their signs. The full list is in section 8a of the findings.
 
 ## Still open
 
-- The general qualities and soccer's strings are stored in the app by pull request 754 (https://github.com/imankha/video-editor/pull/754), merged by the owner on 2026-11-13. Its test checks that the general part names no sport and that a sport with no strings gets the ten general qualities.
+- The general qualities and soccer's strings are stored in the app by pull request 754 (https://github.com/imankha/video-editor/pull/754), merged by the owner on 2026-11-13. Its test checks that the general part names no sport and that a sport with no strings gets the ten general qualities. The rewording under the relative rule is a second pull request, and adds a test that every general sign names another player and uses no distance, speed or inner state.
 - The owner, watching five plays from a real game, checks that the signs alone are enough to name the qualities each one shows. This needs a real game on screen and is easiest on the first staging analysis (T16150).
 
 ## For the implementer
