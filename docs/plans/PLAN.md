@@ -35,6 +35,7 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T11270 | [Collapse clip selection](tasks/single-clip-editor/T11270-collapse-clip-selection.md) | 3 | 3 | 1.0 | WIP | [ ] | Rename the internal selected-clip plumbing to the clip, now that a project has exactly one. A move-only change with no behaviour change. |
 | T11175 | [Move funnel events off quests](tasks/quest-removal/T11175-funnel-analytics-reroute.md) | 5 | 3 | 1.7 | WIP | [ ] | The admin Journey counts events that still travel through the retired quest system's endpoint. Move them to the funnel's own path, keeping the same names, so the map stays accurate when quests are deleted. |
 | T16370 | [Serve staging from reelballers.com so Safari can sign in](tasks/T16370-staging-on-our-own-domain.md) | 6 | 3 | 2.0 | WIP | [ ] | Owner decision 2026-11-13. Staging's app and API sit on two different sites, so Safari treats the sign-in cookie as third-party and blocks it: nobody can stay signed in to staging in Safari (shown in a WebKit iPhone 14 run; Chromium keeps the cookie). Move staging to reelballers.com subdomains like production. Unblocks T15720 and every Safari check on staging. |
+| T16450 | [Staging check failed: T16210:C1 C1: Each of the eleven listed controls measures at least](tasks/T16450-staging-check-failed-t16210-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 
 ### Bugs found by /dotask verify
 
@@ -43,7 +44,6 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T16450 | [Staging check failed: T16210:C1 C1: Each of the eleven listed controls measures at least](tasks/T16450-staging-check-failed-t16210-c1-c1.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
