@@ -1,6 +1,6 @@
 # T16430: An "admin" choice in the dev sign-in presets
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-13

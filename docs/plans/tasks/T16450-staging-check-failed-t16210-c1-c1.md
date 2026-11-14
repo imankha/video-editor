@@ -1,6 +1,6 @@
 # T16450: Staging check failed: T16210:C1 C1: Each of the eleven listed controls measures at least
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-14
