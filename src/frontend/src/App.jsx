@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from 'react';
 import { scheduleWarmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
-import { initSession } from './utils/sessionInit';
+import { initSession, reportAppLoad } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { SharedVideoOverlay } from './components/SharedVideoOverlay';
 import { SharedAnnotationView } from './components/SharedAnnotationView';
@@ -241,6 +241,7 @@ function App() {
 
       scheduleWarmAllUserVideos();
       dismissPreloader();
+      reportAppLoad(); // T16400: how long this load took, kept in the user's own action log
       initialLoadInProgress = false;
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)

@@ -12,6 +12,7 @@ import { API_BASE } from '../config';
 import { DEEP_LINK_KIND } from '../constants/deepLinkKinds';
 import apiFetch from './apiFetch';
 import { checkServerVersion } from './appVersion';
+import { showPreloaderRetry } from './preloader';
 import { PROFILING_ENABLED } from './profiling';
 import { getTabProfileId, setTabProfileId } from './tabProfile';
 
@@ -32,10 +33,10 @@ function updatePreloader(percent, message) {
  * Retry a fetch call with exponential backoff. Handles 5xx and network
  * failures — used for cold-start resilience on Fly.io wake-ups.
  */
-async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = {}) {
+async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000, timeoutMs = null } = {}) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await apiFetch(url, options);
+      const response = await fetchWithTimeout(url, options, timeoutMs);
       if (response.ok || response.status < 500) return response;
       if (attempt < retries) {
         const delay = baseDelay * Math.pow(2, attempt);
@@ -58,6 +59,74 @@ async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = 
       }
     }
   }
+}
+
+/** One request that gives up after `timeoutMs` (T16400); no limit when `timeoutMs` is null. */
+async function fetchWithTimeout(url, options, timeoutMs) {
+  if (timeoutMs == null) return apiFetch(url, options);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await apiFetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error(`no answer within ${timeoutMs}ms`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// T16400: /api/auth/me is the app's first question. Each attempt gives up after this,
+// and with ME_RETRIES the loading screen shows "Still connecting" + Retry within ~17 s
+// (8 s + 0.5 s backoff + 8 s) instead of waiting forever.
+const ME_ATTEMPT_TIMEOUT_MS = 8000;
+const ME_RETRIES = 1;
+
+// T16400: this load's timings, sent once the app is usable (reportAppLoad).
+const _loadStats = { firstAnswerMs: null, meAttempts: 0, retries: 0 };
+
+/**
+ * Ask /api/auth/me until the server answers (any status below 500). A network error,
+ * a time-out or a 5xx after the retries shows "Still connecting" + Retry and waits
+ * for the press: a server that cannot check the cookie must not read as signed out.
+ */
+async function fetchMeUntilAnswered() {
+  for (;;) {
+    _loadStats.meAttempts += 1;
+    try {
+      const response = await fetchWithRetry(`${API_BASE}/api/auth/me`, undefined, {
+        retries: ME_RETRIES, baseDelay: 500, timeoutMs: ME_ATTEMPT_TIMEOUT_MS,
+      });
+      if (response.status < 500) {
+        _loadStats.firstAnswerMs = Math.round(performance.now());
+        return response;
+      }
+    } catch (err) {
+      console.warn('[sessionInit] /me check failed:', err.message || err);
+    }
+    await showPreloaderRetry();
+    _loadStats.retries += 1;
+  }
+}
+
+/**
+ * T16400: record how long this load took to become usable (ms since the page started)
+ * in the user's own action log, so a slow load can be explained later. Called once by
+ * App when it dismisses the loading screen for a signed-in user.
+ */
+export function reportAppLoad() {
+  apiFetch(`${API_BASE}/api/telemetry/app-load`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ready_ms: Math.round(performance.now()),
+      first_answer_ms: _loadStats.firstAnswerMs,
+      me_attempts: _loadStats.meAttempts,
+      retries: _loadStats.retries,
+    }),
+    keepalive: true,
+    rbNonDataWrite: true, // T6020: telemetry, not a user-data write
+  }).catch(() => { /* a telemetry beacon never breaks the app */ });
 }
 
 /**
@@ -248,8 +317,8 @@ export async function initSession() {
     let impersonator = null;
     let resumePoint = null;
 
-    try {
-      const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`, undefined, { retries: 2, baseDelay: 500 });
+    {
+      const meResponse = await fetchMeUntilAnswered();
       if (meResponse.ok) {
         const meData = await meResponse.json();
         userId = meData.user_id;
@@ -278,8 +347,6 @@ export async function initSession() {
           useAuthStore.setState({ authError: errorMsg });
         }
       }
-    } catch (err) {
-      console.warn('[sessionInit] /me check failed:', err.message || err);
     }
 
     if (!userId) {

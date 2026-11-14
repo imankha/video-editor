@@ -1,0 +1,26 @@
+{
+  "criteria": {
+    "T16400:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16400_pg_limits.py -q -p no:cacheprovider -k 'test_c1_'"
+    },
+    "T16400:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16400_pg_limits.py -q -p no:cacheprovider -k 'test_c2_'"
+    },
+    "T16400:C3": {"kind": "browser"},
+    "T16400:C4": {"kind": "browser"},
+    "T16400:C5": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16400_long_query.py -q -p no:cacheprovider"
+    },
+    "T16400:C6": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16400_app_load.py -q -p no:cacheprovider && grep -q 'reportAppLoad()' src/frontend/src/App.jsx"
+    },
+    "T16400:C7": {
+      "kind": "code",
+      "command": "! grep -q 'storage/warmup' src/frontend/index.html"
+    }
+  }
+}

@@ -220,6 +220,12 @@ def _refresh_live_machines():
 _refresh_live_machines()
 
 # Thresholds for slow request warnings (in seconds)
+# T16400: the longest a request waits on the Postgres session check before it is
+# answered 503 "retry" (never 401: a database blip must not sign anyone out). A
+# paused or unreachable Postgres otherwise held the request until it came back;
+# the stranded worker thread finishes on its own once Postgres answers again.
+SESSION_CHECK_TIMEOUT_S = 4.0
+
 SLOW_SYNC_THRESHOLD = 0.5  # 500ms - warn if DB sync takes this long
 SLOW_REQUEST_THRESHOLD = 0.2  # 200ms - warn if total request takes this long (profiling target)
 
@@ -952,11 +958,22 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 # Bare to_thread is safe here: this runs BEFORE set_current_user_id
                 # (below) and validate_session reads no request contextvar (it takes
                 # session_id explicitly and resolves via the thread-safe PG pool).
-                session = await asyncio.to_thread(validate_session, session_id)
+                session = await asyncio.wait_for(
+                    asyncio.to_thread(validate_session, session_id), SESSION_CHECK_TIMEOUT_S,
+                )
             except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.pool.PoolError) as e:
                 logger.warning(f"[AUTH] Postgres unavailable during session validation: {e}")
                 session = None
                 session_validation_unavailable = True
+            except TimeoutError:
+                logger.warning(
+                    f"[AUTH] Postgres session check gave no answer within {SESSION_CHECK_TIMEOUT_S}s"
+                )
+                session = None
+                session_validation_unavailable = True
+            # T16400: /api/auth/me is allowlisted, so it reaches its handler even
+            # when the check failed; the handler answers 503 from this flag.
+            request.state.session_validation_unavailable = session_validation_unavailable
             meta["auth_ms"] = (time.perf_counter() - auth_start) * 1000
             if session:
                 user_id = session["user_id"]
