@@ -20,7 +20,7 @@ const __dirname = path.dirname(__filename);
 const TARGET = process.env.PERF_TARGET || 'prod';
 const TARGETS = {
   prod: 'https://app.reelballers.com',
-  staging: 'https://staging.reelballers.com',
+  staging: 'https://reel-ballers-staging.pages.dev',
   dev: 'http://localhost:5173',
 };
 const baseURL = TARGETS[TARGET] || TARGETS.prod;
