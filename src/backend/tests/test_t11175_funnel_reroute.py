@@ -10,6 +10,7 @@ import uuid
 from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.analytics import CLIENT_FUNNEL_EVENTS, FLOW_EVENTS, record_funnel_event
 from app.services import pg as pg_service
@@ -56,4 +57,24 @@ def test_family_lands_in_user_actions_with_same_milestone_name(pg_conn, family):
         assert event in CLIENT_FUNNEL_EVENTS, f"{event} is not client-beaconable"
         with patch("app.analytics.get_current_user_id", return_value=user_id):
             record_funnel_event(event)
+        assert _action_count(user_id, event) == 1, event
+
+
+@pytest.mark.parametrize("family", sorted(REROUTED))
+def test_family_beacon_lands_via_funnel_endpoint(pg_conn, family):
+    # End to end: the browser's POST /api/telemetry/funnel-event body for each
+    # rerouted milestone becomes one user_actions row under that same name.
+    from app.main import app
+
+    user_id = f"t11175-http-{family}-{uuid.uuid4().hex[:8]}"
+    register_test_user_ids(user_id)
+    create_user(user_id, email=f"{user_id}@test.local")
+    client = TestClient(app, raise_server_exceptions=True)
+    with patch("app.analytics.get_current_user_id", return_value=user_id):
+        for event in REROUTED[family]:
+            resp = client.post(
+                "/api/telemetry/funnel-event", json={"event": event, "context": {}}
+            )
+            assert resp.status_code == 204, event
+    for event in REROUTED[family]:
         assert _action_count(user_id, event) == 1, event
