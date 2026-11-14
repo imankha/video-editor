@@ -16,18 +16,18 @@ Run with: pytest tests/test_request_write_tracking.py -v
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.database import (
-    init_request_context,
-    get_request_has_writes,
-    clear_request_context,
     _request_context,
+    clear_request_context,
+    get_request_has_writes,
+    init_request_context,
 )
+from app.user_context import reset_user_id_token, set_current_user_id
 
 
 def _mark_context_has_writes():
@@ -39,6 +39,14 @@ def _mark_context_has_writes():
 
 class TestRequestWriteTrackingIsolation:
     """Verify that write tracking uses ContextVar and is async-safe."""
+
+    @pytest.fixture(autouse=True)
+    def _user_context(self):
+        # init_request_context() records the request's user, as the auth middleware does
+        # after it sets one; without this the class depended on an earlier test leaking it.
+        token = set_current_user_id("test_request_write_tracking_user")
+        yield
+        reset_user_id_token(token)
 
     def test_init_sets_writes_false(self):
         """init_request_context should set has_writes to False."""
@@ -120,10 +128,10 @@ class TestLocalVersionInitialization:
         overwrite local changes.
         """
         from app.database import (
+            _db_version_lock,
+            _user_db_versions,
             get_local_db_version,
             set_local_db_version,
-            _user_db_versions,
-            _db_version_lock,
         )
 
         test_user = "test_version_init_user"

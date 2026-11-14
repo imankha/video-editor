@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 
 from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY
+from app.profile_context import reset_profile_id_token, set_current_profile_id
 from app.services.upload_failures import (
     MILESTONE_REASON_BY_UPLOAD_REASON,
     UPLOAD_FAILURE_REASONS,
@@ -26,6 +27,18 @@ from app.services.upload_failures import (
     record_upload_failure_from_payload,
     sweep_expired_upload_failures,
 )
+
+TEST_PROFILE_ID = "testdefault"
+
+
+@pytest.fixture(autouse=True)
+def _profile_context():
+    # The milestone context asserts below name this profile, so pin it here rather than
+    # inherit whatever an earlier test file left in the context.
+    token = set_current_profile_id(TEST_PROFILE_ID)
+    yield
+    reset_profile_id_token(token)
+
 
 # ---------------------------------------------------------------------------
 # Pure logic -- no Postgres required
@@ -110,7 +123,7 @@ class TestNeverRaisesContract:
         # resolve its sport without a second DB open.
         mock_milestone.assert_called_once_with(
             "someone", "game_upload_failed", reason="refused",
-            context={SPORT_PROFILE_ID_CONTEXT_KEY: "testdefault"},
+            context={SPORT_PROFILE_ID_CONTEXT_KEY: TEST_PROFILE_ID},
         )
 
     def test_payload_adapter_delegates_to_the_one_writer(self, monkeypatch):
@@ -146,7 +159,7 @@ class TestTerminalGating:
                                    terminal=True, user_id="u1")
         mock_milestone.assert_called_once_with(
             "u1", "game_upload_failed", reason="refused",
-            context={SPORT_PROFILE_ID_CONTEXT_KEY: "testdefault"},
+            context={SPORT_PROFILE_ID_CONTEXT_KEY: TEST_PROFILE_ID},
         )
 
     def test_terminal_clip_kind_uses_clip_milestone_event(self, monkeypatch):

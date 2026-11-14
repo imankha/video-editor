@@ -7,7 +7,7 @@ GAME video again, with the resolver unit tests still green.
 
 - poster: behavioral (real throwaway profile DB through _load_first_clip_for_poster,
   then the real resolver; only R2 is mocked).
-- framing + multi-clip export: their SELECTs live inside large request handlers, so
+- framing export: its SELECT lives inside large request handlers, so
   assert the source text of each working_clips query selects `rc.source`.
 """
 
@@ -90,9 +90,11 @@ def _working_clip_selects(path: Path) -> list[str]:
     return re.findall(r"SELECT.*?FROM working_clips wc", text, flags=re.DOTALL)
 
 
+# T11250 removed the multi-clip export route along with multi_clip.py's working_clips SELECT;
+# framing.py's /render query is the only resolver-feeding export SELECT left.
 @pytest.mark.parametrize(
     "rel_path",
-    ["routers/export/framing.py", "routers/export/multi_clip.py"],
+    ["routers/export/framing.py"],
 )
 def test_export_queries_select_rc_source(rel_path):
     selects = [
