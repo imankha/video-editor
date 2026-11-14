@@ -18,6 +18,12 @@
 
 **How we will know it worked.** The server's timing log shows the sign-in check falling from about 180 milliseconds to under 20 on a single request. Sign-in, a shared link and the admin dashboard all work, and the row counts of every table match the old database.
 
+## Ruling
+
+(owner, 2026-11-13) **Staging now, production later; Fly Postgres, same kind as today.** This task moves the staging accounts database to Los Angeles as the rehearsal and stops before production. It uses unmanaged Fly Postgres (`fly postgres create`, about 2 dollars a month), not Fly Managed Postgres. The production move, its window and the removal of both old databases are T16460, which the owner schedules after this lands and T16380/T16390 are on staging.
+
+Scope for this task: runbook steps 2 to 7 on staging only (`reel-ballers-db-staging` to a new `reel-ballers-db-staging-lax`, API `reel-ballers-api-staging`). Staging is down for a few minutes during the copy; that is accepted. Keep the old staging database (do not destroy it). Never run a command with `-a reel-ballers-api` or `-a reel-ballers-db-prod`. Write what the rehearsal taught (times, surprises, exact commands) into T16460's file so production follows a tested script. If the container has no Fly credentials, stop with BLOCKED naming what it needs; do not work around it.
+
 ## Implementer details
 
 Facts recorded 2026-11-13:
@@ -46,9 +52,7 @@ Notes:
 
 ## Acceptance Criteria
 
-- [ ] Staging's API and accounts database both run in Los Angeles, and the staging browser checks pass.
-- [ ] On staging, a single signed-in request's session check takes under 20 ms in the timing log.
-- [ ] Production: every table's row count matches between the old and new database at the moment of the switch.
-- [ ] Production: sign-in, a shared link and the admin dashboard work after the switch.
-- [ ] The old database is kept for a week, then removed after a final backup, and no doc or script names it.
-- [ ] human: the owner picks the production window and confirms the removal of the old database.
+- [ ] C1: Staging's API and accounts database both run in Los Angeles, and every table's row count and the `schema_migrations` ledger match the old staging database at the switch.
+- [ ] C2: On staging, a single signed-in request's session check takes under 20 ms in the timing log.
+- [ ] C3: Sign-in, a shared link and the admin dashboard work on staging after the switch.
+- [ ] C4: T16460's file holds the production runbook as rehearsed: each command, how long the copy took, and anything that differed from the plan above.

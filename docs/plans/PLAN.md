@@ -55,6 +55,7 @@ The owner sat on the loading screen on production on 2026-11-13. Measured the sa
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16410 | [Accounts database next to the server](tasks/T16410-accounts-database-next-to-server.md) | 6 | 5 | 1.2 | TODO | [ ] | Found 2026-11-13. The server runs in Los Angeles and its accounts database in Chicago, so every database question costs about 45 milliseconds of travel and a sign-in check is four of them. Copy the data into a new database in Los Angeles and point the server at it, staging first; production needs about five minutes of no sign-ins, and the old database stays a week as the way back. Fly's own move recipe was set aside as unmaintained and failure-prone. Worked when the sign-in check falls from about 180 milliseconds to under 20 and every table's row count matches. |
+| T16460 | [Production accounts database to Los Angeles](tasks/T16460-accounts-database-move-production.md) | 6 | 3 | 2.0 | TODO | [ ] | Owner ruling 2026-11-13 on T16410. Production's accounts database sits in Chicago while its server runs in Los Angeles. After T16410 rehearses the move on staging, repeat it on production in a quiet hour the owner picks; about five minutes without sign-in. |
 
 ### Staging QA 2026-11-09: bugs and possible bugs (owner-requested, BUGS FIRST)
 
@@ -79,8 +80,6 @@ String highlights into reels for college recruiting. The reel is the only in-pro
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-|  | **[Single-Clip Editor: remove Reels and multi-clip editing](tasks/single-clip-editor/EPIC.md)** | 8 | 7 | 1.1 | TODO |  | Code for projects with several clips still sits under the single-clip editor. Removing it is the groundwork for reels, which join finished highlights rather than raw clips. |
-|  | **[Remove the Quest System](tasks/quest-removal/EPIC.md)** | 6 | 5 | 1.2 | TODO |  | The quest system, guided steps that paid out credits, is hidden from parents but still in the code. One piece of it carries the events the admin funnel reads, so that piece moves first; the deletions wait in Later. |
 
 ### Payment return and campaign attribution lost on arrival (priority, owner-requested 2026-11-05, BUGS FIRST)
 
