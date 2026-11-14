@@ -1,0 +1,3 @@
+{"criteria": {
+  "T15320:C1": {"kind": "code", "command": "cd src/backend && timeout 290 python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider"}
+}}

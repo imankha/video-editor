@@ -44,3 +44,17 @@ What is miscounted: `game_upload_succeeded` has been recorded since 2026-08-26 (
 - [ ] C4: On production after deploy, no Builds row shows an upload success over 100% (owner checks the dashboard).
 - [ ] C5: Nothing caps or floors the rate: no `GREATEST`, `LEAST`, `min` or `max` over tries or successes. A backend test records a success with no attempt after 2026-09-22 (a real miscount); the row shows the figure as it is, over 100%, and the server logs a warning naming the group, so a future double-count shows instead of hiding (ruling 2026-11-13).
 - [ ] C6: A Findings section in this file names every code path that records `game_upload_attempted` and `game_upload_succeeded`, and shows each success after 2026-09-22 has its attempt, or fixes the path that does not (ruling 2026-11-13).
+
+## Findings
+
+Every code path that records the two events (C6), read on 2026-11-14:
+
+- `game_upload_attempted`: one emitter, `prepare_upload` in `src/backend/app/routers/games_upload.py`, once per game file that is about to push bytes (a new session or a resume). It fires after every validation refusal and after the `in_progress` return (another tab is already uploading that file, and that tab booked its own attempt). A dedup hit (the file is already in R2) books no game attempt, and it can never reach a success because it gets no `upload_session_id` to finalize.
+- `game_upload_succeeded`: one emitter, `finalize_upload` in the same file, for `kind == game` only, and only for the request that deleted the pending row (`released_here`), so two finalizes for one session book one success.
+- Neither is in `CLIENT_FUNNEL_EVENTS` (the browser cannot beacon either one), neither is mapped in `ACHIEVEMENT_TO_MILESTONE` or `DURABLE_SYNC_FAILURE_ACTIONS`, and `record_milestone` skips both the same way under admin impersonation.
+
+Since 2026-09-22 every success therefore has its attempt: finalize needs a session, and a session is only created or resumed by the `prepare_upload` call that books the attempt. The one exception is a session prepared before the T11010 deploy on 2026-09-22 and finalized after it without a new prepare. That is a one-off left over from the deploy, so no code path needed fixing. The rate is now computed from events since 2026-09-22 only, and any group that still shows more successes than tries logs a `[T16340]` warning naming the group, so if a double count ever happens it shows up instead of hiding.
+
+How "only since 2026-09-22" is counted: `user_actions` keeps a lifetime count and the first occurrence only, so a user's count cannot be split by date. A user whose first upload event comes before the cutoff is left out of both sides. The rate describes users who started uploading on or after 2026-09-22.
+
+The pulse card reads today's `user_usage_daily` buckets, which always fall inside the window, and divides successes by successes plus failures. It does not use attempts because `game_upload_attempted` has no daily bucket to read today's attempts from. Making the pulse use attempts would need a new `user_usage_daily` column, which is a Postgres migration. The owner can decide whether that is worth it.

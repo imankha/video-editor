@@ -531,6 +531,9 @@ EVENT_INSTRUMENTED_AT = {
     "add_game_opened": "2026-08-28",
     "add_clip_opened": "2026-06-17",
     "game_upload_succeeded": "2026-08-26",
+    # T16340: T11010's per-file attempt. Upload success compares attempts with
+    # successes only from this day: older successes have no attempt to match.
+    "game_upload_attempted": "2026-09-22",
     "clip_uploaded": "2026-08-28",
     "clip_created": "2026-05-20",
     "framing_opened": "2026-05-22",

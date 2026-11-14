@@ -11,14 +11,19 @@ downloads or SQLite counting.
 import asyncio
 import logging
 import math
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from ..analytics import ARRIVAL_SPORT_KEYS, RETRY_BURST_ACTIONS, usage_daily_has_upload_outcomes
+from ..analytics import (
+    ARRIVAL_SPORT_KEYS,
+    EVENT_INSTRUMENTED_AT,
+    RETRY_BURST_ACTIONS,
+    usage_daily_has_upload_outcomes,
+)
 from ..analytics import detect_retry_bursts as _detect_retry_bursts
 from ..services import credit_ledger
 from ..services.auth_db import (
@@ -2597,6 +2602,9 @@ DIMENSION_COUNTS = {"game_upload_attempted": "upload_attempted",
                     "paywall_shown": "paywall_shown",
                     "buy_modal_opened": "buy_modal_opened",
                     "credit_purchased": "payers"}
+# T16340: the first moment an upload success can have its game_upload_attempted.
+UPLOAD_ATTEMPTS_RECORDED_FROM = datetime.combine(
+    date.fromisoformat(EVENT_INSTRUMENTED_AT["game_upload_attempted"]), time.min, tzinfo=UTC)
 # T15120: the render events that make a first highlight, and the window to reach one.
 FIRST_HIGHLIGHT_ACTIONS = ("credits_consumed", "export_completed")
 FIRST_HIGHLIGHT_DAYS = 14
@@ -2670,39 +2678,75 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
         {where_clause}
         GROUP BY grp, a.action
     """, [*group_params, *where_params])
-    uploads: dict = {}
     for ar in cur.fetchall():
         row = rows.get(ar["grp"])
         if row is None:
             continue
-        outcome = uploads.setdefault(ar["grp"], {"succeeded": 0, "failed": 0, "attempted": 0})
-        if ar["action"] == "game_upload_succeeded":
-            outcome["succeeded"] += ar["occurrences"]
-        elif ar["action"].startswith("game_upload_failed:"):
-            outcome["failed"] += ar["occurrences"]
-        elif ar["action"] == "game_upload_attempted":
-            outcome["attempted"] += ar["occurrences"]
         if ar["action"] in DIMENSION_STEPS:
             key = FLOW_EVENTS[ar["action"]]["label"].lower().replace(" ", "_") + "_pct"
             row[key] = round(ar["users"] / row["signups"] * 100, 2) if row["signups"] else 0
         if ar["action"] in DIMENSION_COUNTS:
             row[DIMENSION_COUNTS[ar["action"]]] = ar["users"]
 
+    # T15770: the denominator counts every ATTEMPT, not just the ones that got an
+    # outcome -- an attempt that stalled with no success/failure row (abandoned tab,
+    # dead client) used to vanish from the rate (build-7102: 4 of 12 uploaders).
+    # T16340: game_upload_attempted only records since T11010 (2026-09-22), while
+    # successes record since 2026-08-26, so older successes had no attempt and the
+    # Unrecorded build read 131.66% on prod. Only upload events from the day attempts
+    # began count, on both sides. user_actions keeps lifetime counts and the FIRST
+    # occurrence only, so a user whose first upload event is older cannot be split
+    # by date: all of that user's upload events are left out of both sides (the rate
+    # then describes users who started uploading since 2026-09-22). Nothing caps the
+    # rate (owner ruling 2026-11-13): more successes than attempts in the window is a
+    # miscount to find at its source, so it shows as it is and logs a warning.
+    cur.execute(f"""
+        SELECT grp,
+               COALESCE(SUM(attempted) FILTER (WHERE first_upload_at >= %s), 0) AS tries,
+               COALESCE(SUM(succeeded) FILTER (WHERE first_upload_at >= %s), 0) AS succeeded,
+               COALESCE(SUM(failed) FILTER (WHERE first_upload_at >= %s), 0) AS failed,
+               COUNT(*) FILTER (WHERE first_upload_at < %s) AS older_users
+        FROM (
+            SELECT
+                {group_expr} AS grp,
+                MIN(a.first_at) AS first_upload_at,
+                COALESCE(SUM(a.count) FILTER (WHERE a.action = 'game_upload_attempted'), 0) AS attempted,
+                COALESCE(SUM(a.count) FILTER (WHERE a.action = 'game_upload_succeeded'), 0) AS succeeded,
+                COALESCE(SUM(a.count) FILTER (WHERE a.action LIKE 'game_upload_failed:%%'), 0) AS failed
+            FROM user_actions a
+            JOIN user_segments s ON a.user_id = s.user_id
+            {excl_join}
+            {where_clause}
+              AND (a.action IN ('game_upload_attempted', 'game_upload_succeeded')
+                   OR a.action LIKE 'game_upload_failed:%%')
+            GROUP BY grp, a.user_id
+        ) per_user
+        GROUP BY grp
+    """, [UPLOAD_ATTEMPTS_RECORDED_FROM] * 4 + [*group_params, *where_params])
+    uploads = {r["grp"]: r for r in cur.fetchall()}
+
     for grp, row in rows.items():
         for count_key in DIMENSION_COUNTS.values():
             row.setdefault(count_key, 0)
         for step in DIMENSION_STEPS:
             row.setdefault(FLOW_EVENTS[step]["label"].lower().replace(" ", "_") + "_pct", 0)
-        outcome = uploads.get(grp, {"succeeded": 0, "failed": 0, "attempted": 0})
-        # T15770: the denominator is every ATTEMPT (game_upload_attempted occurrences),
-        # not just the ones that got an outcome -- an attempt that stalled with no
-        # success/failure row (abandoned tab, dead client) used to count toward
-        # NEITHER side and vanish from the rate entirely (build-7102: 4 of 12
-        # uploaders). `attempted` is the honest denominator; outcome["succeeded"] +
-        # outcome["failed"] can be less than it, and that gap is the no-outcome count.
-        attempts = outcome["attempted"]
-        row["upload_success_pct"] = round(outcome["succeeded"] / attempts * 100, 2) if attempts else None
-        row["upload_no_outcome"] = max(0, attempts - outcome["succeeded"] - outcome["failed"])
+        outcome = uploads.get(grp)
+        tries = int(outcome["tries"]) if outcome else 0
+        successes = int(outcome["succeeded"]) if outcome else 0
+        failures = int(outcome["failed"]) if outcome else 0
+        row["upload_tries"] = tries
+        row["upload_successes"] = successes
+        row["upload_success_pct"] = round(successes / tries * 100, 2) if tries else None
+        row["upload_no_outcome"] = tries - successes - failures
+        # Upload events, all from before attempts were recorded: no rate to show.
+        row["upload_not_tracked"] = bool(outcome) and outcome["older_users"] > 0 and (
+            tries + successes + failures == 0)
+        if successes > tries:
+            logger.warning(
+                f"[T16340] Upload successes exceed attempts for group {grp!r}: "
+                f"{successes} successes / {tries} attempts since "
+                f"{UPLOAD_ATTEMPTS_RECORDED_FROM:%Y-%m-%d} -- an upload event is miscounted"
+            )
     return rows
 
 
@@ -3685,6 +3729,9 @@ def analytics_pulse(
     # T7510: upload success rate = succeeded / (succeeded + failed). Guard
     # divide-by-zero -> null so the card renders "--" when there were no attempts
     # (an honest "no data", not a misleading 0% or 100%).
+    # T16340: today's day buckets are always inside the dimension tables' window
+    # (UPLOAD_ATTEMPTS_RECORDED_FROM), and nothing caps the rate. Its denominator is
+    # outcomes, not attempts: game_upload_attempted has no day bucket to read today's.
     upload_attempts_total = upload_succeeded_total + upload_failed_total
     upload_success_rate = (
         round(upload_succeeded_total / upload_attempts_total * 100, 2)
