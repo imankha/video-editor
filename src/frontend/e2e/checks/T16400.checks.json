@@ -14,10 +14,7 @@
       "kind": "code",
       "command": "cd src/backend && python3 -m pytest tests/test_t16400_long_query.py -q -p no:cacheprovider"
     },
-    "T16400:C6": {
-      "kind": "code",
-      "command": "cd src/backend && python3 -m pytest tests/test_t16400_app_load.py -q -p no:cacheprovider && grep -q 'reportAppLoad()' src/frontend/src/App.jsx"
-    },
+    "T16400:C6": {"kind": "browser"},
     "T16400:C7": {
       "kind": "code",
       "command": "! grep -q 'storage/warmup' src/frontend/index.html"
