@@ -1,48 +1,27 @@
-# T4470: FramingContainer — One Next-State Computation per Gesture
+# T4470: Trim keeps the Frame screen consistent
 
 **Status:** TODO
-**Impact:** 8
+**Impact:** 6
 **Complexity:** 4
 **Created:** 2026-07-03
-**Epic:** [editor-decoupling](EPIC.md) · Audit item D1
+**Updated:** 2026-11-13
 
-## Problem
+## In plain words
 
-[SYNC][DEP] Segments/crops live in `useSegments`/`useCrop` hook state AND mirrored into `projectDataStore.clips[].segments_data/crop_data` (the sidebar progress indicator + export reads). Every gesture handler in `FramingContainer.jsx` hand-rebuilds `{boundaries, segmentSpeeds, trimRange}` for the mirror — 8 sites (:352-355, :438-447, :504-513, :570-579, :616-619, :683-686, :718-727, :762-771, :826-835) — with comments literally fighting React batch timing: *"segmentBoundaries won't have the new value yet... build manually"* (:717, :825). `handleTrimSegment` (:438-447) mirrors a stale pre-toggle value. `syncSegmentsToStore` (:796-804) exists and is unused by the handlers.
+In Frame, cutting the ends off a clip updates two copies of the cut list: the timeline's, and the one the header badge, the Sharpen button and the credit price read. The second copy is written from values captured before the save finished, and it is written even when the save failed. A split or speed change made in that moment is lost from the second copy, so the price and badge disagree with the timeline until reload. Twelve places rebuild this copy by hand; work out the new list once per action and write both copies from it, undoing both when the save fails. Worked when a failed trim leaves both copies unchanged in a test. Runs after T11270.
 
-This is the definitional fix-the-same-bug-in-N-places pattern: forget the mirror (or mirror a stale batch value) → sidebar/export state disagrees with the editor.
+## Implementer details
 
-## Solution
-
-Per gesture, compute the next state ONCE, then fan out:
-
-```
-const next = computeNextSegments(current, gesture)   // pure function
-applyToHook(next)          // reducer/setter
-mirrorToStore(next)        // one shared helper (fix + use syncSegmentsToStore)
-persistSurgical(gesture)   // unchanged T3800-wrapper call
-```
-
-- `computeNext*` are pure and unit-testable — no reliance on post-setState reads, which deletes every batching workaround.
-- One `mirrorToStore` helper for segments and one for crops; handlers never build mirror payloads inline.
-- The surgical API payloads DO NOT CHANGE (persistence semantics stay; this is in-memory/store flow only).
-
-## Context
-
-- Files: `containers/FramingContainer.jsx`, `modes/framing/hooks/useSegments.js`, `useCrop.js`, `stores/projectDataStore.js` (`updateClipData`)
-- Longer-term the mirror should die entirely (store-as-single-owner), but that's a bigger design; this task makes the mirror single-path and stale-proof. Note the follow-up idea in the PR, don't do it.
-- If T4220 landed, its frontend split-removal semantics live in `useSegments` — your `computeNext` for split-removal must match it.
-
-## Steps
-
-1. [ ] Table the 8 sites (gesture → what it mirrors → staleness hazards) in the Progress Log.
-2. [ ] Unit tests for each `computeNext*` (incl. the trim case that's stale today — test pins the CORRECT value).
-3. [ ] Migrate handler-by-handler; assert store mirror === hook state after every gesture (add a dev-mode invariant check helper used by tests).
-4. [ ] E2E framing flow + sidebar indicator manual check.
+- `handleTrimSegment` in `src/frontend/src/containers/FocusContainer.jsx` writes the store copy after `await setTrimRange`, using `segmentBoundaries` and `segmentSpeeds` captured before the await; it writes the new trim range on a failed save (toast only, no rollback) and the old `trimRange` on untrim.
+- Twelve inline `segments_data: {boundaries, segmentSpeeds, trimRange}` rebuilds in that file (it was eight in July), with the 'won't have the new value yet' batching comments still present. `syncSegmentsToStore` exists and is unused.
+- Crop mirrors already go through one path (`persistKeyframeEdit`); only segments are hand-mirrored.
+- Scope: one pure `nextSegments(current, gesture)` per segment gesture (trim, detrim start and end, split, unsplit, speed) and one mirror helper with rollback. About 150 lines removed. Surgical payloads to the server stay byte-identical.
+- T11270 renames `selectedClipId` plumbing throughout this file; start after it merges.
+- Knowledge doc: `.claude/knowledge/keyframes-framing.md`.
 
 ## Acceptance Criteria
 
-- [ ] Zero inline mirror-payload construction in handlers; no batching-workaround comments remain
-- [ ] Store mirror provably equals hook state after every gesture (test-asserted)
-- [ ] Trim-gesture staleness bug fixed (test would fail on old code)
-- [ ] Surgical API payloads byte-identical to before (spot-check via network assertions in tests)
+- [ ] When the trim save fails, the timeline and the store copy both show the cut list from before the trim.
+- [ ] A split made while a trim save is in flight is present in both copies after the save returns.
+- [ ] No inline rebuild of the segments payload remains in the container outside the one helper.
+- [ ] The requests sent for each segment gesture are unchanged (payload parity test).

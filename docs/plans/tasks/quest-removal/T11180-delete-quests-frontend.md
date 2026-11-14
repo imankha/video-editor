@@ -1,10 +1,25 @@
-# T11180: Delete the quest system, frontend
+# T11180: Remove quests from the app
 
 **Status:** TODO
-**Impact:** 4
+**Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-24
 **Epic:** [Remove the Quest System](EPIC.md)
+**Updated:** 2026-11-13
+
+## In plain words
+
+The quest system, guided steps that paid out credits, is hidden from parents, but about 2,000 lines of it are still wired into 30 app files and 59 test files. Delete it once the funnel events have moved off it (T11175). The tutorial video window that was to be kept can no longer be opened by anything; delete it too unless the owner wants a button for it (ruling needed before a worker starts; recommendation: delete, the thank-you email already links the tutorial). Worked when no quest code remains in the app and the admin Journey still counts every step.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- Every line number in the text below is stale; re-grep.
+- Quest-only files today: `stores/questStore.js` and test, `data/questDefinitions.js`, `config/questDefinitions.jsx` and test (no importer in `src`; only `e2e/T4780` imports it), `components/QuestIcon.jsx`, `utils/questAchievements.js` and test, about 195 lines of `quest-*` CSS in `src/index.css`, `src/t8520diag/` with `t8520diag.html`, and the specs `T4780-tutorial-quest-steps` and `T8120-quest-overlay-modal-occlusion`.
+- Still wired in: 61 `useQuestStore` or `fetchProgress` lines in about 30 non-test files and 31 `recordAchievement(` call sites; quest sections remain in `new-user-flow.spec.js`, the two T5330 specs, T8520-T8530 and `helpers/targetEnv.js`.
+- `components/TutorialVideoModal.jsx` (452 lines) is mounted in `App.jsx` but its only opener lives in the unimported `config/questDefinitions.jsx` behind `TUTORIAL_VIDEOS_ENABLED = false`, and it records a quest achievement itself. Deleting it also removes `config/tutorialVideos.js` and `stores/useTutorialStore.js`. Record the owner's ruling under `## Ruling` before starting.
+- Strictly after T11175. The quest lines sit in files the multi-clip removal (T11250, T11260, T11270) edits; start after those merge too.
 
 ## Solution (pure deletion, ~2,000 LOC)
 

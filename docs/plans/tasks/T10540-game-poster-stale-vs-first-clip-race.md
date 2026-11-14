@@ -1,10 +1,22 @@
-# T10540: Game poster/thumbnail races the first clip save, caches the wrong frame forever
+# T10540: Game thumbnail shows a real play
 
 **Status:** TODO
 **Impact:** 4
-**Complexity:** 4
+**Complexity:** 3
 **Created:** 2026-09-19
-**Updated:** 2026-09-19
+**Updated:** 2026-11-13
+
+## In plain words
+
+A game is the uploaded match video. Its thumbnail is made the moment the upload finishes, before any play is marked, so it uses the frame at one minute and is then kept forever. Parents see a random moment even after marking and rating plays. Remake the thumbnail when the game's first play is saved and when its top-rated play changes. Worked when the thumbnail changes after the first play is saved on a fresh upload.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- `src/backend/app/services/poster.py`: the game poster function returns on a cache hit before choosing a frame, and with no clips uses `GAME_POSTER_FALLBACK_OFFSET_SEC = 60.0`.
+- No game-poster invalidation exists; only `invalidate_draft_poster` does, with four call sites in `clips.py`.
+- Two independent fire-and-forget warmers write the same cached object (upload activation and the Games list); the design must say which one wins.
 
 ## Problem
 

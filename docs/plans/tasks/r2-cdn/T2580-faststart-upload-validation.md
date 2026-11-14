@@ -1,72 +1,24 @@
-# T2580: Faststart check on upload
+# T2580: Know which uploads cannot start at once
+
+**Status:** TODO
+**Impact:** 5
+**Complexity:** 2
+**Created:** 2026-06-02
+**Updated:** 2026-11-13
 
 ## In plain words
 
-A video whose index sits at the end of the file cannot start playing until it is fully downloaded. Check for this on upload and fix or warn, so it cannot regress.
+A video whose index sits at the end of the file cannot start playing until all of it has downloaded. The app moves the index to the front while uploading, but it skips some kinds of file without saying so, and the server never checks or records the result. Check each upload when it finishes, record the answer and show the count on the admin upload panel. Repair files on the server only if that count turns out to matter. Worked when the panel shows, for new uploads, how many cannot start at once.
 
+## Implementer details
 
-**Status:** TODO
-**Impact:** 6
-**Complexity:** 2
-**Created:** 2026-06-02
-
-## Problem
-
-Non-faststart MP4 files (moov atom at end of file) break direct R2 streaming. The browser must download the entire file before it can parse the moov atom and start playback. With T3250's presigned URL approach (no proxy), the bounded-range proxy's moov-head/tail windows no longer protect against this.
-
-All existing game videos are faststart (T1450 migration), but new uploads through any path (game upload, Trace import, manual R2 upload) could introduce non-faststart files with no detection or warning.
-
-## Solution
-
-Validate faststart at upload/ingest time. After FFprobe metadata extraction, check whether the moov atom is at the start of the file. Store the result and reject or warn on non-faststart files.
-
-## Implementation
-
-### 1. Detection
-
-After FFprobe extracts video metadata during game upload, check moov atom position:
-
-```python
-# During metadata extraction (already reads the file)
-# FFprobe can report atom positions:
-ffprobe -v quiet -print_format json -show_format -show_entries format_tags=major_brand <file>
-
-# Or parse the first 32 bytes for ftyp + moov box headers
-# If first box is ftyp and second is moov, file is faststart
-```
-
-Lightweight alternative: read first 32 bytes of the uploaded file. Parse MP4 box headers:
-- Bytes 0-3: box size, bytes 4-7: box type (should be `ftyp`)
-- After ftyp box: next box type should be `moov` (faststart) not `mdat`
-
-### 2. Store Result
-
-Add `is_faststart` boolean to `game_videos` table (nullable, NULL = unknown/legacy).
-
-### 3. Action on Detection
-
-- **Faststart = true**: proceed normally
-- **Faststart = false**: log warning, attempt auto-remux with `ffmpeg -movflags +faststart` (same as T1450 migration did), then re-upload. If remux fails, store the file but mark it and surface a warning in the admin panel.
-
-### 4. Surface in API
-
-Include `is_faststart` in game video metadata responses so the frontend can detect and warn (or the playback-url endpoints can include it for monitoring).
+- The browser already relocates the index: `src/frontend/src/services/uploadManager.js` runs `analyzeMp4Faststart` and uploads reordered slices. `src/frontend/src/utils/mp4Faststart.js` skips relocation for the overflow fallback and for fragmented or index-less files; those land in storage as they were.
+- The server never verifies: `src/backend/app/routers/games_upload.py` has no faststart, moov or probe reference, and no `is_faststart` column exists. The index-at-end workarounds are still live in `clips.py` and `games.py` stream handlers.
+- Scope: at finalize, one small ranged read of the box headers; log and store the verdict (schema change, so include the Migration agent); show the count in the admin upload panel.
+- A server-side repair through the GPU service is a separate task, filed only if the count is not trivial.
 
 ## Acceptance Criteria
 
-- [ ] New game video uploads are checked for faststart
-- [ ] Non-faststart uploads are auto-remuxed to faststart
-- [ ] `is_faststart` flag stored in game_videos table
-- [ ] Warning logged for any non-faststart file that can't be remuxed
-- [ ] Existing NULL values treated as "unknown/assumed faststart" (T1450 migrated all)
-
-## Notes
-
-- **T3760 spike confirmation (2026-06-18):** the prod game video for clip 48 (`1c8a48db…b404.mp4`,
-  3.05 GB) was probed directly and is faststart (`ftyp` 0–31, `moov` 32–700421, then `mdat`). This
-  corroborates that T1450 held and that the framing deep-offset reads are clip seeks, not moov hunts.
-  T2580 remains valid as a **regression guard** for new upload paths — it was never the fix for the
-  T3760 "slow load" (which didn't exist). See `../T3760-decision.md`.
-- Spawned from T3250 design review: decided to skip runtime faststart probing (adds 50-150ms latency to every playback-url request) in favor of upload-time validation
-- T1450 already migrated all existing game videos to faststart
-- This task prevents regression: new upload paths must maintain the faststart invariant
+- [ ] Every newly finalized upload has a stored yes or no for 'index at the front'.
+- [ ] The admin upload panel shows how many recent uploads are 'no'.
+- [ ] The check adds no noticeable time to finishing an upload (one ranged read, no full download).

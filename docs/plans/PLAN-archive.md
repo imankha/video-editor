@@ -1631,3 +1631,9 @@ User ran the full local Playwright suite 2026-08-25 (348 passed / 144 failed / 2
 | T15930 | [Staging check failed: T15550:C1 'Keep marking plays' returns to Annotate with the playhead after](tasks/T15930-staging-check-failed-t15550-c1-keep.md) | 5 | 3 | 1.7 | DONE | [ ] | DONE (deployed 2026-11-12 prod). Filed by /dotask staging check. |
 | T15940 | [Staging check failed: T15640:C2 Mark play near 0:00 yields a play of the normal](tasks/T15940-staging-check-failed-t15640-c2-mark.md) | 5 | 3 | 1.7 | DONE | [ ] | DONE (deployed 2026-11-12 prod). Filed by /dotask staging check. |
 | T15980 | [Staging check failed: T15630:C1 The sport is asked at most once per game, and](tasks/T15980-staging-check-failed-t15630-c1-the.md) | 5 | 3 | 1.7 | DONE | [ ] | DONE (deployed 2026-11-12 prod). Filed by /dotask staging check. |
+
+## Roadmap (re-ranked 2026-11-09 on production evidence) — Later (kept, not scheduled)
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+|  | **[Modal Export Safety & Capacity](tasks/modal-export-safety/EPIC.md)** | 7 | 5 | 1.4 | DONE | [ ] | All three shipped children are in production (T11330 on 2026-09-29, T11320 and T11370 on 2026-10-05): a long export now fails with a clear message instead of timing out silently. The two deferred children were removed on 2026-11-13. |

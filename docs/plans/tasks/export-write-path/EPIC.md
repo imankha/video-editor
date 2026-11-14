@@ -1,6 +1,6 @@
 # Export Write-Path Unification Epic
 
-**Status:** TODO
+**Status:** CLOSED 2026-11-13. T4370, T4380 and T4390 shipped. T4400 and T4410 were re-scoped against the code of that day and stand alone in PLAN.md; their task files are current, and the order and scope below no longer apply to them.
 **Started:** -
 **Completed:** -
 **Source:** [Code quality audit 2026-07-03](../../audit-2026-07-03-code-quality.md) items F2, E1, E2, B4, E8

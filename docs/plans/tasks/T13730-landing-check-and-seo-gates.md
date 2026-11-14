@@ -1,10 +1,22 @@
-# T13730: Make the landing job run astro check and the SEO verifier
+# T13730: Landing page checks in CI
 
 **Status:** TODO
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-10-27
 **Follow-up of:** T13710
+**Updated:** 2026-11-13
+
+## In plain words
+
+CI builds the marketing site and runs its tests, but it does not run the site's type check or its search-listing check, so a broken page title or an untyped mistake can ship. Turn both on and fix what they report. Any change to page wording needs the owner's sign-off. Worked when a branch that breaks either check fails CI.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- The `landing` job in `.github/workflows/branch-ci.yml` runs `npm ci`, `npm test` and `npm run build` only; no workflow mentions `astro check` or `verify-seo`.
+- The untyped parameter the task names is still in `src/landing/src/pages/index.astro` (`CREDIT_PACKS.map((pack) =>`). Current failure counts of both commands were not re-measured.
 
 ## Problem
 

@@ -1,10 +1,23 @@
-# T12890: Archive Fly app logs to R2 (self-hosted log shipper + window fetch script)
+# T12890: Production logs survive a deploy
 
 **Status:** TODO
-**Impact:** 6
+**Impact:** 7
 **Complexity:** 4
 **Created:** 2026-10-18
-**Updated:** 2026-10-18
+**Updated:** 2026-11-13
+
+## In plain words
+
+The production server keeps a week of logs in a folder that is wiped on every deploy, and Fly itself holds about four minutes. On 2026-11-13 the owner sat on the loading screen and the logs were gone before we could say why. Send the logs to a private storage bucket, kept 30 days, with a script that fetches any time window as one file. Self-hosted, no outside vendor (owner decision). Worked when a log line written before a deploy can be fetched the next day.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- T15050 gave seven rotated files at `/tmp/logs/app.log` (`src/backend/app/main.py`, the logging setup), but `src/backend/fly.production.toml` has no `[mounts]`, so they are erased on every deploy or machine replacement.
+- T16400's task file records that the Fly buffer held under four minutes during the 2026-11-13 incident.
+- Nothing of this task exists yet: no `infra/` directory, no shipper, no `scripts/fetch_prod_logs.py`.
+- The owner does the bucket and token clicks.
 
 ## Problem
 

@@ -1,10 +1,21 @@
-# T5950: Verify the cross-machine CAS conflict path (blocked until we run more than one box)
+# T5950: Two-server edit conflict check
 
-**Status:** TODO
+**Status:** BLOCKED
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-26
 **Blocked by:** running more than one backend machine. **Not actionable today** — see below.
+**Updated:** 2026-11-13
+
+## In plain words
+
+Production runs one server, so two servers can never save the same parent's data at once. The guards for that case are unit-tested, but the full sequence a parent would see (refused save, conflict notice, Retry, being told their changes were replaced) has never run against a real conflict. Run it the day a second server is added, before real traffic reaches it. Blocked until then; the deploy script refuses any server count other than one.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- `src/backend/fly.production.toml` pins `min_machines_running = 1`. Nothing in flight adds a machine (T16410 and T16460 move the database, not the app).
 
 ## Why this is parked, not forgotten
 

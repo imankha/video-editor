@@ -1,36 +1,27 @@
-# T4540: frameMath Module + One Canonical Framerate Source
+# T4540: Crop timing right at any frame rate
 
 **Status:** TODO
-**Impact:** 7
-**Complexity:** 3
+**Impact:** 6
+**Complexity:** 2
 **Created:** 2026-07-03
-**Source:** Audit items C7 + frontend-sync #19 ([audit doc](../audit-2026-07-03-code-quality.md))
+**Updated:** 2026-11-13
 
-## Problem
+## In plain words
 
-[DRY][DEP] Frame↔time math is scattered and the framerate that feeds it is fiction in places:
+The crop path a parent sets in Frame is stored by frame number. When a clip's frame rate is missing from its record, the editor assumes 30 frames a second while the final render reads the real rate from the file. On a 60 frames a second clip the crop motion then runs at double speed and finishes halfway through, and stepping frame by frame skips every other frame. Use the clip's real rate everywhere and stop with a clear error when it is missing. Worked when a 60 frames a second test clip renders with the crop where the editor showed it; count first how many production clips lack a rate.
 
-- `utils/videoUtils.js` `getFramerate()` (:81-85) is a stub that **always returns 30**.
-- `framerate || 30` silent fallbacks in 8+ files: `useClipManager.js:46`, `projectDataStore.js:402`, `FramingContainer.jsx:238`, `videoStore.js:114`, `FramingScreen.jsx:219/541/623`, `useCrop.js:66`; hardcoded `fps = 30` twice in `useMultiVideoScrub.js:126-157` and in `useHighlightRegions.js:40`; backend twin at `projects.py:1256`.
-- Frame-step logic (round-to-frame, ±1, clamp) implemented in `useVideo.js:443-474` AND `useMultiVideoScrub.js:126-157`; `timeFormat.js` `seekToFrame` (:144-149) re-composes timeToFrame+frameToTime.
+## Implementer details
 
-Why it matters: keyframes are frame-based; wrong fps silently shifts every frame↔time conversion — the exact class of the near-duplicate-keyframe prod bugs (T3800 family). One clock source is also a [DEP] win: no consumer depends on WHICH code path computed its frames. `useProjectLoader.js:150-164` already does the correct boundary pattern (warn + probe on missing fps) — downstream `|| 30` re-hides what it surfaces.
-
-## Solution
-
-1. **`utils/frameMath.js`** — pure: `timeToFrame(t, fps)`, `frameToTime(f, fps)`, `stepFrame(t, fps, ±1)`, `snapToFrame(t, fps)`. All step/seek call sites use it; delete the copies (incl. the stub `getFramerate`).
-2. **One canonical framerate selector** — clip-scoped: fps lives on working_clips (T1500) and reaches the frontend via `clipMetadataCache`/video metadata. Find where the guarded value lands (useProjectLoader's probe) and expose ONE accessor (e.g., selector on projectDataStore or `videoStore.getFramerate` — pick whichever is already closest to owning it; record the decision). It may return null; per the no-silent-fallback rule, consumers `console.warn` and handle null — they do NOT default to 30.
-3. Sweep the `|| 30` sites to the accessor. Backend `projects.py:1256` gets a `# audit C7` note only (backend fps handling belongs to the migration that put fps on working_clips — check whether the rescale path can read the row's real fps; if trivially yes, fix it here too).
-
-## Steps
-
-1. [ ] frameMath + unit tests (incl. fractional fps like 29.97 — rounding decisions documented).
-2. [ ] Framerate ownership decision (Progress Log) + accessor + warn-on-null.
-3. [ ] Mechanical sweep, one commit per area (framing / overlay / annotate / stores); frontend tests + editor E2E after each.
+- Editor side: fps comes from the clip row with a silent fallback to 30 in `src/frontend/src/hooks/useProjectLoader.js`; `src/frontend/src/utils/videoMetadata.js` hard-codes `framerate: 30`; `getFramerate()` in `src/frontend/src/utils/videoUtils.js` always returns 30 and drives frame stepping in `src/frontend/src/hooks/useVideo.js`. About 14 fallbacks to 30 remain in non-test code (FocusContainer, FocusScreen, projectDataStore, useClipManager, videoStore, `useSegments` `useState(30)`).
+- Render side: `src/backend/app/routers/export/framing.py` uses ffprobe's real fps and computes `kf['frame'] / framerate`; when its probe fails it falls back to 30 with only a warning.
+- Not a bug, leave alone: Spotlight's fixed 30 grid (`useHighlightRegions.js`) matches the server's fixed 30 in `routers/export/overlay.py`, and `UI_STEP_FPS = 30` in `utils/timeFormat.js` is a deliberate UI grid.
+- Scope: one clip-fps accessor that returns null and fails loudly when fps is missing; editor and server agree on `working_clips.fps`; delete `getFramerate`; step by the clip's fps. No shared frame-math module.
+- Before coding, count production clip rows with no fps (read-only) and record it in the PR; if rows lack it, a migration fills it from the file.
+- After T11250 (deletes the multi-clip twin of the server fps code) and T11270 (renames the clip accessor).
+- Knowledge doc: `.claude/knowledge/keyframes-framing.md`.
 
 ## Acceptance Criteria
 
-- [ ] `grep -rn "|| 30\|= 30" src/frontend/src` shows no framerate fallbacks (test constants excepted)
-- [ ] One frame-step implementation; one framerate accessor
-- [ ] Missing fps warns and is handled, never defaulted
-- [ ] 29.97-style fps covered by tests
+- [ ] A 60 fps clip with a moving crop renders with the crop at the same positions and times the editor preview showed.
+- [ ] A clip with no stored frame rate shows a clear error in Frame and cannot be rendered with a guessed rate.
+- [ ] Frame stepping on a 60 fps clip moves one frame per press.

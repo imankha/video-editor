@@ -1,32 +1,23 @@
-# T4570: useEditorScreenShell + Shared Keyboard Shortcuts in Overlay
+# T4570: Same arrow keys in Frame and Spotlight
 
 **Status:** TODO
-**Impact:** 6
-**Complexity:** 5
+**Impact:** 4
+**Complexity:** 2
 **Created:** 2026-07-03
-**Source:** Audit item C10 ([audit doc](../audit-2026-07-03-code-quality.md)) · Best after the editor-decoupling epic slims both screens
+**Updated:** 2026-11-13
 
-## Problem
+## In plain words
 
-[DRY] `FramingScreen.jsx` (1212 L) and `OverlayScreen.jsx` (1115 L) are copy-paste siblings: identical 20-name `useVideo` destructure (:182-207 vs :184-207), identical `useZoom` (:258-269 vs :240-251) and `useTimelineZoom` destructures, character-identical `handleToggleFullscreen` + Escape-key effect (:851-860 vs :910-919), parallel `handleRetryVideo`.
+On a computer, the arrow keys jump four seconds in Frame and step a single frame in Spotlight, so the same key does two different things in two neighbouring steps. The owner picks one behaviour (ruling needed before a worker starts; recommendation: one frame, with Shift for four seconds). Then both editors use the one shared keyboard handler and its unused branches are deleted, about 100 lines. Runs after T11260 and T11270.
 
-Divergence-bug-in-waiting: Framing wires keyboard via the shared `useKeyboardShortcuts` (arrows seek `ARROW_SEEK_SECONDS = 4`s on the playhead layer); Overlay re-implements keydown inline (:864-896) where arrows always frame-step and copy/paste/layer handling is missing. **Same keys, different behavior per mode**, two places to fix.
+## Implementer details
 
-## Solution
-
-1. **`hooks/useEditorScreenShell.js`**: bundles video transport + zoom + timeline-zoom + fullscreen/Escape + retry into one hook returning a stable surface both screens consume. Extract EXACTLY what's identical (the diff-table decides); anything divergent stays in the screens.
-2. **Overlay adopts `useKeyboardShortcuts`**: delete the inline keydown. Where behaviors differ (arrow = seek vs frame-step), that's a UX decision — present both + a recommendation (recommend framing's, it's the shared-hook behavior), get the user's pick, apply to both modes via the hook's config.
-3. Do NOT attempt a full screen merge (audit rated that high-risk) — the shell hook + shortcuts are the valuable 20%.
-
-## Steps
-
-1. [ ] Diff-table of the identical blocks (the audit lists them; re-verify line ranges — the decoupling epic will have shifted them).
-2. [ ] Shell hook + migrate FramingScreen (behavior-identical; E2E green), then OverlayScreen.
-3. [ ] Keyboard: UX decision recorded → Overlay onto useKeyboardShortcuts; keymap test asserting both modes handle the same keys the same way (excluding mode-specific actions).
-4. [ ] Manual pass: all shortcuts in both modes, fullscreen, retry.
+- Frame uses `src/frontend/src/hooks/useKeyboardShortcuts.js` (arrows jump 4 seconds on the playhead layer). Spotlight has an inline keydown handler in `src/frontend/src/screens/OverlayScreen.jsx` where arrows step one frame.
+- The shared hook has one caller, `FocusScreen.jsx`; its Annotate and highlight branches can never run and `FocusScreen` passes ten dummy arguments for them. Annotate has its own handlers.
+- Also pull the identical fullscreen toggle and Escape pair from both screens into one small hook. No wider 'screen shell' hook: the screens are otherwise different.
+- Record the owner's choice under `## Ruling` before starting.
 
 ## Acceptance Criteria
 
-- [ ] Both screens consume the shell hook; the identical blocks exist once
-- [ ] One keyboard implementation; arrow-key behavior uniform and user-approved
-- [ ] Screens each shrink by ~150+ lines with zero behavior change beyond the keyboard decision
+- [ ] The arrow keys do the same thing in Frame and Spotlight, as ruled.
+- [ ] Spotlight has no keydown handler of its own; the shared hook has no branch that cannot run.

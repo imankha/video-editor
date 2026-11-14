@@ -1,16 +1,26 @@
 # T15910: Dead-code ratchet
 
-## In plain words
-
-Dead code misleads the AI agents that work in this repo: they read unused files and copy from them. A first scan found 14 frontend files nothing imports and 11 backend findings. Set up two scanners, knip for the frontend and vulture for the backend, with a committed list of known findings, so CI fails only when new dead code appears and the list only shrinks. Then delete what no planned task claims.
-
-
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-09
-**Updated:** 2026-11-09
 **Milestone:** Roadmap, Chores (see PLAN.md)
+**Updated:** 2026-11-13
+
+## In plain words
+
+Dead code misleads the AI agents that work in this repo: they read unused files and copy from them. No scanner runs today; a check on 2026-11-13 found 21 app files that nothing imports, 1,800 lines, and on the server a whole unused layer the usual scanner misses. Set up one scanner for the app and one for the server with a committed list of known findings, so CI fails only when new dead code appears and the list only shrinks. Then delete what no other task claims. Runs after the deletions above, so the list starts short.
+
+## Current facts (checked 2026-11-13)
+
+Checked against the code on 2026-11-13. Where the older text further down disagrees, this section is right.
+
+- No tooling exists: no knip config or `deadcode` script in `src/frontend/package.json`, no `scripts/check_dead_code*`, nothing in `.github/workflows` or `scripts/ci_policy.py`. Vulture is installed in the backend venv and gives 4 findings at 80% confidence.
+- Vulture cannot see modules that only tests import (see T16500 and T4410); add a module-level import-graph check for the server that ignores `tests/`.
+- Of the 14 app files named below, 13 are still unimported. `utils/veoHighlights/durationWorker.js` is alive: `readDurations.js` loads it with `new Worker(new URL(...))`, so knip needs it as an entry point.
+- Also unimported and unclaimed: `components/PaymentResultModal.jsx`, `components/admin/FunnelChart.jsx` and its test, `components/FileUpload.jsx`, `components/ThreePositionToggle.jsx`, `components/timeline/index.js`, and `constants/index.js` with `constants/editorModes.js` and `constants/keyframeOrigins.js` (the real constant is `EDITOR_MODES` in `stores/editorStore.js`).
+- The 21 `*diag` harness directories under `src/frontend/src/` are each used by a browser spec: list them as entry points, not findings.
+- 268 named exports have no user outside their own file; that is the size of knip's first report, so baseline exports and ratchet files first.
 
 ## How we got here
 

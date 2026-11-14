@@ -1,37 +1,24 @@
-# T10990: Big lag on the first Portrait/Landscape switch of a Focus session
+# T10990: Portrait and landscape switch in one step
 
 **Status:** TODO
 **Impact:** 4
-**Complexity:** 3
+**Complexity:** 2
 **Created:** 2026-09-21
-**Updated:** 2026-09-21
+**Updated:** 2026-11-13
 
-## Report (user, prod, 2026-09-21)
+## In plain words
 
-"There also seems to be a big lag when I try to switch between portrait and landscape for the
-first time in a session." Later switches are fast.
+In Frame, switching a highlight between portrait and landscape makes three server calls one after another, and the picture changes shape only after the third answers. A parent reported a long lag on production on 2026-09-21; it could not be reproduced because the logs were gone. Have the first call return everything the screen needs and change the shape at once, so the switch is one call. Worked when the switch sends one request and the shape changes immediately; then time it again on staging once the sign-in speed-ups (T16380, T16390) are in. Runs after T11270.
 
-## What is already known (investigated during T10980)
+## Implementer details
 
-- The switch is `handleAspectRatioChange` (FocusScreen) -> `POST /api/clips/projects/{id}/aspect-ratio`
-  (UPDATE project + re-fit every latest clip's crop keyframes, non-durable so the R2 upload is a
-  background task) -> `GET .../clips` -> `GET /api/projects/{id}`. Three sequential round trips.
-- Nothing on the frontend is first-time-only: no lazy import, no video reload (`lastLoadedUrlRef`
-  guard), no worker, no cache build. In dev the whole gesture measures ~100 ms.
-- The only first-write-only server path is `db_sync.py` `_sync_aware_flow`: a WRITE request whose
-  user has a `.sync_pending` marker from an earlier failure first awaits `retry_pending_sync`
-  (an R2 PutObject, 300-1000 ms+) before the handler runs. That needs a leftover marker, i.e. an
-  earlier failed sync, so it is not the normal case.
-- Before T10980 the selector could show the WRONG ratio, so the first click on the correct
-  button was a silent no-op (guard compared against the real project value). A user's "first
-  switch" may therefore have been a no-op click followed by a real one; re-test after T10980.
-- Fly's `fly logs` buffer only holds ~100 recent lines and there is no log drain yet (T10350), so
-  the prod requests from the report window could not be inspected.
+- `src/frontend/src/screens/FocusScreen.jsx`: the handler awaits `changeAspectRatioAction`, then `refreshProject()`. Inside the action (`src/frontend/src/stores/projectDataStore.js`) the POST is awaited and then `fetchClips(projectId)`. The shape comes from `projectAspectRatio` through `useProject()`, so nothing changes until the third response.
+- Have the POST return the updated project and its one clip, or apply the ratio locally and reconcile. With one clip per project the re-fit is a single row.
+- If only the first switch of a session is still slow afterwards, the remainder is the server's pending-sync retry (`db_sync.py`, `.sync_pending`) and gets its own task with timings.
+- T11270 collapses clip selection in both files; start after it.
 
-## Next step
+## Acceptance Criteria
 
-Reproduce on staging with DevTools Network open (or ask the user to note the time so the
-`[SLOW REQUEST]` lines can be read from `fly logs` immediately after). Compare the three
-requests' server timings on the first vs second switch; if the first POST is slow, check for
-`[SYNC] Retrying pending sync` on the same req_id window and for a cold Postgres/R2 connection.
-If the frontend is the slow half, profile the `clips` -> `useCrop` restore effect chain.
+- [ ] Switching portrait and landscape sends exactly one request.
+- [ ] The frame changes shape before that request answers, and reverts with a message if it fails.
+- [ ] The crop shown after the switch equals the crop the server stored.

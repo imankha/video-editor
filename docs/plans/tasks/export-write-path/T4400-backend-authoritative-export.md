@@ -1,49 +1,25 @@
-# T4400: Server-owned export state
+# T4400: Old tab cannot overwrite newer edits
+
+**Status:** TODO
+**Impact:** 8
+**Complexity:** 4
+**Created:** 2026-07-03
+**Updated:** 2026-11-13
 
 ## In plain words
 
-Export still trusts the browser's copy of the clip state, so an old tab clicking Export can overwrite edits made in a newer tab. Make the server snapshot its own state at export instead.
+Frame is the step where the parent crops around their athlete and pays to sharpen the result. Pressing the button that starts the render first sends the whole editing state the browser tab holds, and the server stores it without checking that it is current. A tab left open from yesterday therefore replaces edits made since in another tab or on a phone. Every edit is already saved at the moment it is made, so we will stop sending that copy and render from what the server has. Worked when a test with a stale second tab renders the newer edits. Runs after the multi-clip removal (T11250, T11260, T11270).
 
+## Implementer details
 
-**Status:** TODO
-**Impact:** 9
-**Complexity:** 6
-**Created:** 2026-07-03
-**Epic:** [export-write-path](EPIC.md) · Audit items B4 + F8 (persistence audit) · Depends on T4390
-
-## Problem
-
-Every gesture already persists surgically, yet export still trusts CLIENT state as authority — the whole-blob clobber class survives:
-
-1. **Single-clip:** export calls `saveCurrentClipState` → `PUT /clips/.../clips/{id}` (`clips.py:2001-2124`) replacing `crop_data`/`segments_data` with whatever the hooks hold. Two tabs: tab B's surgical edits land in the DB; stale tab A clicks Export → PUT clobbers them (backend has no version check on working_clips). And any call while hooks have reset is exactly T4020's empty shadow-version. Frontend-only guards protect this today (`framingOverlayTransition.js:27-29` — an always-false predicate — and the hook-initialized check `FramingContainer.jsx:214-231`).
-2. **Multi-clip:** sends `cropKeyframes`/`segments` built from live hook state (`ExportButtonContainer.jsx:626-663`) with NO save-first; backend renders the payload then stamps the DB rows `exported_at` **without reconciling `crop_data` to what was rendered** (`multi_clip.py:1427-1432`) — DB and rendered video can permanently diverge (and the sweep later re-renders from the DB, producing a third variant).
-
-[DEP] bonus: removing client authority removes the "hooks must be fresh at export time" timing dependence entirely.
-
-## Solution
-
-1. New surgical action `mark_exported` (or extend the actions endpoint): backend snapshots ITS OWN current blobs into the new working-clip version (the versioning logic now lives in T4390's `finalize_export`); client sends no keyframes/segments. The T4020 no-op comparison (`clips.py:2039-2051`) becomes unnecessary — backend state can't disagree with itself.
-2. Multi-clip: `/multi-clip` resolves framing from the DB (it already resolves SOURCES from DB per T810 — extend the same approach to crop/segments). The client payload shrinks to clip ids + export options.
-3. Retire `PUT /clips/.../clips/{id}` full-state writes: grep every caller; when none remain, delete or 410 the write path (GET stays if it exists).
-4. Frontend: `saveCurrentClipState`/`ExportButtonContainer` slim down; the always-false transition guard and its dead code go.
-
-## Context
-
-- **Prerequisite check (do FIRST):** backend-authoritative export is only correct if every gesture truly persisted. T1660 found framing gestures are fire-and-forget with no rollback in places; T4330's serialized client closes ordering gaps. Verify: is there any hook state that reaches export WITHOUT having been persisted by a gesture (e.g., a local-only edit)? Inventory in the Progress Log; any such state needs a persisting gesture first, or this design silently drops it. This is the task's main risk.
-- Files: `clips.py`, `multi_clip.py`, `FramingContainer.jsx`, `ExportButtonContainer.jsx`, `projectDataStore.js:198-256`, `screens/framingOverlayTransition.js`
-- Tests: T4020's regression tests must be RETARGETED (they pin the old guard), not deleted; add a two-tab test: stale-tab export cannot clobber newer surgical edits.
-
-## Steps
-
-1. [ ] The unpersisted-hook-state inventory (above). Stop and surface if anything is found.
-2. [ ] Backend `mark_exported` + tests (snapshot correctness, versioning via T4390).
-3. [ ] Single-clip frontend switch; delete dead guards; T4370 snapshots + E2E export flow green.
-4. [ ] Multi-clip DB-resolution + payload slim-down; snapshot parity.
-5. [ ] Retire the full-state PUT path (grep-proof, then remove).
+- The render itself is already server-side: `POST /api/export/render` takes ids and options and reads `crop_data` and `segments_data` from the database (`src/backend/app/routers/export/framing.py`).
+- The clobber: `src/frontend/src/containers/ExportButtonContainer.jsx` awaits `saveCurrentClipState()`, which sends full hook state (built in `src/frontend/src/containers/FocusContainer.jsx`) to `PUT /projects/{id}/clips/{clip_id}` (`src/backend/app/routers/clips.py`). That handler has no version check.
+- First inventory any hook state that no gesture persists; that is the only thing the save-before-render call could still be carrying. Give each such field a gesture write, then drop the call and remove the framing fields from the full-state PUT.
+- The multi-clip half of the old scope disappears with T11250. T11270 renames the selected-clip plumbing in the same two containers, so start after both.
+- Knowledge docs: `.claude/knowledge/export-pipeline.md`, `.claude/knowledge/persistence-sync.md`.
 
 ## Acceptance Criteria
 
-- [ ] No export path accepts client keyframes/segments as authority
-- [ ] Stale-tab export test: newer surgical edits survive
-- [ ] Rendered output always matches DB state at render time (multi-clip reconciliation gap closed)
-- [ ] Full-state PUT write path removed; T4020-class regression impossible by construction
+- [ ] A test with two tabs: tab A is loaded, tab B changes the crop, tab A starts the render; the rendered job uses tab B's crop and the stored clip still holds it.
+- [ ] No request sent when the render button is pressed carries crop or segment data.
+- [ ] Every Frame edit a parent can make is still saved when it is made (one test per gesture that was found unsaved).
