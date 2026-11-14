@@ -9,11 +9,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // disclosure again, and untouched metadata is submitted EMPTY (no fabricated
 // "Unnamed opponent"/today) so the backend titles the game by its upload date.
 
-const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
+const { recordFunnelEventSpy } = vi.hoisted(() => ({ recordFunnelEventSpy: vi.fn() }));
 // T12830: submit probes footage; jsdom cannot decode video, so stub the probe.
 vi.mock('../utils/videoMetadata', () => ({ extractVideoMetadata: vi.fn().mockResolvedValue({}) }));
+// T11175: the beacon travels through the funnel transport, not the quest store.
+vi.mock('../utils/funnelEvents', async (orig) => ({
+  ...(await orig()),
+  recordFunnelEvent: (...args) => recordFunnelEventSpy(...args),
+}));
 vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: recordAchievementSpy };
+  const state = { recordAchievement: vi.fn() };
   const useQuestStore = (sel) => (sel ? sel(state) : state);
   useQuestStore.getState = () => state;
   return { useQuestStore };
@@ -71,7 +76,7 @@ function pickFile(container) {
 
 describe('GameDetailsModal — T8500 video-first', () => {
   beforeEach(() => {
-    recordAchievementSpy.mockClear();
+    recordFunnelEventSpy.mockClear();
   });
 
   it('shows the cost line (credits + 30-day expiry + balance) BEFORE any file is selected', () => {
@@ -164,6 +169,6 @@ describe('GameDetailsModal — T8500 video-first', () => {
   it('still fires upload_file_selected from the file-select gesture after the reorder', () => {
     const { container } = renderModal();
     pickFile(container);
-    expect(recordAchievementSpy).toHaveBeenCalledWith('upload_file_selected');
+    expect(recordFunnelEventSpy).toHaveBeenCalledWith('upload_file_selected');
   });
 });

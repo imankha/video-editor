@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
-import { useEditorStore, EDITOR_MODES, useProjectsStore, useQuestStore } from '../stores';
+import { useEditorStore, EDITOR_MODES, useProjectsStore } from '../stores';
+import { recordFunnelEvent } from '../utils/funnelEvents';
 import { useProjectLoader } from '../hooks/useProjectLoader';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { resumeFocusCompletion } from '../utils/resumeFocusCompletion';
@@ -88,7 +89,7 @@ export function FocusCompletionRecovery() {
           resolvePreviewUrl: resolveWorkingVideoPreviewUrl,
           openPreview,
           acknowledgeJob: acknowledgeExportJob,
-          recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
+          recordFunnelEvent,
           toastError: (title, opts) => toast.error(title, opts),
           EDITOR_MODES,
           allowEnterFraming,

@@ -570,7 +570,7 @@ is consumed by `ExportButtonContainer` and `useProjectLoader`.
   `clipsWithCurrentState` already injects the hook state as frontend-format `segments` onto the
   selected clip (line ~225) and leaves every OTHER clip with its saved `segments_data`. So feeding
   `clipsWithCurrentState` to the calculator gives a LIVE selected-clip number + SAVED others in one
-  pass. The two derived memos (`selectedClipEffectiveDuration`, `projectEffectiveDuration`,
+  pass. The two derived memos (`clipEffectiveDuration`, `projectEffectiveDuration`,
   `FocusContainer.jsx` ~L272-296) are PURE render-time derivations — **no new state, no store
   field, no persistence** (T350 doctrine); the chip ticks the instant a speed/trim gesture updates
   the hook, with no save/export.
@@ -643,7 +643,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   FIRE-AND-FORGET then switches editor mode immediately, and `projectDataStore.fetchClips` only
   writes `clips` when the response lands — nothing calls the existing `clearClips` on that path. So
   for one window `FocusScreen` renders the NEW `projectId` over the PREVIOUS project's `clips` +
-  `selectedClipId`, and its `[]`-deps mount loader fires on them at once. Pairing those ids is not
+  `projectClipId`, and its `[]`-deps mount loader fires on them at once. Pairing those ids is not
   just stale, it is IMPOSSIBLE (`clips.py` matches `WHERE wc.id = ? AND wc.project_id = ?`), so the
   request can only 404. That 404 used to reach `<video>` as a dead src and surface as the FALSE
   "source storage may have expired" (a real 410 renders the T8310 panel and never mounts a player —

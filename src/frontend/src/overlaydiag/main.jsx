@@ -76,7 +76,7 @@ function OverlayDiagHarness() {
     framingVideoUrl: null, framingMetadata: null,
     keyframes: [], segments: null, segmentSpeeds: {}, segmentBoundaries: [], trimRange: null,
     selectedProjectId: 'diag', selectedProject: null,
-    clips: [], hasClips: false,
+    hasClips: false,
     editorMode: 'overlay', setEditorMode: () => {}, setSelectedLayer: () => {},
     overlayVideoFile: null, overlayVideoUrl: '/overlaydiag-sample.mp4', overlayVideoMetadata: VIDEO_METADATA,
     overlayClipMetadata: null, isLoadingWorkingVideo: false,

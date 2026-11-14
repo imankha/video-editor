@@ -10,8 +10,8 @@ import { FOCUS_PREVIEW } from '../../config/displayNames';
 
 const testState = vi.hoisted(() => ({
   clips: [],
-  selectedClipId: null,
-  selectedClip: null,
+  projectClipId: null,
+  projectClip: null,
   clipMetadataCache: {},
 }));
 
@@ -23,7 +23,7 @@ vi.mock('../../modes', () => ({ FocusModeView: (p) => { viewSpy(p); return null;
 vi.mock('../../containers', () => ({
   FocusContainer: () => ({
     clipsWithCurrentState: [],
-    selectedClipEffectiveDuration: 0,
+    clipEffectiveDuration: 0,
     canUndoFraming: false,
     handleCropChange: vi.fn(),
     handleCropComplete: vi.fn(),
@@ -85,7 +85,7 @@ vi.mock('../../hooks/useVideo', () => ({
 }));
 vi.mock('../../hooks/useClipManager', () => ({
   useClipManager: () => ({
-    clips: testState.clips, selectedClipId: testState.selectedClipId, selectedClip: testState.selectedClip,
+    clips: testState.clips, projectClipId: testState.projectClipId, projectClip: testState.projectClip,
     hasClips: testState.clips.length > 0, globalAspectRatio: '9:16', updateClipData: vi.fn(),
   }),
 }));
@@ -205,7 +205,7 @@ function deferred() {
 
 describe('FocusScreen highlight-ready handoff (T11970)', () => {
   beforeEach(() => {
-    testState.clips = []; testState.selectedClipId = null; testState.selectedClip = null; testState.clipMetadataCache = {};
+    testState.clips = []; testState.projectClipId = null; testState.projectClip = null; testState.clipMetadataCache = {};
     viewSpy.mockClear(); refreshMock.mockReset(); resolveUrlMock.mockReset();
     openPreviewMock.mockReset(); toastError.mockReset();
     fetchClipsMock.mockReset(); fetchClipsMock.mockResolvedValue([]);

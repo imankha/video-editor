@@ -52,7 +52,7 @@
  * @param {(projectId:number) => Promise<string|null>} deps.resolvePreviewUrl
  * @param {(payload:{projectId:number, previewUrl:string, openMode:string, jobId?:string}) => void} deps.openPreview
  * @param {(jobId:string) => Promise<void>} deps.acknowledgeJob
- * @param {(id:string) => void} deps.recordAchievement
+ * @param {(id:string) => void} deps.recordFunnelEvent
  * @param {(title:string, opts:Object) => void} deps.toastError
  * @param {Object} deps.EDITOR_MODES
  * @param {(project:Object) => boolean} deps.allowEnterFraming T11220 re-frame guard
@@ -70,7 +70,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
   resolvePreviewUrl,
   openPreview,
   acknowledgeJob,
-  recordAchievement,
+  recordFunnelEvent,
   toastError,
   EDITOR_MODES,
   allowEnterFraming,
@@ -110,7 +110,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
         return { opened: true, navigated: true };
       }
       openPreview({ projectId, previewUrl, openMode: EDITOR_MODES.FRAMING, jobId });
-      recordAchievement('overlay_offered');
+      recordFunnelEvent('overlay_offered');
       await acknowledgeJob(jobId);
       return { opened: true, navigated: false };
     }
@@ -143,7 +143,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
     setEditorMode(EDITOR_MODES.FRAMING);
     await loadProject(project, { mode: EDITOR_MODES.FRAMING });
     openPreview({ projectId, previewUrl, openMode: EDITOR_MODES.FRAMING, jobId });
-    recordAchievement('overlay_offered');
+    recordFunnelEvent('overlay_offered');
     await acknowledgeJob(jobId);
     return { opened: true, navigated: true };
   } catch (err) {

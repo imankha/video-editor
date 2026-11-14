@@ -1,12 +1,7 @@
-"""T4370 DB-effects golden: triggers (a) single-clip render and (c) multi-clip
-local branch.
-
-Both share the EXACT same code path -- `multi_clip._export_clips(...,
-is_test_mode=True)`'s local branch (MockVideoUpscaler, real ffmpeg crop+resize,
-no AI/GPU/Modal/R2 network) -- so one parametrized test covers both triggers;
-they differ only in clip_count/transition, which the audit found does NOT
-change which finalize code path runs (both write via the same direct
-`upsert_working_video` call at multi_clip.py ~1897-1905).
+"""T4370 DB-effects golden: trigger (a) single-clip render, local branch
+(`multi_clip._export_clips(..., is_test_mode=True)`: MockVideoUpscaler, real
+ffmpeg crop+resize, no AI/GPU/Modal/R2 network). T11250 deleted trigger (c),
+the multi-clip local branch: a project holds one clip.
 
 Stub boundary: only `upload_to_r2` (R2_ENABLED is False in this env, so the
 real function returns False and the pipeline would hard-fail) and
@@ -99,11 +94,3 @@ async def test_single_clip_render_db_delta(golden_env):
     project_id = await _run_local_export(golden_env, clip_count=1, export_id="exp-t4370-single")
     tables = snapshot_project_tables(project_id)
     assert_matches_golden("single_clip_render", tables)
-
-
-@pytest.mark.asyncio
-async def test_multi_clip_local_db_delta(golden_env):
-    """Trigger (c): multi-clip local branch (MODAL_ENABLED unset/false)."""
-    project_id = await _run_local_export(golden_env, clip_count=2, export_id="exp-t4370-multi-local")
-    tables = snapshot_project_tables(project_id)
-    assert_matches_golden("multi_clip_local", tables)

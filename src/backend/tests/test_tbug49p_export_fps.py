@@ -22,7 +22,6 @@ Scope notes (from review):
   rows IS tested below, since that's where review found the real gap.
 """
 
-import sqlite3
 
 from app.modal_functions.video_processing import (
     _build_simple_ffmpeg_cmd,
@@ -157,70 +156,3 @@ class TestBuildFramingSnapshotFpsDeliberatelyUnchanged:
     def test_snapshot_fps_is_unaffected_by_missing_source_fps(self):
         snapshot = _build_framing_snapshot([self._clip(source_fps=None)], (810, 1440))
         assert snapshot["clips"][0]["fps"] == SNAPSHOT_FRAMERATE
-
-
-class TestMultiClipDbResolveFpsJoin:
-    """Reviewer finding: raw_clips.video_sequence is NULL on legacy
-    single-video-game clips (bug 49p's reporter is a legacy account). Without
-    COALESCE(rc.video_sequence, 1) in the join predicate, gv.fps silently
-    drops for exactly those rows, no-oping the crop-keyframe fps fix for the
-    cohort it targets. This pins the actual SELECT used by
-    _run_multi_clip_background's DB-resolve path against an in-memory sqlite
-    db, without mocking the surrounding async pipeline.
-    """
-
-    def _db(self):
-        conn = sqlite3.connect(":memory:")
-        conn.row_factory = sqlite3.Row
-        conn.executescript("""
-            CREATE TABLE working_clips (id INTEGER PRIMARY KEY, raw_clip_id INTEGER, fps REAL);
-            CREATE TABLE raw_clips (id INTEGER PRIMARY KEY, game_id INTEGER, video_sequence INTEGER);
-            CREATE TABLE game_videos (game_id INTEGER, sequence INTEGER, fps REAL);
-        """)
-        return conn
-
-    def _select_fps(self, conn):
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT wc.id, wc.fps as wc_fps, gv.fps as gv_fps
-            FROM working_clips wc
-            LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND COALESCE(rc.video_sequence, 1) = gv.sequence
-        """)
-        return dict(cur.fetchone())
-
-    def test_legacy_null_video_sequence_still_resolves_game_video_fps(self):
-        """The exact case that no-op'd before the COALESCE: a legacy clip with
-        NULL video_sequence, NULL working_clips.fps, and the game's fps only
-        available on game_videos (sequence=1, the legacy single-video default)."""
-        conn = self._db()
-        conn.execute("INSERT INTO raw_clips (id, game_id, video_sequence) VALUES (1, 16, NULL)")
-        conn.execute("INSERT INTO working_clips (id, raw_clip_id, fps) VALUES (1, 1, NULL)")
-        conn.execute("INSERT INTO game_videos (game_id, sequence, fps) VALUES (16, 1, 50.0)")
-
-        row = self._select_fps(conn)
-        framerate = row["wc_fps"] or row["gv_fps"] or 30
-        assert framerate == 50.0
-
-    def test_non_legacy_video_sequence_still_matches_exactly(self):
-        """A multi-video game with an explicit, non-1 video_sequence must still
-        match its own game_videos row, not fall through to sequence=1."""
-        conn = self._db()
-        conn.execute("INSERT INTO raw_clips (id, game_id, video_sequence) VALUES (1, 16, 2)")
-        conn.execute("INSERT INTO working_clips (id, raw_clip_id, fps) VALUES (1, 1, NULL)")
-        conn.execute("INSERT INTO game_videos (game_id, sequence, fps) VALUES (16, 1, 30.0)")
-        conn.execute("INSERT INTO game_videos (game_id, sequence, fps) VALUES (16, 2, 60.0)")
-
-        row = self._select_fps(conn)
-        framerate = row["wc_fps"] or row["gv_fps"] or 30
-        assert framerate == 60.0
-
-    def test_working_clips_fps_takes_priority_over_game_videos_fps(self):
-        conn = self._db()
-        conn.execute("INSERT INTO raw_clips (id, game_id, video_sequence) VALUES (1, 16, NULL)")
-        conn.execute("INSERT INTO working_clips (id, raw_clip_id, fps) VALUES (1, 1, 50.0)")
-        conn.execute("INSERT INTO game_videos (game_id, sequence, fps) VALUES (16, 1, 30.0)")
-
-        row = self._select_fps(conn)
-        framerate = row["wc_fps"] or row["gv_fps"] or 30
-        assert framerate == 50.0

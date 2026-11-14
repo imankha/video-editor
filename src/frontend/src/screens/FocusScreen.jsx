@@ -32,7 +32,7 @@ import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments,
 import { API_BASE } from '../config';
 import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore } from '../stores';
+import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler } from '../stores';
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
@@ -154,8 +154,8 @@ export function FocusScreen({
   // Multi-clip management hook (reads from projectDataStore)
   const {
     clips,
-    selectedClipId,
-    selectedClip,
+    projectClipId,
+    projectClip,
     hasClips,
     globalAspectRatio,
     updateClipData,
@@ -274,19 +274,19 @@ export function FocusScreen({
   }, [clipMetadataCache]);
 
   // Get the selected clip with metadata for crop/segment hooks
-  const selectedClipWithMeta = useMemo(() => getClipWithMeta(selectedClip), [selectedClip, getClipWithMeta]);
+  const projectClipWithMeta = useMemo(() => getClipWithMeta(projectClip), [projectClip, getClipWithMeta]);
 
   // Parse crop keyframes from raw clip data for useCrop
-  const selectedClipCropKeyframes = useMemo(() => {
-    if (!selectedClip) return undefined;
-    const kfs = clipCropKeyframes(selectedClip);
+  const projectClipCropKeyframes = useMemo(() => {
+    if (!projectClip) return undefined;
+    const kfs = clipCropKeyframes(projectClip);
     return kfs.length > 0 ? kfs : undefined;
-  }, [selectedClip]);
+  }, [projectClip]);
 
   // Seed the horizon-straighten angle from the selected clip (like crop_data).
-  const selectedClipRotation = useMemo(
-    () => (selectedClip ? clipRotation(selectedClip) : 0),
-    [selectedClip]
+  const projectClipRotation = useMemo(
+    () => (projectClip ? clipRotation(projectClip) : 0),
+    [projectClip]
   );
 
   // Crop hook
@@ -313,7 +313,7 @@ export function FocusScreen({
     getKeyframesForExport,
     reset: resetCrop,
     restoreState: restoreCropState,
-  } = useCrop(metadata, trimRange, selectedClipCropKeyframes, selectedClipRotation);
+  } = useCrop(metadata, trimRange, projectClipCropKeyframes, projectClipRotation);
 
   // Zoom hooks
   const {
@@ -414,8 +414,8 @@ export function FocusScreen({
     detrimStart,
     detrimEnd,
     clips,
-    selectedClipId,
-    selectedClip: selectedClipWithMeta,
+    projectClipId,
+    projectClip: projectClipWithMeta,
     hasClips,
     globalAspectRatio,
     updateClipData,
@@ -427,7 +427,7 @@ export function FocusScreen({
 
   const {
     clipsWithCurrentState: framingClipsWithCurrentState,
-    selectedClipEffectiveDuration,
+    clipEffectiveDuration,
     canUndoFraming,
     handleCropChange: framingHandleCropChange,
     handleCropComplete: framingHandleCropComplete,
@@ -579,15 +579,15 @@ export function FocusScreen({
 
   // Derive clip range for the currently selected clip (used by VideoPlayer for preload hints)
   const currentClipRange = useMemo(() => {
-    if (!selectedClip) return null;
-    if (selectedClip.game_video_url && selectedClip.start_time != null && selectedClip.end_time != null) {
+    if (!projectClip) return null;
+    if (projectClip.game_video_url && projectClip.start_time != null && projectClip.end_time != null) {
       return {
-        clipOffset: selectedClip.start_time,
-        clipDuration: selectedClip.end_time - selectedClip.start_time,
+        clipOffset: projectClip.start_time,
+        clipDuration: projectClip.end_time - projectClip.start_time,
       };
     }
     return null;
-  }, [selectedClip]);
+  }, [projectClip]);
 
   // T6190: No mount refetch here. useProjectLoader.loadProject is the single owner of the
   // project-open clips fetch; annotate edits reach Framing via invalidateClips on the
@@ -630,7 +630,7 @@ export function FocusScreen({
   useLayoutEffect(() => {
     if (clips.length === 0) return;
     const controller = new AbortController();
-    const targetClip = (selectedClipId && clips.find(c => c.id === selectedClipId)) || clips[0];
+    const targetClip = (projectClipId && clips.find(c => c.id === projectClipId)) || clips[0];
 
     (async () => {
       const cfg = await getClipVideoConfig(targetClip);
@@ -733,7 +733,7 @@ export function FocusScreen({
   // exactly one clip there is no other clip to switch to; the init effect above
   // is the only restore path (mount, and the T10740 foreign-clip guard lives at
   // its getClipVideoConfig choke point). An export version bump still changes
-  // selectedClipId, but the new version's persisted data equals what was just
+  // projectClipId, but the new version's persisted data equals what was just
   // saved, so re-restoring would be a no-op at best — see design doc §3.1.
 
   // T350: Reactive sync effect REMOVED. See docs/plans/tasks/T350-design.md.
@@ -916,13 +916,13 @@ export function FocusScreen({
 
   // Retry video loading when URL expires
   const handleRetryVideo = useCallback(async () => {
-    if (!selectedClipWithMeta) return;
+    if (!projectClipWithMeta) return;
 
-    console.log('[FocusScreen] Retrying video load for clip:', selectedClipWithMeta.id);
+    console.log('[FocusScreen] Retrying video load for clip:', projectClipWithMeta.id);
     clearError();
 
-    const filename = selectedClipWithMeta.filename || `${selectedClipWithMeta.id}.mp4`;
-    const localFallbackUrl = getClipFileUrlSelector(selectedClipWithMeta, projectId);
+    const filename = projectClipWithMeta.filename || `${projectClipWithMeta.id}.mp4`;
+    const localFallbackUrl = getClipFileUrlSelector(projectClipWithMeta, projectId);
 
     try {
       const freshUrl = await forceRefreshUrl('raw_clips', filename, localFallbackUrl);
@@ -930,14 +930,14 @@ export function FocusScreen({
 
       if (freshUrl && !freshUrl.startsWith('blob:')) {
         warmVideoCache(freshUrl);
-        loadVideoFromStreamingUrl(freshUrl, selectedClipWithMeta.metadata || null);
+        loadVideoFromStreamingUrl(freshUrl, projectClipWithMeta.metadata || null);
       } else {
         await loadVideoFromUrl(freshUrl || localFallbackUrl, filename);
       }
     } catch (err) {
       console.error('[FocusScreen] Failed to retry video load:', err);
     }
-  }, [selectedClipWithMeta, projectId, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl]);
+  }, [projectClipWithMeta, projectId, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl]);
 
   // Outdated clips dialog handlers
   // T740: handleContinueWithOriginal and handleUseLatestClips removed — auto-refresh is silent
@@ -1071,7 +1071,7 @@ export function FocusScreen({
           openMode: EDITOR_MODES.FRAMING,
           jobId: exportJobId,
           openPreview,
-          recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
+          recordFunnelEvent,
         });
         // The completion toast is suppressed while this project is open in Focus, so a
         // missing preview URL must be announced here.
@@ -1163,7 +1163,7 @@ export function FocusScreen({
     acknowledgeCompletionJob();
     closePreview();
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
-    useQuestStore.getState().recordAchievement('overlay_deferred');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_DEFERRED);
     // T10010 activation funnel: "Save draft"/defer is a real user gesture. IDs only.
     recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
     // Navigation: back to the exact Annotate spot this play came from, if this
@@ -1208,7 +1208,7 @@ export function FocusScreen({
     // T10660: preview stays OPEN (no closePreview / no setEditorMode). The user
     // keeps watching while the reel publishes; the Publish card shows its loading
     // state, derived above from this staked intent.
-    useQuestStore.getState().recordAchievement('overlay_declined');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_DECLINED);
     usePublishIntentStore.getState().set(projectId);
     // Safety-net backstop ONLY (T10660): the headless render now surfaces a
     // precise failure point (App's onError clears the stake + toasts), so this is
@@ -1273,11 +1273,11 @@ export function FocusScreen({
   }, [backToPreviewLoading, projectId, openPreview]);
 
   // Derive game name for selected clip
-  const selectedClipGameName = useMemo(() => {
-    if (!selectedClipWithMeta?.game_id || !games?.length) return null;
-    const game = games.find(g => g.id === selectedClipWithMeta.game_id);
+  const projectClipGameName = useMemo(() => {
+    if (!projectClipWithMeta?.game_id || !games?.length) return null;
+    const game = games.find(g => g.id === projectClipWithMeta.game_id);
     return game?.name || null;
-  }, [selectedClipWithMeta?.game_id, games]);
+  }, [projectClipWithMeta?.game_id, games]);
 
   const isLoadingProjectData = isProjectLoading;
 
@@ -1299,10 +1299,10 @@ export function FocusScreen({
   // App.jsx uses (raw_clip_id, falling back to source_clip_id).
   const handleBackToGame = useCallback(() => {
     if (focusCompletionGameId == null) return;
-    const sourceClipId = selectedClip?.raw_clip_id ?? selectedClip?.source_clip_id;
+    const sourceClipId = projectClip?.raw_clip_id ?? projectClip?.source_clip_id;
     setPendingGame(focusCompletionGameId, focusCompletionGameStartTime, sourceClipId);
     useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
-  }, [focusCompletionGameId, focusCompletionGameStartTime, selectedClip]);
+  }, [focusCompletionGameId, focusCompletionGameStartTime, projectClip]);
 
   // T16050: name what Frame is waiting for in the console, so a stuck spinner
   // is diagnosable without reading code (the hour T16040 cost tracing the
@@ -1431,10 +1431,10 @@ export function FocusScreen({
       videoUrl={videoUrl}
       metadata={metadata}
       videoFile={videoFile}
-      clipTitle={selectedClipWithMeta?.name || (selectedClipWithMeta?.filename || '').replace(/\.[^/.]+$/, '')}
-      clipGameName={selectedClipGameName}
-      clipTags={selectedClipWithMeta?.tags}
-      clipDuration={selectedClipWithMeta?.duration || 0}
+      clipTitle={projectClipWithMeta?.name || (projectClipWithMeta?.filename || '').replace(/\.[^/.]+$/, '')}
+      clipGameName={projectClipGameName}
+      clipTags={projectClipWithMeta?.tags}
+      clipDuration={projectClipWithMeta?.duration || 0}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}
@@ -1510,7 +1510,7 @@ export function FocusScreen({
       onLayerSelect={setSelectedLayer}
       hasClips={hasClips}
       clipsWithCurrentState={framingClipsWithCurrentState}
-      selectedClipEffectiveDuration={selectedClipEffectiveDuration}
+      clipEffectiveDuration={clipEffectiveDuration}
       canUndoFraming={canUndoFraming}
       onUndoFraming={framingHandleUndoFraming}
       globalAspectRatio={globalAspectRatio}

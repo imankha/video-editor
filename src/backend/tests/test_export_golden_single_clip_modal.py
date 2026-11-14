@@ -1,6 +1,6 @@
 """T11210 characterization golden: single-clip Modal branch.
 
-Mirrors tests/test_export_golden_multiclip_modal.py exactly, but drives
+Mirrored the multi-clip Modal golden (deleted in T11250), but drives
 `multi_clip._export_clips` with a SINGLE clip (clip_count=1) on the Modal
 branch (`modal_enabled()` forced True). This pins the current behavior of the
 single-clip Modal export path -- the same `process_clips_ai`/`call_modal_clips_ai`

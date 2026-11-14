@@ -30,8 +30,8 @@ import { render, waitFor, cleanup } from '@testing-library/react';
 
 const testState = vi.hoisted(() => ({
   clips: [],
-  selectedClipId: null,
-  selectedClip: null,
+  projectClipId: null,
+  projectClip: null,
   clipMetadataCache: {},
 }));
 
@@ -49,7 +49,7 @@ vi.mock('../../modes', () => ({ FocusModeView: () => null }));
 vi.mock('../../containers', () => ({
   FocusContainer: () => ({
     clipsWithCurrentState: [],
-    selectedClipEffectiveDuration: 0,
+    clipEffectiveDuration: 0,
     canUndoFraming: false,
     handleCropChange: vi.fn(),
     handleCropComplete: vi.fn(),
@@ -182,8 +182,8 @@ vi.mock('../../hooks/useVideo', () => ({
 vi.mock('../../hooks/useClipManager', () => ({
   useClipManager: () => ({
     clips: testState.clips,
-    selectedClipId: testState.selectedClipId,
-    selectedClip: testState.selectedClip,
+    projectClipId: testState.projectClipId,
+    projectClip: testState.projectClip,
     hasClips: testState.clips.length > 0,
     globalAspectRatio: '9:16',
     updateClipData: vi.fn(),
@@ -315,10 +315,10 @@ function makeClip({ id, projectId = PROJECT_ID }) {
 // Unlike the T10740 harness's setClips, this does NOT unconditionally cache
 // every clip: `cachedIds` controls which ids get a clipMetadataCache entry so
 // CH2/CH3 can produce the "id absent from cache" production shape.
-function setClips(clips, selectedClipId, cachedIds = clips.map((c) => c.id)) {
+function setClips(clips, projectClipId, cachedIds = clips.map((c) => c.id)) {
   testState.clips = clips;
-  testState.selectedClipId = selectedClipId;
-  testState.selectedClip = clips.find((c) => c.id === selectedClipId) || null;
+  testState.projectClipId = projectClipId;
+  testState.projectClip = clips.find((c) => c.id === projectClipId) || null;
   testState.clipMetadataCache = Object.fromEntries(
     clips.filter((c) => cachedIds.includes(c.id))
       .map((c) => [c.id, { duration: 10, width: 1080, height: 1920, framerate: 30 }])

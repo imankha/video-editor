@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Pencil, ChevronDown, ChevronUp, Video, Clapperboard } from 'lucide-react';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
-import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { useIsMobile } from '../../../hooks/useIsMobile';
@@ -306,7 +305,6 @@ export function AnnotateFullscreenOverlay({
   const handleRatingChange = (newRating) => {
     setRating(newRating);
     onUpdateClip(existingClip.id, { rating: newRating });
-    maybeRecordRatedAndTagged(newRating, selectedTags);
   };
   handleRatingChangeRef.current = handleRatingChange;
 
@@ -316,7 +314,6 @@ export function AnnotateFullscreenOverlay({
       : [...selectedTags, tagName];
     setSelectedTags(newTags);
     onUpdateClip(existingClip.id, { tags: newTags });
-    maybeRecordRatedAndTagged(rating, newTags);
   };
 
   // T11150: ONE shared category(layer)/teammates write path, mirroring

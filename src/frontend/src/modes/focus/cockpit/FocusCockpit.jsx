@@ -47,7 +47,7 @@ export default function FocusCockpit({
   // T15730: still-uploading source game -- mirrors isSourceExpired, see FocusModeView.jsx.
   isSourceUploading = false,
   isUrlExpiredError, onRetryVideo,
-  clipTitle, clipGameName, selectedClipEffectiveDuration, globalAspectRatio,
+  clipTitle, clipGameName, clipEffectiveDuration, globalAspectRatio,
   // Transport
   currentTime, duration, isPlaying, togglePlay, stepForward, stepBackward,
   onExitToHome,
@@ -175,8 +175,8 @@ export default function FocusCockpit({
   }, [previewing, previewRect, currentCropState]);
 
   const ctaMode = framingCtaMode === 'preview' || framingCtaMode === 'opening' ? framingCtaMode : 'generate';
-  const outputLabel = selectedClipEffectiveDuration != null
-    ? FRAME_COPY.lengthChip(formatLength(selectedClipEffectiveDuration, PRECISION.SECOND, { style: 'clock' }))
+  const outputLabel = clipEffectiveDuration != null
+    ? FRAME_COPY.lengthChip(formatLength(clipEffectiveDuration, PRECISION.SECOND, { style: 'clock' }))
     : null;
 
   const addFocusPointAtPlayhead = () => {

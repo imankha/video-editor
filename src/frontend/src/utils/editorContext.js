@@ -51,7 +51,7 @@ export function getEditorContext() {
       ? {
           id: projects.selectedProjectId,
           clipCount: projectData.clips?.length ?? 0,
-          selectedClipId: projectData.selectedClipId,
+          selectedClipId: projectData.projectClipId,
           aspectRatio: projects.selectedProject?.aspect_ratio,
         }
       : null,

@@ -17,14 +17,6 @@ from app.services.image_extractor import (
     get_image_url,
     list_highlight_images,
 )
-from app.services.transitions import (
-    CutTransition,
-    DissolveTransition,
-    FadeTransition,
-    TransitionFactory,
-    TransitionStrategy,
-    apply_transition,
-)
 from app.services.video_processor import (
     ProcessingBackend,
     ProcessingConfig,
@@ -52,13 +44,6 @@ __all__ = [
     'get_video_info',
     'concatenate_clips',
     'extract_clip',
-    # Transition strategies
-    'TransitionStrategy',
-    'TransitionFactory',
-    'CutTransition',
-    'FadeTransition',
-    'DissolveTransition',
-    'apply_transition',
     # Image extraction for highlights
     'extract_player_image',
     'extract_player_images_for_region',

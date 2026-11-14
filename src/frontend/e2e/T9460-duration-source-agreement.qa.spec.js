@@ -44,15 +44,15 @@ function clipSourceDuration(c) {
 }
 
 // Read the store state that drives the sidebar/header duration for the selected clip.
-async function readSelectedClip(page) {
+async function readProjectClip(page) {
   return page.evaluate(async () => {
     const { useProjectDataStore } = await import('/src/stores/projectDataStore.js');
     const s = useProjectDataStore.getState();
-    const selId = s.selectedClipId ?? (s.clips[0] && s.clips[0].id);
+    const selId = s.projectClipId ?? (s.clips[0] && s.clips[0].id);
     const clip = s.clips.find((c) => c.id === selId) || s.clips[0] || null;
     return {
       clipCount: s.clips.length,
-      selectedClipId: selId,
+      projectClipId: selId,
       cacheKeys: Object.keys(s.clipMetadataCache || {}),
       clip: clip && {
         id: clip.id,
@@ -82,7 +82,7 @@ test.describe('T9460 duration-source agreement @staging-gate', () => {
     // --- 1. REOPENED path: open a real draft (loadProject builds the cache) ----
     await openFramingDraft(page, { waitFor: '.crop-handle' });
 
-    const state = await readSelectedClip(page);
+    const state = await readProjectClip(page);
     console.log('[T9460] reopened state:', JSON.stringify(state));
     expect(state.clip, 'a clip is loaded in Focus').toBeTruthy();
 
@@ -118,7 +118,7 @@ test.describe('T9460 duration-source agreement @staging-gate', () => {
       useProjectDataStore.setState({ clipMetadataCache: {} });
     });
 
-    const cleared = await readSelectedClip(page);
+    const cleared = await readProjectClip(page);
     expect(cleared.cacheKeys.length, 'clipMetadataCache is now empty (fresh-draft condition)').toBe(0);
 
     // The decisive discriminator: sidebar STILL shows the real duration, not 0.0s.

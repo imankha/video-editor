@@ -255,7 +255,7 @@ describe('T70: Multi-clip Overlay After Framing Edit', () => {
       expect(useProjectDataStore.getState().clips).toHaveLength(3);
 
       // User selects clip2 to edit (simulating what happens in framing mode)
-      useProjectDataStore.getState().setSelectedClipId(2);
+      useProjectDataStore.getState().setProjectClipId(2);
 
       // Verify that after selecting one clip, ALL clips are still available
       expect(useProjectDataStore.getState().clips).toHaveLength(3);
@@ -281,7 +281,7 @@ describe('T70: Multi-clip Overlay After Framing Edit', () => {
       ];
 
       useProjectDataStore.getState().setProjectClips({ clips });
-      useProjectDataStore.getState().setSelectedClipId(2); // User selected clip2 to edit
+      useProjectDataStore.getState().setProjectClipId(2); // User selected clip2 to edit
 
       // When export happens, it should use ALL clips
       const clipMetadata = buildClipMetadata(clips);

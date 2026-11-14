@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T11250:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_export_golden_local_render.py tests/test_export_golden_single_clip_modal.py -q -p no:cacheprovider"
+    },
+    "T11250:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t11250_single_clip_backend.py -k site -q -p no:cacheprovider"
+    },
+    "T11250:C3": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t11250_single_clip_backend.py -k 'deleted_route or removed_symbols or zero_references' -q -p no:cacheprovider"
+    }
+  }
+}

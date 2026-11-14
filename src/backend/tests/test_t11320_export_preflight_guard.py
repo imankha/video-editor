@@ -7,8 +7,8 @@ export that cannot plausibly finish inside the timeout budget.
 
 Two layers of proof:
 - Pure unit tests of the cost model + budget decision + structured rejection shape.
-- Integration tests through `multi_clip._export_clips` (the shared path BOTH multi-clip and
-  single-clip /render use) proving a Bug-58p-shaped export is rejected BEFORE
+- Integration tests through `multi_clip._export_clips` (the single-clip /render path; T11250
+  removed multi-clip export) proving a Bug-58p-shaped export is rejected BEFORE
   `call_modal_clips_ai` is ever invoked, while a normal small export dispatches unaffected.
 """
 
@@ -367,7 +367,9 @@ async def test_bug58p_rejected_before_dispatch(monkeypatch):
     monkeypatch.setattr(mc, "upload_bytes_to_r2", lambda user_id, key, content: True)
 
     export_id = "exp-t11320-bug58p"
-    clips = [_clip_export(mc, i, duration=79.0 / 14, w=1920, h=1080) for i in range(14)]
+    # T11250: _export_clips renders exactly one clip, so the Bug-58p shape is one 79s
+    # full-frame 1080p clip (still ~1.7x the budget at the max target).
+    clips = [_clip_export(mc, 0, duration=79.0, w=1920, h=1080)]
 
     with pytest.raises(ExportBudgetExceeded) as ei:
         await mc._export_clips(
@@ -420,7 +422,7 @@ async def test_normal_export_dispatches_unaffected(monkeypatch):
     monkeypatch.setattr(mc, "call_modal_clips_ai", spy)
     monkeypatch.setattr(mc, "upload_bytes_to_r2", lambda user_id, key, content: True)
 
-    clips = [_clip_export(mc, i, duration=5.0, w=410, h=730) for i in range(3)]
+    clips = [_clip_export(mc, 0, duration=5.0, w=410, h=730)]
 
     # The spy raises _DispatchReached the instant it's called; _export_clips' generic
     # handler wraps that into an HTTPException. We don't care about the wrapper -- only
@@ -439,7 +441,7 @@ async def test_normal_export_dispatches_unaffected(monkeypatch):
             user_id="test-user-t11320",
             profile_id=0,
             credits_deducted=0,
-            total_video_seconds=15.0,
+            total_video_seconds=5.0,
             is_test_mode=False,
         )
 
