@@ -1042,8 +1042,9 @@ _DIMENSION_KPIS = {
     "deleted",
     # T15770: attempts with no recorded outcome (abandoned/invisible before this task)
     "upload_no_outcome",
-    # T16340: the Upload tries column, the same counts the rate divides
-    "upload_tries", "upload_successes",
+    # T16340: the Upload tries column (the counts the rate divides) and the
+    # "not tracked" flag for a group whose uploads all predate attempt recording
+    "upload_tries", "upload_successes", "upload_not_tracked",
 }
 
 
@@ -1099,30 +1100,50 @@ class TestUniformDimensionKpis:
         assert builds["unrecorded"]["upload_no_outcome"] == 0
 
 
+def _backdate_upload_events(user_id, first_at="2026-09-01T12:00:00+00:00"):
+    """Move a user's recorded upload events before game_upload_attempted existed."""
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "UPDATE user_actions SET first_at = %s WHERE user_id = %s AND action LIKE 'game_upload_%%'",
+            (first_at, user_id),
+        )
+
+
 @pytest.fixture()
-def unpaired_successes(builds_setup):
-    """T16340: uploads that finished before game_upload_attempted existed (T11010,
-    2026-09-22) left a success with no attempt. user-d (build 4814) has one attempt
-    and three successes (two pre-T11010 uploads); user-e (build 4815) only ever has
-    a success. Both join builds_setup's private origin."""
+def upload_window(builds_setup):
+    """T16340 (ruling 2026-11-13): game_upload_attempted only records since T11010
+    (2026-09-22), so only upload events from that day count, on both sides.
+    - user-d (build 4814): 1 attempt and 3 successes, all in the window -- a real
+      miscount the rate must show as it is (300%), never capped.
+    - user-f (build 4814): straddles the cutoff (first success 2026-09-01, an attempt
+      since). Lifetime counts cannot be split by date, so all of its upload events
+      are left out of both sides.
+    - user-e (build 4815): one success from before the cutoff only -> not tracked.
+    - user-g (build 4816): a success in the window and no attempt at all.
+    All join builds_setup's private origin."""
     import uuid
 
     import app.analytics as analytics
     from tests.conftest import register_test_user_ids
 
-    user_d, user_e = (f"t16340-{name}-{uuid.uuid4().hex[:8]}" for name in ("d", "e"))
-    register_test_user_ids(user_d, user_e)
-    create_user(user_d, email=f"{user_d}@test.com")
-    create_user(user_e, email=f"{user_e}@test.com")
-    with patch.object(analytics, "APP_BUILD", 4814), patch.object(analytics, "APP_VERSION", "aaa4814aaaa"):
-        create_user_segment(user_d, T14000_ORIGIN, None, "otp")
-    with patch.object(analytics, "APP_BUILD", 4815), patch.object(analytics, "APP_VERSION", "bbb4815bbbb"):
-        create_user_segment(user_e, T14000_ORIGIN, None, "otp")
-    record_milestone(user_d, "game_upload_attempted")
+    ids = {name: f"t16340-{name}-{uuid.uuid4().hex[:8]}" for name in ("d", "e", "f", "g")}
+    register_test_user_ids(*ids.values())
+    for name, build in (("d", 4814), ("f", 4814), ("e", 4815), ("g", 4816)):
+        create_user(ids[name], email=f"{ids[name]}@test.com")
+        with patch.object(analytics, "APP_BUILD", build), patch.object(analytics, "APP_VERSION", f"aaa{build}aaaa"):
+            create_user_segment(ids[name], T14000_ORIGIN, None, "otp")
+    record_milestone(ids["d"], "game_upload_attempted")
     for _ in range(3):
-        record_milestone(user_d, "game_upload_succeeded")
-    record_milestone(user_e, "game_upload_succeeded")
-    yield
+        record_milestone(ids["d"], "game_upload_succeeded")
+    record_milestone(ids["f"], "game_upload_succeeded")
+    record_milestone(ids["f"], "game_upload_succeeded")
+    _backdate_upload_events(ids["f"])
+    record_milestone(ids["f"], "game_upload_attempted")
+    record_milestone(ids["e"], "game_upload_succeeded")
+    _backdate_upload_events(ids["e"])
+    record_milestone(ids["g"], "game_upload_succeeded")
+    yield ids
 
 
 def _all_dimension_rows(client):
@@ -1132,42 +1153,81 @@ def _all_dimension_rows(client):
     return channels, cohorts, builds
 
 
-class TestUploadSuccessNeverOver100:
+class TestUploadSuccessWindow:
     """T16340: production read 131.66% (91 tries / 141 successes) on the Unrecorded
-    build row: successes with no recorded attempt outnumbered the attempts."""
+    build row: successes from before game_upload_attempted existed had no attempt."""
 
-    def test_success_without_attempt_stays_at_or_below_100(self, client, unpaired_successes):
-        channels, cohorts, builds = _all_dimension_rows(client)
-        assert cohorts and builds
-        for row in [*channels, *cohorts, *builds]:
-            pct = row["upload_success_pct"]
-            assert pct is None or 0 <= pct <= 100, row
+    def test_upload_rate_counts_only_events_since_attempts_began(self, client, upload_window):
+        from app.analytics import EVENT_INSTRUMENTED_AT
+        assert EVENT_INSTRUMENTED_AT["game_upload_attempted"] == "2026-09-22"
+        _channels, _cohorts, builds = _all_dimension_rows(client)
         by_build = {b["build"]: b for b in builds}
-        # One attempt, three successes: three tries, all succeeded.
-        assert by_build[4814]["upload_success_pct"] == 100
-        # A success with no attempt event at all is still a try that succeeded.
-        assert by_build[4815]["upload_success_pct"] == 100
-        # Channel: user-a 1/1, user-b 0/1 (no outcome), user-d 3/3, user-e 1/1.
-        assert channels[0]["upload_success_pct"] == 83.33
+        # user-f's older successes and its newer attempt are on neither side.
+        assert (by_build[4814]["upload_tries"], by_build[4814]["upload_successes"]) == (1, 3)
+        # A group whose uploads are all older shows "not tracked", not a percent.
+        assert by_build[4815]["upload_success_pct"] is None
+        assert by_build[4815]["upload_not_tracked"] is True
+        assert (by_build[4815]["upload_tries"], by_build[4815]["upload_successes"]) == (0, 0)
+        # A group with no upload events at all is not "not tracked": it has no uploads.
+        assert by_build["unrecorded"]["upload_not_tracked"] is False
+        assert by_build[4812]["upload_not_tracked"] is False
 
-    def test_rate_and_tries_column_use_the_same_counts(self, client, unpaired_successes):
+    def test_rate_and_tries_column_use_the_same_counts(self, client, upload_window):
         channels, cohorts, builds = _all_dimension_rows(client)
         for row in [*channels, *cohorts, *builds]:
             tries, successes = row["upload_tries"], row["upload_successes"]
-            assert successes <= tries, row
             expected = round(successes / tries * 100, 2) if tries else None
             assert row["upload_success_pct"] == expected, row
-        assert (channels[0]["upload_tries"], channels[0]["upload_successes"]) == (6, 5)
+        # user-a 1/1, user-b 1/0, user-d 1/3, user-g 0/1; user-e and user-f left out.
+        assert (channels[0]["upload_tries"], channels[0]["upload_successes"]) == (3, 5)
         by_build = {b["build"]: b for b in builds}
-        assert (by_build[4814]["upload_tries"], by_build[4814]["upload_successes"]) == (3, 3)
-        assert (by_build[4815]["upload_tries"], by_build[4815]["upload_successes"]) == (1, 1)
         assert (by_build["unrecorded"]["upload_tries"], by_build["unrecorded"]["upload_successes"]) == (0, 0)
 
-    def test_pulse_upload_success_rate_stays_at_or_below_100(self, client, unpaired_successes):
+    def test_success_without_attempt_shows_over_100_and_warns(self, client, upload_window, caplog):
+        import logging
+        with caplog.at_level(logging.WARNING, logger="app.routers.admin"):
+            channels, _cohorts, builds = _all_dimension_rows(client)
+        by_build = {b["build"]: b for b in builds}
+        # Nothing caps the rate: more successes than attempts reads over 100%.
+        assert by_build[4814]["upload_success_pct"] == 300
+        assert channels[0]["upload_success_pct"] == 166.67
+        # Successes with no attempt in the window: no percent to show, but not hidden.
+        assert by_build[4816]["upload_success_pct"] is None
+        assert by_build[4816]["upload_not_tracked"] is False
+        assert (by_build[4816]["upload_tries"], by_build[4816]["upload_successes"]) == (0, 1)
+        warnings = [r.getMessage() for r in caplog.records
+                    if r.levelno == logging.WARNING and "[T16340]" in r.getMessage()]
+        for group in ("4814", "4816", T14000_ORIGIN):
+            assert any(group in w for w in warnings), (group, warnings)
+        assert not any("4815" in w or "4812" in w for w in warnings), warnings
+
+    def test_no_cap_or_floor_on_upload_counts(self):
+        import inspect
+
+        from app.routers import admin
+        src = inspect.getsource(admin._segment_group_rows)
+        for capper in ("GREATEST(", "LEAST(", "max(", "min("):
+            assert capper not in src, capper
+
+    def test_pulse_upload_success_rate_uses_the_same_window(self, client, upload_window, pg_conn):
+        """The pulse reads today's day buckets (user_usage_daily), so it is inside the
+        window by construction; an older day's outcomes never reach it, and nothing
+        caps it."""
+        from app.services.pg import get_pg
+        from tests.conftest import register_test_user_ids
+        old = "t16340-pulse-old"
+        register_test_user_ids(old)
+        create_user(old, email=f"{old}@test.com")
+        create_user_segment(old, T14000_ORIGIN, None, "otp")
+        with get_pg() as conn:
+            conn.cursor().execute(
+                "INSERT INTO user_usage_daily (user_id, day, game_uploads_succeeded, game_uploads_failed) "
+                "VALUES (%s, '2026-09-01', 0, 50)", (old,))
         card = client.get(f"/api/admin/analytics/pulse?origin={T14000_ORIGIN}",
                           headers=_auth()).json()["cards"]["upload_success_rate"]
+        assert card["failed"] == 0, card
         assert card["succeeded"] >= 5
-        assert card["today"] is not None and 0 <= card["today"] <= 100, card
+        assert card["today"] == round(card["succeeded"] / card["attempts"] * 100, 2), card
 
 
 class TestPulsePopulationKpis:

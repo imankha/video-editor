@@ -10,7 +10,7 @@ const KPIS = {
   signups: 3, deleted: 0, revenue_cents: 1234, upload_success_pct: 75,
   first_highlight_14d: { aged: 24, hit: 3, pct: 12.5 }, upload_attempted: 7, upload_succeeded: 5, paywall_shown: 4, buy_modal_opened: 2, payers: 1,
   // T16340: the tries column shows the counts the rate divides (3 / 4 = 75%), not user counts.
-  upload_tries: 4, upload_successes: 3,
+  upload_tries: 4, upload_successes: 3, upload_not_tracked: false,
   uploaded_pct: 67, clipped_pct: 33, exported_pct: 33, shared_pct: 0, purchased_pct: 33,
 };
 // T15290: Deleted sits right after Signups (account deleted, analytics kept).
@@ -38,10 +38,20 @@ describe('Dimension tables share one KPI column set (T13990)', () => {
     expect(cells).toEqual(['3', '0', '$12.34', '75.00%', '4 / 3', '12.50% (3/24)', '4', '2', '1', '67.00%', '33.00%', '33.00%', '0.00%', '33.00%']);
   });
 
-  it('T16340: Upload tries explains the rate it shares counts with', () => {
+  it('T16340: Upload tries explains the window the rate counts', () => {
     const { container } = render(<CohortGrid data={{ cohorts: [{ cohort_period: '2026-10-05', ...KPIS }] }} />);
     const th = [...container.querySelectorAll('th')].find(h => h.textContent === 'Upload tries');
-    expect(th.getAttribute('title')).toMatch(/success with no recorded try counts as a try/);
+    expect(th.getAttribute('title')).toMatch(/since 2026-09-22/);
+  });
+
+  it('T16340: a group whose uploads all predate 2026-09-22 reads "not tracked"', () => {
+    render(<CohortGrid data={{ cohorts: [{ cohort_period: '2026-10-05', ...KPIS, upload_success_pct: null, upload_not_tracked: true }] }} />);
+    expect(screen.getByText('not tracked')).toBeTruthy();
+  });
+
+  it('T16340: a rate over 100% is shown as it is', () => {
+    render(<CohortGrid data={{ cohorts: [{ cohort_period: '2026-10-05', ...KPIS, upload_success_pct: 300, upload_tries: 1, upload_successes: 3 }] }} />);
+    expect(screen.getByText('300.00%')).toBeTruthy();
   });
 
   it('upload success with no upload outcome reads "--"', () => {

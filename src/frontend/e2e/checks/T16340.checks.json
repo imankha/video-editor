@@ -1,6 +1,28 @@
-{"criteria": {
-  "T16340:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k test_success_without_attempt_stays_at_or_below_100"},
-  "T16340:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k test_rate_and_tries_column_use_the_same_counts"},
-  "T16340:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k test_pulse_upload_success_rate_stays_at_or_below_100"},
-  "T16340:C4": {"kind": "human", "why": "Production admin dashboard data after deploy; only the owner reads prod Builds rows"}
-}}
+{
+ "criteria": {
+  "T16340:C1": {
+   "kind": "code",
+   "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k \"test_upload_rate_counts_only_events_since_attempts_began\""
+  },
+  "T16340:C2": {
+   "kind": "code",
+   "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k test_rate_and_tries_column_use_the_same_counts"
+  },
+  "T16340:C3": {
+   "kind": "code",
+   "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k \"test_pulse_upload_success_rate_uses_the_same_window\""
+  },
+  "T16340:C4": {
+   "kind": "human",
+   "why": "Production admin dashboard data after deploy; only the owner reads prod Builds rows"
+  },
+  "T16340:C5": {
+   "kind": "code",
+   "command": "cd src/backend && python3 -m pytest tests/test_analytics_dashboards.py -q -p no:cacheprovider -k \"test_success_without_attempt_shows_over_100_and_warns or test_no_cap_or_floor_on_upload_counts\""
+  },
+  "T16340:C6": {
+   "kind": "code",
+   "command": "f=docs/plans/tasks/T16340-upload-success-over-100-percent.md && grep -q '^## Findings' $f && sed -n '/^## Findings/,$p' $f | grep -q 'prepare_upload' && sed -n '/^## Findings/,$p' $f | grep -q 'finalize_upload' && test \"$(grep -rlE 'record_milestone\\([^)]*\"game_upload_(attempted|succeeded)\"|\"game_upload_attempted\"' src/backend/app --include=*.py | grep -v -e analytics.py -e routers/admin.py | sort -u)\" = src/backend/app/routers/games_upload.py"
+  }
+ }
+}
