@@ -22,7 +22,7 @@ const RESOLVE = {
 describe('apiBase', () => {
   it('maps the prod host to the prod API, defaults to staging', () => {
     expect(apiBase('app.reelballers.com')).toBe('https://api.reelballers.com');
-    expect(apiBase('localhost')).toBe('https://reel-ballers-api-staging.fly.dev');
+    expect(apiBase('localhost')).toBe('https://api-staging.reelballers.com');
   });
 });
 

@@ -11,7 +11,7 @@ import { render } from '@testing-library/react';
  * empty-base assertion could not tell the bug from the fix. Pinning a real host is
  * the split-host simulation the local Vite proxy hides.
  */
-const { API_HOST } = vi.hoisted(() => ({ API_HOST: 'https://reel-ballers-api-staging.fly.dev' }));
+const { API_HOST } = vi.hoisted(() => ({ API_HOST: 'https://api-staging.reelballers.com' }));
 
 vi.mock('../../config', async (importOriginal) => ({
   ...(await importOriginal()),

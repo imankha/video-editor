@@ -1,8 +1,8 @@
 """T15450: staging sign-in does not survive a reload in Safari-class browsers.
 
-Staging's frontend (reel-ballers-staging.pages.dev) and backend
-(reel-ballers-api-staging.fly.dev) are on different sites, so the rb_session
-cookie is cross-site there. `app/utils/cookies.py` only emits the cross-site-safe
+Staging's frontend (a pages.dev host) and backend (a fly.dev host) were on
+different sites until T16370 moved both onto reelballers.com, so the rb_session
+cookie was cross-site there. `app/utils/cookies.py` only emits the cross-site-safe
 `SameSite=None; Secure; Partitioned` cookie when `SECURE_COOKIES=true`; otherwise
 it falls back to `SameSite=Lax`, which browsers (notably Safari/WebKit) refuse to
 send on cross-site fetch/XHR requests like the reload-time `/auth/me` call --
@@ -26,7 +26,7 @@ def _env(name):
 def test_staging_sets_secure_cookies_true_for_its_cross_site_deployment():
     env = _env("fly.staging.toml")
     assert env.get("SECURE_COOKIES") == "true", (
-        "staging's frontend (pages.dev) and backend (fly.dev) are cross-site, "
+        "staging's frontend and backend were cross-site before T16370, "
         "so SECURE_COOKIES must be true so app/utils/cookies.py emits "
         "SameSite=None; Secure; Partitioned (the cross-site-safe cookie) "
         "instead of SameSite=Lax, which Safari refuses on cross-site fetches"

@@ -175,7 +175,7 @@ DEFAULT_CONFIG = {
     "prod_session": "",
     "staging_session": "",
     "prod_url": "https://reel-ballers-api.fly.dev",
-    "staging_url": "https://reel-ballers-api-staging.fly.dev",
+    "staging_url": "https://api-staging.reelballers.com",
 }
 
 def load_config():

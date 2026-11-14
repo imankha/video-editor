@@ -1488,6 +1488,10 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   checkpoints WAL + awaits R2 upload → **200** clean / **503** still-pending / **401** unauthenticated
   (the client treats 401 as a no-op, not a failure — logged-out users have nothing to flush).
 
+## Staging hosts (T16370)
+
+Staging has prod's shape: app `https://staging.reelballers.com` (Pages project `reel-ballers-staging`), API `https://api-staging.reelballers.com` (Fly app `reel-ballers-api-staging`, CNAME DNS-only). Same site, so the `rb_session` cookie is first-party and Safari keeps it; the old pages.dev/fly.dev pair was cross-site and Safari dropped the cookie (T15450's `SECURE_COOKIES` only fixed Chrome). The project/app NAMES are identifiers and stay; never put the old pages.dev/fly.dev hosts back in code (`tests/test_t16370_staging_own_domain.py` greps the repo, `docs/plans` + dated `docs/testing/staging-verification-*` excluded as history). Edge functions map `app.reelballers.com` -> prod, every other host -> the staging API.
+
 ## Deploy + build-number lockstep (T6220)
 Follow-up from T6210 (which made a server-ahead-of-bundle update-gate loop *structurally impossible*
 regardless of build-number accuracy — see appVersion.js's Tbug41s comment). This section is the

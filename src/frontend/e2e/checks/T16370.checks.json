@@ -1,0 +1,5 @@
+{"criteria": {
+  "T16370:C1": {"kind": "human", "why": "Needs the owner's DNS records and custom domains (staging.reelballers.com, api-staging.reelballers.com) to exist, and WebKit, whose system libraries are absent from the worker and staging-check containers. After those are in place run e2e/checks/T16370.check.spec.js (WebKit, iPhone 14) against staging: the T16370:C1 test signs in from inside the page, reloads, and reopens a context from the saved cookies."},
+  "T16370:C2": {"kind": "human", "why": "Same prerequisites as C1. The T16370:C2 test in e2e/checks/T16370.check.spec.js opens an active game in Annotate in WebKit (iPhone 14) on staging, taps Play and waits for the video's time to advance."},
+  "T16370:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16370_staging_own_domain.py -q -p no:cacheprovider"}
+}}

@@ -2513,8 +2513,8 @@ def status(args):
 # the merge commit, the browser checks the worker committed run against staging, and each failure is filed
 # as a bug task at once (T14980's staging miss and T15360's never-restoring resume point were both found
 # only there). `code` checks prove code, which CI already ran, so they are not repeated.
-STAGING = {"url": os.environ.get("DOTASK_STAGING_URL", "https://reel-ballers-staging.pages.dev"),
-           "api": os.environ.get("DOTASK_STAGING_API", "https://reel-ballers-api-staging.fly.dev/api"),
+STAGING = {"url": os.environ.get("DOTASK_STAGING_URL", "https://staging.reelballers.com"),
+           "api": os.environ.get("DOTASK_STAGING_API", "https://api-staging.reelballers.com/api"),
            # A seeded staging account (e2e/STAGING-GATE.md lane B): dev preset accounts exist only in dev.
            "email": os.environ.get("DOTASK_STAGING_EMAIL", "e2e-gate@test.local")}
 DEPLOY_WORKFLOWS = ("deploy-frontend.yml", "deploy-backend.yml")

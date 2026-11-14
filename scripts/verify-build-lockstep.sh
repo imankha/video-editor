@@ -15,8 +15,8 @@
 #
 # Example:
 #   scripts/verify-build-lockstep.sh \
-#     --frontend-url https://reel-ballers-staging.pages.dev \
-#     --backend-url  https://reel-ballers-api-staging.fly.dev/api/version
+#     --frontend-url https://staging.reelballers.com \
+#     --backend-url  https://api-staging.reelballers.com/api/version
 #
 #   --frontend-url is the site ROOT; the script fetches "<url>/build.json".
 #   --backend-url  is the FULL version endpoint (already includes /api/version).
