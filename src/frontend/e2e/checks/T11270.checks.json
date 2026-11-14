@@ -2,11 +2,11 @@
   "criteria": {
     "T11270:C1": {
       "kind": "code",
-      "command": "cd src/frontend && npx vitest run --testTimeout=60000 --hookTimeout=60000 src/hooks/useClipManager.projectClip.test.js -t 'projectClipId'"
+      "command": "cd src/frontend && python3 ../../scripts/check_suites_identical.py --subject '^T11270: Rename' --map selectedClipId=projectClipId --map selectedClip=projectClip --map selectedClipEffectiveDuration=clipEffectiveDuration src/screens/__tests__/focus*.test.jsx src/screens/__tests__/overlay*.test.jsx src/modes/FocusModeView.*.test.jsx src/modes/OverlayModeView.*.test.jsx src/containers/OverlayContainer*.test.* src/containers/ExportButtonContainer.test.js src/stores/projectDataStore.*.test.js src/stores/T11240.multiclip-store-removed.test.js"
     },
     "T11270:C2": {
       "kind": "code",
-      "command": "cd src/frontend && npx vitest run --testTimeout=60000 --hookTimeout=60000 src/hooks/useClipManager.projectClip.test.js -t 'selection vocabulary'"
+      "command": "python3 scripts/check_rename_only.py --subject '^T11270: ' --map selectedClipId=projectClipId --map selectedClip=projectClip --map setSelectedClipId=setProjectClipId --map getSelectedClip=getProjectClip --map useSelectedClipId=useProjectClipId --map selectedClipForAnnotate=projectClipForAnnotate --map selectedClipGameClock=projectClipGameClock --map selectedClipGameName=projectClipGameName --map latestSelectedClipIdRef=latestProjectClipIdRef --map selectedClipEffectiveDuration=clipEffectiveDuration --map selectedClipCropKeyframes=projectClipCropKeyframes --map selectedClipRotation=projectClipRotation --map selectedClipWithMeta=projectClipWithMeta --map readSelectedClip=readProjectClip --keep src/frontend/src/utils/editorContext.js:selectedClipId --allow-added src/frontend/e2e/checks/T11270.checks.json --allow-added src/frontend/src/hooks/useClipManager.projectClip.test.js --allow-added scripts/check_rename_only.py --allow-added scripts/check_suites_identical.py --allow-changed src/frontend/e2e/checks/T11270.checks.json"
     }
   }
 }

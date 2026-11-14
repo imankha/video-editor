@@ -570,7 +570,7 @@ is consumed by `ExportButtonContainer` and `useProjectLoader`.
   `clipsWithCurrentState` already injects the hook state as frontend-format `segments` onto the
   selected clip (line ~225) and leaves every OTHER clip with its saved `segments_data`. So feeding
   `clipsWithCurrentState` to the calculator gives a LIVE selected-clip number + SAVED others in one
-  pass. The two derived memos (`selectedClipEffectiveDuration`, `projectEffectiveDuration`,
+  pass. The two derived memos (`clipEffectiveDuration`, `projectEffectiveDuration`,
   `FocusContainer.jsx` ~L272-296) are PURE render-time derivations — **no new state, no store
   field, no persistence** (T350 doctrine); the chip ticks the instant a speed/trim gesture updates
   the hook, with no save/export.
