@@ -85,11 +85,18 @@ test('T7430:C1 one large Retention chart, no table; hover shows exact percent an
   const rate = hover.getByText(/^Week \d+: (\d+\.\d+% \(\d+ of \d+\)|\d+\/\d+)$/);
   await expect(rate).toBeVisible();
 
-  // Classic vs unbounded redraws the curves.
-  const curve = page.getByTestId('retention-curve').first();
-  const unboundedPoints = await curve.getAttribute('points');
+  // Classic vs unbounded redraws the curves. Compare every drawn curve, not the first: a
+  // group whose members never left and came back has identical curves in both views
+  // (T16440: staging's first drawn cohort had 1 signup and identical rates). The chart
+  // draws the first 8 groups (RetentionView MAX_CURVES).
+  const differs = firstBody.triangle.cohorts.slice(0, 8).some((row) => Object.values(row.weeks)
+    .some((c) => c && c.classic?.pct !== c.unbounded?.pct));
+  expect(differs, 'live data has a drawn group whose classic and unbounded rates differ').toBe(true);
+  const allPoints = () => page.getByTestId('retention-curve')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('points')).join('|'));
+  const unboundedPoints = await allPoints();
   await page.getByLabel('Classic').check();
-  await expect.poll(() => curve.getAttribute('points')).not.toBe(unboundedPoints);
+  await expect.poll(allPoints).not.toBe(unboundedPoints);
 
   // Weekly -> monthly re-bins the signup cohorts.
   const [monthly] = await Promise.all([chartResponse(page), page.getByLabel('Monthly').check()]);
