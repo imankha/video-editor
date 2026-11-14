@@ -231,13 +231,13 @@ def _patch_local(monkeypatch, detect_fn):
     async def fake_process_single_clip(**kwargs):
         return "/tmp/fake_processed.mp4"
 
-    def fake_concat(**kwargs):
-        return None
+    def fake_copy(src, dst):
+        return dst
 
     monkeypatch.setattr(mc, "modal_enabled", lambda: False)
     monkeypatch.setattr(mc.manager, "send_progress", fake_send_progress)
     monkeypatch.setattr(mc, "process_single_clip", fake_process_single_clip)
-    monkeypatch.setattr(mc, "concatenate_clips_with_transition", fake_concat)
+    monkeypatch.setattr(mc.shutil, "copy2", fake_copy)
     monkeypatch.setattr(mc, "get_video_duration", lambda *a, **k: 5.0)
     monkeypatch.setattr(mc, "upload_to_r2", lambda *a, **k: True)
     monkeypatch.setattr(mc, "run_local_detection_on_video_file", detect_fn)

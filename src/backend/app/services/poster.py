@@ -1427,25 +1427,6 @@ def ensure_draft_poster(project_id: int, user_id: str) -> str | None:
         return None
 
 
-def invalidate_draft_poster(project_id: int) -> None:
-    """Delete a draft's cached poster object so the next GET regenerates it
-    (T5671). Called from the gesture-triggered backend actions that change a
-    project's clip composition (add/remove/reorder) -- the draft's first clip,
-    and thus its thumbnail, may have changed. NO reactive watcher.
-
-    Runs in the CURRENT profile context. Best effort: `delete_from_r2` already
-    swallows R2 errors, and this wrapper never lets an unexpected error escape,
-    so poster invalidation can NEVER fail the parent clip action.
-    """
-    from ..storage import delete_from_r2
-    from ..user_context import get_current_user_id
-
-    try:
-        delete_from_r2(get_current_user_id(), draft_poster_rel_path(project_id))
-    except Exception as e:
-        logger.info(f"[DraftPoster] invalidation failed for project {project_id}: {e}")
-
-
 def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False) -> dict:
     """Admin-triggered one-off: generate posters for PUBLISHED reels that have none
     (T4890). Pre-existing reels published before this feature carry no poster, so

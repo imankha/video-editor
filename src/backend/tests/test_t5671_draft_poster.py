@@ -6,11 +6,8 @@ Covers:
   (clearest frame within the clip's [in, out] region), no-clips -> None,
   missing-source (SourceUnavailable) -> None (the 404 basis), R2-upload-failure
   -> None, never raises.
-- invalidate_draft_poster: deletes the deterministic key; never raises.
 - GET /api/projects/{id}/poster.jpg: 200 image/jpeg on success, 404 when no
   poster; _serve_draft_poster_jpeg 404 (no presign) / 502 (bad fetch).
-- Invalidation is wired into add/upload/reorder/remove clip handlers, and an R2
-  delete failure NEVER breaks the clip action (poster failure is best-effort).
 - _load_first_clip_for_poster: first clip by sort_order (latest version); [] ->
   None.
 
@@ -197,24 +194,6 @@ def test_ensure_draft_poster_degenerate_window_falls_back_no_window():
 
 
 # ---------------------------------------------------------------------------
-# invalidate_draft_poster
-# ---------------------------------------------------------------------------
-
-def test_invalidate_draft_poster_deletes_key():
-    with patch("app.user_context.get_current_user_id", return_value=USER_ID), \
-         patch("app.storage.delete_from_r2", return_value=True) as delete:
-        poster_mod.invalidate_draft_poster(PROJECT_ID)
-    delete.assert_called_once_with(USER_ID, REL_PATH)
-
-
-def test_invalidate_draft_poster_never_raises():
-    with patch("app.user_context.get_current_user_id", return_value=USER_ID), \
-         patch("app.storage.delete_from_r2", side_effect=RuntimeError("r2 down")):
-        # Must not propagate -- poster invalidation can never fail a clip action.
-        poster_mod.invalidate_draft_poster(PROJECT_ID)
-
-
-# ---------------------------------------------------------------------------
 # GET /api/projects/{id}/poster.jpg + _serve_draft_poster_jpeg
 # ---------------------------------------------------------------------------
 
@@ -378,64 +357,3 @@ def test_load_first_clip_for_poster_orders_by_sort_order(db):
 def test_load_first_clip_for_poster_empty_project_none(db):
     pid = _seed_project(db)
     assert poster_mod._load_first_clip_for_poster(pid) is None
-
-
-def test_remove_clip_invalidates_poster(db):
-    from app.routers import clips
-    pid = _seed_project(db)
-    rc = _seed_raw_clip(db)
-    wc = _seed_working_clip(db, pid, rc)
-
-    with patch.object(clips, "invalidate_draft_poster") as inval:
-        res = asyncio.run(clips.remove_clip_from_project(pid, wc))
-    assert res == {"success": True}
-    inval.assert_called_once_with(pid)
-
-
-def test_reorder_clips_invalidates_poster(db):
-    from app.routers import clips
-    pid = _seed_project(db)
-    rc_a = _seed_raw_clip(db, filename="a.mp4", end=5.0)
-    rc_b = _seed_raw_clip(db, filename="b.mp4", end=7.0)
-    wc_a = _seed_working_clip(db, pid, rc_a, sort_order=0)
-    wc_b = _seed_working_clip(db, pid, rc_b, sort_order=1)
-
-    with patch.object(clips, "invalidate_draft_poster") as inval:
-        res = asyncio.run(clips.reorder_clips(pid, [wc_b, wc_a]))
-    assert res == {"success": True}
-    inval.assert_called_once_with(pid)
-
-
-def test_add_clip_invalidates_poster(db):
-    from app.routers import clips
-    pid = _seed_project(db)
-    rc = _seed_raw_clip(db)
-
-    with patch.object(clips, "invalidate_draft_poster") as inval:
-        # T8370 Slice D: add_clip_to_project's file= branch (Path 2) was
-        # retired -- it has no live frontend caller (addClipFromLibrary only
-        # ever sends raw_clip_id), so the handler no longer takes a `file` arg.
-        res = asyncio.run(clips.add_clip_to_project(pid, raw_clip_id=rc,
-                                                    background_tasks=None))
-    assert res.project_id == pid
-    inval.assert_called_once_with(pid)
-
-
-def test_clip_action_survives_r2_delete_failure(db):
-    # "Poster failure does not break clip actions": force the R2 delete to raise;
-    # the real invalidate_draft_poster must swallow it and the remove still 200s.
-    from app.routers import clips
-    pid = _seed_project(db)
-    rc = _seed_raw_clip(db)
-    wc = _seed_working_clip(db, pid, rc)
-
-    with patch("app.storage.delete_from_r2", side_effect=RuntimeError("r2 write failed")):
-        res = asyncio.run(clips.remove_clip_from_project(pid, wc))
-    assert res == {"success": True}
-    # And the row really was removed (the action completed).
-    conn = _connect(db)
-    remaining = conn.execute(
-        "SELECT COUNT(*) AS n FROM working_clips WHERE project_id = ?", (pid,)
-    ).fetchone()["n"]
-    conn.close()
-    assert remaining == 0

@@ -207,42 +207,6 @@ class TestFramingRenderPreservesPointers:
 
 
 # ===========================================================================
-# Multi-clip export: no speculative null pre-step
-# ===========================================================================
-
-class TestMultiClipPreservesPointers:
-
-    @pytest.mark.asyncio
-    async def test_export_multi_clip_does_not_null_pointers_pre_step(self, db):
-        """multi_clip.py:1837 pre-step must NOT null the pointers before render."""
-        from app.routers.export import multi_clip
-        from app.routers.export.multi_clip import export_multi_clip
-
-        project_id, wv, fv = _seed_project_with_final(db)
-
-        http_request = MagicMock()
-        http_request.headers.get.return_value = ""
-
-        multi_clip_data = '{"clips": [], "aspectRatio": "9:16", "transition": {"type": "cut", "duration": 0}}'
-
-        # Stub the heavy pipeline so only the pre-step transaction runs. The body
-        # raises after the pre-step (no clips), but the pointers must already be intact.
-        with patch.object(multi_clip, "_export_clips", new=AsyncMock(side_effect=RuntimeError("stop after pre-step"))), \
-             patch.object(multi_clip.manager, "send_progress", new=AsyncMock()):
-            try:
-                await export_multi_clip(
-                    request=http_request, export_id="exp-t4010-c",
-                    multi_clip_data_json=multi_clip_data, include_audio="true",
-                    target_fps=30, export_mode="fast", project_id=project_id,
-                    project_name="Reel")
-            except Exception:
-                pass
-
-        assert _pointers(db, project_id) == (wv, fv), \
-            "export_multi_clip must leave working_video_id + final_video_id intact"
-
-
-# ===========================================================================
 # Overlay finalize: post-commit old-R2 cleanup
 # ===========================================================================
 

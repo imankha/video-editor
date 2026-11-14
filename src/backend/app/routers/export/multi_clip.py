@@ -1,14 +1,11 @@
 """
-Multi-clip export endpoints.
-
-This module handles exports involving multiple video clips:
-- /multi-clip - Export multiple clips with transitions
-
-Uses the transition strategy pattern for different transition types.
+Clip export pipeline (`_export_clips`), local detection and framing snapshot
+helpers. The one route that renders a project's clip is `/api/export/render`
+(`framing.py`); a project holds exactly one clip (T11250 removed the
+multi-clip route, transitions and chapters).
 """
 
 import asyncio
-import json
 import logging
 import math
 import os
@@ -20,8 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import ffmpeg
-from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
+from fastapi import HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 try:
@@ -31,24 +27,21 @@ except ImportError:
 
 from ...analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
 from ...constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH, ExportStage, ExportStatus
-from ...database import column_exists, get_db_connection
-from ...profile_context import get_current_profile_id, set_current_profile_id
-from ...queries import latest_working_clips_subquery
+from ...database import get_db_connection
+from ...profile_context import set_current_profile_id
 from ...services import export_job_repository
 from ...services.clip_cache import get_clip_cache
 from ...services.clip_pipeline import process_clip_with_pipeline
 from ...services.export_cost_guard import ExportBudgetExceeded, enforce_export_budget
 from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import call_modal_clips_ai, call_modal_detect_players_batch, modal_enabled
-from ...services.transitions import apply_transition
 from ...storage import delete_from_r2, download_from_r2, generate_presigned_url, upload_bytes_to_r2, upload_to_r2
-from ...user_context import get_current_user_id, set_current_user_id
-from ...utils.encoding import decode_data, encode_data
+from ...user_context import set_current_user_id
+from ...utils.encoding import encode_data
 from ...websocket import export_progress, manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
 
 # AI upscaler will be imported on-demand
 AIVideoUpscaler = None
@@ -646,7 +639,6 @@ def calculate_effective_duration(clip_data: dict[str, Any], raw_duration: float)
 def build_clip_boundaries_from_durations(
     clips_data: list[dict[str, Any]],
     actual_durations: list[float],
-    transition: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
     """
     Build clip boundary metadata using actual measured durations of processed clips.
@@ -654,23 +646,16 @@ def build_clip_boundaries_from_durations(
     Args:
         clips_data: List of clip configurations (for names)
         actual_durations: List of actual durations in seconds for each processed clip
-        transition: Optional transition config to account for overlaps
 
     Returns:
         List of dicts with name, start_time, end_time, duration for each clip
     """
     sorted_clips = sorted(clips_data, key=lambda x: x.get('clipIndex', 0))
-    transition_type = transition.get('type', 'cut') if transition else 'cut'
-    transition_duration = transition.get('duration', 0.5) if transition else 0.5
 
     source_clips = []
     current_time = 0.0
 
     for i, (clip_data, duration) in enumerate(zip(sorted_clips, actual_durations)):
-        # Account for transition overlap (dissolve transitions cause clips to overlap)
-        if i > 0 and transition_type == 'dissolve':
-            current_time -= transition_duration
-
         clip_name = clip_data.get('clipName') or clip_data.get('fileName') or f'Clip {i + 1}'
 
         source_clips.append({
@@ -689,7 +674,6 @@ def build_clip_boundaries_from_durations(
 
 def build_clip_boundaries_from_input(
     clips_data: list[dict[str, Any]],
-    transition: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
     """
     Build clip boundary metadata by calculating durations from input data.
@@ -700,14 +684,11 @@ def build_clip_boundaries_from_input(
 
     Args:
         clips_data: List of clip configurations with duration, trimRange, segments
-        transition: Optional transition config to account for overlaps
 
     Returns:
         List of dicts with name, start_time, end_time, duration for each clip
     """
     sorted_clips = sorted(clips_data, key=lambda x: x.get('clipIndex', 0))
-    transition_type = transition.get('type', 'cut') if transition else 'cut'
-    transition_duration = transition.get('duration', 0.5) if transition else 0.5
 
     source_clips = []
     current_time = 0.0
@@ -717,10 +698,6 @@ def build_clip_boundaries_from_input(
         effective_duration = calculate_effective_duration(clip_data, raw_duration)
 
         logger.info(f"[build_clip_boundaries] Clip {i}: raw_duration={raw_duration}, effective_duration={effective_duration}")
-
-        # Account for transition overlap
-        if i > 0 and transition_type == 'dissolve':
-            current_time -= transition_duration
 
         clip_name = clip_data.get('clipName') or clip_data.get('fileName') or f'Clip {i + 1}'
 
@@ -1130,162 +1107,6 @@ async def process_single_clip(
     return output_path
 
 
-def create_chapter_metadata_file(
-    clip_info: list[dict[str, Any]],
-    output_path: str
-) -> str:
-    """
-    Create an ffmetadata file with chapter markers for each clip.
-
-    Args:
-        clip_info: List of dicts with 'name', 'start_time', 'end_time'
-        output_path: Directory to write the metadata file
-
-    Returns:
-        Path to the created metadata file
-    """
-    metadata_path = os.path.join(os.path.dirname(output_path), 'chapters.txt')
-
-    with open(metadata_path, 'w', encoding='utf-8') as f:
-        f.write(";FFMETADATA1\n\n")
-
-        for clip in clip_info:
-            # Convert seconds to milliseconds for TIMEBASE=1/1000
-            start_ms = int(clip['start_time'] * 1000)
-            end_ms = int(clip['end_time'] * 1000)
-            title = clip.get('name', f"Play {clip.get('index', 0) + 1}")
-
-            # Remove file extension from title for cleaner display
-            if '.' in title:
-                title = os.path.splitext(title)[0]
-
-            f.write("[CHAPTER]\n")
-            f.write("TIMEBASE=1/1000\n")
-            f.write(f"START={start_ms}\n")
-            f.write(f"END={end_ms}\n")
-            f.write(f"title={title}\n\n")
-
-    logger.info(f"[Chapters] Created metadata file with {len(clip_info)} chapters")
-    return metadata_path
-
-
-def add_chapters_to_video(
-    input_path: str,
-    metadata_path: str,
-    output_path: str
-) -> None:
-    """Add chapter metadata to a video file."""
-    import subprocess
-
-    cmd = [
-        'ffmpeg', '-y',
-        '-i', input_path,
-        '-i', metadata_path,
-        '-map_metadata', '1',
-        '-codec', 'copy',
-        '-movflags', '+faststart',
-        output_path
-    ]
-
-    logger.info("[Chapters] Adding chapters to video")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        logger.error(f"[Chapters] Failed to add chapters: {result.stderr}")
-    else:
-        logger.info("[Chapters] Successfully added chapters")
-
-
-def concatenate_clips_with_transition(
-    clip_paths: list[str],
-    output_path: str,
-    transition: dict[str, Any],
-    include_audio: bool = True,
-    clip_info: list[dict[str, Any]] | None = None
-) -> None:
-    """
-    Concatenate processed clips with transitions and embed chapter markers.
-
-    Uses the transition strategy pattern for different transition types.
-
-    Args:
-        clip_paths: List of paths to processed clip files
-        output_path: Path for the final concatenated output
-        transition: Transition settings {'type': str, 'duration': float}
-        include_audio: Whether to include audio in output
-        clip_info: Optional list of clip info for chapter markers
-    """
-    transition_type = transition.get('type', 'cut')
-    transition_duration = transition.get('duration', 0.5)
-
-    if len(clip_paths) == 1:
-        # Single clip - just copy
-        shutil.copy(clip_paths[0], output_path)
-        return
-
-    # Use transition strategy pattern
-    success = apply_transition(
-        transition_type=transition_type,
-        clip_paths=clip_paths,
-        output_path=output_path,
-        duration=transition_duration,
-        include_audio=include_audio
-    )
-
-    if not success:
-        raise RuntimeError(f"Transition '{transition_type}' failed")
-
-    # Add chapter markers if clip info is provided
-    if clip_info and len(clip_info) > 1:
-        try:
-            # Get actual durations of processed clips
-            durations = [get_video_duration(path) for path in clip_paths]
-
-            # Calculate chapter timestamps accounting for transitions
-            chapter_data = []
-            current_time = 0.0
-
-            for i, (info, dur) in enumerate(zip(clip_info, durations)):
-                # For dissolve transitions, clips overlap
-                if i > 0 and transition_type == 'dissolve':
-                    current_time -= transition_duration
-
-                chapter_data.append({
-                    'name': info.get('fileName', info.get('name', f'Clip {i + 1}')),
-                    'index': i,
-                    'start_time': current_time,
-                    'end_time': current_time + dur
-                })
-                current_time += dur
-
-            # Adjust end times so chapters don't overlap
-            for i in range(len(chapter_data) - 1):
-                chapter_data[i]['end_time'] = chapter_data[i + 1]['start_time']
-
-            # Create and apply chapter metadata
-            metadata_path = create_chapter_metadata_file(chapter_data, output_path)
-
-            # Create temp output with chapters
-            temp_output = output_path + '.chapters.mp4'
-            add_chapters_to_video(output_path, metadata_path, temp_output)
-
-            # Replace original with chaptered version
-            if os.path.exists(temp_output) and os.path.getsize(temp_output) > 0:
-                os.replace(temp_output, output_path)
-                logger.info(f"[Multi-Clip] Added {len(chapter_data)} chapters to output")
-            else:
-                logger.warning("[Multi-Clip] Chapter embedding produced no output")
-
-            # Cleanup
-            if os.path.exists(metadata_path):
-                os.remove(metadata_path)
-            if os.path.exists(temp_output):
-                os.remove(temp_output)
-
-        except Exception as e:
-            logger.error(f"[Multi-Clip] Failed to add chapters: {e}")
-            # Continue without chapters - video is still valid
-
-
 def _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, transition, new_framing_snapshot=None):
     """T5630 stage='rendered': the render output now exists in R2. Persist
     output_key AND the config finalize needs to rebuild source_clips so a later
@@ -1368,7 +1189,11 @@ async def _export_clips(
     total_video_seconds: float,
     is_test_mode: bool = False,
 ) -> JSONResponse:
-    """Core export pipeline. Handles 1-N clips via Modal or local GPU."""
+    """Core export pipeline: renders a project's one clip via Modal or local GPU."""
+    if len(clips) != 1:
+        # T11250: a project holds exactly one clip; /render refuses more before here.
+        logger.error(f"[T11250] _export_clips refused {len(clips)} clips for export {export_id}")
+        raise ValueError(f"_export_clips renders exactly one clip, got {len(clips)}")
     logger.info(f"[T1116] _export_clips entered: export_id={export_id}, clips={len(clips)}, modal={modal_enabled()}")
     # Reconstruct legacy formats for internal functions
     clips_data = []
@@ -1832,17 +1657,9 @@ async def _export_clips(
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
 
+        # T11250: one clip per project, so the processed clip IS the output.
         final_output = os.path.join(temp_dir, f"final_{export_id}.mp4")
-        _t0 = time_module.monotonic()
-        await asyncio.to_thread(
-            concatenate_clips_with_transition,
-            clip_paths=processed_paths,
-            output_path=final_output,
-            transition=transition,
-            include_audio=include_audio,
-            clip_info=sorted_clips,
-        )
-        logger.info(f"[T1110] concatenate_clips_with_transition took {time_module.monotonic() - _t0:.2f}s (threaded)")
+        shutil.copy2(processed_paths[0], final_output)
 
         logger.info(f"[Multi-Clip Export] Final output: {final_output}")
 
@@ -1891,7 +1708,7 @@ async def _export_clips(
                 # T4010: do NOT null final_video_id on framing re-export; the
                 # published reel stays valid until a new final exists.
                 actual_durations = [get_video_duration(path) for path in processed_paths]
-                source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
+                source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations)
 
                 try:
                     highlight_regions = await run_local_detection_on_video_file(
@@ -2079,508 +1896,3 @@ async def _export_clips(
             # (not a truncated dict repr). The structured detail already went out over WS above.
             raise
         raise HTTPException(status_code=500, detail=user_error) from e
-
-
-@router.post("/multi-clip")
-async def export_multi_clip(
-    request: Request,
-    export_id: str = Form(...),
-    multi_clip_data_json: str = Form(...),
-    include_audio: str = Form("true"),
-    target_fps: int = Form(30),
-    export_mode: str = Form("fast"),
-    project_id: int = Form(None),  # Optional: for saving working video to DB
-    project_name: str = Form(None),  # Optional: for metadata
-):
-    """
-    Export multiple video clips with transitions.
-
-    This endpoint handles multi-clip export where:
-    1. Each clip has its own crop keyframes, segments, and trim settings
-    2. A global aspect ratio applies to all clips
-    3. Clips are concatenated with a specified transition (cut, fade, dissolve)
-
-    Request format:
-    - video_0, video_1, video_2, ... : Video files uploaded as multipart form
-    - multi_clip_data_json: JSON containing clips configuration
-    """
-    # Initialize progress
-    export_progress[export_id] = {
-        "progress": 5,
-        "message": "Making your highlight...",
-        "status": "processing",
-        "projectId": project_id,
-        "projectName": project_name,
-    }
-
-    logger.info(f"[Multi-Clip Export] Starting export {export_id}")
-
-    # T890/T9540: create the export_jobs row via the atomic per-(project, type)
-    # in-flight guard. A double-click generates a second export_id, so dedup on
-    # (project, 'framing') BEFORE the credit reservation below -- an active job
-    # already present -> 409, reserve nothing, so the duplicate can't double-charge.
-    # T4010: do NOT null the pointers here; they stay valid for the whole in-flight
-    # export (success repoints, failure restores). The 'processing' row is the
-    # in-progress signal the UI keys on.
-    if project_id:
-        from app.services.export_helpers import insert_export_job_if_none_active
-        if not insert_export_job_if_none_active(export_id, project_id, "framing"):
-            raise HTTPException(
-                status_code=409,
-                detail={"code": "export_in_flight", "message": "This highlight is already being made."},
-            )
-        logger.info(f"[Multi-Clip Export] Created export_jobs record: {export_id} for project {project_id}")
-        # Notify frontend that export job exists so quest progress can refresh
-        await manager.send_progress(export_id, {
-            "progress": 5,
-            "message": "Making your highlight...",
-            "status": "processing"
-        })
-
-    # Parse form data to get video files
-    form = await request.form()
-
-    # Extract video files (video_0, video_1, etc.). Read into memory now —
-    # UploadFile spools are closed when the request ends, but the pipeline
-    # runs in a background task that outlives the request.
-    video_files: dict[int, Any] = {}
-    for key, value in form.items():
-        if key.startswith('video_'):
-            try:
-                index = int(key.split('_')[1])
-                video_files[index] = BytesFile(await value.read())
-                logger.info(f"[Multi-Clip Export] Found video file: {key}")
-            except (ValueError, IndexError):
-                continue
-
-    # Parse multi-clip data
-    try:
-        multi_clip_data = json.loads(multi_clip_data_json)
-        clips_data = multi_clip_data.get('clips', [])
-        global_aspect_ratio = multi_clip_data.get('globalAspectRatio', '9:16')
-        transition = multi_clip_data.get('transition', {'type': 'cut', 'duration': 0.5})
-
-        logger.info(f"[Multi-Clip Export] {len(clips_data)} clips, aspect ratio: {global_aspect_ratio}, transition: {transition}")
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from e
-
-    include_audio_bool = include_audio.lower() == "true"
-
-    # Capture user + profile context early (needed for credit deduction and async operations)
-    captured_user_id = get_current_user_id()
-    captured_profile_id = get_current_profile_id()
-
-    # T890: Credit reservation — calculate total duration from clips_data
-    from ...highlight_transform import compute_export_credits, get_output_duration
-    from ...services.credit_ledger import (
-        CreditsUnavailable,
-        confirm_reservation,
-        release_reservation,
-        reserve_credits,
-    )
-
-    total_video_seconds = 0
-    for clip_cfg in clips_data:
-        clip_duration = clip_cfg.get('duration', 0)
-        segments = clip_cfg.get('segments')
-        total_video_seconds += get_output_duration(segments, clip_duration)
-
-    credits_required = compute_export_credits(total_video_seconds, target_fps)
-    credits_deducted = 0
-
-    # T890: Reserve credits (atomic in Postgres), confirm after export_jobs created
-    if credits_required > 0:
-        try:
-            credit_result = reserve_credits(
-                captured_user_id, credits_required, export_id, total_video_seconds,
-                profile_id=captured_profile_id,
-            )
-        except CreditsUnavailable:
-            raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
-        if not credit_result["success"]:
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "error": "insufficient_credits",
-                    "required": credits_required,
-                    "available": credit_result["balance"],
-                    "video_seconds": total_video_seconds,
-                },
-            )
-        # Reservation created — export_jobs already created above in atomic transaction
-        # Confirm the reservation (moves from reserved to deducted in credit_transactions)
-        try:
-            confirm_reservation(captured_user_id, export_id)
-        except Exception:
-            release_reservation(captured_user_id, export_id)
-            raise
-        credits_deducted = credits_required
-
-    is_test_mode = request.headers.get('X-Test-Mode', '').lower() == 'true'
-
-    # T760: Run resolution + pipeline in background so the per-user write lock
-    # is released immediately. Holding it for the full export blocked every
-    # other write request from this user for minutes. Completion and errors
-    # are reported via WebSocket (same pattern as /render-overlay).
-    from ...services.poster_warmer import fire_and_forget
-    fire_and_forget(_run_multi_clip_background(
-        export_id=export_id,
-        clips_data=clips_data,
-        video_files=video_files,
-        global_aspect_ratio=global_aspect_ratio,
-        transition=transition,
-        include_audio=include_audio_bool,
-        target_fps=target_fps,
-        export_mode=export_mode,
-        project_id=project_id,
-        project_name=project_name,
-        user_id=captured_user_id,
-        profile_id=captured_profile_id,
-        credits_deducted=credits_deducted,
-        total_video_seconds=total_video_seconds,
-        is_test_mode=is_test_mode,
-    ))
-    return JSONResponse(
-        status_code=202,
-        content={"status": "accepted", "export_id": export_id}
-    )
-
-
-async def _run_multi_clip_background(
-    export_id: str,
-    clips_data: list,
-    video_files: dict[int, Any],
-    global_aspect_ratio: str,
-    transition: dict,
-    include_audio: bool,
-    target_fps: int,
-    export_mode: str,
-    project_id: int | None,
-    project_name: str | None,
-    user_id: str,
-    profile_id: int,
-    credits_deducted: int,
-    total_video_seconds: float,
-    is_test_mode: bool,
-):
-    """Resolve clip sources from the DB, then run the shared export pipeline.
-    Runs via asyncio.create_task after /multi-clip returns 202; all progress
-    and errors are reported via WebSocket."""
-    from ...highlight_transform import canonicalize_segments_data
-    from ...services.export_helpers import fail_export_job, sync_export_db_to_r2
-
-    # T4010: snapshot the pre-job pointers so a failed export restores the project
-    # to exactly its prior state (the success path repoints working_video_id itself).
-    prior_working_video_id = None
-    prior_final_video_id = None
-    if project_id:
-        try:
-            with get_db_connection() as conn:
-                row = conn.cursor().execute(
-                    "SELECT working_video_id, final_video_id FROM projects WHERE id = ?",
-                    (project_id,)).fetchone()
-            if row:
-                prior_working_video_id = row['working_video_id']
-                prior_final_video_id = row['final_video_id']
-        except Exception as e:
-            logger.warning(f"[Multi-Clip Export] Could not snapshot prior pointers for project {project_id}: {e}")
-
-    pipeline_entered = False
-    try:
-        # DB-resolved mode: when project_id is provided and no video files uploaded,
-        # resolve clip sources from the database (supports game-video clips without standalone files)
-        if project_id and len(video_files) == 0 and len(clips_data) > 0:
-            logger.info(f"[Multi-Clip Export] No video files uploaded, resolving {len(clips_data)} clips from DB")
-
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                # T5640: tolerate the deploy->migrate window (v029 rotation column may be absent).
-                _rot = "wc.rotation" if column_exists(cursor, "working_clips", "rotation") else "0.0 as rotation"
-                cursor.execute(f"""
-                    SELECT
-                        wc.id, wc.raw_clip_id, wc.uploaded_filename,
-                        wc.crop_data, wc.segments_data, wc.sort_order, {_rot},
-                        wc.fps as wc_fps, gv.fps as gv_fps,
-                        rc.filename as raw_filename, rc.name as clip_name,
-                        rc.game_id, rc.video_sequence, rc.source, rc.start_time as raw_start_time,
-                        rc.end_time as raw_end_time,
-                        (rc.end_time - rc.start_time) as raw_duration,
-                        COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash
-                    FROM working_clips wc
-                    LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                    LEFT JOIN games g ON rc.game_id = g.id
-                    -- Bug 49p: video_sequence is NULL on legacy single-video-game
-                    -- clips (see clips.py:1616,2142,995 for the same pattern) --
-                    -- without the COALESCE this join drops gv.fps for exactly
-                    -- those legacy rows, no-oping the fps fix for them.
-                    LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND COALESCE(rc.video_sequence, 1) = gv.sequence
-                    WHERE wc.project_id = ?
-                    AND wc.id IN ({latest_working_clips_subquery()})
-                    ORDER BY wc.sort_order
-                """, (project_id, project_id))
-                # dict(), not raw sqlite3.Row: resolve_clip_source (export_helpers.py)
-                # is typed `clip: dict` and calls .get() on it — a bare Row has no
-                # .get() and crashes every multi-clip export that resolves from DB
-                # (T6450). The single-clip path already converts before calling it
-                # (framing.py); this fallback branch was the one call site that didn't.
-                db_clips = [dict(row) for row in cursor.fetchall()]
-
-            if not db_clips:
-                raise RuntimeError("No clips found in project")
-
-            # Build lookup by working_clip_id
-            db_clips_by_id = {clip['id']: clip for clip in db_clips}
-
-            resolve_temp_dir = tempfile.mkdtemp()
-            resolve_total = len(clips_data)
-            try:
-                for i, clip_data in enumerate(clips_data):
-                    wc_id = clip_data.get('workingClipId')
-                    if wc_id and wc_id in db_clips_by_id:
-                        db_clip = db_clips_by_id[wc_id]
-                    elif i < len(db_clips):
-                        # Fallback: match by sort order
-                        db_clip = db_clips[i]
-                    else:
-                        raise RuntimeError(f"Cannot resolve clip {i}: no matching DB clip")
-
-                    # Bug 49p: this hard-coded 30 mis-times every crop keyframe
-                    # for a non-30fps source (e.g. frame 854 on a 50fps clip
-                    # resolved to 28.5s instead of the correct 17.1s, past the
-                    # clip's own end, freezing the crop). Use the clip's own
-                    # fps, falling back to the game video's, then 30 -- mirrors
-                    # the ffprobe-based real-fps handling in framing.py.
-                    framerate = db_clip['wc_fps'] or db_clip['gv_fps']
-                    if not framerate:
-                        logger.warning(
-                            f"[Multi-Clip Export] clip {db_clip['id']}: no fps on working_clips "
-                            f"or game_videos, defaulting to 30 (may mis-time crop on a non-30fps source)"
-                        )
-                        framerate = 30
-                    clip_data['sourceFps'] = framerate
-
-                    # Use DB-authoritative crop/segments data
-                    # DB stores frame-based keyframes; pipeline expects time-based
-                    if db_clip['crop_data']:
-                        raw_kfs = decode_data(db_clip['crop_data'])
-                        # T4350: keep the frame-based stored form for the framing snapshot.
-                        clip_data['cropKeyframesStored'] = raw_kfs
-                        if raw_kfs and 'frame' in raw_kfs[0] and 'time' not in raw_kfs[0]:
-                            clip_data['cropKeyframes'] = [
-                                {'time': kf['frame'] / framerate, 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
-                                for kf in raw_kfs
-                            ]
-                        else:
-                            clip_data['cropKeyframes'] = raw_kfs
-                    if db_clip['raw_duration']:
-                        clip_data['duration'] = db_clip['raw_duration']
-                    if db_clip['segments_data']:
-                        # Gesture-saved rows store boundaries as user splits only;
-                        # rebuild the full [0, ...splits, duration] list so
-                        # segmentSpeeds indices line up (Bug 20p)
-                        clip_data['segments'] = canonicalize_segments_data(
-                            decode_data(db_clip['segments_data']),
-                            clip_data.get('duration'),
-                        )
-                    clip_data['rotation'] = db_clip['rotation'] if 'rotation' in db_clip.keys() else 0  # noqa: SIM118 -- sqlite3.Row `in` checks values, not keys
-
-                    # Resolve video source. T4175: game clips and post-expiry
-                    # drafts share resolve_clip_source (game video while it
-                    # exists, else the preserved raw_clips/ extract, else recap).
-                    # Uploaded clips keep their own download path below.
-                    if db_clip['game_id'] or db_clip['raw_filename']:
-                        # Game clip: stream clip range from R2 via presigned URL (no full download)
-                        extract_progress = 5 + int(((i + 0.5) / resolve_total) * 5)
-                        progress_data = {
-                            "progress": extract_progress,
-                            "message": f"Getting play {i + 1} of {resolve_total} ready...",
-                            "status": "processing",
-                            "projectId": project_id,
-                            "projectName": project_name,
-                            "type": "multi_clip"
-                        }
-                        export_progress[export_id] = progress_data
-                        await manager.send_progress(export_id, progress_data)
-
-                        from ...services.export_helpers import resolve_clip_source
-                        source_url, start_time, end_time, source_flexible = resolve_clip_source(db_clip)
-                        clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
-                        logger.info(
-                            f"[Multi-Clip Export] Streaming clip {i} range: "
-                            f"{start_time}s - {end_time}s (flexible={source_flexible})"
-                        )
-
-                        try:
-                            # B023: bind the loop variables as defaults so the closure
-                            # can't observe a later iteration's values (they're read
-                            # synchronously below regardless, but this is robust to
-                            # future refactors that don't await inline).
-                            def _extract_clip(source_url=source_url, start_time=start_time,
-                                               end_time=end_time, clip_path=clip_path):
-                                (
-                                    ffmpeg
-                                    .input(source_url, ss=start_time, to=end_time)
-                                    .output(str(clip_path), c='copy')
-                                    .overwrite_output()
-                                    .run(quiet=True)
-                                )
-                            _t0 = time_module.monotonic()
-                            await asyncio.to_thread(_extract_clip)
-                            logger.info(f"[T1110] ffmpeg extract clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
-                        except ffmpeg.Error as e:
-                            raise RuntimeError(f"Failed to extract clip {i} range: {e}") from e
-
-                        with open(clip_path, 'rb') as f:
-                            video_files[i] = BytesFile(f.read())
-
-                    elif db_clip['uploaded_filename']:
-                        # Uploaded clip: download from user's R2 storage
-                        dl_progress = 5 + int((i / resolve_total) * 5)
-                        progress_data = {
-                            "progress": dl_progress,
-                            "message": f"Getting play {i + 1} of {resolve_total} ready...",
-                            "status": "processing",
-                            "projectId": project_id,
-                            "projectName": project_name,
-                            "type": "multi_clip"
-                        }
-                        export_progress[export_id] = progress_data
-                        await manager.send_progress(export_id, progress_data)
-
-                        r2_key = f"raw_clips/{db_clip['uploaded_filename']}"
-                        clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
-                        logger.info(f"[Multi-Clip Export] Downloading uploaded clip: {r2_key}")
-                        _t0 = time_module.monotonic()
-                        if not await asyncio.to_thread(download_from_r2, user_id, r2_key, clip_path):
-                            raise RuntimeError(f"Failed to download uploaded clip {i}")
-                        logger.info(f"[T1110] download_from_r2 uploaded clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
-                        with open(clip_path, 'rb') as f:
-                            video_files[i] = BytesFile(f.read())
-
-                    else:
-                        raise RuntimeError(
-                            f"Clip {i} has no video source (no game_id, uploaded_filename, or raw_filename)"
-                        )
-
-                logger.info(f"[Multi-Clip Export] Resolved {len(video_files)} clips from DB")
-            finally:
-                # Clean up temp files (video content is now in memory via BytesFile)
-                shutil.rmtree(resolve_temp_dir, ignore_errors=True)
-
-        # Validate video files match clip data
-        if len(video_files) != len(clips_data):
-            raise RuntimeError(
-                f"Mismatch: {len(video_files)} video files but {len(clips_data)} clip configs"
-            )
-
-        # Validate all clips have framing data (crop keyframes). T3700 P0: a clip the
-        # user never framed is NOT an error — apply the named centered default crop so a
-        # zero-effort export still succeeds (same default the editor shows for opened clips).
-        clips_missing_framing = []
-        for i, clip in enumerate(clips_data):
-            crop_keyframes = clip.get('cropKeyframes', [])
-            if not crop_keyframes or len(crop_keyframes) == 0:
-                vw, vh = clip.get('sourceWidth'), clip.get('sourceHeight')
-                if vw and vh:
-                    from ...services.default_crop import default_crop_keyframes
-                    total_frames = max(1, round((clip.get('duration') or 0) * 30))
-                    clip['cropKeyframes'] = default_crop_keyframes(vw, vh, global_aspect_ratio, total_frames)
-                    logger.info(f"[Multi-Clip Export] clip {i}: no crop set, applied centered default ({global_aspect_ratio}, {vw}x{vh})")
-                else:
-                    clip_name = clip.get('clipName') or clip.get('fileName') or f'Clip {i + 1}'
-                    clips_missing_framing.append(clip_name)
-
-        if clips_missing_framing:
-            raise RuntimeError(
-                f"Cannot generate: {len(clips_missing_framing)} highlight(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all highlights before generating."
-            )
-
-        # Build ClipExportData list for the shared pipeline
-        clip_export_list = []
-        for i, cd in enumerate(clips_data):
-            clip_index = cd.get('clipIndex', i)
-            clip_export_list.append(ClipExportData(
-                clip_index=clip_index,
-                crop_keyframes=cd.get('cropKeyframes', []),
-                segments=cd.get('segments'),
-                duration=cd.get('duration', 0),
-                video_file=video_files.get(clip_index),
-                clip_name=cd.get('clipName') or cd.get('fileName'),
-                rotation=cd.get('rotation', 0),
-                crop_keyframes_stored=cd.get('cropKeyframesStored', cd.get('cropKeyframes', [])),  # T4350
-                # Bug 49p: real source fps, resolved for the crop-keyframe time
-                # conversion above. NOT currently consumed for the framing
-                # snapshot (see _build_framing_snapshot) -- that needs the
-                # transform's source/working fps units split first (follow-up).
-                source_fps=cd.get('sourceFps'),
-            ))
-
-        logger.info(f"[T1116] export_multi_clip delegating to _export_clips: {len(clip_export_list)} clips, aspect={global_aspect_ratio}, test_mode={is_test_mode}")
-
-        pipeline_entered = True
-        await _export_clips(
-            export_id=export_id,
-            clips=clip_export_list,
-            aspect_ratio=global_aspect_ratio,
-            transition=transition,
-            include_audio=include_audio,
-            target_fps=target_fps,
-            export_mode=export_mode,
-            project_id=project_id,
-            project_name=project_name,
-            user_id=user_id,
-            profile_id=profile_id,
-            credits_deducted=credits_deducted,
-            total_video_seconds=total_video_seconds,
-            is_test_mode=is_test_mode,
-        )
-
-    except Exception as e:
-        # _export_clips refunds credits itself once entered; only pre-pipeline
-        # failures need a refund here.
-        if not pipeline_entered and credits_deducted > 0:
-            from ...services.credit_ledger import refund_credits
-            refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
-            logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits (pre-pipeline failure)")
-        # T11320: a preflight budget rejection is expected and already fully handled by
-        # _export_clips (structured WS payload + readable job-fail message) and logged there;
-        # log it once at WARNING here, not a duplicate ERROR + traceback.
-        if isinstance(e, ExportBudgetExceeded):
-            logger.warning(f"[Multi-Clip Export] Export {export_id} rejected by preflight guard: {e}")
-        else:
-            logger.error(f"[Multi-Clip Export] Background export failed: {e}", exc_info=True)
-
-        # T4010: a failed export must leave the project exactly as before the job.
-        # Restore the pointers in case the pipeline advanced working_video_id or
-        # nulled final_video_id before failing -- the published reel is never lost.
-        if project_id:
-            try:
-                with get_db_connection() as conn:
-                    conn.cursor().execute(
-                        "UPDATE projects SET working_video_id = ?, final_video_id = ? WHERE id = ?",
-                        (prior_working_video_id, prior_final_video_id, project_id))
-                    conn.commit()
-            except Exception as restore_err:
-                logger.error(f"[Multi-Clip Export] Failed to restore prior pointers for project {project_id}: {restore_err}")
-
-        fail_export_job(export_id, str(e))
-
-        # _export_clips' generic error path already sent a WS error; cover the
-        # paths that didn't (pre-pipeline failures, HTTPException from pipeline).
-        if export_progress.get(export_id, {}).get('status') != 'error':
-            logger.warning(f"Generation failed: {e}")
-            error_data = {
-                "progress": 0,
-                "message": "We couldn't make your highlight. Try again.",
-                "error": "We couldn't make your highlight. Try again.",
-                "status": "error",
-                "projectId": project_id,
-                "projectName": project_name,
-                "type": "multi_clip",
-            }
-            export_progress[export_id] = error_data
-            await manager.send_progress(export_id, error_data)
-    finally:
-        # Background tasks run outside the request middleware, so DB writes
-        # (working_videos, export_jobs, refunds) must be synced explicitly.
-        await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id)

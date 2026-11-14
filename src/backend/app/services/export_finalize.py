@@ -360,7 +360,7 @@ async def finalize_export(
     early-returns; a ``detecting``/``persisting`` job completes once.
 
     Detection is reconstructed from the persisted config: it decodes
-    ``job['input_data']`` -> ``build_clip_boundaries_from_input(clips, transition)``
+    ``job['input_data']`` -> ``build_clip_boundaries_from_input(clips)``
     and runs ``run_player_detection_for_highlights(user_id, output_key,
     source_clips)`` — **fps defaults to 30, matching writer 1 exactly (BINDING:
     do NOT pass input.target_fps)**. On any detection failure it falls back to
@@ -425,8 +425,7 @@ async def finalize_export(
 
     input_data = decode_data(job.get("input_data")) or {}
     clips = input_data.get("clips", [])
-    transition = input_data.get("transition")
-    source_clips = build_clip_boundaries_from_input(clips, transition)
+    source_clips = build_clip_boundaries_from_input(clips)
 
     try:
         # fps defaults to 30 — BINDING fidelity rule #1 (do NOT pass target_fps).

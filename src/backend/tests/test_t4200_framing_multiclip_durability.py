@@ -1,7 +1,8 @@
 """
-T4200 — framing/multi-clip export durability (sync-then-announce).
+T4200 — framing export durability (sync-then-announce).
 
-Framing and multi-clip both render through _export_clips (framing delegates to it).
+Framing renders its one clip through _export_clips (T11250 removed the multi-clip
+endpoint that also delegated to it).
 Before this task, _export_clips:
   - announced COMPLETE before the profile DB was durably synced to R2, ignoring
     sync failure (a Fly machine cycling in between silently lost the export), and
@@ -159,7 +160,7 @@ async def test_db_save_failure_is_terminal_no_complete(project, monkeypatch):
 
     from fastapi import HTTPException
     # Terminal: the DB-save failure is re-raised and the outer handler turns it into a
-    # 500 (framing's background caller catches this; the multi-clip endpoint returns 500).
+    # 500 (framing's background caller catches this).
     with pytest.raises(HTTPException) as exc_info:
         await _run(project)
     assert exc_info.value.status_code == 500
