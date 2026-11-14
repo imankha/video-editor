@@ -66,7 +66,7 @@ export const generalQualities = [
   {
     name: 'Decision Making',
     meaning: 'Chooses the better option before the opponent can react.',
-    sign: 'Two or more options were visible and the player took the one that hurt the opponent most, or released before the nearest opponent could reach them. Give this only when the choice itself is what stands out.',
+    sign: 'Two or more options were visible and the player took the one that hurt the opponent most, or acted before the nearest opponent could get to them. Give this only when the choice itself is what stands out.',
     routine: 'Only one option was on.',
   },
   {
