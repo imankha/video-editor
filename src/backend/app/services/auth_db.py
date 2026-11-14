@@ -11,6 +11,7 @@ Postgres instance for all users. It stores:
 """
 
 import logging
+import re
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -236,13 +237,25 @@ def cleanup_expired_sessions() -> int:
 # Admin operations (T550)
 # ---------------------------------------------------------------------------
 
+# Email grammar of the dev account picker (routers/dev_accounts.dev_account_email, T11500 design D8).
+DEV_PICKER_EMAIL_RE = re.compile(
+    r"^dev\+(?:empty|upload|full)\+[a-z0-9._-]+\+\d{8}T\d{6}-[0-9a-f]{6}@reelballers\.local$"
+)
+
+
 def is_admin(user_id: str) -> bool:
     with get_auth_db() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
+        cur.execute("SELECT email, is_test_account FROM users WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
         if not row or not row["email"]:
             return False
+        # T16430: a dev-picker account (?dev_account=<preset>) is an admin, so a local or task stack can
+        # test /admin from its test link. Only where the picker itself exists (dev envs, never staging or
+        # production), and only for an account the picker created (test flag + its email grammar).
+        from app import storage
+        if storage._test_seams_enabled() and row["is_test_account"] and DEV_PICKER_EMAIL_RE.match(row["email"]):
+            return True
         cur.execute("SELECT 1 FROM admin_users WHERE email = %s", (row["email"],))
         return cur.fetchone() is not None
 

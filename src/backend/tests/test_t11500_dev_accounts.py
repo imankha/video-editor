@@ -259,3 +259,45 @@ def test_clone_failure_is_a_loud_500_with_nothing_left_behind(dev_client, monkey
     assert "set-cookie" not in resp.headers
     assert _q(dsn, "SELECT COUNT(*) AS n FROM users")[0]["n"] == users_before
     assert set(r2.objects) == keys_before  # new prefix purged
+
+
+# ---- T16430: every dev-picker account is an admin, on dev stacks only --------
+# Owner, 2026-11-13: "?dev_account=full ... just logs in as normal user, no access to admin panel."
+
+@pytest.mark.parametrize("preset", ["empty", "full"])
+def test_dev_picker_account_is_an_admin_on_a_dev_stack(dev_client, monkeypatch, preset):
+    client, r2, _dsn = dev_client
+    from app.services import auth_db
+    if preset != "empty":
+        _seed_template(_dsn, r2, monkeypatch, preset=preset)
+    resp = client.post(f"/api/auth/dev-accounts/{preset}")
+    assert resp.status_code == 200, resp.text
+    uid = resp.json()["user_id"]
+    register_test_user_ids(uid)
+    assert auth_db.is_admin(uid) is True  # the gate every /api/admin route uses (_require_admin)
+
+
+@pytest.mark.parametrize("app_env", ["staging", "production", "prod"])
+def test_dev_picker_email_is_never_admin_outside_dev(monkeypatch, pg_conn, app_env):
+    from app import storage
+    from app.services import auth_db
+    uid = auth_db.generate_user_id()
+    register_test_user_ids(uid)
+    auth_db.create_user(uid, email=f"dev+full+stack-a+20261113T120000-{uid.replace('-', '')[:6]}@reelballers.local",
+                        is_test_account=True)
+    monkeypatch.setattr(storage, "APP_ENV", app_env)
+    assert auth_db.is_admin(uid) is False
+
+
+def test_dev_grammar_email_without_the_test_flag_is_not_admin(monkeypatch, pg_conn):
+    from app import storage
+    from app.services import auth_db
+    monkeypatch.setattr(storage, "APP_ENV", ENV)
+    uid = auth_db.generate_user_id()
+    register_test_user_ids(uid)
+    auth_db.create_user(uid, email=f"dev+full+stack-a+20261113T120000-{uid.replace('-', '')[:6]}@reelballers.local")
+    assert auth_db.is_admin(uid) is False
+    other = auth_db.generate_user_id()
+    register_test_user_ids(other)
+    auth_db.create_user(other, email=f"someone-{other[:6]}@example.com", is_test_account=True)
+    assert auth_db.is_admin(other) is False
