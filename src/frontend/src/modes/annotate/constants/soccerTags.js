@@ -120,7 +120,7 @@ export const sportStrings = {
     {
       name: "Passing Range",
       meaning: "Hits long or firm passes accurately.",
-      sign: "A pass of 30 yards or more that reaches a teammate's feet or stride; or a firm ground pass that goes between two defenders to a teammate.",
+      sign: "A long pass that clears one or more lines of opponents and reaches a teammate's feet or stride; or a firm ground pass that goes between two defenders to a teammate.",
       routine: "Short sideways or backward passes under no pressure."
     },
     {
@@ -166,14 +166,14 @@ export const sportStrings = {
 
   // One line for each general quality, saying what it looks like in soccer.
   generalQualityExamples: {
-    "Pace": "Wins a race of 15 yards or more to the ball or into space, with or without the ball.",
+    "Separation": "Runs away from a defender with or without the ball, catches an attacker who had a head start, or out-jumps an opponent for a header.",
     "Strength": "Shoulder to shoulder, stays up and comes away with the ball; or holds a defender off with the back to goal and plays a teammate in.",
-    "Composure": "Pressed within about two yards, keeps the ball and passes or carries out instead of clearing it.",
-    "Vision": "Checks over the shoulder before receiving, then plays through or over a line of defenders into a run, or switches play to the free side.",
+    "Composure": "With a defender within reach, keeps the ball and passes or carries out instead of clearing it.",
+    "Vision": "Plays through or over a line of defenders into a teammate's run, or switches play to the free side.",
     "Decision Making": "Squares to an unmarked teammate instead of shooting from a tight angle; releases in one or two touches before the press arrives.",
     "Anticipation": "Steps in to intercept the pass, or covers the space behind a beaten teammate before the attacker gets there.",
-    "Work Rate": "Sprints 20 yards or more after the ball is lost to win it back; presses two or three times in a row and forces a turnover.",
-    "Off-Ball Movement": "A run behind the last defender that stays onside and is found; an overlapping run that receives the pass.",
+    "Work Rate": "After the ball is lost, sprints past jogging players to win it back or catch the attack; presses two or three times in a row and forces a turnover.",
+    "Getting Open": "A run behind the last defender that stays onside and is found; an overlapping run that receives the pass.",
     "1v1 Attacking": "Goes past a set defender with a change of speed or direction or a feint, and it leads to a shot, cross or pass.",
     "1v1 Defending": "Stays on their feet, forces the attacker wide or backward, and wins the ball or blocks the cross or shot."
   },

@@ -7,9 +7,15 @@
  * and is added to a prompt only for athletes of that sport. A sport with no
  * strings runs on this file alone.
  *
- * A quality is what a play shows about the athlete (Pace, Vision); a tag is
- * what happened (Goal, Tackle). Quality names are stored identifiers once a
+ * A quality is what a play shows about the athlete (Separation, Vision); a tag
+ * is what happened (Goal, Tackle). Quality names are stored identifiers once a
  * game analysis has used them: renaming one means a new prompt version.
+ *
+ * Every sign must be something a camera can show (owner ruling 2026-11-13):
+ * what the player does relative to another player in the frame. Video cannot
+ * measure speed, distance or what a player is thinking, but it can show a
+ * player pulling away from an opponent, catching one or out-jumping one. That
+ * is why the list says Separation and not Pace.
  *
  * Source and evidence: docs/plans/research/recruiting-reel-research-2026-11.md
  * section 8a.
@@ -34,10 +40,10 @@ export const LEARNING_OPPORTUNITY =
 
 export const generalQualities = [
   {
-    name: 'Pace',
-    meaning: 'Covers ground faster than the opponent.',
-    sign: 'The player wins a race against an opponent who started level or ahead.',
-    routine: 'Nobody was racing them.',
+    name: 'Separation',
+    meaning: 'Beats an opponent with speed, quickness or jump.',
+    sign: "The gap between the player and an opponent changes because of the player's speed, quickness or jump: the player pulls away from one, catches one who started ahead, or gets higher than one in a contested jump.",
+    routine: 'No opponent was close enough to compare against, or the opponent was not trying.',
   },
   {
     name: 'Strength',
@@ -47,38 +53,38 @@ export const generalQualities = [
   },
   {
     name: 'Composure',
-    meaning: 'Stays calm and in control when pressed.',
-    sign: 'Under close pressure from one or more opponents, the player keeps control and makes a clean next action instead of a hurried one.',
+    meaning: 'Keeps control while opponents close in.',
+    sign: 'Under close pressure from one or more opponents, the player keeps control and makes a clean next action instead of giving possession away.',
     routine: 'Time and space, nobody near.',
   },
   {
     name: 'Vision',
-    meaning: 'Sees a teammate or a space others do not.',
-    sign: 'The player looks around first, then finds a teammate or a space that was not the obvious option.',
+    meaning: 'Finds a teammate or a space that takes opponents out of the play.',
+    sign: 'The player delivers to a teammate or into a space that was not the nearest option, and it leaves one or more opponents behind the play.',
     routine: 'The nearest, obvious option.',
   },
   {
     name: 'Decision Making',
-    meaning: 'Chooses the better option, quickly.',
-    sign: 'Two or more options were visible and the player took the one that hurt the opponent most, or acted before the pressure arrived. Give this only when the choice itself is what stands out.',
+    meaning: 'Chooses the better option before the opponent can react.',
+    sign: 'Two or more options were visible and the player took the one that hurt the opponent most, or acted before the nearest opponent could get to them. Give this only when the choice itself is what stands out.',
     routine: 'Only one option was on.',
   },
   {
     name: 'Anticipation',
-    meaning: 'Reads the play and arrives first.',
+    meaning: 'Moves early and arrives before the opponent.',
     sign: 'The player moves before the opponent acts and gets there first: cuts out a pass, steps in front, or covers for a beaten teammate.',
     routine: 'The play came straight to them.',
   },
   {
     name: 'Work Rate',
-    meaning: 'Chases back or presses to win possession.',
-    sign: 'A long sprint or repeated efforts off the play that win possession back or stop an attack.',
-    routine: 'Jogging back into position.',
+    meaning: 'Out-works the players around them to win possession back.',
+    sign: 'While teammates and opponents nearby slow down or jog, the player keeps sprinting or makes repeated efforts off the play, and it wins possession back or stops an attack.',
+    routine: 'Jogging back into position with everyone else.',
   },
   {
-    name: 'Off-Ball Movement',
-    meaning: 'Gets free without possession.',
-    sign: 'A timed move without possession loses the marker, and a teammate finds the player.',
+    name: 'Getting Open',
+    meaning: 'Gets free of a marker without possession.',
+    sign: 'A timed move without possession leaves the marker behind or on the wrong side, and a teammate finds the player.',
     routine: 'Standing in space and receiving.',
   },
   {

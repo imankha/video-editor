@@ -25,6 +25,13 @@ const GENERAL_NAMES = generalQualities.map(q => q.name);
 // part is sent to the model for every sport, so none of these may appear.
 const SPORT_SPECIFIC = /soccer|goalkeeper|goalie|penalty|offside|yard|header|puck|dunk|touchdown|ball\b/i;
 
+// A sign must be something a camera can show: what the player does relative
+// to another player in the frame (owner ruling 2026-11-13). So every sign
+// names another player, and nothing leans on a measurement video cannot make
+// or on what the player sees or feels.
+const ANOTHER_PLAYER = /opponent|defender|attacker|marker|teammate/i;
+const NOT_VISIBLE = /\b(pace|fast|faster|mph|calm|sees|looks|reads|thinks)\b|\d+ ?(yards?|feet|meters?|metres?)\b/i;
+
 describe('general qualities (T16320)', () => {
   it('has ten uniquely named qualities, each fully described', () => {
     expect(generalQualities).toHaveLength(10);
@@ -46,6 +53,15 @@ describe('general qualities (T16320)', () => {
     ];
     for (const text of general) {
       expect(text).not.toMatch(SPORT_SPECIFIC);
+    }
+  });
+
+  it('describes every sign relative to another player, in terms video can show', () => {
+    expect(GENERAL_NAMES).toContain('Separation');
+    expect(GENERAL_NAMES).not.toContain('Pace');
+    for (const q of generalQualities) {
+      expect(q.sign, q.name).toMatch(ANOTHER_PLAYER);
+      expect(`${q.name} ${q.meaning} ${q.sign}`, q.name).not.toMatch(NOT_VISIBLE);
     }
   });
 
@@ -95,6 +111,9 @@ describe('sport strings (T16320)', () => {
     }
     expect(Object.keys(getSportStrings('soccer').generalQualityExamples).sort())
       .toEqual([...GENERAL_NAMES].sort());
+    for (const text of Object.values(getSportStrings('soccer').generalQualityExamples)) {
+      expect(text).not.toMatch(NOT_VISIBLE);
+    }
   });
 
   it('soccer carries its social examples and reel notes', () => {
