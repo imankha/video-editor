@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T15950:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/GlobalExportIndicator.test.jsx -t 'T15950:C1' --reporter=dot"
+    }
+  }
+}

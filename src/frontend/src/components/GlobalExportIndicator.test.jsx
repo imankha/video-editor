@@ -41,6 +41,11 @@ function makeExport({
   };
 }
 
+/** T15950: a frame track whose last two windows both measured `msPerFrame` (settled). */
+function settledTrack(frame, msPerFrame) {
+  return { frame, at: NOW, rates: [msPerFrame, msPerFrame] };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
@@ -82,15 +87,14 @@ describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
 
   it('returns null on the very first frame sample (no rate yet)', () => {
     const exp = makeExport({ percent: 10, elapsedSec: 10, message: 'AI upscaling frame 20/150' });
-    const frameTracks = new Map([[exp.exportId, { frame: 20, at: NOW }]]);
+    const frameTracks = new Map([[exp.exportId, { frame: 20, at: NOW, rates: [] }]]);
     expect(resolveEtaDisplay(exp, NOW, new Map(), new Map(), frameTracks)).toBeNull();
   });
 
   it('returns a live estimate from the measured per-frame rate once frames advance', () => {
-    // 50 frames in 25s -> 500ms/frame; 50 remaining -> 25s + 30s fixed tail = 55s,
-    // rounded up to the next 30s = 60s = "About 1 minute".
+    // 500ms/frame; 50 remaining -> 25s + 30s fixed tail = 55s = "About 1 minute".
     const exp = makeExport({ percent: 60, elapsedSec: 60, message: 'AI upscaling frame 100/150' });
-    const frameTracks = new Map([[exp.exportId, { frame: 50, at: NOW - 25000 }]]);
+    const frameTracks = new Map([[exp.exportId, settledTrack(100, 500)]]);
     const display = resolveEtaDisplay(exp, NOW, new Map(), new Map(), frameTracks);
     expect(display.stale).toBe(false);
     expect(display.formatted).toBe('About 1 minute');
@@ -98,7 +102,7 @@ describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
 
   it('goes stale once the promised deadline is exceeded by the grace period', () => {
     const exp = makeExport({ percent: 95, elapsedSec: 60, message: 'AI upscaling frame 140/150' });
-    const frameTracks = new Map([[exp.exportId, { frame: 100, at: NOW - 50000 }]]);
+    const frameTracks = new Map([[exp.exportId, settledTrack(140, 1250)]]);
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS - 1000]]);
     const display = resolveEtaDisplay(exp, NOW, deadlines, new Map(), frameTracks);
     expect(display.stale).toBe(true);
@@ -109,7 +113,7 @@ describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
 
   it('stays live inside the 15s grace window past the deadline', () => {
     const exp = makeExport({ percent: 95, elapsedSec: 60, message: 'AI upscaling frame 140/150' });
-    const frameTracks = new Map([[exp.exportId, { frame: 100, at: NOW - 50000 }]]);
+    const frameTracks = new Map([[exp.exportId, settledTrack(140, 1250)]]);
     const deadlines = new Map([[exp.exportId, NOW - ETA_BUST_GRACE_MS + 5000]]);
     expect(resolveEtaDisplay(exp, NOW, deadlines, new Map(), frameTracks).stale).toBe(false);
   });
@@ -118,7 +122,7 @@ describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
     // frame === totalFrames -> 0 remaining frames -> the estimate is just the fixed
     // post-upscale tail (30s = "About 1 minute"), the sub-minute case the stall rule guards.
     const exp = makeExport({ percent: 95, elapsedSec: 60, message: 'AI upscaling frame 150/150' });
-    const frameTracks = new Map([[exp.exportId, { frame: 100, at: NOW - 50000 }]]);
+    const frameTracks = new Map([[exp.exportId, settledTrack(140, 1250)]]);
     const tracks = new Map([[exp.exportId, { percent: 95, changedAt: NOW - ETA_STALL_MS - 1000 }]]);
     const display = resolveEtaDisplay(exp, NOW, new Map(), tracks, frameTracks);
     expect(display.stale).toBe(true);
@@ -126,7 +130,7 @@ describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
 
   it('a multi-minute estimate is NOT hidden by the stall rule (only sub-minute ones)', () => {
     const exp = makeExport({ percent: 30, elapsedSec: 300, message: 'AI upscaling frame 60/150' });
-    const frameTracks = new Map([[exp.exportId, { frame: 10, at: NOW - 250000 }]]);
+    const frameTracks = new Map([[exp.exportId, settledTrack(60, 5000)]]);
     const tracks = new Map([[exp.exportId, { percent: 30, changedAt: NOW - ETA_STALL_MS - 1000 }]]);
     expect(resolveEtaDisplay(exp, NOW, new Map(), tracks, frameTracks).stale).toBe(false);
   });
@@ -144,129 +148,95 @@ describe('resolveEtaDisplay — honest ETA, frame-rate based (T14860)', () => {
     // more frames have completed and less time is actually left (the task's own
     // repro: "4, 3, 2, 3, 2 minutes (non-monotonic)"). minSecondsTracks clamps the
     // displayed value to the lowest one ever shown for this export.
-    const frameTracks = new Map([['export_m', { frame: 10, at: Date.now() }]]);
+    const frameTracks = new Map([['export_m', settledTrack(60, 400)]]);
     const minSecondsTracks = new Map();
 
-    // 20s in, 50 frames of 200 completed since the first sample (10 -> 60) -> fast
-    // rate -> "About 2 minutes".
+    // 400ms/frame at frame 60 of 200 -> 140 * 0.4s + 30s tail = 86s -> "About 1 minute".
     vi.advanceTimersByTime(20000);
     const expA = makeExport({ exportId: 'export_m', percent: 30, elapsedSec: 20, message: 'AI upscaling frame 60/200' });
     const displayA = resolveEtaDisplay(expA, Date.now(), new Map(), new Map(), frameTracks, minSecondsTracks);
-    expect(displayA.formatted).toBe('About 2 minutes');
+    expect(displayA.formatted).toBe('About 1 minute');
 
-    // 60s in (40s later), only 10 more frames done (60 -> 70) -> the rate has
-    // slowed a lot -- the raw extrapolation alone would read "About 3 minutes".
+    // 60s in (40s later), only 10 more frames done (60 -> 70) and both windows now
+    // measure 1s/frame -- the raw extrapolation alone would read "About 3 minutes".
+    frameTracks.set('export_m', settledTrack(70, 1000));
     vi.advanceTimersByTime(40000);
     const expB = makeExport({ exportId: 'export_m', percent: 35, elapsedSec: 60, message: 'AI upscaling frame 70/200' });
     const displayB = resolveEtaDisplay(expB, Date.now(), new Map(), new Map(), frameTracks, minSecondsTracks);
-    expect(displayB.formatted).toBe('About 2 minutes');
+    expect(displayB.formatted).toBe('About 1 minute');
   });
 });
 
 describe('GlobalExportIndicator — live estimate stays within 1.5x of actual remaining time (T15530 AC3)', () => {
-  // Reproduces the task's own repro: a slow early window (GPU warm-up) followed by a
-  // faster steady pace. Averaging the per-frame rate from the very FIRST frame ever seen
-  // (the pre-fix behavior) keeps dragging in that slow window long after the pace sped
-  // up, overshooting the actual remaining time by >1.5x. The fix resets the measurement
-  // anchor to the latest sample on every new frame count, so the estimate tracks the
-  // current pace instead of blending in a stale window.
-  it('does not overshoot the actual remaining time by more than 1.5x after a slow start speeds up', () => {
-    useExportStore.setState({
-      activeExports: {
-        export_acc: makeExport({
-          exportId: 'export_acc', percent: 20, elapsedSec: 0, message: 'AI upscaling frame 10/200',
-        }),
-      },
+  // A slow early window (GPU warm-up) followed by a faster steady pace. Averaging that
+  // window in, or showing it alone, overshoots the actual remaining time by >1.5x.
+  // T15950: no estimate shows until two consecutive frame windows agree, so the slow
+  // window is never shown and never blended in. The component's effect records each
+  // sample after the render that shows it, so every reading waits one 1s tick.
+  function sample(exportId, percent, frame, total) {
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          [exportId]: makeExport({ exportId, percent, elapsedSec: 0, message: `AI upscaling frame ${frame}/${total}` }),
+        },
+      });
     });
+  }
+  function tick(ms) {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  it('does not overshoot the actual remaining time by more than 1.5x after a slow start speeds up', () => {
+    sample('export_acc', 20, 10, 200);
     render(<GlobalExportIndicator />);
 
-    // 25s in: 10 frames done since the first sample (slow, 2.5s/frame) -- this window
-    // alone would read "About 8 minutes", which is fine; it's what happens to that
-    // measurement AFTER the pace changes that's under test.
-    act(() => {
-      vi.advanceTimersByTime(25000);
-    });
-    act(() => {
-      useExportStore.setState({
-        activeExports: {
-          export_acc: makeExport({
-            exportId: 'export_acc', percent: 25, elapsedSec: 25, message: 'AI upscaling frame 20/200',
-          }),
-        },
-      });
-    });
-    expect(document.body.textContent).toContain('About 8 minutes remaining');
+    // 25s in: 10 frames in 25s (slow, 2.5s/frame). Alone, this window read "About 8
+    // minutes" before T15950 against ~110s actually left; it is not shown.
+    tick(25000);
+    sample('export_acc', 25, 20, 200);
+    tick(1000);
+    expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
 
-    // 10s later: pace speeds up a lot (20 frames in 10s, 500ms/frame -- the true current
-    // pace). 160 frames remain * 500ms + 30s tail = 110s actual remaining ("About 2
-    // minutes", 120s rounded) -- the FIX measures from the reset anchor and lands there.
-    // The old average-from-first-sample code would still blend in the slow 2.5s/frame
-    // window and read "About 4 minutes" (240s), 2.18x the ~110s actually left.
-    act(() => {
-      vi.advanceTimersByTime(10000);
-    });
-    act(() => {
-      useExportStore.setState({
-        activeExports: {
-          export_acc: makeExport({
-            exportId: 'export_acc', percent: 35, elapsedSec: 35, message: 'AI upscaling frame 40/200',
-          }),
-        },
-      });
-    });
-    expect(document.body.textContent).toContain('About 2 minutes remaining');
+    // 10s later: 20 frames in 10s (500ms/frame). The windows disagree 5x; averaging from
+    // the first sample would read "About 4 minutes" (2.18x the ~110s left). Still withheld.
+    tick(9000);
+    sample('export_acc', 35, 40, 200);
+    tick(1000);
+    expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
     expect(document.body.textContent).not.toContain('About 4 minutes');
+
+    // 10s later, 500ms/frame again: 140 frames * 500ms + 30s tail = 100s -> "About 2 minutes".
+    tick(9000);
+    sample('export_acc', 45, 60, 200);
+    tick(1000);
+    expect(document.body.textContent).toContain('About 2 minutes remaining');
   });
 
   it('does not overshoot the actual remaining time by more than 1.5x WITHIN the first 20s of an anchor (T15530 AC3 fix round 2)', () => {
-    // Round 1's anchor-reset only fires once `now - anchor.at >= FRAME_RATE_WINDOW_MS`
-    // (20s) -- so a slow-then-fast transition that happens entirely INSIDE that first
-    // 20s window never triggers a reset at all, and the averaged rate still blends in
-    // the slow start. This reproduces exactly that: anchor set at t=0 (frame 2), a slow
-    // sample at t=5s (frame 4, 2 frames/5s = 2500ms/frame), then the real/fast pace
-    // (500ms/frame) holds from there -- all inside the 20s window.
-    useExportStore.setState({
-      activeExports: {
-        export_early: makeExport({
-          exportId: 'export_early', percent: 5, elapsedSec: 0, message: 'AI upscaling frame 2/200',
-        }),
-      },
-    });
+    // A slow-then-fast transition inside the first 20s: frame 2 at t=0, frame 4 at t=5s
+    // (2500ms/frame), then the true 500ms/frame pace. Averaging from frame 2 read "About
+    // 4 minutes" at frame 10 against ~125s actually left (1.92x).
+    sample('export_early', 5, 2, 200);
     render(<GlobalExportIndicator />);
+    tick(5000);
+    sample('export_early', 8, 4, 200);
+    tick(1000);
+    expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
 
-    act(() => {
-      vi.advanceTimersByTime(5000);
-    });
-    act(() => {
-      useExportStore.setState({
-        activeExports: {
-          export_early: makeExport({
-            exportId: 'export_early', percent: 8, elapsedSec: 5, message: 'AI upscaling frame 4/200',
-          }),
-        },
-      });
-    });
-
-    // 3s later, at t=8s (still well inside the 20s window): 6 more frames land at the
-    // TRUE 500ms/frame pace (4 -> 10). Actual remaining from here: (200-10)*500ms +
-    // 30s tail = 125s ("About 2 minutes" true pace). Averaging from the t=0 anchor
-    // (frame 2) instead gives (10-2)=8 frames over 8s = 1000ms/frame -> (200-10)*1000 +
-    // 30000 = 220s, rounded to 240s = "About 4 minutes" -- 1.92x the ~125s actually
-    // left, which violates the 1.5x bound despite never reaching a 20s-aged anchor.
-    act(() => {
-      vi.advanceTimersByTime(3000);
-    });
-    act(() => {
-      useExportStore.setState({
-        activeExports: {
-          export_early: makeExport({
-            exportId: 'export_early', percent: 15, elapsedSec: 8, message: 'AI upscaling frame 10/200',
-          }),
-        },
-      });
-    });
+    // t=8s, frame 10: 6 frames in 3s (500ms/frame) disagrees with the slow window.
+    tick(2000);
+    sample('export_early', 15, 10, 200);
+    tick(1000);
     expect(document.body.textContent).not.toContain('About 4 minutes');
-    expect(document.body.textContent).toContain('About 3 minutes remaining');
+    expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
+
+    // t=11s, frame 16 at 500ms/frame again: 184 * 500ms + 30s = 122s -> "About 2 minutes".
+    tick(2000);
+    sample('export_early', 18, 16, 200);
+    tick(1000);
+    expect(document.body.textContent).toContain('About 2 minutes remaining');
   });
 });
 
@@ -388,24 +358,30 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
     // First frame sample alone gives no rate yet.
     expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
 
-    // 20s later, a second frame sample arrives (10 -> 60 of 160, 400ms/frame):
-    // remaining 100 frames * 400ms + 30s tail = 70s, rounded up to 90s = "About 2 minutes".
-    act(() => {
-      vi.advanceTimersByTime(20000);
-    });
-    act(() => {
-      useExportStore.setState({
-        activeExports: {
-          export_3: makeExport({ exportId: 'export_3', percent: 40, elapsedSec: 22, message: 'AI upscaling frame 60/160' }),
-        },
+    // Two windows at 400ms/frame (10 -> 60 -> 110 of 160, 20s each; T15950 waits for two
+    // agreeing windows): 50 frames * 400ms + 30s tail = 50s = "About 1 minute". The
+    // component records each sample after the render that shows it, hence the 1s ticks.
+    for (const [frame, percent] of [[60, 40], [110, 70]]) {
+      act(() => {
+        vi.advanceTimersByTime(19000);
       });
-    });
-    expect(document.body.textContent).toContain('About 2 minutes remaining');
+      act(() => {
+        useExportStore.setState({
+          activeExports: {
+            export_3: makeExport({ exportId: 'export_3', percent, elapsedSec: 0, message: `AI upscaling frame ${frame}/160` }),
+          },
+        });
+      });
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+    }
+    expect(document.body.textContent).toContain('About 1 minute remaining');
     expect(document.body.textContent).not.toContain(EXPORT_PROGRESS.ETA_VARIES);
 
-    // Advance past the promised 90s deadline + 15s grace with no further frame update -> stale.
+    // Advance past the promised 50s deadline + 15s grace with no further frame update -> stale.
     act(() => {
-      vi.advanceTimersByTime(110000);
+      vi.advanceTimersByTime(70000);
     });
     expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
     expect(document.body.textContent).toContain('Sharpening the picture');
@@ -586,5 +562,65 @@ describe('GlobalExportIndicator — docks above the editor action band below lg 
     expect(slot).toContain('max-lg:bottom-[calc(var(--cta-bar-h,0px)+1rem)]');
     expect(slot).toContain('bottom-4');
     expect(slot).toContain('right-4');
+  });
+});
+
+describe('GlobalExportIndicator — first shown estimate within 1.5x of actual remaining (T15950)', () => {
+  // The task's repro: model load ends, frames start flowing, and the FIRST measured
+  // window is an unrepresentative warm-up (15 frames in 14s) before the steady pace
+  // (400ms/frame) settles in. The backend reports every 15 frames. Before the fix the
+  // estimate was shown from that one warm-up window ("About 4 minutes" against ~98s
+  // actually left). Every reading the user sees, from the first estimate shown, must be
+  // within 1.5x of the real remaining time either way. Readings stop once under a minute
+  // is left: "About 1 minute" is the copy's floor, not an estimate.
+  it('T15950:C1 every shown estimate stays within 1.5x of actual remaining after a slow warm-up window', () => {
+    const TOTAL = 200;
+    const PACE_MS = 400;
+    const WARMUP_END_S = 14; // frame 30 reached at t=14s, after 15 frames in 14s
+    const frameAt = (frame) => (frame === 15 ? 0 : WARMUP_END_S + ((frame - 30) * PACE_MS) / 1000);
+    const jobEndS = frameAt(TOTAL) + 30; // + the post-upscale tail
+    const show = (frame) => act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_t15950: makeExport({
+            exportId: 'export_t15950', percent: 10 + frame / 4, elapsedSec: 0,
+            message: `AI upscaling frame ${frame}/${TOTAL}`,
+          }),
+        },
+      });
+    });
+    const shownSeconds = () => {
+      const match = /About (\d+) minutes? remaining/.exec(document.body.textContent);
+      return match ? parseInt(match[1], 10) * 60 : null;
+    };
+
+    show(15);
+    render(<GlobalExportIndicator />);
+    const readings = [];
+    let t = 0;
+    for (let frame = 30; frame <= TOTAL; frame += 15) {
+      const at = frameAt(frame);
+      act(() => { vi.advanceTimersByTime((at - t) * 1000); });
+      t = at;
+      show(frame);
+      const nextAt = frameAt(Math.min(frame + 15, TOTAL));
+      // Read what the user sees right after the sample and on every 1s tick until the next.
+      for (;;) {
+        const remaining = jobEndS - t;
+        if (remaining < 60) break;
+        const shown = shownSeconds();
+        if (shown != null) readings.push({ t, shown, remaining });
+        if (t + 1 >= nextAt) break;
+        act(() => { vi.advanceTimersByTime(1000); });
+        t += 1;
+      }
+      if (jobEndS - t < 60) break;
+    }
+
+    expect(readings.length).toBeGreaterThan(0);
+    for (const { t: at, shown, remaining } of readings) {
+      expect(shown / remaining, `t=${at}s shown ${shown}s vs ${remaining}s left`).toBeLessThanOrEqual(1.5);
+      expect(remaining / shown, `t=${at}s shown ${shown}s vs ${remaining}s left`).toBeLessThanOrEqual(1.5);
+    }
   });
 });

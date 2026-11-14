@@ -44,6 +44,11 @@ export const ETA_STALL_MS = 30000;
 // enough completed jobs to track a real rolling median server-side.
 export const POST_UPSCALE_TAIL_SECONDS = 30;
 
+// T15950: two consecutive frame windows whose ms-per-frame differ by more than this
+// factor mean the pace hasn't settled (e.g. GPU warm-up then the steady pace), so no
+// estimate is shown yet ("Time remaining varies.").
+export const ETA_RATE_SETTLED_RATIO = 1.5;
+
 // T14860: the only phases that report a numeric "frame i/N" count are the AI-upscale
 // loop (both single-clip "AI upscaling frame X/Y" and multi-clip "Clip N: frame X/Y" --
 // see app/modal_functions/video_processing.py). Before this appears, progress is not
@@ -74,8 +79,8 @@ export function getExportLabel(exp) {
 
 /**
  * Calculate ETA for an export from the measured per-frame rate of THIS job.
- * Returns null until a frame count has appeared in the message AND a second
- * frame sample has arrived (one sample alone gives no rate to measure).
+ * Returns null until a frame count has appeared in the message AND the rate has
+ * settled: the last two inter-sample rates agree within ETA_RATE_SETTLED_RATIO.
  *
  * T14860: replaces the old "elapsed * (100-percent)/percent" extrapolation, which
  * assumed every percentage point takes the same wall-clock time -- it does not: the
@@ -83,32 +88,49 @@ export function getExportLabel(exp) {
  * regardless of clip length, so extrapolating from them at 5% overclaimed "Less than
  * a minute remaining" on an 8s clip that actually took 131s.
  *
+ * T15950: one measured window right after frames start flowing is often a warm-up
+ * (15 frames in 14s, then 400ms/frame), and an estimate shown from it alone read
+ * "About 4 minutes" against ~98s left. No single window can be trusted, so the
+ * estimate waits until two consecutive windows agree.
+ *
  * @param {Object} exp - Export object with startedAt and progress
- * @param {{ frame: number, at: number } | undefined} frameTrack - the caller's anchor
- *   sample for this export. The component (T15530 fix round 2) resets this to the
- *   latest sample on every new frame count, so the measured rate tracks the current
- *   pace instead of averaging in a stale early window.
+ * @param {{ frame: number, at: number, rates: number[] } | undefined} frameTrack - the
+ *   latest frame sample seen for this export plus the ms-per-frame of the last (up to)
+ *   two windows between samples, oldest first. Built by the component's effect.
  * @returns {{ seconds: number, formatted: string } | null}
  */
 export function calculateETA(exp, frameTrack) {
   if (!exp.startedAt) return null;
 
   const frameProgress = parseFrameProgress(exp.progress?.message);
-  if (!frameProgress || !frameTrack) return null;
+  if (!frameProgress || !frameTrack || frameTrack.rates.length < 2) return null;
 
-  const elapsedSinceFirstMs = Date.now() - frameTrack.at;
-  const framesSinceFirst = frameProgress.frame - frameTrack.frame;
-  if (framesSinceFirst <= 0 || elapsedSinceFirstMs <= 0) return null;
+  const [earlier, latest] = frameTrack.rates.slice(-2);
+  if (Math.max(earlier, latest) / Math.min(earlier, latest) > ETA_RATE_SETTLED_RATIO) return null;
 
-  const msPerFrame = elapsedSinceFirstMs / framesSinceFirst;
+  const msPerFrame = (earlier + latest) / 2;
   const remainingFrames = frameProgress.totalFrames - frameProgress.frame;
   if (remainingFrames < 0) return null;
 
   const remainingMs = remainingFrames * msPerFrame + POST_UPSCALE_TAIL_SECONDS * 1000;
-  // Round up to the next 30s -- an honest estimate rounds toward "longer", never shorter.
-  const remainingSeconds = Math.ceil(remainingMs / 1000 / 30) * 30;
+  // T15950: round to the nearest second, not up to the next 30s -- rounding up and then
+  // to the nearest minute showed "About 2 minutes" for 80s left (1.5x over).
+  const remainingSeconds = Math.round(remainingMs / 1000);
 
   return { seconds: remainingSeconds, formatted: formatRemaining(remainingSeconds) };
+}
+
+/**
+ * T15950: the next frame track for an export after a new progress message. A larger
+ * frame count closes a window: its ms-per-frame joins `rates` (last two kept) and the
+ * sample becomes the new start. Same or no frame count leaves the track as is.
+ */
+export function nextFrameTrack(track, frameProgress, now) {
+  if (!frameProgress) return track;
+  if (!track) return { frame: frameProgress.frame, at: now, rates: [] };
+  if (frameProgress.frame <= track.frame) return track;
+  const rate = (now - track.at) / (frameProgress.frame - track.frame);
+  return { frame: frameProgress.frame, at: now, rates: [...track.rates.slice(-1), rate] };
 }
 
 function formatRemaining(seconds) {
@@ -122,7 +144,7 @@ function formatRemaining(seconds) {
  * Pure derivation from timestamps (no persistence): `deadlines` maps exportId to
  * the epoch-ms completion time the FIRST estimate promised, `percentTracks` maps
  * exportId to { percent, changedAt } for stall detection, `frameTracks` maps exportId
- * to the FIRST { frame, at } sample seen (T14860, feeds calculateETA's rate). All
+ * to its { frame, at, rates } track (T14860/T15950, feeds calculateETA's rate). All
  * three are component-local bookkeeping (refs), updated in an effect as progress arrives.
  *
  * Returns null (no trustworthy estimate — too little data, i.e. frames aren't flowing
@@ -137,9 +159,8 @@ function formatRemaining(seconds) {
  * (the stage copy) is retained on the return object for T8510's direct unit tests.
  *
  * T15530: `minSecondsTracks` (exportId -> lowest remainingSeconds ever computed for that
- * export) clamps the displayed number so it never climbs back up. `calculateETA` measures
- * its rate as an AVERAGE from the first frame sample to the current one, so a later slowdown
- * can make the recomputed remaining-time read higher than an earlier, truer call did even
+ * export) clamps the displayed number so it never climbs back up. A later slowdown in the
+ * measured rate can make the recomputed remaining-time read higher than an earlier, truer call did even
  * though less time is actually left — the observed "4, 3, 2, 3, 2 minutes" bug. Optional so
  * existing callers that don't track minimums keep their prior (unclamped) behavior.
  */
@@ -218,13 +239,10 @@ export function GlobalExportIndicator() {
   // T8510: display-only ETA-honesty bookkeeping (never persisted).
   // etaDeadlinesRef: exportId -> epoch-ms deadline the first estimate promised.
   // percentChangeRef: exportId -> { percent, changedAt } for stall detection.
-  // frameTrackRef (T14860, T15530): exportId -> the anchor { frame, at } sample
-  // calculateETA measures this job's rate from. Reset to the latest sample on every
-  // new frame count (T15530 fix round 2) so an unrepresentative early window (e.g.
-  // GPU warm-up) can only skew ONE measurement, never get permanently baked into the
-  // average -- a fixed-duration reset window (the original T15530 fix) still let a
-  // slow-then-fast transition inside that window overshoot, since the reset only
-  // fired once the window had fully aged.
+  // frameTrackRef (T14860, T15530, T15950): exportId -> { frame, at, rates }, the
+  // latest frame sample plus the ms-per-frame of the last two windows between samples
+  // (nextFrameTrack). calculateETA shows nothing until those two agree, so an
+  // unrepresentative early window (e.g. GPU warm-up) is never shown on its own.
   // etaMinSecondsRef (T15530): exportId -> the lowest remainingSeconds ever computed,
   // so a later rate slowdown can't make the displayed estimate climb back up.
   // nowTick re-renders once a second while exports run, so a stalled export
@@ -254,13 +272,10 @@ export function GlobalExportIndicator() {
       if (!track || track.percent !== percent) {
         tracks.set(exp.exportId, { percent, changedAt: now });
       }
-      const frameProgress = parseFrameProgress(exp.progress?.message);
-      const anchor = frameTracks.get(exp.exportId);
-      if (!anchor) {
-        if (frameProgress) frameTracks.set(exp.exportId, { frame: frameProgress.frame, at: now });
-      } else if (frameProgress && frameProgress.frame > anchor.frame) {
-        frameTracks.set(exp.exportId, { frame: frameProgress.frame, at: now });
-      }
+      const frameTrack = nextFrameTrack(
+        frameTracks.get(exp.exportId), parseFrameProgress(exp.progress?.message), now,
+      );
+      if (frameTrack) frameTracks.set(exp.exportId, frameTrack);
       if (!deadlines.has(exp.exportId)) {
         const eta = calculateETA(exp, frameTracks.get(exp.exportId));
         if (eta) deadlines.set(exp.exportId, now + eta.seconds * 1000);
