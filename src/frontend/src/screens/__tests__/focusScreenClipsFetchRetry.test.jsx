@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, act } from '@testing-library/react';
 
 // T16040: GET /clips/projects/{id}/clips can fail (network blip, a cold staging
 // backend waking up -- T16060) and projectDataStore.fetchClips's catch branch
@@ -322,5 +322,58 @@ describe('T16040 FocusScreen retries a failed clips fetch instead of treating it
     vi.advanceTimersByTime(5000);
 
     expect(invalidateClipsSpy).not.toHaveBeenCalled();
+  });
+});
+
+// T16040:C2 (T16120 review): FocusModeView.loadingState.test.jsx only proves the view
+// renders the message when handed stuckEmpty=true. These prove FocusScreen itself
+// decides "stuck" (a project, nothing in flight, no video URL) and logs a
+// console.error naming the project id and the missing input.
+describe('T16040:C2 FocusScreen flags a project that will never show a video', () => {
+  beforeEach(() => {
+    testState.clips = [];
+    testState.selectedClipId = null;
+    testState.selectedClip = null;
+    testState.clipMetadataCache = {};
+    testState.clipsError = null;
+    testState.lastModeViewProps = null;
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function stuckErrors() {
+    return console.error.mock.calls.map((args) => args.join(' ')).filter((l) => l.includes('stuck with no video'));
+  }
+
+  it('T16040:C2 empty clips: stuckEmpty reaches the view and console.error names project and clips', () => {
+    render(<FocusScreen />);
+    expect(testState.lastModeViewProps.stuckEmpty).toBe(false);
+
+    act(() => { vi.advanceTimersByTime(8000); });
+
+    expect(testState.lastModeViewProps.stuckEmpty).toBe(true);
+    expect(typeof testState.lastModeViewProps.onBackToAnnotate).toBe('function');
+    expect(stuckErrors()).toEqual([expect.stringMatching(/project=4\b.*missing=clips/)]);
+  });
+
+  it('T16040:C2 a clip whose URL resolves to nothing: console.error names videoUrl as missing', () => {
+    testState.clips = [{ id: 7, project_id: 4, filename: 'clip-7.mp4', crop_data: null, segments_data: null }];
+    testState.selectedClipId = 7;
+    testState.selectedClip = testState.clips[0];
+
+    render(<FocusScreen />);
+    act(() => { vi.advanceTimersByTime(8000); });
+
+    expect(testState.lastModeViewProps.stuckEmpty).toBe(true);
+    expect(stuckErrors()).toEqual([expect.stringMatching(/project=4\b.*missing=videoUrl/)]);
   });
 });

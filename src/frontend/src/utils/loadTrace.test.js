@@ -52,12 +52,19 @@ describe('startLoadTrace', () => {
     const trace = startLoadTrace('Frame', { projectId: 42 }, ['highlight', 'plays', 'video']);
     trace.arrived('highlight');
 
-    vi.advanceTimersByTime(10000);
+    // Not before 10s (T16120: a warning at 1s also passed the old version of this test).
+    vi.advanceTimersByTime(9999);
+    expect(console.warn).not.toHaveBeenCalled();
 
+    vi.advanceTimersByTime(1);
     expect(console.warn).toHaveBeenCalledTimes(1);
     expect(console.warn).toHaveBeenCalledWith(
       '[LOAD] Frame still waiting after 10000ms for: plays, video projectId=42'
     );
+
+    // One warning, not one every 10s while still stuck.
+    vi.advanceTimersByTime(30000);
+    expect(console.warn).toHaveBeenCalledTimes(1);
   });
 
   it('T16050:C2 does not warn once every need already resolved before 10s', () => {

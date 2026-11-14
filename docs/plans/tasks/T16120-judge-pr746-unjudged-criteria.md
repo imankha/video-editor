@@ -29,11 +29,30 @@
 
 All paths are under `src/frontend/`.
 
+## Verdicts (2026-11-14)
+
+Each check was read against its criterion; the ones judged adequate were also run against a deliberately broken copy to confirm they fail.
+
+- **T16040:C2: strengthened.** The view test only proved that `FocusModeView` shows the message when handed `stuckEmpty=true`. Nothing tested that Frame decides it is stuck, or the `console.error` naming the project id and the missing input. Added two `T16040:C2` tests to `src/screens/__tests__/focusScreenClipsFetchRetry.test.jsx`: empty clips gives `missing=clips`, and a clip with no video URL gives `missing=videoUrl`. Both check `project=4` and that `stuckEmpty` reaches the view. They fail on a copy whose error names neither. The check command now runs both files.
+- **T16040:C3: strengthened, not verified locally.** The check allowed 20 s to navigate plus 10 s for the video, so a 25 s open passed a "within 10 s" criterion. It now times one 10 s budget from the click to a loaded video. On the dev stack the run never reached that assertion: the `full` preset's in-progress project shows no highlight row in Annotate (6 plays clicked, 90 s timeout), in the unchanged part of the spec. The tighter budget is first proven by the post-merge staging run.
+- **T16050:C2: strengthened.** The test advanced 10 s and expected one warning, so a warning at 1 s also passed. It now checks no warning at 9,999 ms, one at 10,000 ms, and still only one at 40 s. It fails on a copy that warns after 1 s.
+- **T16050:C3: adequate.** It fails on a copy whose Frame settles empty plays without naming them.
+- **T16050:C4: strengthened.** The grep only looked at `vite.config.js`'s `pure` list, so moving the `[LOAD]` lines to `console.log` (which production strips) passed. It now also rejects `console.log(`/`console.debug(` in `src/utils/loadTrace.js` and any `drop:` of `console`. It fails on a copy whose waiting line uses `console.log`.
+- **T16060:C2 and T16060:C3: adequate.** Removing the cold-window gate fails all three C2 tests. Forcing `IS_PRODUCTION_BACKEND` false fails both C3 tests.
+
+## T16050:C4 and T16060:C3: do they conflict?
+
+No. They gate on different things.
+
+- **T16050 `[LOAD]` lines** gate on the console method. `src/utils/loadTrace.js` uses only `console.info/warn/error`. The production-mode build (`vite.config.js` `esbuild.pure`, set when `NODE_ENV=production`) strips only `console.log`. So the lines appear in every build, staging and production alike.
+- **T16060 cold-backend note** gates on the backend URL baked in at build time, not on build mode: `IS_PRODUCTION_BACKEND = API_BASE === 'https://reel-ballers-api.fly.dev'` in `src/utils/coldBackendTracker.js`. Staging builds with `VITE_API_BASE=https://reel-ballers-api-staging.fly.dev` (`.github/workflows/deploy-frontend.yml`), so staging prints the note. Production builds with the production URL (`scripts/deploy_production.sh`), so production never prints it.
+- So "production builds" in T16060:C3 means the build deployed to production, not any production-mode build. Staging shows both lines; production shows the `[LOAD]` lines and never the note. Nothing to fix. One trap: if production ever moves to a different API URL (a custom domain), the note's gate breaks silently. `PRODUCTION_API_BASE` would need to follow it.
+
 ## Implementer details
 
 ### Acceptance criteria
-- [ ] C1: Each of the seven checks is read against its criterion text; any that would pass on broken code is strengthened in place, with the strengthened test shown failing on a deliberately broken copy and passing on master.
-- [ ] C2: The T16050:C4 / T16060:C3 production-build question is answered in this file (what each gates on, and whether staging shows each line), and fixed if they conflict.
+- [x] C1: Each of the seven checks is read against its criterion text; any that would pass on broken code is strengthened in place, with the strengthened test shown failing on a deliberately broken copy and passing on master.
+- [x] C2: The T16050:C4 / T16060:C3 production-build question is answered in this file (what each gates on, and whether staging shows each line), and fixed if they conflict.
 
 ### Related tasks
 T16040, T16050, T16060 (PR #746), T16090.

@@ -41,15 +41,22 @@ test('T16040:C3 opening an in-progress highlight from Annotate opens Frame withi
   }
   expect(found, `highlight-row-${inProgress.id} (the in-progress highlight's row) to appear`).toBeTruthy();
 
+  // One 10s budget from the click to a loaded video, covering navigation AND the video
+  // load (T16120: the check used to allow 20s to navigate plus 10s for the video, so a
+  // 25s open passed a "within 10 s" criterion).
+  const BUDGET_MS = 10000;
+  const clickedAt = Date.now();
   await highlightRow.click();
   await expect.poll(() => /^\/(focus|overlay)\/p\/\d+/.test(new URL(page.url()).pathname), {
-    timeout: 20000,
+    timeout: BUDGET_MS,
   }).toBe(true);
 
   const stuck = page.getByTestId('focus-stuck-empty');
   await expect.poll(async () => (await videoTime(page)) >= 0 || (await stuck.count()) > 0, {
-    timeout: 10000,
+    timeout: Math.max(1, BUDGET_MS - (Date.now() - clickedAt)),
   }).toBe(true);
+  const openedInMs = Date.now() - clickedAt;
   expect(await stuck.count(), 'Frame did not show the stuck-empty fallback -- a real video loaded').toBe(0);
   expect(await videoTime(page)).toBeGreaterThanOrEqual(0);
+  expect(openedInMs, `click to loaded video took ${openedInMs}ms`).toBeLessThanOrEqual(BUDGET_MS);
 });
