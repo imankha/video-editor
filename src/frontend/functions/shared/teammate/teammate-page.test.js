@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildTeammateMetaTags } from './[token].js';
 
-const ORIGIN = 'https://reel-ballers-staging.pages.dev';
-const API = 'https://reel-ballers-staging.fly.dev';
+const ORIGIN = 'https://staging.reelballers.com';
+const API = 'https://api-staging.reelballers.com';
 
 describe('buildTeammateMetaTags', () => {
   it('emits game title, clip-count description, and the branded card image', () => {

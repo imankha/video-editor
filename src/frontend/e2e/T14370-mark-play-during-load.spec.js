@@ -16,8 +16,8 @@ import { deleteClip } from './helpers/annotateClips.js';
  * play this test creates is deleted in finally.
  *
  * Env: E2E_REAL_EMAIL, E2E_PROFILE_ID, E2E_GAME_ID (a single-video game that
- * is not expired). Staging: E2E_BASE_URL=https://reel-ballers-staging.pages.dev
- * E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api E2E_REAL_EMAIL=e2e@test.local
+ * is not expired). Staging: E2E_BASE_URL=https://staging.reelballers.com
+ * E2E_API_BASE=https://api-staging.reelballers.com/api E2E_REAL_EMAIL=e2e@test.local
  * E2E_PROFILE_ID=4345b661 E2E_GAME_ID=6
  */
 

@@ -7,8 +7,8 @@ set -euo pipefail
 spec="$1"; grep_re="$2"
 cd "$(dirname "$0")/../src/frontend"
 report=$(mktemp)
-E2E_BASE_URL="${E2E_BASE_URL:-https://reel-ballers-staging.pages.dev}" \
-E2E_API_BASE="${E2E_API_BASE:-https://reel-ballers-api-staging.fly.dev/api}" \
+E2E_BASE_URL="${E2E_BASE_URL:-https://staging.reelballers.com}" \
+E2E_API_BASE="${E2E_API_BASE:-https://api-staging.reelballers.com/api}" \
 E2E_CHECK_EMAIL="${E2E_CHECK_EMAIL:-e2e-gate@test.local}" \
 PLAYWRIGHT_JSON_OUTPUT_NAME="$report" \
   npx playwright test "$spec" --grep "$grep_re" --reporter=json,line || true

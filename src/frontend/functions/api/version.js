@@ -7,7 +7,7 @@ const API_BY_HOST = {
   'app.reelballers.com': 'https://reel-ballers-api.fly.dev',
 };
 
-const DEFAULT_API = 'https://reel-ballers-api-staging.fly.dev';
+const DEFAULT_API = 'https://api-staging.reelballers.com';
 
 export function apiBase(hostname) {
   return API_BY_HOST[hostname] || DEFAULT_API;

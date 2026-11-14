@@ -22,8 +22,8 @@ import { waitForAppReady } from './helpers/appReady.js';
  * feature working (retryable), not a bug.
  *
  * Run:
- *   E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
- *   E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
+ *   E2E_BASE_URL=https://staging.reelballers.com \
+ *   E2E_API_BASE=https://api-staging.reelballers.com/api \
  *   E2E_REAL_EMAIL=imankh@gmail.com E2E_REAL_PROFILE=9fa7378c \
  *   npx playwright test e2e/derisk-staging-export.qa.spec.js
  */

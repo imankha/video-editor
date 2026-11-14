@@ -48,6 +48,8 @@ PROJECT_ROOT = Path(__file__).parent.parent
 USER_DATA = PROJECT_ROOT / "user_data"
 DBCACHE = Path(__file__).parent / ".dbcache"   # remote DBs downloaded here before edit
 FLY_APPS = {"staging": "reel-ballers-api-staging", "prod": "reel-ballers-api"}
+# Warm-up targets: staging's API is served from api-staging.reelballers.com (T16370).
+API_HOSTS = {"staging": "https://api-staging.reelballers.com", "prod": "https://reel-ballers-api.fly.dev"}
 
 
 # ---- env / clients (same patterns as reset-test-user.py) --------------------
@@ -174,7 +176,7 @@ def restart_fly_machines(env_name, config):
             rr = subprocess.run(["fly", "machines", "restart", m["id"], "-a", app], capture_output=True, text=True, timeout=60, env=env)
             print(f"  {'Restarted' if rr.returncode == 0 else 'FAILED'} {m['id']}")
         try:
-            urllib.request.urlopen(f"https://{app}.fly.dev/api/health", timeout=30); print("  Warmed.")
+            urllib.request.urlopen(f"{API_HOSTS[env_name]}/api/health", timeout=30); print("  Warmed.")
         except Exception as e:
             print(f"  WARNING: warm failed: {e}")
     except FileNotFoundError:

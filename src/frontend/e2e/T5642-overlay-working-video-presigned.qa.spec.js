@@ -34,8 +34,8 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  * backend unit tests in tests/test_stream_auth.py.
  *
  * Run (staging):
- *   E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
- *   E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
+ *   E2E_BASE_URL=https://staging.reelballers.com \
+ *   E2E_API_BASE=https://api-staging.reelballers.com/api \
  *   npx playwright test e2e/T5642-overlay-working-video-presigned.qa.spec.js --project=chromium
  */
 

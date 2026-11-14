@@ -18,7 +18,7 @@
 const API_BY_HOST = {
   "app.reelballers.com": "https://api.reelballers.com",
 };
-const DEFAULT_API = "https://reel-ballers-api-staging.fly.dev";
+const DEFAULT_API = "https://api-staging.reelballers.com";
 
 const SHARE_CACHE_TTL = 600; // seconds (10 min) -- comfortably < 4h presign expiry
 // Generous upstream budget for EVERYONE: the staging/prod API cold-starts in
