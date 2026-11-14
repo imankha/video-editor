@@ -9,6 +9,8 @@ import { renderHook, act } from '@testing-library/react';
 // Drives the REAL AnnotateContainer through renderHook (same harness as
 // AnnotateContainer.createAtTap.test.jsx).
 
+// T11175: the Add Clip beacon is a funnel event; keep it off the mocked apiFetch.
+vi.mock('../utils/funnelEvents', async (orig) => ({ ...(await orig()), recordFunnelEvent: vi.fn() }));
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 
 vi.mock('../modes/annotate', async (importOriginal) => {

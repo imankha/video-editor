@@ -1,9 +1,9 @@
 import { useEffect, useCallback, useMemo, useState } from 'react';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
 import { useSpotlightLoop } from '../modes/overlay/hooks/useSpotlightLoop';
 import { EDITOR_MODES } from '../stores';
-import { useQuestStore } from '../stores/questStore';
-import { countDetectionAssignments, detectionAssignmentStates } from '../modes/overlay/utils/detectionAssignment';
+import { countDetectionAssignments } from '../modes/overlay/utils/detectionAssignment';
 import { useGuidedAthletePick } from '../modes/overlay/hooks/useGuidedAthletePick';
 import { frameToTime } from '../utils/videoUtils';
 
@@ -473,8 +473,8 @@ export function OverlayContainer({
   }, [dragHighlight, currentTime, isTimeInEnabledRegion, getRegionHighlightAtTime, highlightColor]);
 
   /**
-   * quest_3 "Pick your player" completes only when EVERY detected frame (every
-   * green marker on the timeline) has a player assigned — not just one marker
+   * overlay_players_assigned (funnel, once per session) fires only when EVERY
+   * detected frame (every green marker on the timeline) has a player assigned — not just one marker
    * per region. A detection frame is assigned when its region has a user
    * (non-boundary) keyframe at that frame's time. `currentRegionId` + `assignedTime`
    * describe the assignment made in this same gesture, whose keyframe isn't yet
@@ -486,29 +486,9 @@ export function OverlayContainer({
       currentRegionId != null ? { regionId: currentRegionId, time: assignedTime } : null;
     const { total, assigned } = countDetectionAssignments(highlightRegions, justAssigned);
     if (total > 0 && assigned >= total) {
-      useQuestStore.getState().recordAchievement('overlay_players_assigned');
+      recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_PLAYERS_ASSIGNED);
     }
   }, [highlightRegions]);
-
-  /**
-   * Mirror per-detection assignment progress into the quest store so the
-   * select_players step can show one checkbox per detection that fills in as
-   * the user assigns each. This is EPHEMERAL display state only — it is never
-   * persisted (no backend write), so it does not violate the gesture-based
-   * persistence rule. The quest-completion write stays in maybeEmitPlayersAssigned.
-   */
-  useEffect(() => {
-    const setProgress = useQuestStore.getState().setDetectionAssignProgress;
-    if (editorMode !== EDITOR_MODES.OVERLAY) {
-      setProgress(null);
-      return;
-    }
-    const states = detectionAssignmentStates(highlightRegions);
-    setProgress(states.length > 0 ? states : null);
-  }, [editorMode, highlightRegions]);
-
-  // Clear progress when the container unmounts so a stale count never shows elsewhere.
-  useEffect(() => () => useQuestStore.getState().setDetectionAssignProgress(null), []);
 
   /**
    * Handle player selection from detection overlay

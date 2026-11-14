@@ -399,6 +399,10 @@ async function _clearDataStores() {
   stores.useSettingsStore.getState().reset();
   stores.useCreditStore.getState().reset();
   stores.useQuestStore.getState().reset();
+  // T11175: once-per-session funnel events count again for the next profile
+  // (same scope the quest achievement dedup had). Dynamic import, same cycle reason.
+  const { resetFunnelEventSession } = await import('../utils/funnelEvents');
+  resetFunnelEventSession();
   // T6930: card ids are per-profile AUTOINCREMENT — a stale library from the
   // previous profile validates against the new profile's table and attaches
   // the wrong card. No Phase-3 refetch: the library is fetched on modal open.

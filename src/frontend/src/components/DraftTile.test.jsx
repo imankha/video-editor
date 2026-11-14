@@ -196,7 +196,7 @@ describe('DraftTile (T5672)', () => {
     expect(primary.textContent).toMatch(/^finish$/i);
   });
 
-  it('publishes via the primary button click (records the moved_to_my_reels quest step)', async () => {
+  it('publishes via the primary button click (no quest moved_to_my_reels step, T11175)', async () => {
     const apiFetch = (await import('../utils/apiFetch')).default;
     apiFetch.mockResolvedValueOnce({
       ok: true,
@@ -212,7 +212,7 @@ describe('DraftTile (T5672)', () => {
       expect.stringMatching(/\/api\/downloads\/publish\/7$/),
       expect.objectContaining({ method: 'POST' })
     );
-    expect(useQuestStore.getState().recordAchievement).toHaveBeenCalledWith('moved_to_my_reels');
+    expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalled();
   });
 
   it('has no primary "Publish clip" action once the draft is published', () => {

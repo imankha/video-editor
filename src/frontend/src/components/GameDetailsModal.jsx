@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { X, Gamepad2, ChevronDown } from 'lucide-react';
 import { Button } from './shared/Button';
 
@@ -8,7 +9,6 @@ import { GameType } from '../constants/gameConstants';
 import { GameFootagePicker } from './GameFootagePicker';
 import { GameDetailsFields } from './GameDetailsFields';
 import { useCreditStore } from '../stores/creditStore';
-import { useQuestStore } from '../stores/questStore';
 import { useProfileStore } from '../stores/profileStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { parseGameFilename } from '../utils/gameNameParser';
@@ -90,7 +90,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   // Fire-and-forget + session-deduped, so every path records "File Selected" once
   // and selection is never delayed. Not a quest step — analytics only.
   const recordFileSelected = useCallback(() => {
-    useQuestStore.getState().recordAchievement('upload_file_selected');
+    recordFunnelEvent(FUNNEL_EVENTS.UPLOAD_FILE_SELECTED);
   }, []);
 
   // T8810: the picker owns all selection paths (click, multi, folder pick/drag)

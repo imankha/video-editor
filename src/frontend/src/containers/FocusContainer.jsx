@@ -8,7 +8,6 @@ import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { toast } from '../components/shared';
 import { track } from '../utils/analytics';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
-import { useQuestStore } from '../stores/questStore';
 import { calculateEffectiveDuration } from '../utils/effectiveDuration';
 import useFramingHistory from '../hooks/useFramingHistory';
 import { ERROR_COPY } from '../config/displayNames';
@@ -421,7 +420,7 @@ export function FocusContainer({
     setFramingChangedSinceExport?.(true);
     track('crop_keyframe_add', { frame: targetFrame, clipId: projectClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
     // T3700: quest_2 "Keep your player in frame" — the user adjusted the crop box
-    useQuestStore.getState().recordAchievement('crop_adjusted');
+    recordFunnelEvent(FUNNEL_EVENTS.CROP_ADJUSTED);
     // T10010 activation funnel: this handler IS the MANUAL framing path (a user
     // drag placing/positioning the crop box). IDs/bucket only, no PII.
     // T9950 landed without reshaping this call site: it still fires from the
@@ -1031,7 +1030,7 @@ export function FocusContainer({
     // T3700: quest_2 "Add a slow-mo moment" — completes ONLY for a genuinely slowed
     // segment (speed < 1x). A bare split, or a speed-up, must not satisfy it.
     if (speed < 1) {
-      useQuestStore.getState().recordAchievement('speed_segment_created');
+      recordFunnelEvent(FUNNEL_EVENTS.SPEED_SEGMENT_CREATED);
     }
 
     // Optimistically update store so sidebar framing indicator reflects the change

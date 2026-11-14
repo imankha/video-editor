@@ -121,12 +121,12 @@ describe('T9790 live path acknowledges the framing job on the decision gesture',
 
   it('offering the preview (raw completion) does NOT acknowledge — only the gesture does', () => {
     const openPreview = vi.fn();
-    const recordAchievement = vi.fn();
+    const recordFunnelEvent = vi.fn();
     const acknowledgeExportJob = vi.fn();
 
     // offerFocusCompletionPreview is the live path's completion-time step.
     offerFocusCompletionPreview({
-      projectId: 42, previewUrl: 'blob://x', openMode: 'framing', jobId: 'job-live-1', openPreview, recordAchievement,
+      projectId: 42, previewUrl: 'blob://x', openMode: 'framing', jobId: 'job-live-1', openPreview, recordFunnelEvent,
     });
 
     // It opens the preview carrying the job id, but must NOT acknowledge.
@@ -173,29 +173,29 @@ describe('T9790 live path acknowledges the framing job on the decision gesture',
 describe('T9285 offerFocusCompletionPreview: no silent no-render (real import)', () => {
   it('a resolved preview URL opens the preview and records the achievement', () => {
     const openPreview = vi.fn();
-    const recordAchievement = vi.fn();
+    const recordFunnelEvent = vi.fn();
 
     const opened = offerFocusCompletionPreview({
-      projectId: 42, previewUrl: 'blob://x', openMode: 'framing', openPreview, recordAchievement,
+      projectId: 42, previewUrl: 'blob://x', openMode: 'framing', openPreview, recordFunnelEvent,
     });
 
     expect(opened).toBe(true);
     expect(openPreview).toHaveBeenCalledWith({ projectId: 42, previewUrl: 'blob://x', openMode: 'framing' });
-    expect(recordAchievement).toHaveBeenCalledWith('overlay_offered');
+    expect(recordFunnelEvent).toHaveBeenCalledWith('overlay_offered');
   });
 
   it('a null preview URL (resolveWorkingVideoPreviewUrl failure) logs loudly instead of silently doing nothing', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const openPreview = vi.fn();
-    const recordAchievement = vi.fn();
+    const recordFunnelEvent = vi.fn();
 
     const opened = offerFocusCompletionPreview({
-      projectId: 42, previewUrl: null, openMode: 'framing', openPreview, recordAchievement,
+      projectId: 42, previewUrl: null, openMode: 'framing', openPreview, recordFunnelEvent,
     });
 
     expect(opened).toBe(false);
     expect(openPreview).not.toHaveBeenCalled();
-    expect(recordAchievement).not.toHaveBeenCalled();
+    expect(recordFunnelEvent).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledTimes(1);
     expect(errorSpy.mock.calls[0][0]).toMatch(/no preview URL/i);
   });

@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T11175:C1": {"kind": "code", "command": "cd src/backend && python -m pytest tests/test_t11175_funnel_reroute.py -q -p no:cacheprovider && cd ../frontend && npx vitest run src/utils/funnelEvents.reroute.test.js -t 'rerouted milestone|quest achievement' --testTimeout=60000 --hookTimeout=60000"},
+    "T11175:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/utils/funnelEvents.reroute.test.js -t 'crop' --testTimeout=60000 --hookTimeout=60000"},
+    "T11175:C3": {"kind": "code", "command": "cd src/backend && ! grep -q 'routers.quests' tests/test_overlay_offer_events.py && grep -q 'record_funnel_event' tests/test_overlay_offer_events.py && python -m pytest tests/test_overlay_offer_events.py -q -p no:cacheprovider"}
+  }
+}

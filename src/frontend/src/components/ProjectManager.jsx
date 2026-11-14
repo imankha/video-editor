@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Send, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
@@ -44,7 +45,6 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useProfileStore } from '../stores/profileStore';
 import { UPLOAD_STATUS, useUploadStore } from '../stores/uploadStore';
-import { useQuestStore } from '../stores/questStore';
 import { parseEditorPath, EDITOR_MODES } from '../stores/editorStore';
 import { writeResumePoint } from '../utils/resumePoint';
 import {
@@ -1233,10 +1233,9 @@ export function ProjectManager({
       // Open the picker FIRST so the funnel beacon can never delay it.
       setShowGameDetailsModal(true);
       // T7890: pre-upload funnel beacon — the entry gesture of the signup->first-upload
-      // cliff. Fire-and-forget through the impersonation-guarded milestone bridge
-      // (session-deduped, keepalive). Fired only after auth succeeds so it maps to a
-      // real user and matches the funnel cohort. Not a quest step — analytics only.
-      useQuestStore.getState().recordAchievement('add_game_opened');
+      // cliff. Fire-and-forget, session-deduped (T11175). Fired only after auth
+      // succeeds so it maps to a real user and matches the funnel cohort.
+      recordFunnelEvent(FUNNEL_EVENTS.ADD_GAME_OPENED);
     });
   }, [requireAuth]);
 
@@ -1455,16 +1454,6 @@ export function ProjectManager({
     }
     return rows;
   }, [isUploadingClips, progressByFile, failedClips]);
-
-  // T7840: register the auth-gated add-game gesture as the quest panel's opener
-  // for the `upload_game` step so its "Add Your First Game" row is actionable
-  // (mirrors the WatchTutorialButton store-action idiom). Cleared on unmount —
-  // ephemeral, component-lifetime wiring, never persisted.
-  const setAddGameOpener = useQuestStore((s) => s.setAddGameOpener);
-  useEffect(() => {
-    setAddGameOpener(handleAddGameClick);
-    return () => setAddGameOpener(null);
-  }, [setAddGameOpener, handleAddGameClick]);
 
   // Handle game creation with details
   const handleCreateGame = useCallback(async (gameDetails) => {

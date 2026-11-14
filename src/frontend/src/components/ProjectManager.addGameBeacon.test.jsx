@@ -60,9 +60,14 @@ vi.mock('../stores/gamesDataStore', () => {
 });
 
 // Capture the beacon.
-const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
+const { recordFunnelEventSpy } = vi.hoisted(() => ({ recordFunnelEventSpy: vi.fn() }));
+// T11175: the beacon travels through the funnel transport, not the quest store.
+vi.mock('../utils/funnelEvents', async (orig) => ({
+  ...(await orig()),
+  recordFunnelEvent: (...args) => recordFunnelEventSpy(...args),
+}));
 vi.mock('../stores/questStore', () => {
-  const state = { setAddGameOpener: vi.fn(), recordAchievement: recordAchievementSpy };
+  const state = { setAddGameOpener: vi.fn(), recordAchievement: vi.fn() };
   const useQuestStore = (sel) => (sel ? sel(state) : state);
   useQuestStore.getState = () => state;
   return { useQuestStore };
@@ -110,7 +115,7 @@ function renderManager(props = {}) {
 describe('ProjectManager — T7890 add_game_opened funnel beacon', () => {
   beforeEach(() => {
     requireAuthImpl.authed = true;
-    recordAchievementSpy.mockClear();
+    recordFunnelEventSpy.mockClear();
   });
 
   it('fires add_game_opened AND opens the picker on the Add Game gesture', async () => {
@@ -122,8 +127,8 @@ describe('ProjectManager — T7890 add_game_opened funnel beacon', () => {
     // beacon is fire-and-forget (session-deduped in the real store) and never gates
     // the picker (opened in the same synchronous gesture).
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Upload game' })).toBeTruthy());
-    expect(recordAchievementSpy).toHaveBeenCalledWith('add_game_opened');
-    expect(recordAchievementSpy).toHaveBeenCalledTimes(1);
+    expect(recordFunnelEventSpy).toHaveBeenCalledWith('add_game_opened');
+    expect(recordFunnelEventSpy).toHaveBeenCalledTimes(1);
   });
 
   it('does NOT fire the beacon when auth is required and withheld (no picker)', () => {
@@ -135,6 +140,6 @@ describe('ProjectManager — T7890 add_game_opened funnel beacon', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
 
     expect(screen.queryByRole('heading', { name: 'Upload game' })).toBeNull();
-    expect(recordAchievementSpy).not.toHaveBeenCalled();
+    expect(recordFunnelEventSpy).not.toHaveBeenCalled();
   });
 });

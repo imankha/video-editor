@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { EyeOff, AlertTriangle } from 'lucide-react';
 import { API_BASE } from '../config';
 import { withTabProfile } from '../utils/sessionInit';
@@ -8,7 +9,6 @@ import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
-import { useQuestStore } from '../stores/questStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useWebShare } from '../hooks/useWebShare';
 import { useDownloads } from '../hooks/useDownloads';
@@ -129,7 +129,7 @@ function DraftReelPreviewInner({ payload }) {
   // before ~1s (closing the player) cancels it via the cleanup below.
   useEffect(() => {
     const timer = setTimeout(() => {
-      useQuestStore.getState().recordAchievement('previewed_draft_reel_1s');
+      recordFunnelEvent(FUNNEL_EVENTS.PREVIEWED_DRAFT_REEL_1S);
     }, 1000);
     return () => clearTimeout(timer);
   }, []);

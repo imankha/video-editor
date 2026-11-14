@@ -29,7 +29,6 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useFocusStore } from '../stores/focusStore';
 import { useExportStore } from '../stores/exportStore';
 import { startLoadTrace } from '../utils/loadTrace';
-import { useQuestStore } from '../stores/questStore';
 import * as overlayActions from '../api/overlayActions';
 import { dispatchOverlayAction, useOverlayActionStore } from '../stores/overlayActionStore';
 import { track } from '../utils/analytics';
@@ -1105,7 +1104,7 @@ export function OverlayScreen({
     track('overlay_settings_change', { field: 'highlightColor', value: color }, { debugOnly: true });
     setHighlightColor(color);
     // T3700: quest_3 "Pick your highlight color"
-    useQuestStore.getState().recordAchievement('overlay_color_set');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_COLOR_SET);
     setOverlayChangedSinceExport(true);
     if (!canSyncActions) return;
     if (highlightColorTimerRef.current) clearTimeout(highlightColorTimerRef.current);
@@ -1154,7 +1153,7 @@ export function OverlayScreen({
     track('overlay_settings_change', { field: 'highlightShape', value: val }, { debugOnly: true });
     setHighlightShape(val);
     // T3700: quest_3 "Choose the spotlight shape" (Body/Ground)
-    useQuestStore.getState().recordAchievement('overlay_shape_set');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_SHAPE_SET);
     if (canSyncActions) {
       dispatchOverlayAction('setHighlightShape', () => overlayActions.setHighlightShape(projectId, val));
     }

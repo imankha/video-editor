@@ -32,7 +32,7 @@ import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments,
 import { API_BASE } from '../config';
 import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler, useQuestStore } from '../stores';
+import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler } from '../stores';
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
@@ -1071,7 +1071,7 @@ export function FocusScreen({
           openMode: EDITOR_MODES.FRAMING,
           jobId: exportJobId,
           openPreview,
-          recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
+          recordFunnelEvent,
         });
         // The completion toast is suppressed while this project is open in Focus, so a
         // missing preview URL must be announced here.
@@ -1163,7 +1163,7 @@ export function FocusScreen({
     acknowledgeCompletionJob();
     closePreview();
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
-    useQuestStore.getState().recordAchievement('overlay_deferred');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_DEFERRED);
     // T10010 activation funnel: "Save draft"/defer is a real user gesture. IDs only.
     recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
     // Navigation: back to the exact Annotate spot this play came from, if this
@@ -1208,7 +1208,7 @@ export function FocusScreen({
     // T10660: preview stays OPEN (no closePreview / no setEditorMode). The user
     // keeps watching while the reel publishes; the Publish card shows its loading
     // state, derived above from this staked intent.
-    useQuestStore.getState().recordAchievement('overlay_declined');
+    recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_DECLINED);
     usePublishIntentStore.getState().set(projectId);
     // Safety-net backstop ONLY (T10660): the headless render now surfaces a
     // precise failure point (App's onError clears the stake + toasts), so this is

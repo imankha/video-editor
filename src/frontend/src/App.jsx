@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from 'react';
+import { recordFunnelEvent, FUNNEL_EVENTS } from './utils/funnelEvents';
 import { scheduleWarmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
@@ -497,20 +498,20 @@ function App() {
   // Popstate handler lives in editorStore.js (module scope) — immune to React
   // StrictMode's mount-cleanup-remount cycle that was dropping the listener.
 
-  // T540: Record achievement when user enters framing mode
+  // T540/T11175: funnel beacon when the user enters framing mode (once per session).
   // T635: Gate on !isCheckingSession to avoid firing before auth completes
   // Also require a selected project — editorMode defaults to FRAMING on initial load
-  // before redirecting to Projects, which would falsely trigger the achievement.
+  // before redirecting to Projects, which would falsely trigger the beacon.
   useEffect(() => {
     if (!isCheckingSession && editorMode === EDITOR_MODES.FRAMING && selectedProjectId) {
-      useQuestStore.getState().recordAchievement('opened_framing_editor');
+      recordFunnelEvent(FUNNEL_EVENTS.FRAMING_OPENED);
     }
   }, [editorMode, isCheckingSession, selectedProjectId]);
 
-  // T3700: Record achievement when user enters overlay (spotlight) mode — quest_3 step
+  // T3700/T11175: funnel beacon when the user enters overlay (spotlight) mode
   useEffect(() => {
     if (!isCheckingSession && editorMode === EDITOR_MODES.OVERLAY && selectedProjectId) {
-      useQuestStore.getState().recordAchievement('opened_overlay_editor');
+      recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_OPENED);
     }
   }, [editorMode, isCheckingSession, selectedProjectId]);
 
@@ -532,21 +533,6 @@ function App() {
       redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
     }
   }, [editorMode, selectedProjectId, isCheckingSession, redirectToMode]);
-
-  // T5195: quest_2 "return home" — record when the user lands on the home
-  // (project-manager) screen AFTER saving their first reel. Gated on quest_1's
-  // annotate_brilliant step because home is also the app's default landing
-  // screen: an ungated fire would pre-complete the step on a brand-new user's
-  // very first load, before quest 1 even starts. Same mode-entry pattern as
-  // T540/T3700 above; recordAchievement is session-deduped + fire-and-forget.
-  const annotateBrilliantDone = useQuestStore(
-    (s) => s.quests?.find?.((q) => q.id === 'quest_1')?.steps?.annotate_brilliant === true
-  );
-  useEffect(() => {
-    if (!isCheckingSession && editorMode === EDITOR_MODES.PROJECT_MANAGER && annotateBrilliantDone) {
-      useQuestStore.getState().recordAchievement('returned_home');
-    }
-  }, [editorMode, isCheckingSession, annotateBrilliantDone]);
 
   // Export button refs, for triggering an export programmatically from the mode-
   // switch dialog and the payment-return auto-export. T9740: ONE ref per mode,

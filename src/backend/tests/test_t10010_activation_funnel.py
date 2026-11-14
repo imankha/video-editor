@@ -88,7 +88,11 @@ class TestRegistration:
         # The client beacon may only fire these seven plus the T13330 purchase-funnel
         # tries; a server-endpoint event (clip_created, export_completed, ...) must
         # NOT be spoofable via the beacon.
-        assert set(NEW_EVENTS) | {"paywall_shown", "buy_modal_opened"} == CLIENT_FUNNEL_EVENTS
+        # T11175 adds the engagement events rerouted off the quest achievements POST.
+        assert set(NEW_EVENTS) <= CLIENT_FUNNEL_EVENTS
+        assert {"paywall_shown", "buy_modal_opened"} <= CLIENT_FUNNEL_EVENTS
+        assert "export_completed" not in CLIENT_FUNNEL_EVENTS
+        assert "clip_created" not in CLIENT_FUNNEL_EVENTS
 
 
 class TestViewedConvention:

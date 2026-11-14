@@ -18,6 +18,8 @@ import { renderHook, act } from '@testing-library/react';
 // The game-row metadata the container sees; null models a /load without a duration.
 const meta = { value: { duration: 5400 } };
 
+// T11175: the Add Clip beacon is a funnel event; keep it off the mocked apiFetch.
+vi.mock('../utils/funnelEvents', async (orig) => ({ ...(await orig()), recordFunnelEvent: vi.fn() }));
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 
 vi.mock('../modes/annotate', async (importOriginal) => {
