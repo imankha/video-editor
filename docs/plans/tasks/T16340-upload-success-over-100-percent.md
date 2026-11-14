@@ -1,6 +1,6 @@
 # T16340: Admin upload success reads over 100% on production
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-13

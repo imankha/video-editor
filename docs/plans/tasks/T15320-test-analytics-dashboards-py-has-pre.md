@@ -1,6 +1,6 @@
 # T15320: test_analytics_dashboards.py has pre-existing failures against shared Postgres test state
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-08
