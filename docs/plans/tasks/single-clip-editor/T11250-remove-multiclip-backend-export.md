@@ -5,7 +5,7 @@
 Delete the server endpoints and export code that only existed for projects with more than one clip. Nothing a parent sees changes.
 
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 6
 **Created:** 2026-09-24

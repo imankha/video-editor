@@ -5,7 +5,7 @@
 The admin Journey counts events that still travel through the retired quest system's endpoint. Move them to the funnel's own path, keeping the same names, so the map stays accurate when quests are deleted.
 
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-24

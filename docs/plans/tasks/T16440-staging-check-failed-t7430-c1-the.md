@@ -1,6 +1,6 @@
 # T16440: Staging check failed: T7430:C1 The Retention chart renders on demand from live data as
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-13

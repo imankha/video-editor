@@ -5,7 +5,7 @@
 Delete the Spotlight and highlight code that mapped circles across joined clips, which was also subtly wrong. Nothing a parent sees changes.
 
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-09-24

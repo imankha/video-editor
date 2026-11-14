@@ -5,7 +5,7 @@
 Rename the internal selected-clip plumbing to the clip, now that a project has exactly one. A move-only change with no behaviour change.
 
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 3
 **Created:** 2026-09-24

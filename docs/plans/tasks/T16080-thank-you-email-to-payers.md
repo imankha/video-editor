@@ -4,7 +4,7 @@
 
 Today a parent who buys credits sees Stripe's receipt and nothing from us. Of the 56 parents who paid for a highlight, only 11 downloaded or shared it, so most paying parents hit a problem or lose interest right after paying, and we usually never hear why. We will send every paying parent a short personal email from Iman, right after the payment goes through: thank you, I will personally help with any problem, just reply to this email, here is our Discord, and here is the short tutorial. A paying parent who is stuck is the person most worth helping, and a reply to a person gets answered far more often than a support form. Done when a test purchase on staging delivers exactly one email with working Discord and tutorial links, and a reply to it reaches the owner's inbox.
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-11-11

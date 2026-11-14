@@ -1,6 +1,6 @@
 # T16210: Remaining small touch targets on phone and iPad
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-11-12

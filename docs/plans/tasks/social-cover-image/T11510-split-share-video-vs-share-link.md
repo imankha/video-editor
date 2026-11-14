@@ -5,7 +5,7 @@
 On a phone, every Share button sends the video file itself, even the one labelled Share link. A file never shows the cover picture the parent chose, because Instagram, iMessage and WhatsApp pick their own thumbnail; only a link shows our cover. Of the 56 parents who paid for a highlight, 11 downloaded or shared it, so this is where finished highlights die. We will give phones two clear choices, Share video for posting to Reels or TikTok and Share link for messaging, and fix the mislabelled button. The cover picture itself is handled by the reel's title card (T15880). Done when both choices work on a phone and the share-or-download rate out of paid highlights moves on the admin Journey.
 
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-10-01
