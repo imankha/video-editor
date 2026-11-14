@@ -1,0 +1,5 @@
+{
+  "criteria": {
+    "T16450:C1": {"kind": "code", "command": "cd src/frontend && E2E_BASE_URL=https://reel-ballers-staging.pages.dev E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api E2E_CHECK_EMAIL=e2e-gate@test.local npx playwright test e2e/checks/T16210.check.spec.js --grep 'T16210:C1' --reporter=line --workers=4"}
+  }
+}
