@@ -1,6 +1,6 @@
 # T16380: Signed-in requests skip the repeated session lookup
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-13
