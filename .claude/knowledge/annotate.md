@@ -854,18 +854,18 @@ exists ONLY on the Annotate screen. **The fix (1 line + copy):** OR-satisfy the 
 completes it; Preview plays stays a SUFFICIENT path so nothing that already completed regresses. Because
 completion derives in `_check_all_steps` — the ONE choke point `/progress` and `/claim-reward` share —
 displayed-complete and claim-rejected can never disagree (the T9410 invariant holds; adding an OR only
-makes completion EASIER). **Copy:** `config/questDefinitions.jsx`'s `playback_annotations` DESCRIPTION
+makes completion EASIER). **Copy:** config/questDefinitions.jsx's (deleted with the quest system, T11180) `playback_annotations` DESCRIPTION
 no longer instructs a required Preview-plays click — it points at the persistent T9580 next actions
 (`ANNOTATE.FRAME_THIS_CLIP` / `ANNOTATE.KEEP_MARKING_PLAYS`); removed the now-unused `Play` lucide
 import. **Left ALONE (deliberate):** the step TITLE stays `ANNOTATE.PREVIEW_PLAYS` (T9860 owns final
-vocabulary; the FE/BE STEP_TITLES sync test still passes); `data/questDefinitions.js` needs NO change
+vocabulary; the FE/BE STEP_TITLES sync test still passes); data/questDefinitions.js needs NO change
 (it carries only `step_ids`, not completion — OR-satisfy keeps the id); no other quest_1 step
 hard-requires rating/tag/source-preview (`rate_clip` was already OR'd with `reels>=1`). The already-
 shipped stageCta/keepMarkingCta persistent-next-action UI (T9580) was NOT rebuilt — brief's core ask
 was already met by existing code; only the guide's completion PREDICATE + description were wrong.
 Tests: new tests/test_t9850_playback_step_gating.py (3 — saved-clip completes step without the
 achievement, achievement still sufficient, router-seam claim succeeds via saved-value path) +
-`config/questDefinitions.test.jsx` T9850 assertion (desc names Frame-this-clip/Keep-marking, never
+config/questDefinitions.test.jsx T9850 assertion (desc names Frame-this-clip/Keep-marking, never
 Preview plays). QA: container has no browser (same limit as T9830/T9820/T9630) — no live e2e drive;
 `new-user-flow.spec.js` left intact (its Create-Reel step already sets auto_project_id, so the step
 completes earlier but every assertion still holds). Prior:)
