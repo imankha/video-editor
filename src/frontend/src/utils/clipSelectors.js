@@ -67,6 +67,20 @@ export const clipSourceDuration = (clip) => {
   return null;
 };
 
+/**
+ * The clip's frame rate: its stored `fps` from GET /clips (working_clips.fps,
+ * else game_videos.fps), the same rate the framing render converts crop
+ * keyframe frame numbers with (T4540). Crop keyframes are keyed by frame, so a
+ * guessed 30 on a 60 fps clip runs the crop path at double speed: a missing
+ * rate returns `null` and logs an error, never a fabricated default.
+ */
+export const clipFramerate = (clip) => {
+  if (!clip) return null;
+  if (clip.fps > 0) return clip.fps;
+  console.error(`[clipFramerate] clip id=${clip.id} has no stored frame rate (fps=${clip.fps}); its crop timing cannot be known`);
+  return null;
+};
+
 export const clipTrimRange = (clip) => {
   if (!clip.timing_data) return null;
   return clip.timing_data.trimRange || null;

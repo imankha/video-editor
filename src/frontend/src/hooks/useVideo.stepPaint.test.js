@@ -35,7 +35,8 @@ function makeFakeVideo({ paused = true } = {}) {
 describe('useVideo paused frame-step repaint (bug 38 glitch 3)', () => {
   beforeEach(() => {
     // Reset shared store so isSeeking/isBuffering start clean.
-    useVideoStore.setState({ currentTime: 0, isSeeking: false, isBuffering: false, duration: null });
+    // T4540: a step moves one frame of the loaded video's known rate.
+    useVideoStore.setState({ currentTime: 0, isSeeking: false, isBuffering: false, duration: null, metadata: { framerate: 30 } });
   });
 
   it('stepForward advances exactly one frame and registers a paused repaint callback', () => {

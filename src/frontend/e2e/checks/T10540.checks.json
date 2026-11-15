@@ -1,0 +1,12 @@
+{"criteria": {
+  "T10540:C1": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k c1_"},
+  "T10540:C2": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k c2_"},
+  "T10540:C3": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k c3_"},
+  "T10540:C4": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k c4_"},
+  "T10540:C5": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k c5_"},
+  "T10540:C6": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k 'c6_ or warmer'"},
+  "T10540:C7": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k c7_"},
+  "T10540:C8": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k c8_"},
+  "T10540:C9": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t10540_game_poster_top_play.py -p no:cacheprovider -q -k c9_"},
+  "T10540:C10": {"kind": "browser"}
+}}

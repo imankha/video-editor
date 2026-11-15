@@ -179,19 +179,5 @@ describe('videoStore', () => {
       useVideoStore.getState().setVideoUrl('blob:test');
       expect(useVideoStore.getState().hasVideo()).toBe(true);
     });
-
-    it('getFramerate returns metadata framerate', () => {
-      useVideoStore.getState().setMetadata({ framerate: 60 });
-      expect(useVideoStore.getState().getFramerate()).toBe(60);
-    });
-
-    it('getFramerate returns 30 as default when no metadata', () => {
-      expect(useVideoStore.getState().getFramerate()).toBe(30);
-    });
-
-    it('getFramerate returns 30 when metadata has no framerate', () => {
-      useVideoStore.getState().setMetadata({ width: 1920 });
-      expect(useVideoStore.getState().getFramerate()).toBe(30);
-    });
   });
 });

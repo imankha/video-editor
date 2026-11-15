@@ -28,7 +28,8 @@ import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/vide
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
-import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
+import MissingFramerateNotice from '../modes/focus/MissingFramerateNotice';
+import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipFramerate, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
@@ -268,7 +269,7 @@ export function FocusScreen({
       duration: meta.duration,
       sourceWidth: meta.width,
       sourceHeight: meta.height,
-      framerate: meta.framerate || 30,
+      framerate: meta.framerate,
       metadata: meta.metadata,
     };
   }, [clipMetadataCache]);
@@ -664,8 +665,11 @@ export function FocusScreen({
         restoreSegmentState(parsedSegments, clipDuration);
       }
 
-      if (parsedCropKfs && parsedCropKfs.length > 0) {
-        const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
+      // T4540: keyframes are frame numbers at the clip's stored rate; without
+      // one (Frame shows the missing-frame-rate error) there is nothing to restore.
+      const firstClipFramerate = clipFramerate(firstClip);
+      if (parsedCropKfs && parsedCropKfs.length > 0 && firstClipFramerate) {
+        const endFrame = Math.round(clipDuration * firstClipFramerate);
         if (endFrame > 0) {
           restoreCropState(parsedCropKfs, endFrame);
         }
@@ -1398,6 +1402,7 @@ export function FocusScreen({
     <div className="flex h-full">
       {/* Main content */}
       <div className="flex-1 min-w-0">
+        <MissingFramerateNotice clip={projectClip} />
         <FocusModeView
       projectId={projectId}
       guideNeedsCredits={guideNeedsCredits}

@@ -249,7 +249,7 @@ export const useProjectDataStore = create((set, get) => ({
       duration: meta.duration,
       sourceWidth: meta.width,
       sourceHeight: meta.height,
-      framerate: meta.framerate || 30,
+      framerate: meta.framerate,
       metadata: meta.metadata,
     };
   },

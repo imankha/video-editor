@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { extractVideoMetadata, createVideoURL, revokeVideoURL, getFramerate } from '../utils/videoUtils';
+import { extractVideoMetadata, createVideoURL, revokeVideoURL } from '../utils/videoUtils';
+import { UI_STEP_FPS } from '../utils/timeFormat';
 import { validateVideoFile } from '../utils/fileValidation';
 import { useVideoStore } from '../stores';
 import { invalidateUrl } from '../utils/storageUrls';
@@ -35,6 +36,21 @@ const RANGE_FALLBACK_WATCHDOG_MS = 5000;
 // stable and don't churn hook dependency arrays.
 const FORMAT_MAX_RETRIES = 3;
 const FORMAT_RETRY_BASE_MS = 400; // 400ms, 1.2s, 3.6s
+
+/**
+ * T4540: the frame rate of the loaded video, the one a frame step moves by.
+ * Frame loads a clip with metadata.framerate = the clip's stored fps, so a 60
+ * fps clip steps 1/60 s. A missing rate refuses the step loudly (no guessed 30).
+ */
+function loadedFramerate() {
+  const framerate = useVideoStore.getState().metadata?.framerate;
+  if (!framerate) {
+    console.error(`[useVideo] frame step refused: the loaded video has no known frame rate (framerate=${framerate})`);
+    return null;
+  }
+  return framerate;
+}
+
 export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const videoRef = useRef(null);
 
@@ -487,7 +503,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       }
 
       const target = clipToVideo(validTime);
-      const fps = getFramerate(videoRef.current);
+      const fps = useVideoStore.getState().metadata?.framerate;
       seekRequestedForLoadRef.current = loadIdRef.current;
       seekTimingRef.current = { t0: performance.now(), requestedTime: time, validTime, videoTarget: target, fps };
       console.log(`[DetectionSeek] SEEK requested=${time.toFixed(6)}s clamped=${validTime.toFixed(6)}s videoElement=${target.toFixed(6)}s requestedFrame=${Math.round(time * fps)} clampedFrame=${Math.round(validTime * fps)}`);
@@ -562,7 +578,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    */
   const stepForward = useCallback(() => {
     if (videoRef.current && videoRef.current.src) {
-      const framerate = getFramerate(videoRef.current);
+      const framerate = loadedFramerate();
+      if (!framerate) return;
       const effectiveDuration = duration || videoRef.current.duration || 0;
       // Convert current time to frame, add 1, convert back to time
       // This avoids floating point errors from repeatedly adding 1/framerate
@@ -582,7 +599,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    */
   const stepBackward = useCallback(() => {
     if (videoRef.current && videoRef.current.src) {
-      const framerate = getFramerate(videoRef.current);
+      const framerate = loadedFramerate();
+      if (!framerate) return;
       // Convert current time to frame, subtract 1, convert back to time
       // This avoids floating point errors from repeatedly subtracting 1/framerate
       const currentFrame = Math.round(currentTime * framerate);
@@ -992,7 +1010,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
           width: video.videoWidth,
           height: video.videoHeight,
           duration: effectiveDuration,
-          framerate: getFramerate(video) || 30,
+          // A <video> element cannot report its frame rate. Sources loaded
+          // without metadata (Annotate's game video, Overlay) step on the UI
+          // grid; Frame always preloads the clip's stored fps (T4540).
+          framerate: UI_STEP_FPS,
           format: 'mp4', // Assume mp4 for streaming
           size: 0, // Unknown for streaming
         };

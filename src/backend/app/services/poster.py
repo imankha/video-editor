@@ -1026,11 +1026,12 @@ async def warm_recap_poster(
 # live game source (`games/{blake3}.mp4`, global namespace) and cache it at the
 # SAME per-profile key the recap poster uses (`recaps/posters/{game_id}.jpg`), so
 # the serving path in the endpoint is identical regardless of which producer wrote
-# the object. Recap-derived posters always win when a recap exists (the endpoint
-# only calls this when recap_video_url is NULL).
+# the object. T10540: while the game video is live this poster wins over the
+# recap one; the endpoint falls to the recap poster only when this returns False.
 #
 # Frame choice: the timestamp of the HIGHEST-RATED annotated clip (rating 5
-# "Brilliant" > 4 "Good" > ...; ties -> earliest start_time). A game with no clips
+# "Brilliant" > 4 "Good" > ...; ties -> earliest start_time; unrated last), and
+# the card is remade whenever that choice changes (T10540, R2 source metadata). A game with no clips
 # uses a fixed offset into its primary video. Reuses extract_first_frame_jpeg (a
 # single ranged seek) -- no fork.
 # ---------------------------------------------------------------------------
@@ -1120,30 +1121,49 @@ def _clamp_fallback_seek(offset: float, duration: float | None) -> float:
     return offset
 
 
+def _game_poster_source_metadata(video_hash: str, timestamp: float) -> dict:
+    """R2 metadata recording what a game card poster was made from (T10540): the
+    source video hash and the seek, fixed to 3 decimals. The cache-hit test
+    compares a stored card's metadata against this for the CURRENT choice."""
+    return {"source_hash": video_hash, "source_ts": f"{timestamp:.3f}"}
+
+
+def _choose_game_poster_source(cursor, game_id: int) -> tuple[str | None, float]:
+    """(video_hash, timestamp) the game card poster should be made from NOW: the
+    top-rated play's start on its own video, else the primary video at the
+    clamped fallback offset (T8200)."""
+    choice = _choose_game_poster_frame(cursor, game_id)
+    if choice is not None:
+        return choice
+    return (
+        _primary_game_video_hash(cursor, game_id),
+        _clamp_fallback_seek(
+            GAME_POSTER_FALLBACK_OFFSET_SEC,
+            _primary_game_video_duration(cursor, game_id),
+        ),
+    )
+
+
 def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bool:
-    """Cache-first poster for an ACTIVE game with NO recap, from its live source
-    video (T5681). Generate-on-miss; caches at the CARD-SIZE recap poster key
-    (`recap_card_poster_r2_key`, `.card.jpg`) so the endpoint serves it identically
-    to the recap-derived card thumbnail.
+    """The game card poster, kept in step with the game's top-rated play
+    (T5681, T10540). Caches at the CARD-SIZE key (`recap_card_poster_r2_key`,
+    `.card.jpg`) so the endpoint serves it identically to a recap-derived card.
 
-    T5682: the frame is written at card size (480px, q~70) -- the same resize the
-    recap-derived tile uses -- for fast TTFB. Games without a recap have no
-    share/og:image consumer (a share requires a recap master), so there is no
-    full-size object to preserve; the source frame goes straight to the card key.
+    T10540: the frame is chosen FIRST (top-rated play's start on its own video,
+    else the one-minute frame), and the stored card is a cache hit only when its
+    R2 metadata (`source_hash`/`source_ts`) says it was made from that same
+    choice. Every play write path (save, re-rate, move, delete, shared-in) is
+    covered by this one read-side check -- no invalidation hooks. A stale card,
+    or one with no source metadata (pre-T10540), is remade IN PLACE: the new
+    object is uploaded over the old key, never deleted first.
 
-    Returns True when the poster object exists (already cached or freshly stored),
-    False when it could not be produced -- the endpoint then 404s and the frontend
-    renders the branded fallback (no fabricated image, no-silent-fallback rule).
-    Specifically False when the game's live source object is gone
-    (expired/reclaimed) -> an expired game with no recap stays 404.
+    T5682: the frame is written at card size (480px, q~70).
 
-    Steps:
-      1. Card poster already in R2 -> True without ffmpeg (cache hit).
-      2. Pick the frame: highest-rated clip's (video_hash, start_time); no clips ->
-         (primary video hash, GAME_POSTER_FALLBACK_OFFSET_SEC).
-      3. HEAD-probe `games/{hash}.mp4` (global). Missing -> False (no live source).
-      4. Presign + extract ONE card-size frame at the timestamp + upload to the
-         card key.
+    Returns True when a poster object exists to serve (current, freshly stored,
+    or the OLD one kept because a remake was impossible: expired/reclaimed game
+    video, failed extraction or upload -- the old picture stays). False only
+    when there is no object at all and none could be made -- the endpoint then
+    falls to the recap poster or 404s (no fabricated image).
 
     Best effort: never raises. Runs blocking ffmpeg/R2 work, so callers on the
     event loop wrap it in asyncio.to_thread.
@@ -1157,39 +1177,38 @@ def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bo
 
     poster_key = recap_card_poster_r2_key(user_id, profile_id, game_id)
     try:
-        # 1. Cache hit.
-        if r2_head_object_global(poster_key) is not None:
-            return True
-
-        # 2. Choose the frame (highest-rated clip, else primary video @ offset).
+        # 1. Choose the frame (top-rated play, else primary video @ offset).
         with get_db_connection() as conn:
-            cursor = conn.cursor()
-            choice = _choose_game_poster_frame(cursor, game_id)
-            if choice is not None:
-                video_hash, timestamp = choice
-            else:
-                video_hash = _primary_game_video_hash(cursor, game_id)
-                # T8200: clamp the fixed offset into the video -- a game shorter
-                # than the offset would otherwise seek past EOF and 404 forever.
-                timestamp = _clamp_fallback_seek(
-                    GAME_POSTER_FALLBACK_OFFSET_SEC,
-                    _primary_game_video_duration(cursor, game_id),
-                )
+            video_hash, timestamp = _choose_game_poster_source(conn.cursor(), game_id)
+
+        # 2. Cache hit only when the stored card was made from this choice.
+        existing = r2_head_object_global(poster_key)
+        has_existing = existing is not None
+        wanted = (
+            _game_poster_source_metadata(video_hash, timestamp) if video_hash else None
+        )
+        if has_existing and wanted is not None:
+            stored = existing.get("Metadata") or {}
+            if all(stored.get(k) == v for k, v in wanted.items()):
+                return True
 
         if not video_hash:
-            logger.info(f"[GamePoster] game {game_id} has no source video hash -> no poster")
-            return False
+            logger.info(f"[GamePoster] game {game_id} has no source video hash -> no remake")
+            return has_existing
 
-        # 3. Live source must still exist (expired/reclaimed -> 404 -> fallback).
+        # 3. Live source must still exist (expired/reclaimed -> keep what exists).
         game_key = f"games/{video_hash}.mp4"
         if r2_head_object_global(game_key) is None:
-            logger.info(f"[GamePoster] game {game_id} source {game_key} gone -> no poster")
-            return False
+            logger.info(
+                f"[GamePoster] game {game_id} source {game_key} gone -> "
+                f"{'keeping existing poster' if has_existing else 'no poster'}"
+            )
+            return has_existing
 
         source_url = generate_presigned_url_global(game_key, expires_in=3600)
         if not source_url:
-            logger.info(f"[GamePoster] presign failed for {game_key}; skipping")
-            return False
+            logger.warning(f"[GamePoster] presign failed for {game_key}; poster not remade")
+            return has_existing
 
         # 4. Extract ONE frame at the chosen timestamp (single ranged seek).
         with tempfile.TemporaryDirectory() as tmp:
@@ -1199,27 +1218,31 @@ def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bo
                 resize_width=480, jpeg_quality=3,
             ):
                 # T8200: the source object is CONFIRMED present (HEAD passed
-                # above), so a failed extraction is a real infra/encoding anomaly,
-                # not the expected expired-source 404 -- log at WARNING so it does
-                # not hide at INFO the way this bug did.
+                # above), so a failed extraction is a real infra/encoding anomaly.
                 logger.warning(
                     f"[GamePoster] extraction failed for game {game_id} @ {timestamp:.3f}s "
-                    f"(source {game_key} present)"
+                    f"(source {game_key} present); "
+                    f"{'keeping existing poster' if has_existing else 'no poster'}"
                 )
-                return False
+                return has_existing
             data = Path(out_path).read_bytes()
             dims = _jpeg_dimensions(out_path)
 
-        metadata = {"width": dims[0], "height": dims[1]} if dims else None
+        metadata = dict(wanted)
+        if dims:
+            metadata.update(width=dims[0], height=dims[1])
         if not upload_bytes_to_r2_global(
             poster_key, data, fast=True, content_type="image/jpeg", metadata=metadata,
         ):
-            logger.info(f"[GamePoster] R2 upload failed for {poster_key}; no poster stored")
-            return False
+            logger.warning(
+                f"[GamePoster] R2 upload failed for {poster_key}; "
+                f"{'keeping existing poster' if has_existing else 'no poster stored'}"
+            )
+            return has_existing
 
         logger.info(
             f"[GamePoster] stored {poster_key} from {game_key} @ {timestamp:.3f}s "
-            f"({len(data)} bytes, dims={dims or 'unknown'})"
+            f"({len(data)} bytes, dims={dims or 'unknown'}, replaced={has_existing})"
         )
         return True
     except Exception as e:
