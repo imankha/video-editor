@@ -385,6 +385,10 @@ class TestUploadSuccessRateAlarm:
     collapses (>= MIN_ATTEMPTS with rate < THRESHOLD), and must NOT fire on a
     quiet day with too few attempts to mean anything.
 
+    T16550: the alarm reads FINISHED uploads (`finished_rate` = succeeded /
+    (succeeded + failed)); the card's `today` divides by attempts
+    (test_t16550_pulse_upload_attempts.py). These tests record outcomes only.
+
     ISOLATION: `daily_counters` is a shared, cumulative-per-day Postgres table
     that `pg_conn`'s fixture does NOT reset (only user_actions/segments/etc.
     are cleaned per test) -- any other test in the SAME run touching
@@ -445,7 +449,7 @@ class TestUploadSuccessRateAlarm:
 
         assert resp.status_code == 200
         card = resp.json()["cards"]["upload_success_rate"]
-        assert card["today"] == 20.0
+        assert card["finished_rate"] == 20.0
         assert card["alarm"] is True
         assert any("[T8170]" in r.message and "collapsed" in r.message for r in caplog.records), (
             "expected a CRITICAL [T8170] log line when the alarm fires"
@@ -460,7 +464,7 @@ class TestUploadSuccessRateAlarm:
         resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
         assert resp.status_code == 200
         card = resp.json()["cards"]["upload_success_rate"]
-        assert card["today"] == 90.0
+        assert card["finished_rate"] == 90.0
         assert card["alarm"] is False
 
     def test_low_sample_size_never_sets_alarm_even_at_zero_percent(self, client, pg_conn):
@@ -473,7 +477,7 @@ class TestUploadSuccessRateAlarm:
         resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
         assert resp.status_code == 200
         card = resp.json()["cards"]["upload_success_rate"]
-        assert card["today"] == 0.0
+        assert card["finished_rate"] == 0.0
         assert card["alarm"] is False
 
     def test_no_attempts_alarm_is_false_not_missing(self, client):
@@ -511,7 +515,7 @@ class TestUploadSuccessRateAlarm:
         card = resp.json()["cards"]["upload_success_rate"]
         assert card["succeeded"] == 4
         assert card["failed"] == 0
-        assert card["today"] == 100.0
+        assert card["finished_rate"] == 100.0
         assert card["alarm"] is False
 
     def test_stale_prior_day_failures_do_not_pollute_today_segment_filtered_path(self, client, pg_conn):
@@ -533,7 +537,7 @@ class TestUploadSuccessRateAlarm:
         assert card["succeeded"] == 1
         assert card["failed_users"] == 0
         assert card["succeeded_users"] == 1
-        assert card["today"] == 100.0
+        assert card["finished_rate"] == 100.0
         assert card["alarm"] is False
 
 
@@ -742,8 +746,8 @@ class TestPulseUtcDateWindow:
         # mocked local date.today(), so the window still ends on the real UTC day.
         assert card["succeeded"] == 2
         assert card["failed"] == 0
-        assert card["attempts"] == 2
-        assert card["today"] == 100.0
+        assert card["finished"] == 2
+        assert card["finished_rate"] == 100.0
 
     def test_signup_card_visible_when_local_clock_lags_utc(self, client, pg_conn):
         # Same boundary bug, different card: daily_counters.signups instead of

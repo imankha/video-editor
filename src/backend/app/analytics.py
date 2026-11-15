@@ -1185,17 +1185,21 @@ def record_milestone(
             )
 
             daily_col = cfg["daily_col"]
-            if daily_col:
+            # T16550: the attempt has a per-user day bucket but no daily_counters column.
+            if daily_col or event == UPLOAD_ATTEMPT_EVENT:
                 cur.execute(
                     "SELECT origin FROM user_segments WHERE user_id = %s",
                     (user_id,),
                 )
                 row = cur.fetchone()
                 if row:
+                    if event == UPLOAD_ATTEMPT_EVENT:
+                        add_upload_attempt(cur, user_id)
                     if daily_col in UPLOAD_OUTCOME_COLUMNS:
                         add_upload_outcome(cur, user_id, daily_col)
-                    _counter_buffer.increment(row["origin"], daily_col)
-                    _counter_buffer.increment("all", daily_col)
+                    if daily_col:
+                        _counter_buffer.increment(row["origin"], daily_col)
+                        _counter_buffer.increment("all", daily_col)
 
         logger.info("[Analytics] Recorded: action=%s user=%s", action, user_id)
     except Exception:
@@ -1647,6 +1651,46 @@ def add_upload_outcome(cur, user_id: str, column: str) -> None:
             VALUES (%s, CURRENT_DATE, 1)
             ON CONFLICT (user_id, day)
             DO UPDATE SET {column} = user_usage_daily.{column} + 1""",
+        (user_id,),
+    )
+
+
+# T16550: today's upload starts per user, the pulse rate's denominator.
+UPLOAD_ATTEMPT_EVENT = "game_upload_attempted"
+
+# Sticky once seen, like _upload_outcome_columns_present; re-probed until v049 lands.
+_upload_attempts_column_present = False
+_upload_attempts_missing_logged = False
+
+
+def usage_daily_has_upload_attempts(cur) -> bool:
+    """Migration-window guard for v049's user_usage_daily.game_uploads_attempted."""
+    global _upload_attempts_column_present
+    if not _upload_attempts_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_usage_daily' AND column_name = 'game_uploads_attempted'"
+        )
+        _upload_attempts_column_present = cur.fetchone() is not None
+    return _upload_attempts_column_present
+
+
+def add_upload_attempt(cur, user_id: str) -> None:
+    """Single write path for today's per-user upload attempts (T16550). A row from
+    before v049 holds NULL (not recorded that day) and NULL + 1 stays NULL, so a
+    partially counted day never turns into a number."""
+    if not usage_daily_has_upload_attempts(cur):
+        global _upload_attempts_missing_logged
+        if not _upload_attempts_missing_logged:
+            _upload_attempts_missing_logged = True
+            logger.error("[Analytics] user_usage_daily has no game_uploads_attempted yet: "
+                         "run postgres migration v049")
+        return
+    cur.execute(
+        """INSERT INTO user_usage_daily (user_id, day, game_uploads_attempted)
+            VALUES (%s, CURRENT_DATE, 1)
+            ON CONFLICT (user_id, day)
+            DO UPDATE SET game_uploads_attempted = user_usage_daily.game_uploads_attempted + 1""",
         (user_id,),
     )
 

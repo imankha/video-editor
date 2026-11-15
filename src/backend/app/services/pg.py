@@ -356,12 +356,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_campaigns_name_lower ON campaigns (lower(n
 -- via analytics.add_usage_seconds (single write path), same txn as the total.
 -- T15050 (v042): the game_uploads_* columns are written ONLY by
 -- analytics.add_upload_outcome, so a row can exist with seconds = 0.
+-- T16550 (v049): game_uploads_attempted is nullable on purpose: NULL marks a row
+-- from before v049 (attempts not recorded that day), so the pulse shows no rate.
 CREATE TABLE IF NOT EXISTS user_usage_daily (
     user_id TEXT NOT NULL,
     day DATE NOT NULL,
     seconds INTEGER NOT NULL DEFAULT 0,
     game_uploads_succeeded INTEGER NOT NULL DEFAULT 0,
     game_uploads_failed INTEGER NOT NULL DEFAULT 0,
+    game_uploads_attempted INTEGER DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
 

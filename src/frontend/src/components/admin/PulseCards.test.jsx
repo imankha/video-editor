@@ -21,11 +21,13 @@ describe('PulseCards upload success alarm (T7510/T8170)', () => {
     const data = {
       cards: {
         ...BASE_CARDS,
-        upload_success_rate: { today: 20, succeeded: 2, failed: 8, attempts: 10, alarm: true, sparkline: [] },
+        upload_success_rate: { today: 16.67, succeeded: 2, failed: 8, attempts: 12, finished: 10, finished_rate: 20, alarm: true, sparkline: [] },
       },
     };
     render(<PulseCards data={data} />);
     expect(screen.getByRole('alert').textContent).toContain('2/10 succeeded today');
+    // T16550: the alarm is about finished uploads, not attempts (abandons are routine).
+    expect(screen.getByRole('alert').textContent).toContain('20.00% of finished uploads');
   });
 
   it('says how many people the failures came from (T15050)', () => {
@@ -33,7 +35,7 @@ describe('PulseCards upload success alarm (T7510/T8170)', () => {
       cards: {
         ...BASE_CARDS,
         upload_success_rate: {
-          today: 20, succeeded: 2, failed: 8, attempts: 10, failed_users: 3, succeeded_users: 1,
+          today: 16.67, succeeded: 2, failed: 8, attempts: 12, finished: 10, finished_rate: 20, failed_users: 3, succeeded_users: 1,
           alarm: true, sparkline: [],
         },
       },
@@ -48,7 +50,7 @@ describe('PulseCards upload success alarm (T7510/T8170)', () => {
       cards: {
         ...BASE_CARDS,
         upload_success_rate: {
-          today: 20, succeeded: 2, failed: 8, attempts: 10, failed_users: null, succeeded_users: null,
+          today: 16.67, succeeded: 2, failed: 8, attempts: 12, finished: 10, finished_rate: 20, failed_users: null, succeeded_users: null,
           alarm: true, sparkline: [],
         },
       },
