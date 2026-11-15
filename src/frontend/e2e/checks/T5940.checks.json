@@ -1,8 +1,8 @@
 {
   "criteria": {
     "T5940:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t5940_admin_route_snapshot.py -q -p no:cacheprovider"},
-    "T5940:C2": {"kind": "code", "command": "test $(git log --format=%s master..HEAD | grep -cE '^T5940: Move the .* admin endpoints to routers/admin/[a-z]+\\.py$') -ge 9"},
-    "T5940:C3": {"kind": "code", "command": "git log --reverse --format=%s master..HEAD | grep '^T5940: Move' | tail -1 | grep -q 'helpers to services/analytics.py'"},
+    "T5940:C2": {"kind": "code", "command": "bash src/frontend/e2e/checks/T5940.moves.sh c2"},
+    "T5940:C3": {"kind": "code", "command": "bash src/frontend/e2e/checks/T5940.moves.sh c3"},
     "T5940:C4": {"kind": "code", "command": "! grep -nE 'routers\\.admin|_refresh_target_user_db\\(' src/backend/tests/test_persistence_risk_coverage.py"},
     "T5940:C5": {"kind": "code", "command": "grep -q '^def _segment_group_rows' src/backend/app/services/analytics.py && ! grep -qE '^def (_segment_group_rows|_segment_window_where|_rollup_failures|_retry_bursts_for_stopped|_test_exclusion)' src/backend/app/routers/admin/analytics.py src/backend/app/routers/admin/__init__.py"},
     "T5940:C6": {"kind": "code", "command": "test $(grep -c '^app.include_router(admin_' src/backend/app/main.py) -eq 10 && ! grep -nE '^\\s*for .* in .*(router|admin)' src/backend/app/main.py"},
