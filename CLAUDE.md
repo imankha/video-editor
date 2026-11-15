@@ -135,7 +135,7 @@ turns is restarted up to twice with a handoff note; a worker whose change makes 
 task's criterion false stops with `CONFLICT` before committing; groups hold at most 4 tasks.
 Verification (owner decision 2026-11-09): the worker commits one check per criterion under
 `src/frontend/e2e/checks/`, the harness runs them, and one reviewer per round judges each check against its
-criterion's text; a group has one 30-minute verify budget, and what it does not reach is listed in the PR
+criterion's text; a group has one verify budget of 3 minutes per acceptance criterion, and what it does not reach is listed in the PR
 body as not verified, never counted as a pass; a `human` criterion rides in the PR body as a staging check.
 After merge, `staging-check` runs the browser checks against staging and files each failure as a bug task:
 staging is the real gate; `/dotask resume <slug>` continues a stopped group; every `/dotask` relay carries an `eta:` line and a

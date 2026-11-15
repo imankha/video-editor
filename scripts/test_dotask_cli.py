@@ -1835,7 +1835,7 @@ class AutolandTest(AutolandBase):
 
     def test_a_spent_budget_lands_what_is_left_unverified(self):
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
-        group["verify_spent_s"] = dotask_cli.VERIFY_BUDGET_MINUTES * 60
+        group["verify_spent_s"] = 2 * dotask_cli.VERIFY_MINUTES_PER_CRITERION * 60  # T1 has 2 criteria
         (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
         self.assertEqual(self._run(), 0)
         self.assertEqual(self.dispatches, [])  # no checks, no reviewer
@@ -1852,7 +1852,8 @@ class AutolandTest(AutolandBase):
             caps.append(cap_minutes)
             return self._dispatch(slug, group, phase, instruction)
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
-        group["verify_spent_s"] = (dotask_cli.VERIFY_BUDGET_MINUTES - 6) * 60
+        group["verify_budget_min"], group["verify_budget_source"] = 30, "env"  # room for the 6 left below
+        group["verify_spent_s"] = (30 - 6) * 60
         (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
         self.verdicts = [self._verdict()]
         with patch.object(dotask_cli, "dispatch", dispatch):
@@ -1860,7 +1861,7 @@ class AutolandTest(AutolandBase):
         self.assertLessEqual(caps[0], 6)
         self.assertGreater(caps[0], 5)
         spent = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())["verify_spent_s"]
-        self.assertGreater(spent, (dotask_cli.VERIFY_BUDGET_MINUTES - 6) * 60)
+        self.assertGreater(spent, (30 - 6) * 60)
 
     def test_a_fix_round_that_runs_out_of_turns_is_restarted_with_a_handoff(self):
         (self.checkout / ".dotask-profile").mkdir()
@@ -2631,6 +2632,30 @@ class StagingCheckTest(AutolandBase):
     def test_a_group_without_browser_checks_is_freed_at_once(self):
         (self.checkout / dotask_cli.CHECKS_DIR / "T1.checks.json").unlink()
         self.assertEqual(dotask_cli.on_merge("g-t1-1", "731"), "freed")
+
+
+class VerifyBudgetPerCriterionTest(AutolandBase):
+    """Owner rule 2026-11-15: the verify budget is 3 minutes per acceptance criterion."""
+
+    def _group(self):
+        return json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+
+    def test_autoland_sets_three_minutes_per_criterion(self):
+        self.verdicts = [self._verdict()]
+        with patch.dict(os.environ, {}):
+            os.environ.pop("DOTASK_VERIFY_BUDGET_MIN", None)
+            self.assertEqual(self._run(no_land=True), 0)
+        group = self._group()
+        self.assertEqual(group["verify_budget_min"], 6.0)  # T1 has 2 criteria
+        self.assertEqual(group["verify_budget_source"], "criteria")
+
+    def test_the_environment_override_wins_and_a_later_run_keeps_it(self):
+        self.verdicts = [self._verdict()]
+        with patch.dict(os.environ, {"DOTASK_VERIFY_BUDGET_MIN": "50"}):
+            self.assertEqual(self._run(no_land=True), 0)
+        with patch.dict(os.environ, {}):
+            os.environ.pop("DOTASK_VERIFY_BUDGET_MIN", None)
+            self.assertEqual(dotask_cli.group_budget_minutes(self.checkout, self._group()), (50.0, "env"))
 
 
 if __name__ == "__main__":
