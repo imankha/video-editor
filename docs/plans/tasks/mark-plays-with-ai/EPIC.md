@@ -125,7 +125,6 @@ T16130 has no dependency and can ship on its own. T16145 is done with the owner 
 
 ## Needed from the owner
 
-- Turn on billing for the Google project behind the Gemini key. The prototype key is on the free tier (20 requests a day, 2 GB per file), which cannot analyse a full game. T16150 cannot be proven on staging without it, and T16145 is limited to about one comparison run a day until it is on.
 - Read the prototype's output files in T16145 and approve a version of the prompt and format.
 - Approve the screens drawn on 2026-11-14 (UX-FEEDBACK.md sections 1, 2, 4 and 11) before T16170, T16180 and T16202 are built.
 - Choose the example play shown in the offer.

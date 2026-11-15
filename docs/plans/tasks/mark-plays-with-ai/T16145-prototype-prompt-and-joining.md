@@ -122,7 +122,7 @@ Asking each piece "which way did this team attack in the first half" was ruled o
 - Slot agreement between overlap twins: compare which slot holds the higher relevance and the tag sets per slot; mirrored means both the relevance order and the tag sets match better when one side's slots are swapped. Log the score; do not auto-swap a piece on this alone before the owner has seen how often it fires.
 - Direction check is a majority vote among the pieces between two changes of ends; `unclear` does not vote. Fewer than three voting pieces in a period means no verdict.
 - Test video: `videos/breakers-20min.mp4` has no change of ends. Cut a second 20-minute file across half time from a full game under `formal annotations/` (the free key takes files up to 2 GB), so the direction logic sees a real change.
-- Free key: 20 requests a day for this model, failed attempts count. One run of a 20-minute file is 4 calls; the two-wording comparison run twice is 16. Plan one comparison a day until billing is on.
+- The owner turned on billing for the Google key on 2026-11-14, so the free tier's limit of 20 requests a day no longer applies. One run of a 20-minute file is 4 calls; the two-wording comparison run twice is 16. Confirm the first run is billed (no daily-limit error) before planning a full-game run.
 - `test_merge_windows.py` cases, from recorded answers and hand-made ones: complete beats cut-off; both complete, higher rating wins; both cut off, stitched; cut-off fragment rated 4 kept; cut-off routine fragment dropped; three-way split (one play in A, two in B); mirrored twins flagged; from-zero clock in the later piece.
 - Keep `.env`, `videos/` and large `outputs/` out of git; commit one small approved run folder as the reference.
 
