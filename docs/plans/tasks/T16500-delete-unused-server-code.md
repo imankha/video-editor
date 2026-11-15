@@ -1,6 +1,6 @@
 # T16500: Delete unused server code
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-13
