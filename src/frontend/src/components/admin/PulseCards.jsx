@@ -62,8 +62,9 @@ export function PulseCards({ data }) {
           role="alert"
           className="mb-4 rounded-lg border border-red-500 bg-red-900/40 px-4 py-3 text-red-200 font-semibold"
         >
-          Upload success rate has collapsed to {fmtPct(uploadCard.today)}
-          ({uploadCard.succeeded}/{uploadCard.attempts} succeeded today).
+          {/* T16550: the alarm reads finished uploads; `today` divides by attempts. */}
+          Upload success rate has collapsed to {fmtPct(uploadCard.finished_rate)} of finished uploads
+          ({uploadCard.succeeded}/{uploadCard.finished} succeeded today).
           {uploadCard.failed_users != null && (
             ` ${peopleCount(uploadCard.failed, 'failure', uploadCard.failed_users)}; `
             + `${peopleCount(uploadCard.succeeded, 'success', uploadCard.succeeded_users)}.`

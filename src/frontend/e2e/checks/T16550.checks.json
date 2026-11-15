@@ -1,0 +1,5 @@
+{"criteria": {
+  "T16550:C1": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16550_pulse_upload_attempts.py -p no:cacheprovider -q -k 'upload_start'"},
+  "T16550:C2": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16550_pulse_upload_attempts.py -p no:cacheprovider -q -k 'successes_over_attempts'"},
+  "T16550:C3": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16550_pulse_upload_attempts.py -p no:cacheprovider -q -k 'before_the or v049'"}
+}}

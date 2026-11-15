@@ -22,6 +22,7 @@ from ..analytics import (
     ARRIVAL_SPORT_KEYS,
     EVENT_INSTRUMENTED_AT,
     RETRY_BURST_ACTIONS,
+    usage_daily_has_upload_attempts,
     usage_daily_has_upload_outcomes,
 )
 from ..analytics import detect_retry_bursts as _detect_retry_bursts
@@ -3441,6 +3442,22 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_
     return where_parts, params
 
 
+def _upload_attempts_today(cur, segment_sql: str, params: list) -> int | None:
+    """T16550: today's upload attempts for the pulse rate, from user_usage_daily `d`
+    (`segment_sql` is the join + WHERE, `params` end with today). None when the day
+    is not fully recorded: v049 has not run, or a row from before it holds NULL."""
+    if not usage_daily_has_upload_attempts(cur):
+        logger.error("[T16550] pulse has no upload attempts: run postgres migration v049")
+        return None
+    cur.execute(f"""
+        SELECT COALESCE(SUM(d.game_uploads_attempted), 0) AS attempted,
+               COUNT(*) FILTER (WHERE d.game_uploads_attempted IS NULL) AS unrecorded
+        FROM user_usage_daily d{segment_sql} AND d.day = %s
+    """, params)
+    r = cur.fetchone()
+    return None if r["unrecorded"] else r["attempted"]
+
+
 @router.get("/analytics/pulse")
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_pulse(
@@ -3550,6 +3567,9 @@ def analytics_pulse(
                 ur = cur.fetchone()
                 upload_succeeded_users = upload_failed_users = None
             upload_succeeded_total, upload_failed_total = ur["succeeded"], ur["failed"]
+            upload_attempts_total = _upload_attempts_today(
+                cur, f" JOIN user_segments s ON d.user_id = s.user_id{seg_join} {seg_where}",
+                [*filter_params, today])
 
             # The origin-only daily_counters shortcut can't honor a per-user
             # exclusion, so skip it when excluding test accounts (T8110).
@@ -3658,6 +3678,7 @@ def analytics_pulse(
                 upload_succeeded_users, upload_failed_users = ur["succeeded_users"], ur["failed_users"]
             else:
                 logger.error("[T15050] pulse has no per-user upload counts: run postgres migration v042")
+            upload_attempts_total = _upload_attempts_today(cur, " WHERE TRUE", [today])
 
     date_range = [(start + timedelta(days=i)) for i in range(days)]
 
@@ -3742,16 +3763,22 @@ def analytics_pulse(
     viral_card = make_card(viral_spark)
     viral_card["today"] = viral_pct
 
-    # T7510: upload success rate = succeeded / (succeeded + failed). Guard
-    # divide-by-zero -> null so the card renders "--" when there were no attempts
-    # (an honest "no data", not a misleading 0% or 100%).
-    # T16340: today's day buckets are always inside the dimension tables' window
-    # (UPLOAD_ATTEMPTS_RECORDED_FROM), and nothing caps the rate. Its denominator is
-    # outcomes, not attempts: game_upload_attempted has no day bucket to read today's.
-    upload_attempts_total = upload_succeeded_total + upload_failed_total
+    # T16550: upload success rate = today's successes / today's ATTEMPTS, so an
+    # abandoned upload (neither outcome) pulls it down. None ("--") when there were
+    # no attempts or the day's attempts were not recorded (_upload_attempts_today).
+    # Nothing caps it: an upload started before midnight and finished after reads
+    # its success today with no attempt today (same rule as T16340's tables).
     upload_success_rate = (
         round(upload_succeeded_total / upload_attempts_total * 100, 2)
         if upload_attempts_total else None
+    )
+    # The alarm reads FINISHED uploads (succeeded / (succeeded + failed)): attempts
+    # include routine abandons and unaffordable aborts that are not a pipeline
+    # collapse, and a pending v049 must not mute the alarm.
+    upload_finished_total = upload_succeeded_total + upload_failed_total
+    upload_finished_rate = (
+        round(upload_succeeded_total / upload_finished_total * 100, 2)
+        if upload_finished_total else None
     )
     # T8170: the T8160 outage sat at 29% success for ~2 days with no alert --
     # nobody noticed until a bug report. A real collapse with a meaningful sample
@@ -3766,9 +3793,9 @@ def analytics_pulse(
     # all the evidence there is, and an outage looks exactly like this. 2026-11-04 stays
     # quiet: two other users had successes.
     upload_success_alarm = (
-        upload_attempts_total >= UPLOAD_SUCCESS_ALARM_MIN_ATTEMPTS
-        and upload_success_rate is not None
-        and upload_success_rate < UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT
+        upload_finished_total >= UPLOAD_SUCCESS_ALARM_MIN_ATTEMPTS
+        and upload_finished_rate is not None
+        and upload_finished_rate < UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT
         and (
             upload_failed_users is None
             or upload_failed_users >= UPLOAD_SUCCESS_ALARM_MIN_FAILED_USERS
@@ -3777,8 +3804,8 @@ def analytics_pulse(
     )
     if upload_success_alarm:
         logger.critical(
-            f"[T8170] Upload success rate collapsed: {upload_success_rate}% "
-            f"({upload_succeeded_total}/{upload_attempts_total} succeeded; "
+            f"[T8170] Upload success rate collapsed: {upload_finished_rate}% of finished uploads "
+            f"({upload_succeeded_total}/{upload_finished_total} succeeded; "
             f"{upload_failed_total} failures from {upload_failed_users} users, "
             f"{upload_succeeded_total} successes from {upload_succeeded_users} users) -- "
             f"below the {UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT}% alarm threshold"
@@ -3791,6 +3818,8 @@ def analytics_pulse(
         "succeeded": upload_succeeded_total,
         "failed": upload_failed_total,
         "attempts": upload_attempts_total,
+        "finished": upload_finished_total,
+        "finished_rate": upload_finished_rate,
         "succeeded_users": upload_succeeded_users,
         "failed_users": upload_failed_users,
         "alarm": upload_success_alarm,

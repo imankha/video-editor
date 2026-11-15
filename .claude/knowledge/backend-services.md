@@ -878,6 +878,17 @@ raising or a body with none of the keys. The beacon now warns with `client_build
 `X-Client-Build` header, so it survives a lost body), `body_error` and `content_length`. Grep
 `reason-less beacon` to identify the next one.
 
+**Pulse rate divides by attempts; the alarm reads finished uploads (T16550).** v049 adds
+`user_usage_daily.game_uploads_attempted`, bumped by `analytics.add_upload_attempt` when
+`record_milestone` sees `game_upload_attempted` (prepare_upload). The column is NULLABLE on purpose:
+rows from before v049 keep NULL and NULL + 1 stays NULL, so `_upload_attempts_today` (admin.py)
+returns None for any day holding a NULL row and the card's `today` reads "--" instead of a partial
+count. `today` = succeeded / attempts (uncapped; a pre-midnight start finished after midnight can
+read over 100%). The alarm and banner use `finished`/`finished_rate` = succeeded / (succeeded +
+failed): attempts include routine abandons and unaffordable aborts, and a pending v049 must not
+mute the alarm. The dev Postgres is shared: exact-count pulse tests read a per-run user through its
+own `?origin=` (`tests/test_t16550_pulse_upload_attempts.py`); the unfiltered path is global.
+
 **The upload alarm counts people (T15050).** `user_usage_daily.game_uploads_succeeded/failed`
 (v042, single write path `analytics.add_upload_outcome`, called from `record_milestone`) give the
 pulse card today's count AND today's distinct users; the alarm needs failures from
