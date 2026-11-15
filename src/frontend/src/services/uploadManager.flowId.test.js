@@ -11,9 +11,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ensureVideoInR2, sendUploadFailureBeacon, uploadGame } from './uploadManager';
 import { __setClientBuildForTest } from '../utils/appVersion';
 
-vi.mock('../stores/questStore', () => ({
-  useQuestStore: { getState: () => ({ fetchProgress: vi.fn() }) },
-}));
 vi.mock('../stores/gamesDataStore', () => ({
   useGamesDataStore: { getState: () => ({ invalidateGames: vi.fn() }) },
 }));

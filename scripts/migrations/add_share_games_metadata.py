@@ -11,7 +11,7 @@ Usage:
     .venv/Scripts/python.exe ../../scripts/migrations/add_share_games_metadata.py --env <dev|staging|prod>
 
 Requires fly proxy running for staging/prod:
-    fly proxy 15432:5432 --app reel-ballers-db-staging
+    fly proxy 15432:5432 --app reel-ballers-db-staging-lax
     fly proxy 15433:5432 --app reel-ballers-db
 """
 

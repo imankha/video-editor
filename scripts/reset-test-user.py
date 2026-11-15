@@ -51,7 +51,6 @@ TABLES_TO_CLEAR = [
     "working_videos",
     "final_videos",
     "export_jobs",
-    "achievements",
     "before_after_tracks",
     "pending_uploads",
 ]
@@ -77,6 +76,13 @@ ACTION_TO_DAILY_COL = {
 FLY_APPS = {
     "staging": "reel-ballers-api-staging",
     "prod": "reel-ballers-api",
+}
+
+# Warm-up targets. Staging's API is served from api-staging.reelballers.com (T16370);
+# the Fly app name above is an identifier for the fly CLI, not a host.
+API_HOSTS = {
+    "staging": "https://api-staging.reelballers.com",
+    "prod": "https://reel-ballers-api.fly.dev",
 }
 
 
@@ -195,7 +201,7 @@ def restart_fly_machines(env_name, config):
 
         print("  Warming up server...")
         import urllib.request
-        health_url = f"https://{app_name}.fly.dev/api/health"
+        health_url = f"{API_HOSTS[env_name]}/api/health"
         try:
             urllib.request.urlopen(health_url, timeout=30)
             print("  Server is ready")

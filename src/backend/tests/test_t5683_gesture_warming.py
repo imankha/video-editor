@@ -38,9 +38,6 @@ async def test_game_source_warming_swallows_failures():
     with patch(
         "app.services.poster_warmer.ensure_game_source_poster",
         side_effect=Exception("FFmpeg failed"),
-    ), patch(
-        "app.services.poster_warmer.r2_head_object_global",
-        return_value=None,
     ):
         # Must not raise.
         await warm_game_source_poster_background("user1", "prof1", 456)

@@ -360,7 +360,7 @@ export const SHARING = {
 // T9860 (Shared Vocabulary epic, copy and concept sweep): the editor MODE noun,
 // single source. Was declared per-mode in editorStore.SCREENS[].label (a store
 // owning a UI string) plus duplicated across draftStage, SegmentedProgressStrip,
-// DraftTile, AnnotateFullscreenOverlay and quest_config.py. FRAMING replaces the
+// DraftTile and AnnotateFullscreenOverlay. FRAMING replaces the
 // prior epic override that had named this mode noun after the render engine
 // (see the T9550 comment below, superseded).
 // T12500: Overlay Text tab copy (no editor jargon: no "region", "playhead", "lane").
@@ -1054,7 +1054,6 @@ export const GUIDE = {
     paymentFailed: 'The payment didn’t go through. Tap OK, then try again.',
     storageExtension: 'Tap Extend storage to keep this game longer.',
     exportTooLarge: 'This highlight is too big to sharpen. Tap Got it, then use a tighter box or shorten it.',
-    tutorialVideo: 'Watch the video, then close it and try it yourself.',
     profilesList: 'Tap a profile to switch to it, or tap + Add profile for another athlete.',
     profileAdd: 'Fill in your athlete’s details, then tap Create.',
     profileEdit: 'Change your athlete’s details, then tap Save.',

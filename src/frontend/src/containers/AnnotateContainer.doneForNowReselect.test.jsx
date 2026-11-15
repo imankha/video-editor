@@ -39,7 +39,6 @@ import { AnnotateContainer } from './AnnotateContainer';
 import { useVideo } from '../hooks/useVideo';
 import { useVideoStore } from '../stores';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { __resetBeginLoadDedup } from './annotateVideoLoad';
 
 const flushMicrotasks = () => new Promise((r) => setTimeout(r, 0));
@@ -78,7 +77,6 @@ function makeFakeVideo() {
 }
 
 const authOriginal = useAuthStore.getState();
-const questOriginal = useQuestStore.getState();
 
 describe('AnnotateContainer re-selects the play after Done for now (T11800)', () => {
   beforeEach(() => {
@@ -86,10 +84,6 @@ describe('AnnotateContainer re-selects the play after Done for now (T11800)', ()
     apiFetch.mockReset();
     apiFetch.mockImplementation(() => Promise.resolve({ ok: true, status: 200, json: async () => ({}) }));
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({
-      recordAchievement: vi.fn(),
-      fetchProgress: vi.fn().mockResolvedValue(undefined),
-    });
     window.matchMedia = (query) => ({
       matches: false, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {},
@@ -99,7 +93,6 @@ describe('AnnotateContainer re-selects the play after Done for now (T11800)', ()
 
   afterEach(() => {
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useVideoStore.getState().reset();
     vi.restoreAllMocks();
   });

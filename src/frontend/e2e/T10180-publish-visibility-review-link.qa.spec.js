@@ -63,9 +63,6 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
     await page.route('**/api/projects**', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
     );
-    await page.route('**/api/quests/achievements/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
-    );
     // The single-video share token mint (createShareLink / copyLink's
     // createShareUrl) — POST /api/gallery/{id}/share.
     await page.route('**/api/gallery/999001/share', (route) =>

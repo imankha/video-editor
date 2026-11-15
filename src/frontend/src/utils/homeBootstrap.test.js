@@ -9,12 +9,10 @@ import { runHomeBootstrap } from './homeBootstrap';
 function makeStores() {
   const store = () => ({
     setFromBootstrap: vi.fn(),
-    setPanelCollapsed: vi.fn(),
     fetchProfiles: vi.fn().mockResolvedValue(),
     loadSettings: vi.fn().mockResolvedValue(),
     fetchProjects: vi.fn().mockResolvedValue(),
     fetchGames: vi.fn().mockResolvedValue(),
-    fetchProgress: vi.fn().mockResolvedValue(),
     fetchCount: vi.fn().mockResolvedValue(),
   });
   const wrap = (s) => ({ getState: () => s });
@@ -23,18 +21,16 @@ function makeStores() {
   const useCreditStore = store();
   const useProjectsStore = store();
   const useGamesDataStore = store();
-  const useQuestStore = store();
   const useGalleryStore = store();
   const useConfigStore = store();
   return {
-    raw: { useProfileStore, useSettingsStore, useCreditStore, useProjectsStore, useGamesDataStore, useQuestStore, useGalleryStore, useConfigStore },
+    raw: { useProfileStore, useSettingsStore, useCreditStore, useProjectsStore, useGamesDataStore, useGalleryStore, useConfigStore },
     stores: {
       useProfileStore: wrap(useProfileStore),
       useSettingsStore: wrap(useSettingsStore),
       useCreditStore: wrap(useCreditStore),
       useProjectsStore: wrap(useProjectsStore),
       useGamesDataStore: wrap(useGamesDataStore),
-      useQuestStore: wrap(useQuestStore),
       useGalleryStore: wrap(useGalleryStore),
       useConfigStore: wrap(useConfigStore),
     },
@@ -62,7 +58,7 @@ describe('T16050 runHomeBootstrap [LOAD] trace wiring', () => {
     const { stores, raw } = makeStores();
     const apiFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ profiles: [], settings: {}, credits: 0, projects: [], games: [], quests_progress: {}, downloads: [] }),
+      json: async () => ({ profiles: [], settings: {}, credits: 0, projects: [], games: [], downloads: [] }),
     });
 
     await runHomeBootstrap({ apiFetch, API_BASE: 'http://x', stores });

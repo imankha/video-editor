@@ -14,15 +14,10 @@ TOCTOU race), and eviction would make it routine.
 """
 
 import sqlite3
-import sys
-import types
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-if "cv2" not in sys.modules:
-    sys.modules["cv2"] = types.ModuleType("cv2")
 
 from tests.r2_fake_transport import FakeR2Transport
 

@@ -425,7 +425,7 @@ def _read_projects_list():
         #
         # Optimization: Uses NOT EXISTS anti-join pattern instead of window functions
         # This is faster in SQLite as it can use indexes effectively
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 p.id,
                 p.name,
@@ -464,8 +464,6 @@ def _read_projects_list():
             FROM projects p
             LEFT JOIN (
                 -- Subquery for clip counts per project (latest version only)
-                -- Uses ROW_NUMBER to handle duplicate clips at same version level
-                -- Identity: COALESCE(rc.end_time, wc.uploaded_filename) - matches queries.py
                 SELECT
                     project_id,
                     -- T7860: these exported/in_progress phase predicates are the
@@ -483,15 +481,8 @@ def _read_projects_list():
                     -- NULL), and exported clips keep their crop_data, so this counts
                     -- cropped clips whether or not they've been exported.
                     SUM(CASE WHEN crop_data IS NOT NULL THEN 1 ELSE 0 END) as cropped
-                FROM (
-                    SELECT wc.*, ROW_NUMBER() OVER (
-                        PARTITION BY wc.project_id, COALESCE(rc.end_time, wc.uploaded_filename)
-                        ORDER BY wc.version DESC, wc.id DESC
-                    ) as rn
-                    FROM working_clips wc
-                    LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                ) latest_clips
-                WHERE rn = 1
+                FROM working_clips wc
+                WHERE wc.id IN ({latest_working_clips_subquery(project_filter=False)})
                 GROUP BY project_id
             ) clip_stats ON p.id = clip_stats.project_id
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id

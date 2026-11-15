@@ -3,13 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // T12250: the upload modal owns its inline guide (choose -> submit).
 
-const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
-vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: recordAchievementSpy };
-  const useQuestStore = (sel) => (sel ? sel(state) : state);
-  useQuestStore.getState = () => state;
-  return { useQuestStore };
-});
 
 vi.mock('../stores/creditStore', () => {
   const state = { balance: 88, loaded: true, fetchCredits: vi.fn() };

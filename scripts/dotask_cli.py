@@ -255,6 +255,12 @@ PROCESS_START_RETRIES = 3
 def run_cmd(*args, **kwargs):
     """subprocess.run, retrying a process that failed to START (never one that ran and failed)."""
     check = kwargs.pop("check", False)
+    if kwargs.get("text") or kwargs.get("universal_newlines"):
+        # Windows' default code page cannot decode the UTF-8 that tests, logs and containers print; the reader
+        # thread then dies and stdout comes back None. PR #739 fixed one call (2026-11-10); g-t11180-4's loop
+        # crashed on another in container_run (2026-11-15). Every text call decodes UTF-8 now.
+        kwargs.setdefault("encoding", "utf-8")
+        kwargs.setdefault("errors", "replace")
     for attempt in range(PROCESS_START_RETRIES + 1):
         result = subprocess.run(*args, **kwargs)
         if result.returncode not in PROCESS_START_FAILURES or attempt == PROCESS_START_RETRIES:
@@ -566,7 +572,7 @@ def start(args):
              "wave_id": wave_id, "capture": bool(args.capture), "headless": bool(args.headless),
              "shared_files": shared,
              "created_at": wave_profile.now_iso()}
-    save_group(checkout, group)
+    set_group_budget(checkout, group)  # saves the group; status ETAs read the budget before autoland runs
     exclude_path = checkout / ".git" / "info" / "exclude"
     exclude_path.parent.mkdir(parents=True, exist_ok=True)
     existing = exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""
@@ -664,8 +670,31 @@ def ci_failure_report(branch, head, log_lines=120):
                              check=False).stdout or ""
     except (OSError, subprocess.SubprocessError, ValueError, StopIteration, KeyError) as exc:
         return f"Could not fetch the Branch CI run for {head[:9]} ({exc}); run `gh run list --branch {branch}`."
-    tail = "\n".join(log.splitlines()[-log_lines:])
-    return f"Run {run_id}, failed jobs: {', '.join(failed) or 'unknown'}.\nLast {log_lines} failed-step log lines:\n{tail}"
+    return f"Run {run_id}, failed jobs: {', '.join(failed) or 'unknown'}.\n" + failure_excerpt(log, log_lines)
+
+
+# Lines that name what failed, across pytest, vitest, playwright, unittest and shell steps.
+FAILURE_LINE = re.compile(r"FAIL|Error|assert|Expected|Received|Traceback|^E\s|##\[error\]|failed|❯ \S+:\d+",
+                          re.IGNORECASE)
+
+
+def failure_excerpt(log, log_lines=120):
+    """The failing lines of each failed job, then each job's tail. One tail of the combined log showed only the
+    last job, often the `ci-ready` aggregator, so a fix worker never saw the assertion: g-t16470-4's fix round
+    committed nothing twice on a GameTile test whose Expected/Received never reached it (2026-11-15)."""
+    jobs = {}
+    for line in log.splitlines():
+        job, _, rest = line.partition("\t")
+        jobs.setdefault(job, []).append(re.sub(r"\x1b\[[0-9;]*m", "", rest))
+    per_job = max(20, log_lines // max(1, len(jobs)))
+    parts = []
+    for job, lines in jobs.items():
+        hits = [i for i, text in enumerate(lines) if FAILURE_LINE.search(text)]
+        keep = sorted({j for i in hits for j in range(max(0, i - 2), min(len(lines), i + 6))})[:per_job * 2]
+        tail = lines[-min(per_job, 30):]
+        parts.append(f"--- {job}: failing lines ---\n" + "\n".join(lines[i] for i in keep)
+                     + f"\n--- {job}: last {len(tail)} lines ---\n" + "\n".join(tail))
+    return "\n".join(parts) or "No failed-step log came back from `gh run view --log-failed`."
 
 
 def ingest_transcripts(slug, group):
@@ -904,7 +933,11 @@ VERIFY_ATTEMPTS = 2  # retries cover only a dispatch that errored out, never a b
 # what is unverified. The real gate is the staging check after merge, which runs the same checks.
 CHECKS_DIR = "src/frontend/e2e/checks"
 CHECK_KINDS = ("browser", "code", "human")
-VERIFY_BUDGET_MINUTES = float(os.environ.get("DOTASK_VERIFY_BUDGET_MIN", "30"))
+# The budget scales with the group: 3 minutes per acceptance criterion (owner rule 2026-11-15). A flat 30
+# minutes ran out before most criteria were checked on big groups (19 criteria, 2026-11-14) and was more than
+# a one-criterion group needs. DOTASK_VERIFY_BUDGET_MIN still overrides it for one group.
+VERIFY_MINUTES_PER_CRITERION = 3.0
+VERIFY_BUDGET_MINUTES = 30.0  # only for a group file written before per-criterion budgets (no verify_budget_min)
 CHECK_COMMAND_SECONDS = 300  # one `code` check: a grep or a targeted test run
 CHECK_SPEC_SECONDS = 900  # one task's browser checks in one Playwright run
 BUDGET_SPENT = "not verified: the group's verify budget was spent (owner rule 2026-11-09)"
@@ -1687,7 +1720,7 @@ def container_run(slug, command, timeout, env=None, keep=2000):
         return None, f"timed out after {timeout:.0f}s"
     except OSError as exc:
         return 1, str(exc)
-    output = result.stdout + result.stderr
+    output = (result.stdout or "") + (result.stderr or "")
     return result.returncode, output[-keep:] if keep else output
 
 
@@ -1810,10 +1843,36 @@ def run_checks(slug, checkout, group, wanted, deadline):
     return results
 
 
+def group_budget_minutes(checkout, group):
+    """The group's verify budget: DOTASK_VERIFY_BUDGET_MIN if set (now or by an earlier run), else 3 minutes
+    per acceptance criterion across the group's tasks (owner rule 2026-11-15)."""
+    if os.environ.get("DOTASK_VERIFY_BUDGET_MIN"):
+        return float(os.environ["DOTASK_VERIFY_BUDGET_MIN"]), "env"
+    if group.get("verify_budget_source") == "env":
+        return group["verify_budget_min"], "env"
+    count = sum(len(criterion_ids(checkout, task_id)) for task_id in group["tasks"])
+    return VERIFY_MINUTES_PER_CRITERION * count, "criteria"
+
+
+def set_group_budget(checkout, group):
+    group["verify_budget_min"], group["verify_budget_source"] = group_budget_minutes(checkout, group)
+    save_group(checkout, group)
+
+
 def budget_left_minutes(group):
     # A raised budget is saved on the group (autoland), so `status` and a restart see it, not just the process
     # that had DOTASK_VERIFY_BUDGET_MIN in its environment (g-t15540-4, 2026-11-12: status showed 0 min left).
     return group.get("verify_budget_min", VERIFY_BUDGET_MINUTES) - group.get("verify_spent_s", 0) / 60
+
+
+def renew_round_budget(checkout, group, round_number):
+    """Owner rule 2026-11-15: the verify budget renews at each round. A shared budget left a fix round's
+    re-check 0 minutes, so g-t16470-4's round 2 skipped the review of all 17 criteria. A restarted loop that
+    resumes the same round keeps what that round already spent."""
+    if group.get("verify_budget_round") != round_number:
+        group["verify_budget_round"] = round_number
+        group["verify_spent_s"] = 0
+        save_group(checkout, group)
 
 
 def spend_budget(group, checkout, seconds):
@@ -2146,9 +2205,7 @@ def autoland(args):
         if ignored not in (exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""):
             with exclude_path.open("a", encoding="utf-8") as stream:
                 stream.write(ignored + "\n")
-    if os.environ.get("DOTASK_VERIFY_BUDGET_MIN"):
-        group["verify_budget_min"] = float(os.environ["DOTASK_VERIFY_BUDGET_MIN"])
-        save_group(checkout, group)
+    set_group_budget(checkout, group)
     last_line = (status_text.strip().splitlines() or [""])[-1]
     if any(f" {word} " in f" {last_line} " for word in STOP_WORDS) and status_word(last_line) != "RESUMED":
         # `status` read the old stop line as current while the restarted loop ran (g-t15540-4, 2026-11-12).
@@ -2173,6 +2230,7 @@ def autoland(args):
             write_lf(checkout / VERIFY_FILE, json.dumps({"head": head, "criteria": [], "bugs": [
                 {"scope": "group", "title": "pre-land check failed", "actual": check.stdout + check.stderr}]}, indent=2) + "\n")
         else:
+            renew_round_budget(checkout, group, round_number)
             try:
                 # `approve` re-enters here: the clean verdict on this exact HEAD stands, nothing is re-checked.
                 verdict = (approved_verdict(checkout, group, head) or owner_changes_verdict(checkout, group, head)
@@ -2566,8 +2624,8 @@ def status(args):
 # the merge commit, the browser checks the worker committed run against staging, and each failure is filed
 # as a bug task at once (T14980's staging miss and T15360's never-restoring resume point were both found
 # only there). `code` checks prove code, which CI already ran, so they are not repeated.
-STAGING = {"url": os.environ.get("DOTASK_STAGING_URL", "https://reel-ballers-staging.pages.dev"),
-           "api": os.environ.get("DOTASK_STAGING_API", "https://reel-ballers-api-staging.fly.dev/api"),
+STAGING = {"url": os.environ.get("DOTASK_STAGING_URL", "https://staging.reelballers.com"),
+           "api": os.environ.get("DOTASK_STAGING_API", "https://api-staging.reelballers.com/api"),
            # A seeded staging account (e2e/STAGING-GATE.md lane B): dev preset accounts exist only in dev.
            "email": os.environ.get("DOTASK_STAGING_EMAIL", "e2e-gate@test.local")}
 DEPLOY_WORKFLOWS = ("deploy-frontend.yml", "deploy-backend.yml")

@@ -17,7 +17,7 @@ Usage:
     .venv/Scripts/python.exe ../../scripts/migrations/migrate_staging.py --env staging --verify-only
 
 Requires fly proxy running for staging:
-    fly proxy 15432:5432 --app reel-ballers-db-staging
+    fly proxy 15432:5432 --app reel-ballers-db-staging-lax
 """
 
 import sys

@@ -52,7 +52,6 @@ _TABLES_IN_DELETE_ORDER = [
     "export_jobs",
     "projects",
     "raw_clips",
-    "achievements",
     "pending_uploads",
 ]
 

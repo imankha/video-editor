@@ -1,6 +1,6 @@
 # T10540: Game thumbnail shows a real play
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-19

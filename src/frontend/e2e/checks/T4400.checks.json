@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T4400:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t4400_stale_tab_render.py -q -p no:cacheprovider"
+    },
+    "T4400:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/containers/ExportButtonContainer.noFramingState.test.jsx"
+    },
+    "T4400:C3": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/containers/FocusContainer.gesturesPersist.test.jsx"
+    }
+  }
+}

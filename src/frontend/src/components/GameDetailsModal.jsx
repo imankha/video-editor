@@ -88,7 +88,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   // dies at the form / the T7590 short-viewport dead-end / navigation is
   // distinguishable from one who never picked a file (task acceptance criterion).
   // Fire-and-forget + session-deduped, so every path records "File Selected" once
-  // and selection is never delayed. Not a quest step — analytics only.
+  // and selection is never delayed. Analytics only.
   const recordFileSelected = useCallback(() => {
     recordFunnelEvent(FUNNEL_EVENTS.UPLOAD_FILE_SELECTED);
   }, []);

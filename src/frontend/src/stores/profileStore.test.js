@@ -28,7 +28,6 @@ const _resettableStore = () => ({
     fetchProjects: vi.fn(),
     fetchGames: vi.fn(),
     fetchCredits: vi.fn(),
-    fetchProgress: vi.fn(),
     setEditorMode: vi.fn(),
   }),
 });
@@ -44,7 +43,6 @@ vi.mock('./index', () => ({
   useGalleryStore: _resettableStore(),
   useSettingsStore: _resettableStore(),
   useCreditStore: _resettableStore(),
-  useQuestStore: _resettableStore(),
   useIntroCardStore: _resettableStore(),
   useEditorStore: _resettableStore(),
   EDITOR_MODES: { PROJECT_MANAGER: 'project_manager' },

@@ -513,14 +513,16 @@ keyframes are covered where they diverge from crop — they are the "one refacto
   `src/frontend/src/components/timeline/RegionLayer.jsx` (highlight — forked, stale rules).
 - **Persistence helper**: `src/frontend/src/utils/persistKeyframeEdit.js` (T3800 single path);
   transport `src/frontend/src/api/focusActions.js`.
-- **Spline math**: `src/frontend/src/utils/splineInterpolation.js`; backend mirror
-  `src/backend/app/interpolation.py`.
+- **Spline math**: `src/frontend/src/utils/splineInterpolation.js`; backend copies in
+  `ai_upscaler/keyframe_interpolator.py` and the Modal `video_processing.py` (the unused
+  app/interpolation module went with `POST /api/export/crop`, T16500).
 - **Backend actions**: `POST /api/clips/projects/{project_id}/clips/{clip_id}/actions` →
   `framing_action` in `src/backend/app/routers/clips.py:326`. Overlay:
   `POST .../projects/{project_id}/overlay/actions` → `overlay_action` in
   `src/backend/app/routers/export/overlay.py:347`.
-- **Store**: `src/frontend/src/stores/focusStore.js` — export dirty tracking is hash-based
-  (`markExported`/`hasChangedSinceExport` L38-50).
+- **Store**: `src/frontend/src/stores/focusStore.js` — export dirty tracking is the boolean
+  `framingChangedSinceExport` (the never-called hash pair and the never-written per-clip
+  state/video-file fields were deleted, T4440).
 
 ## Data flow
 ```
@@ -732,26 +734,13 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   the speed buttons below still CHANGE it. Before T9610 the current speed only appeared (centered) for
   non-1x segments, so a novice read the action buttons as the current state. Coverage:
   `SegmentLayer.test.jsx`.
-- **Registering the mounted `saveCurrentClipState` MUST be stable, never keyed on the handler
-  identity (T6190, 2026-07-31 regression fix).** `FocusScreen` subscribes to the WHOLE
-  `focusStore` (selector-less `useFocusStore()`, FocusScreen.jsx:59-66). The effect that
-  exposes `saveCurrentClipState` to `updateFlush.js` used to `set()` the store keyed on
-  `[framingSaveCurrentClipState]` — but that handler's identity churns nearly every render (a
-  `useCrop` keyframe dispatch regenerates `getKeyframesForExport` while clips/metadata settle on
-  the annotate→framing entry). So each write re-rendered the whole-store subscriber, which
-  re-created the handler, which re-fired the effect: an unbounded setState loop ("Maximum update
-  depth exceeded"), crash stack `clearSaveCurrentClipState`→`forceStoreRerender`→
-  `checkForNestedUpdates`. `activeSaveCurrentClipState` is read ONLY imperatively
-  (`useFocusStore.getState()` in updateFlush.js), never subscribed, so registration has no
-  reason to be reactive. **Fix:** `focusStore.useRegisterActiveSaveHandler(fn)` holds the latest
-  handler in a ref and registers a STABLE wrapper once per mount (empty-deps effect). The
-  loop-HAZARD (whole-store sub + reactive registration) predates T6190 and is byte-identical on
-  master; T6190's `invalidateClips` firing during the transition (settling clips/metadata
-  mid-mount) was the TRIGGER that first activated it. Pinned by
-  `stores/focusStore.registration.test.jsx` (the pre-fix reactive pattern throws Maximum-update-
-  depth; the stable hook does not) + the console-error guard in the T6190 QA spec criterion 4.
-  Do NOT re-key this registration on the handler identity, and prefer selector-scoped focusStore
-  reads on this screen.
+- **The Frame screen registers no full-state save handler (T4400, 2026-11-15).** T6190 had made
+  the registration of the mounted full-state save handler stable (a whole-store `focusStore`
+  subscriber plus a registration keyed on the churning handler identity looped into "Maximum
+  update depth exceeded"). T4400 deleted the full-state save, its focusStore registration hook and
+  that hook's test: every Frame gesture now persists through its own surgical action and the render
+  reads the server's framing. If a store-registered handler is ever reintroduced, register a
+  STABLE wrapper once per mount, never keyed on the handler identity.
 - **Focus does NOT fetch games or clips on mount (T6190, 2026-07-30) — do not re-add a
   "just to be safe" mount refetch.** `FocusScreen` used to fire, on mount, an unconditional
   `fetchGames()` and a `fetchClips(projectId)` (with a WRONG comment claiming the latter deduped
@@ -1000,8 +989,7 @@ opacity/radii between the region bounds. **ALWAYS-ON: standard behavior, no sett
   - Backend local path: `overlay._process_frames_to_ffmpeg` computes reveal from
     `_region_bounds(active_region)` + `current_time` and passes `reveal_opacity`/
     `reveal_scale` (optional params, default 1.0) to
-    `KeyframeInterpolator.render_highlight_on_frame`. `processor_local.py` render loop
-    wired the same way. Modal path: `_render_highlight` computes it internally. No
+    `KeyframeInterpolator.render_highlight_on_frame`. Modal path: `_render_highlight` computes it internally. No
     settings/flag read — always applied.
   - Applied AFTER `_normalize_region_keys` (T5120) — the envelope sits ON TOP of whatever
     the interpolator yields; no bare-key access added to the spline helpers.
@@ -1723,8 +1711,8 @@ keyframed** — camera tilt is constant for a recording.
 - **fps `|| 30` fallback landscape**: FocusScreen.jsx:219/541/623, useClipManager.js:46,
   projectDataStore.js:402, FocusContainer.jsx:238, overlay chain OverlayContainer.jsx:162/196/250;
   `videoUtils.timeToFrame/frameToTime` default 30. One canonical source is T4540 (audit C7).
-- **getFilteredKeyframesForExport duplicated verbatim**: FocusContainer.jsx:862-896 (the wired
-  one) ≡ FocusScreen.jsx:750-784 (audit D7).
+- **getFilteredKeyframesForExport**: one copy, in `FocusScreen.jsx` (the FocusContainer twin,
+  plus its unconsumed `hasFramingEdits`/`currentCropState` returns, was deleted, T4440).
 - **FocusContainer hand-mirrors** hook→store per gesture at 8 sites (~L352-835) to dodge React
   batch ordering → T4470 (audit D1).
 
@@ -1851,8 +1839,13 @@ the numbers below are the answer.
 - **T4250**: replace both spline specializations with `interpolateGenericSpline`; fixes
   strokeOpacity/fillOpacity snapping; characterization tests pin crop behavior.
 - **Keyframe System Unification epic (STRICT order)**:
-  - **T4440** dead-code sweep (dead OverlayTimeline/HighlightLayer/components-Timeline,
-    useHighlight, focusStore corpses).
+  - **T4440** dead-code sweep (done): old Spotlight timeline (OverlayTimeline,
+    HighlightLayer, components/Timeline.jsx), useCurrentVideoState, useTimeline,
+    the container FocusTimeline/OverlayVideoOverlays wrappers, focusStore corpses, initializeFromClipMetadata.
+    `OverlayContainer` takes the screen's `effectiveOverlayVideoUrl` and has NO Frame params and
+    no video-source derivation of its own; `OverlayScreen.deriveOverlayVideoSource` is the only
+    picker. Guard: `src/frontend/src/utils/deadEditorCode.test.js`. `syncSegmentsToStore` kept
+    (unused) for T4470.
   - **T4450** shared KeyframeTrack — unify delete gating to the flat-list rule; the gating change
     is the single intended diff.
   - **T4460** overlay onto keyframe controller (**Stage 2 design gate**): region-scoped tracks;

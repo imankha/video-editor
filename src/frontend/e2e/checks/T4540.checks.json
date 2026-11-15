@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T4540:C1": {
+      "kind": "code",
+      "command": "cd src/backend && timeout 300 python -m pytest tests/test_t4540_render_clip_fps.py -q -p no:cacheprovider -k stored_clip_fps"
+    },
+    "T4540:C2": {
+      "kind": "code",
+      "command": "cd src/backend && timeout 300 python -m pytest tests/test_t4540_render_clip_fps.py -q -p no:cacheprovider -k refuses_clip_without_fps && cd ../frontend && npx vitest run src/modes/focus/MissingFramerateNotice.test.jsx src/utils/clipSelectors.framerate.test.js"
+    },
+    "T4540:C3": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/hooks/useVideo.stepClipFramerate.test.js"
+    }
+  }
+}

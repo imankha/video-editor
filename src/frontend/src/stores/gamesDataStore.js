@@ -444,10 +444,10 @@ export const useGamesDataStore = create((set, get) => ({
       }
 
       const result = await response.json();
-      // Refresh games list so the games tab shows updated view progress
-      if (viewedDuration > 0) {
-        get().fetchGames();
-      }
+      // Refresh games list so the games tab shows updated view progress and each
+      // tile's poster_version (T10540: plays marked in this session can change the
+      // top-rated play, and with it the tile picture's address).
+      get().fetchGames();
       return result;
     } catch (err) {
       console.error('[gamesDataStore] finish-annotation error:', err);

@@ -10,9 +10,8 @@ import apiFetch from './apiFetch';
  * T5070 — the step-3 flush is a DRAIN + VERIFY, not a full-state dump (see
  * docs/plans/tasks/T5070-design.md §5.2). These tests pin: overlay-queue
  * drain runs first and is a hard barrier (including the in-flight-retry
- * race, m3); the framing fallback only fires when the store's own dirty
- * flag says something actually changed (G2 — never an unconditional
- * full-state save, which would re-open the T4020 shadow-save bug); and the
+ * race, m3); there is no framing full-state save (T4400: each Frame
+ * gesture already wrote its change); and the
  * flush-verify barrier surfaces the backend's failure detail (or a
  * default), tolerates a 401 (no session -> nothing to flush, not a
  * failure — B1), and never resolves on any other non-ok response.
@@ -20,7 +19,7 @@ import apiFetch from './apiFetch';
 describe('flushDurableState', () => {
   beforeEach(() => {
     apiFetch.mockReset();
-    useFocusStore.setState({ activeSaveCurrentClipState: null, framingChangedSinceExport: false });
+    useFocusStore.setState({ framingChangedSinceExport: false });
     useOverlayActionStore.setState({
       failedActions: [],
       isRetrying: false,
@@ -77,29 +76,18 @@ describe('flushDurableState', () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it('G2: calls the registered framing save when the store flags real uncommitted changes', async () => {
+  it('T4400: sends only the flush-verify request, never a framing full-state save, even with Frame edits made', async () => {
     useOverlayActionStore.setState({ retryFailedOverlayActions: vi.fn().mockResolvedValue(true) });
-    const framingSave = vi.fn().mockResolvedValue(undefined);
-    useFocusStore.setState({ activeSaveCurrentClipState: framingSave, framingChangedSinceExport: true });
+    useFocusStore.setState({ framingChangedSinceExport: true });
     apiFetch.mockResolvedValue({ ok: true, status: 200 });
 
     await flushDurableState();
 
-    expect(framingSave).toHaveBeenCalledTimes(1);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(apiFetch.mock.calls[0][0]).toMatch(/\/api\/sync\/flush-verify$/);
   });
 
-  it('G2: does NOT call the framing save when an editor is mounted but nothing changed (clean/mid-restore)', async () => {
-    useOverlayActionStore.setState({ retryFailedOverlayActions: vi.fn().mockResolvedValue(true) });
-    const framingSave = vi.fn().mockResolvedValue(undefined);
-    useFocusStore.setState({ activeSaveCurrentClipState: framingSave, framingChangedSinceExport: false });
-    apiFetch.mockResolvedValue({ ok: true, status: 200 });
-
-    await flushDurableState();
-
-    expect(framingSave).not.toHaveBeenCalled();
-  });
-
-  it('does not call any framing save when no editor is mounted (the near-no-op path)', async () => {
+  it('resolves when nothing is queued (the near-no-op path)', async () => {
     useOverlayActionStore.setState({ retryFailedOverlayActions: vi.fn().mockResolvedValue(true) });
     apiFetch.mockResolvedValue({ ok: true, status: 200 });
 

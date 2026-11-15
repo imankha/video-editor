@@ -71,13 +71,9 @@ export function getEditorContext() {
   }
 
   if (mode === 'framing') {
-    const clipState = framing.currentClipId ? framing.getClipState(framing.currentClipId) : null;
     ctx.framing = {
       currentClipId: framing.currentClipId,
       changedSinceExport: framing.framingChangedSinceExport,
-      keyframeCount: clipState?.keyframes?.length ?? null,
-      segmentCount: clipState?.segments?.length ?? null,
-      hasExported: framing.hasExported,
     };
   }
 

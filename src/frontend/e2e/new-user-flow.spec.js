@@ -8,29 +8,19 @@ import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
 import { GAME_RETENTION_NOTE } from './helpers/retentionCopy.js';
 
 /**
- * New User Flow E2E Test — Complete quest journey from landing page to "Vamos!" dialog.
+ * New User Flow E2E Test — a fresh user from the home page to a sharpened highlight.
  *
- * Walks a fresh user through all 4 quests:
- *   Quest 1: Get Started — add game, annotate 5-star clip, playback annotations
- *   Quest 2: Export Highlights — open project, frame, export, overlay, view gallery
- *   Quest 3: Annotate More Clips — more 5-star clips, more exports, watch highlights
- *   Quest 4: Highlight Reel — second game, custom multi-game project, export reel
+ *   Step 1: add a game, import plays, rate one 5 stars and make its highlight (full UI)
+ *   Step 2: open the highlight, frame it (API shortcut) and sharpen it (real export)
+ *   Step 3: add a spotlight when the environment can render one
  *
- * After all quests are complete, claiming Quest 4 shows the "Vamos!" completion modal.
- *
- * Strategy:
- *   - Quest 1: Full UI interaction (the core new user onboarding)
- *   - Quests 2-4: API shortcuts for data setup + real exports where needed
- *   - Quest 4 claim: Via QuestPanel UI to trigger the "Vamos!" modal
+ * Progress is asserted from the games and projects the user's actions created.
  *
  * REDUNDANCY NOTES:
- *   The following existing tests have partial overlap with this test:
- *   - quest-walkthrough.spec.js — covers the same 4-quest flow but as a report-generating
- *     walkthrough, not an assertion-based test. Generates screenshots + markdown report.
  *   - full-workflow.spec.js — tests "Add Game → Annotate → TSV import" flow (test #2)
- *     and "Watch plays" (test #4), which overlap with Quest 1 steps.
+ *     and "Watch plays" (test #4), which overlap with Step 1.
  *   - regression-tests.spec.js — "Annotate: video first frame loads" and "TSV import shows
- *     clips" smoke tests overlap with Quest 1 game creation + annotation steps.
+ *     clips" smoke tests overlap with Step 1 game creation + annotation steps.
  *
  * Run with:
  *   cd src/frontend && npx playwright test e2e/new-user-flow.spec.js
@@ -115,36 +105,13 @@ async function cleanupTestData(request) {
   }
 }
 
-/** Wait for quest progress API to show a step as complete.
- * Uses the page's browser context (with session cookie) so the request is
- * authenticated as the same user who created the game via the UI. */
-async function waitForQuestStep(page, stepId, timeout = 30000) {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    try {
-      const data = await page.evaluate(async (apiBase) => {
-        const res = await fetch(`${apiBase}/quests/progress`, { credentials: 'include' });
-        if (!res.ok) return null;
-        return res.json();
-      }, '/api');
-      if (data) {
-        for (const quest of data.quests) {
-          if (quest.steps[stepId] === true) return true;
-        }
-      }
-    } catch { /* retry */ }
-    await new Promise(r => setTimeout(r, 2000));
-  }
-  return false;
-}
-
-/** Get all quest progress.
- * Uses page's browser context (with session cookie) to match the UI's auth. */
-async function getQuestProgress(page) {
+/** Get games via API (uses page session cookie for auth) */
+async function getGames(page) {
   return await page.evaluate(async (apiBase) => {
-    const res = await fetch(`${apiBase}/quests/progress`, { credentials: 'include' });
-    if (!res.ok) return null;
-    return res.json();
+    const res = await fetch(`${apiBase}/games`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : (data.games || []);
   }, '/api');
 }
 
@@ -179,59 +146,6 @@ async function frameAllClipsInProject(page, projectId) {
     }
     return framed;
   }, { apiBase: '/api', projectId });
-}
-
-/** Record an achievement via the page's browser context (session cookie auth). */
-async function recordAchievement(page, key) {
-  return await page.evaluate(async ({ apiBase, key }) => {
-    const res = await fetch(`${apiBase}/quests/achievements/${key}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    return { ok: res.ok, status: res.status };
-  }, { apiBase: '/api', key });
-}
-
-/**
- * Create a fake completed export job via credits/grant API.
- * Used when E2E can't complete a real export (e.g. overlay requires working video file).
- * This inserts into credit_transactions which marks the quest step as "done" in the DB.
- *
- * Actually, quest steps check export_jobs, not credit_transactions. So instead,
- * we grant credits with source=quest_reward to simulate the claim directly.
- */
-async function grantCreditsViaAPI(page, amount, source, referenceId) {
-  return await page.evaluate(async ({ apiBase, amount, source, referenceId }) => {
-    const res = await fetch(`${apiBase}/credits/grant`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount, source, reference_id: referenceId }),
-    });
-    let data = null;
-    if (res.ok) data = await res.json();
-    return { ok: res.ok, status: res.status, data };
-  }, { apiBase: '/api', amount, source, referenceId });
-}
-
-/** Claim a quest reward via the page's browser context (session cookie auth). */
-async function claimQuestReward(page, questId) {
-  return await page.evaluate(async ({ apiBase, questId }) => {
-    const res = await fetch(`${apiBase}/quests/${questId}/claim-reward`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    let data = null;
-    let errorText = null;
-    if (res.ok) {
-      data = await res.json();
-    } else {
-      errorText = await res.text().catch(() => null);
-    }
-    return { ok: res.ok, status: res.status, data, errorText };
-  }, { apiBase: '/api', questId });
 }
 
 /**
@@ -285,12 +199,9 @@ async function waitWithProgress(page, checkFn, { label = 'condition', stallTimeo
 // Test
 // ============================================================================
 
-test.describe('New User Flow — Landing Page to Vamos!', () => {
-  // T5420: drives an EMPTY new-user session (X-User-ID + test-login) and bypasses the
-  // auth gate / seeds quest state by import()ing /src/stores/*.js in-page (e.g.
-  // questStore.js) — those Vite-dev /src paths 404 on a deployed CF Pages BUILD, and it
-  // also uploads local test-data video + shells out (execSync). Skip loudly on a
-  // deployed target.
+test.describe('New User Flow — home page to a sharpened highlight', () => {
+  // T5420: drives an EMPTY new-user session (X-User-ID + test-login), uploads local
+  // test-data video and shells out (execSync). Skip loudly on a deployed target.
   skipOnDeployedTarget(test, "empty new-user flow: import()s /src/stores/*.js + uploads local test video (Vite-dev paths 404 on a deployed build)");
   // This test involves video uploads and exports — needs extended timeout
   test.setTimeout(1200000); // 20 minutes
@@ -339,7 +250,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await cleanupTestData(request);
   });
 
-  test('Complete all 4 quests and see Vamos dialog', async ({ page }) => {
+  test('adds a game, makes a highlight and sharpens it', async ({ page }) => {
     test.slow(); // This is a long workflow test
 
     await setupTestUser(page);
@@ -365,11 +276,10 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     });
 
     // =========================================================================
-    // QUEST 1: GET STARTED (15 credits)
-    // Full UI flow — this is the core new user onboarding experience
+    // STEP 1: ADD A GAME AND MAKE A HIGHLIGHT (full UI)
     // =========================================================================
 
-    console.log('\n=== QUEST 1: GET STARTED ===');
+    console.log('\n=== STEP 1: ADD A GAME ===');
 
     // --- Q1 Step 1: Add Your First Game ---
     console.log('[Q1.1] Add Your First Game');
@@ -436,20 +346,11 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await expect(page.locator('text=Great Control Pass').first()).toBeVisible({ timeout: 15000 });
     console.log('[Q1.1] TSV imported, clips visible');
 
-    // Verify quest step: upload_game
-    const q1s1 = await waitForQuestStep(page, 'upload_game');
-    expect(q1s1).toBeTruthy();
-    console.log('[Q1.1] upload_game step verified');
+    expect((await getGames(page)).length, 'the uploaded game exists').toBeGreaterThan(0);
+    console.log('[Q1.1] game created');
 
     // --- Q1 Step 2: Create a Reel ---
     console.log('[Q1.2] Create a Reel');
-
-    // Dismiss the quest overlay so it doesn't intercept pointer events on clip rows.
-    // The quest panel is a fixed z-50 element that floats above the sidebar.
-    await page.evaluate(() => {
-      document.querySelectorAll('.quest-overlay').forEach(el => el.remove());
-    });
-    await page.waitForTimeout(200);
 
     // Click the first clip row in the sidebar to select it.
     // ClipListItem renders each clip as a <div> with cursor-pointer; the title attribute
@@ -472,7 +373,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // A 5-star rating may or may not have already made the highlight by now
     // (caption "highlight already made"); otherwise the explicit make-highlight CTA
     // (T11910: the Portrait slot's Make button) creates it and opens it in Focus.
-    // Accept either; the annotate_brilliant quest step below verifies a highlight exists.
+    // Accept either; the project check below verifies a highlight exists.
     const makeHighlightBtn = page.getByTestId('annotate-make-highlight-portrait');
     const alreadyMade = page.locator('[data-clip-details]').getByText(/highlight already made/i);
     await expect(makeHighlightBtn.or(alreadyMade)).toBeVisible({ timeout: 10000 });
@@ -480,47 +381,17 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       await expect(makeHighlightBtn).toBeEnabled({ timeout: 10000 });
       await makeHighlightBtn.click();
     }
-    await page.waitForTimeout(2000);
 
-    // Verify quest step: annotate_brilliant
-    const q1s2 = await waitForQuestStep(page, 'annotate_brilliant');
-    expect(q1s2).toBeTruthy();
-    console.log('[Q1.2] annotate_brilliant (Create a Reel) step verified');
-
-    // T9850: first-result guidance completes on saved playable VALUE, not a
-    // mandatory Preview-plays click. The saved clip that just satisfied
-    // annotate_brilliant (rc.reels >= 1) also satisfies playback_annotations via
-    // the same signal — so the guide is already complete here, BEFORE any Preview
-    // plays interaction below. This is the acceptance proof for "direct export
-    // completes first-result guidance without a Preview-plays detour".
-    const q1s3EarlyViaSave = await waitForQuestStep(page, 'playback_annotations');
-    expect(q1s3EarlyViaSave).toBeTruthy();
-    console.log('[Q1.T9850] playback_annotations complete via saved clip, no Watch plays needed');
-
-    // --- Q1 Step 3: Watch Your Clips Back ---
-    // The Preview-plays click is no longer needed (and the highlight CTA above
-    // navigated to Focus): playback_annotations already completed via the saved
-    // highlight, asserted above.
-    console.log('[Q1.3] playback_annotations satisfied by saved highlight');
-
-    // Verify Quest 1 is fully complete
-    let progress = await getQuestProgress(page);
-    const q1Progress = progress.quests.find(q => q.id === 'quest_1');
-    expect(Object.values(q1Progress.steps).every(Boolean)).toBeTruthy();
-    console.log('[Q1] All Quest 1 steps complete');
-
-    // Claim Quest 1 reward via API
-    const q1claim = await claimQuestReward(page, 'quest_1');
-    if (!q1claim.ok) console.log(`[Q1] Claim failed: ${q1claim.status} ${q1claim.errorText}`);
-    expect(q1claim.ok).toBeTruthy();
-    console.log(`[Q1] Reward claimed: ${q1claim.data?.credits_granted} credits`);
+    await expect.poll(async () => (await getProjects(page)).length,
+      { message: 'the 5-star play made a highlight project', timeout: 30000 }).toBeGreaterThan(0);
+    console.log('[Q1.2] highlight project created');
 
     // =========================================================================
-    // QUEST 2: EXPORT HIGHLIGHTS (25 credits)
-    // Uses API shortcuts for framing + real exports
+    // STEP 2: FRAME AND SHARPEN THE HIGHLIGHT
+    // Uses an API shortcut for framing + a real export
     // =========================================================================
 
-    console.log('\n=== QUEST 2: EXPORT HIGHLIGHTS ===');
+    console.log('\n=== STEP 2: FRAME AND SHARPEN ===');
 
     // --- Q2 Step 1: Open a Project ---
     console.log('[Q2.1] Open a Project');
@@ -543,11 +414,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       { label: 'Q2.1-video', stallTimeout: 30000 }
     );
     expect(videoLoaded).toBeTruthy();
-
-    // Verify quest step: open_framing
-    const q2s1 = await waitForQuestStep(page, 'open_framing');
-    expect(q2s1).toBeTruthy();
-    console.log('[Q2.1] open_framing step verified');
+    console.log('[Q2.1] framing screen open');
 
     // --- Q2 Step 2-3: Frame Video + Wait For Export ---
     console.log('[Q2.2-3] Frame Video + Export');
@@ -555,7 +422,8 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Frame clips via API so the export button enables
     const projects = await getProjects(page);
     expect(projects.length).toBeGreaterThan(0);
-    const framed = await frameAllClipsInProject(page, projects[0].id);
+    const projectId = projects[0].id;
+    const framed = await frameAllClipsInProject(page, projectId);
     console.log(`[Q2.2] Framed ${framed} clip(s) via API`);
 
     // Reload to pick up framing data, re-enter project
@@ -570,41 +438,28 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     const frameVideoBtn = page.locator('button:has-text("Sharpen my highlight"):not([disabled])');
     // A project that already has a rendered highlight opens its preview instead of
     // the editor, so only start the export when the editor is showing the button;
-    // wait_for_export below is the real assertion either way.
+    // the working-video check below is the real assertion either way.
     if (await frameVideoBtn.first().isVisible({ timeout: 10000 }).catch(() => false)) {
       await frameVideoBtn.first().click();
       await page.waitForTimeout(2000);
     }
 
+    const projectHas = async (field) =>
+      !!(await getProjects(page)).find((p) => p.id === projectId)?.[field];
+
     // Wait for framing export to complete
-    const q2s3 = await waitWithProgress(page,
-      async () => await waitForQuestStep(page, 'wait_for_export', 5000),
+    const sharpened = await waitWithProgress(page,
+      async () => await projectHas('has_working_video'),
       { label: 'Q2.3-framing-export', stallTimeout: 60000 }
     );
-    expect(q2s3).toBeTruthy();
+    expect(sharpened).toBeTruthy();
     console.log('[Q2.3] Framing export complete');
 
-    // --- Q2 remaining steps: position_crop + add_slowmo are achievement-driven ---
-    // (the framing editor gestures that fire them are covered by their own specs).
-    await recordAchievement(page, 'crop_adjusted');
-    await recordAchievement(page, 'speed_segment_created');
-    for (const step of ['return_home', 'position_crop', 'add_slowmo', 'export_framing']) {
-      expect(await waitForQuestStep(page, step), `quest_2 step ${step}`).toBeTruthy();
-    }
-    console.log('[Q2] All Quest 2 steps verified');
-
-    const q2claim = await claimQuestReward(page, 'quest_2');
-    if (!q2claim.ok) console.log(`[Q2] Claim failed: ${q2claim.status} ${q2claim.errorText}`);
-    expect(q2claim.ok).toBeTruthy();
-    console.log('[Q2] Quest 2 reward claimed');
-
     // =========================================================================
-    // QUEST 3: CONFIGURE YOUR SPOTLIGHT
-    // open_overlay/select_players/choose_color/choose_shape are achievement-driven;
-    // export_overlay/wait_for_overlay need a real overlay render.
+    // STEP 3: ADD A SPOTLIGHT (needs a real overlay render)
     // =========================================================================
 
-    console.log('\n=== QUEST 3: CONFIGURE YOUR SPOTLIGHT ===');
+    console.log('\n=== STEP 3: ADD A SPOTLIGHT ===');
 
     // Reload so the framing export result is reflected, then try a real overlay export.
     await page.goto('/');
@@ -623,77 +478,13 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       if (await generateOverlayBtn.first().isVisible().catch(() => false)) {
         await generateOverlayBtn.first().click();
         await page.waitForTimeout(2000);
-        const q3overlay = await waitWithProgress(page,
-          async () => await waitForQuestStep(page, 'wait_for_overlay', 5000),
+        overlayExportDone = await waitWithProgress(page,
+          async () => await projectHas('has_final_video'),
           { label: 'Q3-overlay-export', stallTimeout: 60000 }
         );
-        overlayExportDone = !!q3overlay;
       }
     }
     console.log(`[Q3] Overlay export done: ${overlayExportDone}`);
-
-    for (const key of ['opened_overlay_editor', 'overlay_players_assigned', 'overlay_color_set', 'overlay_shape_set']) {
-      await recordAchievement(page, key);
-    }
-    for (const step of ['open_overlay', 'select_players', 'choose_color', 'choose_shape']) {
-      expect(await waitForQuestStep(page, step), `quest_3 step ${step}`).toBeTruthy();
-    }
-    console.log('[Q3] Overlay configuration steps verified');
-
-    // Claim only if the overlay render completed (needs a working video file in the env).
-    if (overlayExportDone) {
-      const q3claim = await claimQuestReward(page, 'quest_3');
-      expect(q3claim.ok).toBeTruthy();
-      console.log('[Q3] Quest 3 reward claimed');
-    } else {
-      console.log('[Q3] SKIP: Overlay export unavailable in E2E env -- granting credits directly');
-      await grantCreditsViaAPI(page, 40, 'e2e_bypass', 'quest_3');
-    }
-
-    // =========================================================================
-    // QUEST 4: PUBLISH YOUR HIGHLIGHT
-    // preview_draft/move_to_my_reels/view_gallery_video are achievement-driven.
-    // =========================================================================
-
-    console.log('\n=== QUEST 4: PUBLISH YOUR HIGHLIGHT ===');
-
-    for (const key of ['previewed_draft_reel_1s', 'moved_to_my_reels', 'watched_gallery_video_1s']) {
-      await recordAchievement(page, key);
-    }
-    for (const step of ['preview_draft', 'move_to_my_reels', 'view_gallery_video']) {
-      expect(await waitForQuestStep(page, step), `quest_4 step ${step}`).toBeTruthy();
-    }
-    console.log('[Q4] Publish steps verified');
-
-    // Claim via the API when the quest is genuinely complete; otherwise bypass
-    // (its overlay prerequisite may be unavailable in the E2E env).
-    const q4claim = await claimQuestReward(page, 'quest_4');
-    if (q4claim.ok) {
-      console.log('[Q4] Quest 4 reward claimed');
-    } else {
-      console.log(`[Q4] Claim not available (${q4claim.status}) -- granting credits directly`);
-      await grantCreditsViaAPI(page, 45, 'e2e_bypass', 'quest_4');
-    }
-
-    // Verify total credits accumulated
-    const balance = await page.evaluate(async () => {
-      const res = await fetch('/api/credits', { credentials: 'include' });
-      const data = await res.json();
-      return data.balance;
-    });
-    console.log(`[Final] Total credit balance: ${balance}`);
-    expect(balance).toBeGreaterThan(0);
-
-    const finalProgress = await getQuestProgress(page);
-    for (const quest of finalProgress.quests) {
-      console.log(`[Final] ${quest.id}: steps=${JSON.stringify(quest.steps)}, claimed=${quest.reward_claimed}`);
-    }
-
-    // Quests 1 and 2 are always claimed via the API above
-    for (const id of ['quest_1', 'quest_2']) {
-      const q = finalProgress.quests.find(x => x.id === id);
-      expect(q?.reward_claimed, `${id} claimed`).toBeTruthy();
-    }
 
     console.log('\n=== NEW USER FLOW COMPLETE ===');
   });

@@ -73,7 +73,7 @@ def _clip():
         "id": 56, "raw_clip_id": 56, "uploaded_filename": None, "crop_data": None,
         "game_id": 7, "raw_filename": None, "clip_name": "P",
         "raw_start_time": 3560.0, "raw_end_time": 3566.0, "raw_duration": 6.0,
-        "game_blake3_hash": "deadbeefdeadbeefdeadbeefdeadbeef", "video_sequence": 1,
+        "game_blake3_hash": "deadbeefdeadbeefdeadbeefdeadbeef", "video_sequence": 1, "fps": 30.0,
     }
 
 

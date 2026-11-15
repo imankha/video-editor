@@ -6,6 +6,7 @@ from .v004_session_duration import V004SessionDuration
 from .v005_quest_restructure import V005QuestRestructure
 from .v006_split_overlay_quest import V006SplitOverlayQuest
 from .v007_clear_stale_stripe_customers import V007ClearStaleStripeCustomers
+from .v008_drop_completed_quests import V008DropCompletedQuests
 
 MIGRATIONS = [
     V001Baseline(),
@@ -15,6 +16,7 @@ MIGRATIONS = [
     V005QuestRestructure(),
     V006SplitOverlayQuest(),
     V007ClearStaleStripeCustomers(),
+    V008DropCompletedQuests(),
 ]
 
 # T5089: floor=0 is INERT (gate never fires). Set floor=F + delete v001..vF in

@@ -31,7 +31,6 @@ vi.mock('../modes/annotate', async (importOriginal) => {
 import apiFetch from '../utils/apiFetch';
 import { AnnotateContainer } from './AnnotateContainer';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { useToastStore } from '../components/shared/Toast';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -59,7 +58,6 @@ function baseProps(overrides = {}) {
 }
 
 const authOriginal = useAuthStore.getState();
-const questOriginal = useQuestStore.getState();
 
 async function markPlay(result) {
   await act(async () => { result.current.handleAddClipFromButton(); });
@@ -81,7 +79,6 @@ describe('AnnotateContainer — Make Another Highlight sends snake_case backend 
       json: async () => ({ raw_clip_id: 1, project_created: true, project_id: 99, success: true }),
     });
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({ recordAchievement: vi.fn(), fetchProgress: vi.fn().mockResolvedValue(undefined) });
     window.matchMedia = (query) => ({
       matches: false, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {},
@@ -92,7 +89,6 @@ describe('AnnotateContainer — Make Another Highlight sends snake_case backend 
 
   afterEach(() => {
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useToastStore.setState({ toasts: [] });
   });
 

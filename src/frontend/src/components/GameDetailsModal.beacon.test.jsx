@@ -12,12 +12,6 @@ vi.mock('../utils/funnelEvents', async (orig) => ({
   ...(await orig()),
   recordFunnelEvent: (...args) => recordFunnelEventSpy(...args),
 }));
-vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: vi.fn() };
-  const useQuestStore = (sel) => (sel ? sel(state) : state);
-  useQuestStore.getState = () => state;
-  return { useQuestStore };
-});
 
 vi.mock('../stores/creditStore', () => {
   const state = { balance: 100, loaded: true, fetchCredits: vi.fn() };
@@ -35,7 +29,7 @@ vi.mock('./shared', () => ({
 }));
 
 // Stub the picker so this file tests the MODAL's beacon wiring (onFileSelected ->
-// recordAchievement). The per-path beacon coverage lives in GameFootagePicker.test.
+// recordFunnelEvent). The per-path beacon coverage lives in GameFootagePicker.test.
 vi.mock('./GameFootagePicker', () => ({
   GameFootagePicker: ({ onFootageChange, onFileSelected }) => (
     <input

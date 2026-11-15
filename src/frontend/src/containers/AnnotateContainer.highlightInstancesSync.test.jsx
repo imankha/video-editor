@@ -32,7 +32,6 @@ vi.mock('../modes/annotate', async (importOriginal) => {
 import apiFetch from '../utils/apiFetch';
 import { AnnotateContainer } from './AnnotateContainer';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { useExportStore } from '../stores/exportStore';
 import { useToastStore } from '../components/shared/Toast';
 
@@ -61,7 +60,6 @@ function baseProps(overrides = {}) {
 }
 
 const authOriginal = useAuthStore.getState();
-const questOriginal = useQuestStore.getState();
 const exportOriginal = useExportStore.getState();
 
 const instance = (projectId, aspect, extra = {}) => ({
@@ -109,7 +107,6 @@ describe('AnnotateContainer: highlight list is server-synced (T11910)', () => {
   beforeEach(() => {
     apiFetch.mockReset();
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({ recordAchievement: vi.fn(), fetchProgress: vi.fn().mockResolvedValue(undefined) });
     window.matchMedia = (query) => ({
       matches: false, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {},
@@ -120,7 +117,6 @@ describe('AnnotateContainer: highlight list is server-synced (T11910)', () => {
 
   afterEach(() => {
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useExportStore.setState(exportOriginal, true);
     useToastStore.setState({ toasts: [] });
     vi.restoreAllMocks();

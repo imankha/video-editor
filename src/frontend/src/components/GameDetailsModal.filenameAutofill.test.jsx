@@ -7,20 +7,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // anything already typed. A successful submit confirms the guessed team onto
 // the profile, but only when the profile doesn't already have one on record.
 
-const { recordAchievementSpy, setIntroFactSpy, profileState } = vi.hoisted(() => ({
-  recordAchievementSpy: vi.fn(),
+const { setIntroFactSpy, profileState } = vi.hoisted(() => ({
   setIntroFactSpy: vi.fn(() => Promise.resolve('ok')),
   profileState: { profile: { id: 'p1', team: '' } },
 }));
 
 // T12830: submit probes footage; jsdom cannot decode video, so stub the probe.
 vi.mock('../utils/videoMetadata', () => ({ extractVideoMetadata: vi.fn().mockResolvedValue({}) }));
-vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: recordAchievementSpy };
-  const useQuestStore = (sel) => (sel ? sel(state) : state);
-  useQuestStore.getState = () => state;
-  return { useQuestStore };
-});
 
 vi.mock('../stores/creditStore', () => {
   const state = { balance: 88, loaded: true, fetchCredits: vi.fn() };
@@ -80,7 +73,6 @@ const VEO_NAME = 'match-west-coast-fc-ecnl-vs-sporting-ca-ecnl-2026-09-13.mp4';
 
 describe('GameDetailsModal — filename autofill', () => {
   beforeEach(() => {
-    recordAchievementSpy.mockClear();
     setIntroFactSpy.mockClear();
     profileState.profile = { id: 'p1', team: '' };
   });

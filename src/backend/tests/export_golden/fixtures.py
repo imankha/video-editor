@@ -132,8 +132,8 @@ def build_fixture_project(
 
             cursor.execute(
                 """INSERT INTO working_clips
-                       (project_id, raw_clip_id, uploaded_filename, sort_order, version)
-                   VALUES (?, ?, ?, ?, 1)""",
+                       (project_id, raw_clip_id, uploaded_filename, sort_order, version, fps)
+                   VALUES (?, ?, ?, ?, 1, 30.0)""",
                 (project_id, raw_clip_id, f"wc_fixture_{i}.mp4", i),
             )
             working_clip_ids.append(cursor.lastrowid)

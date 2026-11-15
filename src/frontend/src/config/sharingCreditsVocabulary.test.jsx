@@ -68,7 +68,6 @@ const RETIRED = {
   'components/introcards/IntroExposureNotice.jsx': ['This card includes'],
   'components/instructions/GuidanceToggle.jsx': ['Helpful instructions'],
   'components/AccountSettings.jsx': ['Account Settings', 'Sign Out', 'email code', 'helpful instructions', 'Delete My Account', 'Your Privacy Rights', 'Link Account', 'Google Account', 'Delete Forever'],
-  'components/QuestIcon.jsx': ['Quests'],
   'components/ranking/ConfidenceBanner.jsx': ['head-to-head', 'Ranking Progress', 'All Highlights Ranked'],
   'components/ranking/RankingGame.jsx': ['Rematch', 'matchups', 'Loading matchup', 'Which is better', 'Ranking Progress'],
   'components/ranking/HeroIntroModal.jsx': ['Which is better'],

@@ -1,6 +1,6 @@
 # T4620: Same clip version everywhere
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 1
 **Created:** 2026-07-03

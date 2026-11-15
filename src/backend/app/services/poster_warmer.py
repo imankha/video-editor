@@ -14,14 +14,13 @@ from datetime import datetime, timedelta
 
 from ..profile_context import set_current_profile_id
 from ..r2_usage import R2Source, set_r2_source
-from ..storage import file_exists_in_r2, r2_head_object_global
+from ..storage import file_exists_in_r2
 from ..user_context import set_current_user_id
 from ..utils.offload import run_in_context
 from .poster import (
     draft_poster_rel_path,
     ensure_draft_poster,
     ensure_game_source_poster,
-    recap_card_poster_r2_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -193,11 +192,10 @@ class PosterWarmer:
                     set_current_user_id(user_id)
                     set_current_profile_id(profile_id)
                     set_r2_source(R2Source.POSTER_WARMER)
-                    # Double-check: maybe the poster already exists in R2.
-                    poster_key = recap_card_poster_r2_key(user_id, profile_id, game_id)
-                    if await run_in_context(r2_head_object_global, poster_key) is not None:
-                        logger.info(f"[PosterWarm] game_source {key} already exists (dedup double-check)")
-                        return True
+                    # T10540: no "already exists" double-check here -- an existing
+                    # card may be stale (the top-rated play changed), and
+                    # ensure_game_source_poster's own cache test compares what the
+                    # card was made from without reading the video.
                     result = await asyncio.to_thread(
                         ensure_game_source_poster, user_id, profile_id, game_id
                     )

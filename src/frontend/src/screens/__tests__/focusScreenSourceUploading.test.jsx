@@ -44,7 +44,6 @@ vi.mock('../../containers', () => ({
     handleSegmentSpeedChange: vi.fn(),
     handleSetRotation: vi.fn(),
     handleUndoFraming: vi.fn(),
-    saveCurrentClipState: vi.fn().mockResolvedValue(),
   }),
 }));
 
@@ -240,7 +239,6 @@ vi.mock('../../stores', () => {
     setWorkingVideo: vi.fn(),
     setClipMetadata: vi.fn(),
     fetchClips: vi.fn().mockResolvedValue([]),
-    saveFramingEdits: vi.fn(),
     updateClipMetadata: vi.fn(),
     changeAspectRatio: vi.fn(),
   };
@@ -248,9 +246,6 @@ vi.mock('../../stores', () => {
 
   const overlayState = { reset: vi.fn(), setIsLoadingWorkingVideo: vi.fn() };
   const useOverlayStore = (selector) => selector(overlayState);
-
-  const questState = { recordAchievement: vi.fn() };
-  const useQuestStore = { getState: () => questState };
 
   const projectsState = { selectedProjectId: 10, projects: [] };
   function useProjectsStore(selector) {
@@ -273,8 +268,6 @@ vi.mock('../../stores', () => {
     useOverlayStore,
     useProjectsStore,
     useVideoStore: () => ({}),
-    useRegisterActiveSaveHandler: vi.fn(),
-    useQuestStore,
   };
 });
 

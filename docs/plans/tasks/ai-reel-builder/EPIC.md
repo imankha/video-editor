@@ -8,7 +8,7 @@ A highlight is one finished short clip of an athlete, and a reel is several of t
 **Filed:** 2026-11-13
 **Started:** not started
 **Impact:** 7 **Complexity:** 5 **Priority:** 1.4
-**Placement:** after the Highlight reel builder, which the owner moved to after the Referral programme on 2026-11-13. Its research task runs earlier, before Mark plays with AI, because that epic's prompt and stored data depend on it.
+**Placement:** after the Highlight reel builder, which the owner moved to after the Referral programme on 2026-11-13. Its research task runs earlier, before AI Coach, because that epic's prompt and stored data depend on it.
 
 ## Goal
 
@@ -23,7 +23,7 @@ A parent with a bank of finished highlights taps once and gets a recruiting reel
 5. **A fixed list plus a sentence.** Each play marked by the AI records what it demonstrates in two ways: one to three qualities from a fixed list for the sport, and one plain sentence a parent can read. A quality is what the play shows about the athlete (separation, vision, composure); a tag is what happened (Goal, Tackle). Each quality is defined by what the player does relative to another player in the frame, so it can be seen on video in any sport (owner, 2026-11-13).
 6. **Use what exists for the rest.** Highlights from plays a parent marked by hand, or from clips uploaded directly, have no AI note. For those the model works from tags, star rating, comparison-game standing and any note the parent typed. No extra video analysis and no extra questions.
 7. **Recruiting only at first.** Other purposes, such as a season recap, can be added later as another prompt over the same data. Each play already records whether it is Brilliant for scouting, for social media, or both, so a recruiting reel leans on the scoutable ones and a later social reel has its picks waiting.
-8. **Designed before Mark plays with AI is built.** The data the reel builder needs is written into that epic's tasks now, so the two are one design and the stored game analyses never have to be redone.
+8. **Designed before AI Coach is built.** The data the reel builder needs is written into that epic's tasks now, so the two are one design and the stored game analyses never have to be redone.
 
 ## Why the data work happens early
 
@@ -32,9 +32,9 @@ A game analysis is stored once for each video and reused by every parent of that
 ## How the pieces fit (one design across three epics)
 
 1. **Research and the quality list (this epic, runs first).** Produces what coaches want, how successful reels are built, and the fixed list of qualities for soccer. Its answers on cards also feed the reel builder's title card and end card.
-2. **Capture (Mark plays with AI, the game analysis engine).** For every player's part in a strong play the model records the qualities and the sentence, beside the tags, scores and coaching note it already records.
-3. **Carry (Mark plays with AI, the import and the tagging screen).** The qualities and sentence travel with the play into the parent's game. When the parent says "this is my athlete" on a player, we record which player's description belongs to their child.
-4. **One read (Mark plays with AI, last task).** One server call returns everything the reel builder needs for an athlete: the athlete's own details and, for each finished highlight, its note, qualities, tags, ratings, comparison-game standing, length, shape and game. It is text small enough to send to a model in one message.
+2. **Capture (AI Coach, the game analysis engine).** For every player's part in a strong play the model records the qualities and the sentence, beside the tags, scores and coaching note it already records.
+3. **Carry (AI Coach, the import and the tagging screen).** The qualities and sentence travel with the play into the parent's game. When the parent says "this is my athlete" on a player, we record which player's description belongs to their child.
+4. **One read (AI Coach, last task).** One server call returns everything the reel builder needs for an athlete: the athlete's own details and, for each finished highlight, its note, qualities, tags, ratings, comparison-game standing, length, shape and game. It is text small enough to send to a model in one message.
 5. **The expert prompt (this epic).** The research turned into the general prompt, plus a short block of knowledge for each sport, stored with the sport.
 6. **The suggestion (this epic).** The one read plus the expert prompt go to the model; the answer opens the reel builder already filled in.
 
@@ -48,11 +48,11 @@ Returns: which highlights to use, their order, the sections with a heading for e
 
 | ID | Task | Status | Runs |
 |----|------|--------|------|
-| T16320 | [Recruiting reel research](T16320-recruiting-reel-research.md) | STAGING | Before Mark plays with AI |
+| T16320 | [Recruiting reel research](T16320-recruiting-reel-research.md) | STAGING | Before AI Coach |
 | T16330 | [Reel expert prompt](T16330-reel-expert-prompt.md) | TODO | After the Highlight reel builder |
 | T15890 | [Suggested reel](../T15890-llm-reel-assembly.md) | TODO | After T16330 |
 
-The capture, carry and one-read work lives in the Mark plays with AI epic ([EPIC.md](../mark-plays-with-ai/EPIC.md): the game analysis engine T16150, the import T16190, the tagging screen T16200, and highlight facts in one read T16205).
+The capture, carry and one-read work lives in the AI Coach epic ([EPIC.md](../mark-plays-with-ai/EPIC.md): the game analysis engine T16150, the import T16190, the tagging screen T16200, and highlight facts in one read T16205).
 
 T16330 and T15890 are outlines. Their detail is written after the Highlight reel builder ships, when the builder's real screens and stored format are known.
 

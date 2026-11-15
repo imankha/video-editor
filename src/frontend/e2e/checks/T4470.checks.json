@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T4470:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/containers/FocusContainer.segmentsMirror.test.jsx -t 'T4470:C1'"},
+    "T4470:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/containers/FocusContainer.segmentsMirror.test.jsx -t 'T4470:C2'"},
+    "T4470:C3": {"kind": "code", "command": "test \"$(grep -c 'segments_data:' src/frontend/src/containers/FocusContainer.jsx)\" -eq 1 && grep -q 'const mirrorSegments' src/frontend/src/containers/FocusContainer.jsx && ! grep -q 'syncSegmentsToStore' src/frontend/src/containers/FocusContainer.jsx"},
+    "T4470:C4": {"kind": "code", "command": "cd src/frontend && npx vitest run src/containers/FocusContainer.segmentsPayloadParity.test.jsx"}
+  }
+}

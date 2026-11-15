@@ -403,12 +403,12 @@ class TestProfileDbEquivalence:
 # (refactoring rule 6); the audit alarm below turns a new user_db migration RED
 # so this list can't silently rot.
 USER_DB_MIGRATION_TABLES = ["user_activity", "user_activity_events", "user_action_log"]
-USER_DB_HEAD_AUDITED = 7  # v007 clear_stale_stripe_customers (data-only)
+USER_DB_HEAD_AUDITED = 8  # v008 drop_completed_quests (drops a table; adds none)
 
 
 class TestUserDbEquivalence:
     """user_db has NO side-effecting migrations, so this is the stronger test:
-    drop every table v002..v007 create off a head _USER_DB_SCHEMA and run the
+    drop every table v002..v008 create off a head _USER_DB_SCHEMA and run the
     FULL chain from v001; it must reproduce the DDL schema exactly."""
 
     def test_registry_head_is_audited(self):
@@ -440,7 +440,7 @@ class TestUserDbEquivalence:
         conn_b.execute("PRAGMA user_version = 1")
         conn_b.commit()
         applied = RUNNER.run(conn_b, "sqlite")
-        assert applied, "expected the full v002..v007 chain to run"
+        assert applied, "expected the full v002..v008 chain to run"
         migrated_schema = snapshot_schema(conn_b)
         conn_b.close()
 

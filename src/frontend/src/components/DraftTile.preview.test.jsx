@@ -56,12 +56,6 @@ vi.mock('../stores/galleryStore', () => {
   useGalleryStore.getState = () => api;
   return { useGalleryStore };
 });
-vi.mock('../stores/questStore', () => {
-  const api = { recordAchievement: vi.fn() };
-  const useQuestStore = () => api;
-  useQuestStore.getState = () => api;
-  return { useQuestStore };
-});
 
 import { DraftTile } from './DraftTile';
 import { PREVIEW_WARM_DELAY_MS } from '../hooks/useTilePreview';

@@ -44,7 +44,6 @@ vi.mock('../../containers', () => ({
     handleSegmentSpeedChange: vi.fn(),
     handleSetRotation: vi.fn(),
     handleUndoFraming: vi.fn(),
-    saveCurrentClipState: vi.fn().mockResolvedValue(),
   }),
 }));
 vi.mock('../../modes/focus', () => ({
@@ -168,16 +167,13 @@ vi.mock('../../stores', () => {
     isLoading: false, loadingStage: null,
     get clipMetadataCache() { return testState.clipMetadataCache; },
     setWorkingVideo: vi.fn(), setClipMetadata: vi.fn(), fetchClips: vi.fn().mockResolvedValue([]),
-    addClipFromLibrary: vi.fn(), uploadClipWithMetadata: vi.fn(), saveFramingEdits: vi.fn(),
+    addClipFromLibrary: vi.fn(), uploadClipWithMetadata: vi.fn(),
     updateClipMetadata: vi.fn(), removeClip: vi.fn(), changeAspectRatio: vi.fn(),
   };
   const useProjectDataStore = (selector) => selector(projectDataState);
 
   const overlayState = { reset: vi.fn(), setIsLoadingWorkingVideo: vi.fn() };
   const useOverlayStore = (selector) => selector(overlayState);
-
-  const questState = { recordAchievement: vi.fn() };
-  const useQuestStore = { getState: () => questState };
 
   function useProjectsStore(selector) {
     return selector(projectsState);
@@ -195,8 +191,6 @@ vi.mock('../../stores', () => {
     useOverlayStore,
     useProjectsStore,
     useVideoStore: () => ({}),
-    useRegisterActiveSaveHandler: vi.fn(),
-    useQuestStore,
   };
 });
 

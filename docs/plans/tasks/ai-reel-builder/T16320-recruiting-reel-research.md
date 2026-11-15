@@ -11,7 +11,7 @@ A reel is several highlights (finished short clips of an athlete) joined into on
 **Created:** 2026-11-13
 **Updated:** 2026-11-13
 
-Epic: [ai-reel-builder/EPIC.md](EPIC.md). Epic task 1 of 3. Runs before Mark plays with AI: the game analysis engine (T16150) cannot start until the quality list exists.
+Epic: [ai-reel-builder/EPIC.md](EPIC.md). Epic task 1 of 3. Runs before AI Coach: the game analysis engine (T16150) cannot start until the quality list exists.
 
 ## Problem
 

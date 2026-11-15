@@ -65,7 +65,7 @@ export default function FocusCockpit({
   // Export machinery
   videoFile, getFilteredKeyframesForExport, getSegmentExportData,
   hasClips, clipsWithCurrentState, onProceedToOverlay,
-  onExportComplete, saveCurrentClipState, exportButtonRef,
+  onExportComplete, exportButtonRef,
 }) {
   // Real focus-point count, mirroring FocusModeView's portrait derivation. The
   // cockpit MUST pass isPlaying + isDragging + onDragStateChange into CropOverlay:
@@ -150,7 +150,6 @@ export default function FocusCockpit({
     clips: hasClips ? clipsWithCurrentState : null,
     globalAspectRatio,
     onExportComplete,
-    saveCurrentClipState,
   });
 
   useImperativeHandle(exportButtonRef, () => ({

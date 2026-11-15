@@ -27,6 +27,9 @@
 > advanced tier A1 to A10 and the Help-chip menu mode, forks F6 (obsolete) / F7, the legacy
 > endpoint / `modalOcclusion.js` / video-flag cleanup, the voice-readiness audit, and the per-rule
 > admin readout.
+>
+> **Amended (quest-removal G3, 2026-11-15):** the whole quest system, not just its panel, was
+> deleted in T11180/T11185; guided facts come from games, clips, exports, final_videos and shares.
 
 ## Scope
 

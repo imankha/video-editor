@@ -181,17 +181,21 @@ class TestAPIResponse:
 
 
 class TestPutRoundtrip:
-    """Verify PUT (saveFramingEdits) correctly stores and returns data."""
+    """Verify PUT leaves the msgpack framing written by gesture actions intact.
 
-    def test_put_json_string_stores_as_msgpack(self, project_with_framed_clip):
-        """Frontend sends JSON strings in PUT body — backend should store as msgpack."""
+    T4400: the PUT no longer accepts crop_data/segments_data (a stale tab's
+    full-state copy used to overwrite newer edits); an older bundle that still
+    sends them is ignored.
+    """
+
+    def test_put_framing_fields_are_ignored(self, project_with_framed_clip):
+        """A PUT carrying JSON-string framing does not change the stored msgpack."""
         project_id, clip_id = project_with_framed_clip
 
-        new_keyframes = [
+        stale_keyframes = [
             {"frame": 0, "x": 300, "y": 150, "width": 540, "height": 960, "origin": "user"},
-            {"frame": 90, "x": 400, "y": 200, "width": 540, "height": 960, "origin": "user"},
         ]
-        new_segments = {
+        stale_segments = {
             "boundaries": [0, 10],
             "segmentSpeeds": {"0": 0.75},
             "trimRange": {"start": 2.0, "end": 7.0},
@@ -200,54 +204,52 @@ class TestPutRoundtrip:
         response = client.put(
             f"/api/clips/projects/{project_id}/clips/{clip_id}",
             json={
-                "crop_data": json.dumps(new_keyframes),
-                "segments_data": json.dumps(new_segments),
+                "crop_data": json.dumps(stale_keyframes),
+                "segments_data": json.dumps(stale_segments),
             }
         )
         assert response.status_code == 200
 
-        # Verify DB has msgpack bytes
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT crop_data, segments_data FROM working_clips WHERE id = ?", (clip_id,))
             row = cursor.fetchone()
 
-        assert isinstance(row[0], bytes), f"crop_data should be bytes after PUT, got {type(row[0]).__name__}"
-        assert isinstance(row[1], bytes), f"segments_data should be bytes after PUT, got {type(row[1]).__name__}"
+        assert isinstance(row[0], bytes), f"crop_data should stay bytes, got {type(row[0]).__name__}"
+        assert isinstance(row[1], bytes), f"segments_data should stay bytes, got {type(row[1]).__name__}"
 
         crop = decode_data(row[0])
         assert len(crop) == 2
-        assert crop[0]["x"] == 300
+        assert crop[0]["x"] == 100
 
         segs = decode_data(row[1])
-        assert segs["trimRange"]["start"] == 2.0
-        assert segs["trimRange"]["end"] == 7.0
-        assert segs["segmentSpeeds"]["0"] == 0.75
+        assert segs["trimRange"]["start"] == 1.5
+        assert segs["trimRange"]["end"] == 8.0
+        assert segs["segmentSpeeds"]["0"] == 0.5
 
-    def test_put_then_get_roundtrip(self, project_with_framed_clip):
-        """PUT data, then GET it back — should return parsed objects."""
+    def test_put_then_get_returns_gesture_framing(self, project_with_framed_clip):
+        """PUT framing, then GET: the response is parsed objects from the gesture writes."""
         project_id, clip_id = project_with_framed_clip
 
-        new_segments = {
-            "boundaries": [0, 5, 10],
-            "userSplits": [5.0],
-            "segmentSpeeds": {"0": 1.0, "1": 2.0},
-            "trimRange": {"start": 0.5, "end": 9.5},
-        }
-
-        client.put(
+        response = client.put(
             f"/api/clips/projects/{project_id}/clips/{clip_id}",
-            json={"segments_data": json.dumps(new_segments)}
+            json={"segments_data": json.dumps({
+                "boundaries": [0, 5, 10],
+                "userSplits": [5.0],
+                "segmentSpeeds": {"0": 1.0, "1": 2.0},
+                "trimRange": {"start": 0.5, "end": 9.5},
+            })}
         )
+        assert response.status_code == 200
 
         response = client.get(f"/api/clips/projects/{project_id}/clips")
         clip = next(c for c in response.json() if c["id"] == clip_id)
 
         assert isinstance(clip["segments_data"], dict)
-        assert clip["segments_data"]["trimRange"]["start"] == 0.5
-        assert clip["segments_data"]["trimRange"]["end"] == 9.5
-        assert clip["segments_data"]["userSplits"] == [5.0]
-        assert clip["segments_data"]["segmentSpeeds"]["1"] == 2.0
+        assert clip["segments_data"]["trimRange"]["start"] == 1.5
+        assert clip["segments_data"]["trimRange"]["end"] == 8.0
+        assert "userSplits" not in clip["segments_data"] or clip["segments_data"]["userSplits"] != [5.0]
+        assert clip["segments_data"]["segmentSpeeds"]["0"] == 0.5
 
 
 class TestArchiveRestore:

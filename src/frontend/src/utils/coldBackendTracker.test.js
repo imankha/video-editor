@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../config', () => ({ API_BASE: 'https://reel-ballers-api-staging.fly.dev' }));
+vi.mock('../config', () => ({ API_BASE: 'https://api-staging.reelballers.com' }));
 
 import {
   recordHealthCheck,

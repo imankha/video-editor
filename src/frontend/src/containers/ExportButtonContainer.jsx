@@ -11,7 +11,6 @@ import { SECTION_NAMES, EXPORT_PROGRESS, FRAME_COPY, CREDITS, ERROR_COPY } from 
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
-import { useQuestStore } from '../stores/questStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
 import { calculateEffectiveDuration, knownEffectiveDuration, buildClipMetadata } from '../utils/effectiveDuration';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
@@ -99,7 +98,6 @@ export function ExportButtonContainer({
   onExportEnd: onExportEndProp,
   isExternallyExporting: isExternallyExportingProp,
   externalProgress: externalProgressProp,
-  saveCurrentClipState = null,
   // T14830 (owner ruling 2026-11-07, "Confirm once"): whether the parent has
   // already "checked" the box this session -- moved it, or played the clip
   // with a box that was already pre-placed. Framing's FocusModeView/FocusCockpit
@@ -644,21 +642,10 @@ export function ExportButtonContainer({
         if (!projectId) {
           throw new UserFacingError(ERROR_COPY.OPEN_HIGHLIGHT_AGAIN);
         }
-        if (!saveCurrentClipState) {
-          console.error('[ExportButtonContainer] saveCurrentClipState is missing');
-          throw new UserFacingError(ERROR_COPY.MAKE_HIGHLIGHT);
-        }
-
+        // T4400: send ids and options only. Every Frame edit was saved by its own
+        // gesture, so the server renders what it holds; a full-state save here
+        // let a stale tab overwrite edits made since in another tab.
         console.log('[ExportButtonContainer] Using backend-authoritative render');
-        setProgressMessage(EXPORT_PROGRESS.PREPARING);
-
-        try {
-          await saveCurrentClipState();
-          console.log('[ExportButtonContainer] Clip state saved, requesting render');
-        } catch (saveErr) {
-          console.error('[ExportButtonContainer] Failed to save clip state:', saveErr);
-          throw new UserFacingError(ERROR_COPY.SAVE_EDITS);
-        }
 
         endpoint = `${API_BASE}/api/export/render`;
 
@@ -674,9 +661,6 @@ export function ExportButtonContainer({
           include_audio: includeAudio
         });
         renderRequestAccepted = true;
-
-        // Refresh quest progress now that export job exists in DB
-        useQuestStore.getState().fetchProgress({ force: true });
 
         // T760: 202 = background processing, completion comes via WebSocket
         if (renderResponse.status === 202) {
@@ -788,9 +772,6 @@ export function ExportButtonContainer({
           }
         }
       );
-
-      // Refresh quest progress now that export job exists in DB
-      useQuestStore.getState().fetchProgress({ force: true });
 
       // Overlay's legacy no-projectId path — backend returns a blob for download.
       // (Framing always returns early above; this tail no longer runs for it.)

@@ -38,7 +38,6 @@ BACKEND_TOOLS = {'scripts/split_pytest.py'}  # T13964: assigns test files to the
 # cross-tree read fails tooling until it is listed here.
 CROSS_TREE_READS = {
     'src/backend/app/pricing.json': {'frontend', 'landing'},  # pricing.js; landing bakes prices in
-    'src/backend/app/quest_config.py': {'frontend'},  # questDefinitions.test.jsx parity check
     'src/backend/app/services/spend_readiness_constants.py': {'frontend'},  # SpendReadinessPanel.test.jsx gate-4 parity (T14910)
     'src/landing/src/site.ts': {'frontend'},  # landingVocabulary.test.js imports these
     'src/landing/src/data/sports.ts': {'frontend'},

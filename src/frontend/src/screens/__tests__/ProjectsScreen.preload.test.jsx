@@ -30,7 +30,7 @@ vi.mock('../../hooks/useGameUpload', () => ({
 vi.mock('../../hooks/useProjectLoader', () => ({
   useProjectLoader: () => ({ loadProject: vi.fn() }),
 }));
-// Heavy, side-effectful store (pulls in uploadManager, creditStore, questStore, shared
+// Heavy, side-effectful store (pulls in uploadManager, creditStore, shared
 // toast) that this test doesn't exercise — stubbed for the same reason the mocks above
 // are, and its absence here (while every other heavy ProjectsScreen dependency already had
 // one) is the actual cause of the "useUploadStore is not a function" / vitest-worker RPC

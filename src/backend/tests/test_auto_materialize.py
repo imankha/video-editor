@@ -383,28 +383,38 @@ class TestAutoMaterialize:
             assert row["resolved_at"] is None
 
 
-def _quest1_steps(db_path):
-    """Compute quest-step booleans against a recipient's materialized profile DB."""
-    from app.routers.quests import _check_all_steps
+def _own_content_counts(db_path):
+    """Count the recipient's OWN content: rows whose `shared_by` provenance is NULL.
+
+    T5330's rule (kept by T11185 after the quest system it first served was
+    deleted): any fact about what a user did themselves excludes shared-in rows,
+    and `shared_by IS NULL` is the whole test for "own"."""
     conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
     try:
-        return _check_all_steps("recipient-user", conn)
+        return {
+            "games": conn.execute(
+                "SELECT COUNT(*) FROM games WHERE shared_by IS NULL").fetchone()[0],
+            "clips": conn.execute(
+                "SELECT COUNT(*) FROM raw_clips WHERE shared_by IS NULL").fetchone()[0],
+            "rated_clips": conn.execute(
+                "SELECT COUNT(*) FROM raw_clips WHERE shared_by IS NULL AND rating IS NOT NULL"
+            ).fetchone()[0],
+        }
     finally:
         conn.close()
 
 
-class TestShareIsNufBlind:
-    """T5330: content shared into a profile must be invisible to NUF quest progress.
+class TestShareIsOwnContentBlind:
+    """T5330: content shared into a profile never counts as the recipient's own.
 
-    A recipient's quest_1 steps derive from THEIR OWN content only — a materialized
-    share (game + clips + the 5-star auto-draft-reel) must not pre-complete any step.
+    A materialized share (game + clips + the 5-star auto-draft-reel) carries
+    non-NULL `shared_by` provenance, so own-content facts stay at zero.
     """
 
-    def test_share_recipient_still_sees_quest1(self, pg_conn, tmp_path):
-        """A never-started recipient lands on quest_1 with all DB-derived steps
-        incomplete, even though a shared game (with a 5-star clip → auto-reel) was
-        just materialized into their fresh profile."""
+    def test_share_recipient_has_no_own_content(self, pg_conn, tmp_path):
+        """A never-started recipient has no own content, even though a shared game
+        (with a 5-star clip -> auto-reel) was just materialized into their fresh
+        profile."""
         from app.services.auth_db import create_user
 
         create_user(SHARER_ID, email=SHARER_EMAIL)
@@ -449,16 +459,14 @@ class TestShareIsNufBlind:
         assert c[0]["auto_project_id"] is not None  # 5-star auto-reel was created
         r_conn.close()
 
-        # ...but NONE of quest_1's DB-derived steps are pre-completed.
-        steps = _quest1_steps(recipient_db_path)
-        assert steps["upload_game"] is False
-        assert steps["add_clip"] is False
-        assert steps["rate_clip"] is False
-        assert steps["annotate_brilliant"] is False
+        # ...but none of it counts as the recipient's own content.
+        assert _own_content_counts(recipient_db_path) == {
+            "games": 0, "clips": 0, "rated_clips": 0,
+        }
 
-    def test_mid_nuf_recipient_keeps_own_progress(self, pg_conn, tmp_path):
-        """A recipient who earned upload_game via their OWN game keeps exactly that —
-        a materialized share neither rolls it back nor advances the clip/reel steps."""
+    def test_recipient_keeps_own_content(self, pg_conn, tmp_path):
+        """A recipient's OWN game still counts as own after a share materializes;
+        the shared clip does not."""
         from app.services.auth_db import create_user
 
         create_user(SHARER_ID, email=SHARER_EMAIL)
@@ -501,10 +509,7 @@ class TestShareIsNufBlind:
         r_conn.commit()
         r_conn.close()
 
-        steps = _quest1_steps(recipient_db_path)
-        # Own game still counts (earned progress preserved, not rolled back).
-        assert steps["upload_game"] is True
-        # Shared game/clip/auto-reel do NOT advance the remaining steps.
-        assert steps["add_clip"] is False
-        assert steps["rate_clip"] is False
-        assert steps["annotate_brilliant"] is False
+        # Own game counts; the shared game/clip/auto-reel do not.
+        assert _own_content_counts(recipient_db_path) == {
+            "games": 1, "clips": 0, "rated_clips": 0,
+        }

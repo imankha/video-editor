@@ -56,7 +56,6 @@ from app.storage import (
     generate_presigned_url_global,
     get_r2_client,
     log_video_resolution,
-    presigned_r2_http_client,
     r2_head_object_global,
     r2_key,
 )
@@ -1614,6 +1613,35 @@ GAMES_MATCH_DATE_ORDER_BY = (
 )
 
 
+def _compute_poster_versions(cursor, game_ids: list) -> dict:
+    """Per-game tile picture version (T10540): changes exactly when the game's
+    top-rated play changes (same ranking as poster._choose_game_poster_frame:
+    rating DESC, earliest start first, unrated last). GameTile appends it to the
+    poster URL so the browser's day-long cache never shows a picture made from an
+    older top play. "0" when the game has no plays (the one-minute picture).
+    ONE query for the whole list (no N+1)."""
+    if not game_ids:
+        return {}
+    cursor.execute("""
+        SELECT game_id, id, start_time, video_sequence FROM (
+            SELECT game_id, id, start_time, video_sequence,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY game_id ORDER BY rating DESC, start_time ASC
+                   ) AS rn
+            FROM raw_clips
+            WHERE game_id IS NOT NULL
+        ) WHERE rn = 1
+    """)
+    versions = {gid: "0" for gid in game_ids}
+    for row in cursor.fetchall():
+        if row["game_id"] in versions:
+            start = row["start_time"] if row["start_time"] is not None else 0.0
+            versions[row["game_id"]] = (
+                f"{row['id']}-{start:.3f}-{row['video_sequence'] or 1}"
+            )
+    return versions
+
+
 def _read_games_for_list():
     """T6200: every blocking read for the games list, on ONE worker thread.
 
@@ -1679,6 +1707,7 @@ def _read_games_for_list():
         athlete_stats = _compute_athlete_stats(cursor, game_ids) if game_ids else {}
         # T8260: published reels attributable to each game (same cursor, no N+1).
         reel_counts = _compute_reel_counts(cursor, game_ids)
+        poster_versions = _compute_poster_versions(cursor, game_ids)
 
     # T5800: resolve owning-profile display names for reference cards. ONE user.sqlite
     # read regardless of reference count (no per-row lookup -> no N+1); skipped
@@ -1696,7 +1725,7 @@ def _read_games_for_list():
     grace_hashes = get_grace_deletion_hashes()
     return (
         rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes,
-        source_profile_names, reel_counts,
+        source_profile_names, reel_counts, poster_versions,
     )
 
 
@@ -1715,7 +1744,7 @@ async def _list_games_impl(skip_presigned_urls=False):
     # thread. The presign warm below already offloads via to_thread; list-building
     # then reads the warmed presigned-URL cache (no blocking) on the loop.
     (rows, expiry_by_hash, all_ref_hashes, athlete_stats, grace_hashes,
-     source_profile_names, reel_counts) = await run_in_context(_read_games_for_list)
+     source_profile_names, reel_counts, poster_versions) = await run_in_context(_read_games_for_list)
 
     # T2880: Pre-generate presigned URLs for all games concurrently.
     # T3380: Skip when called from bootstrap (URLs loaded lazily on demand).
@@ -1780,6 +1809,7 @@ async def _list_games_impl(skip_presigned_urls=False):
             'athlete_clip_count': stats['athlete_clip_count'],  # T10120: derived live; my_athlete-true (or NULL) clips
             'team_clip_count': stats['team_clip_count'],  # T10120: derived live; my_athlete=0 (shared/team) clips
             'reel_count': reel_counts.get(row['id'], 0),  # T8260: published reels for this game, derived live
+            'poster_version': poster_versions[row['id']],  # T10540: tile picture cache-buster
             'brilliant_count': stats['brilliant_count'],
             'good_count': stats['good_count'],
             'interesting_count': stats['interesting_count'],
@@ -1811,22 +1841,18 @@ async def _list_games_impl(skip_presigned_urls=False):
 
     logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
 
-    # T5683: Warm game source posters for visible games without recaps
-    # (non-blocking background). Recap posters are warmed at share creation.
+    # T5683: Warm game source posters for visible games (non-blocking background).
+    # T10540: recap games too -- the top-rated play's frame wins while the game
+    # video is live, and the warm is the staleness check that keeps it current.
     async def warm_visible_game_sources():
-        """Warm game source posters (games without recaps) with bounded concurrency."""
+        """Warm game source posters with bounded concurrency."""
         warmer = get_poster_warmer()
         user_id = get_current_user_id()
         profile_id = _profile
         tasks = []
         for game in games:
-            # Only warm source posters for games without recap (recap already warmed at share).
-            if not game['recap_video_url']:
-                game_id = game['id']
-                coro = warmer.warm_game_source_poster_async(
-                    user_id, profile_id, game_id
-                )
-                tasks.append(warmer.warm_with_semaphore(coro))
+            coro = warmer.warm_game_source_poster_async(user_id, profile_id, game['id'])
+            tasks.append(warmer.warm_with_semaphore(coro))
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
             logger.info(f"[ListWarm] warmed {len(tasks)} game source posters for {len(games)} visible games")
@@ -3462,7 +3488,13 @@ async def create_game_link(game_id: int, background_tasks: BackgroundTasks):
     # Stitch-on-share: the TEAM recap must exist before the link is live.
     # status == 'empty' is T5710's zero-team-clips signal -> actionable refusal,
     # NO share row created (explicit state, never an empty share).
-    result = ensure_recap(user_id, profile_id, game_id, RecapLayer.TEAM.value)
+    # T16470: a miss runs the ffmpeg encode + R2 upload; off the event loop so
+    # every other request keeps answering while it runs. The worker thread
+    # inherits the request's user/profile ContextVars (asyncio.to_thread copies
+    # the context; the request-context dict is shared, so write tracking holds).
+    result = await asyncio.to_thread(
+        ensure_recap, user_id, profile_id, game_id, RecapLayer.TEAM.value,
+    )
     if result["status"] == "empty":
         raise HTTPException(
             status_code=409,
@@ -3479,7 +3511,8 @@ async def create_game_link(game_id: int, background_tasks: BackgroundTasks):
     # Public link has no recipient -> store the sharer's own email (the
     # self-share convention; recipient_email is NOT NULL).
     recipient_email = sharer["email"] if sharer else user_id
-    rail = _build_team_clip_rail(user_id, game_id, result["mapping_key"])
+    # R2 GET of the recap mapping + SQLite read: blocking I/O, same offload.
+    rail = await asyncio.to_thread(_build_team_clip_rail, user_id, game_id, result["mapping_key"])
 
     share = create_game_share(
         game_id=game_id,
@@ -3963,217 +3996,6 @@ async def load_game(game_id: int):
     }
 
 
-@router.get("/{game_id:int}/stream")
-async def stream_game_bounded(
-    game_id: int,
-    request: Request,
-    t: float | None = None,
-):
-    """
-    Bounded streaming proxy for annotation playback. Serves byte ranges
-    covering the moov atom + annotated clip regions instead of the full
-    game video. Same three-window strategy as T1430's clip proxy.
-
-    If no clips exist for this game, all ranges are allowed (full video).
-    """
-    MOOV_WINDOW_END = 10 * 1024 * 1024 - 1
-    MOOV_TAIL_SIZE = 10 * 1024 * 1024
-    PRE_PAD_SECONDS = 2.0
-    POST_PAD_SECONDS = 5.0
-    MIN_PAD_BYTES = 5 * 1024 * 1024
-    GAP_OVERRUN_EXTRA = 20 * 1024 * 1024
-    import httpx
-    from fastapi.responses import StreamingResponse
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT
-                COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
-                g.video_filename,
-                COALESCE(gv.duration, g.video_duration) AS video_duration,
-                COALESCE(gv.video_size, g.video_size) AS video_size
-            FROM games g
-            LEFT JOIN game_videos gv
-                ON gv.game_id = g.id AND gv.sequence = 1
-            WHERE g.id = ?
-        """, (game_id,))
-        game_row = cursor.fetchone()
-
-        if not game_row:
-            raise HTTPException(404, "We couldn't find that game.")
-        if not game_row['video_duration'] or not game_row['video_size']:
-            logger.warning("Game video missing duration/size metadata")
-            raise HTTPException(422, "We couldn't load this video. Try again.")
-        if not game_row['blake3_hash']:
-            raise HTTPException(422, "We couldn't load this video. Try again.")
-
-        blake3_hash = game_row['blake3_hash']
-        video_filename = game_row['video_filename']
-        duration = game_row['video_duration']
-        size = game_row['video_size']
-
-        cursor.execute(
-            "SELECT start_time, end_time FROM raw_clips WHERE game_id = ? ORDER BY start_time",
-            (game_id,),
-        )
-        clips = cursor.fetchall()
-
-    moov_end = min(size - 1, MOOV_WINDOW_END)
-    moov_tail_start = max(0, size - MOOV_TAIL_SIZE)
-
-    if not clips:
-        clip_windows = [(0, size - 1)]
-    else:
-        raw_windows = []
-        for clip in clips:
-            start_byte_raw = int((clip['start_time'] / duration) * size)
-            end_byte_raw = int((clip['end_time'] / duration) * size)
-            pre_pad = max(int((PRE_PAD_SECONDS / duration) * size), MIN_PAD_BYTES)
-            post_pad = max(int((POST_PAD_SECONDS / duration) * size), MIN_PAD_BYTES)
-            raw_windows.append((
-                max(0, start_byte_raw - pre_pad),
-                min(size - 1, end_byte_raw + post_pad),
-            ))
-        raw_windows.sort()
-        clip_windows = [raw_windows[0]]
-        for start, end in raw_windows[1:]:
-            prev_start, prev_end = clip_windows[-1]
-            if start <= prev_end + 1:
-                clip_windows[-1] = (prev_start, max(prev_end, end))
-            else:
-                clip_windows.append((start, end))
-
-    presigned_url = get_game_video_url(blake3_hash, video_filename)
-    if not presigned_url:
-        logger.warning("Failed to generate R2 URL")
-        raise HTTPException(404, "We couldn't load this video. Try again.")
-
-    # No upfront R2 probe -- it added ~1.5s of latency per seek
-    # (separate TCP/TLS handshake). Errors are caught in stream_from_r2().
-
-    range_hdr = request.headers.get("range") or request.headers.get("Range")
-    req_start = 0
-    req_end = size - 1
-    if range_hdr and range_hdr.startswith("bytes="):
-        spec = range_hdr[len("bytes="):].strip()
-        if "-" in spec:
-            lo_s, hi_s = spec.split("-", 1)
-            try:
-                if lo_s:
-                    req_start = int(lo_s)
-                if hi_s:
-                    req_end = int(hi_s)
-            except ValueError:
-                raise HTTPException(416, "We couldn't load this video. Try again.") from None
-
-    window_kind = None
-    window_end = None
-
-    if req_start <= moov_end:
-        window_end = moov_end
-        window_kind = "moov"
-    else:
-        for win_start, win_end_val in clip_windows:
-            if win_start <= req_start <= win_end_val:
-                window_end = win_end_val
-                window_kind = "clip"
-                break
-
-        if window_kind is None and req_start >= moov_tail_start:
-            window_end = size - 1
-            window_kind = "moov_tail"
-
-        if window_kind is None:
-            for _, win_end_val in clip_windows:
-                if win_end_val < req_start <= win_end_val + GAP_OVERRUN_EXTRA:
-                    window_end = min(
-                        win_end_val + GAP_OVERRUN_EXTRA,
-                        moov_tail_start - 1 if moov_tail_start > 0 else size - 1,
-                    )
-                    window_kind = "clip_overrun"
-                    logger.info(
-                        f"[game-stream] overrun game_id={game_id} req={req_start}-{req_end} "
-                        f"clip_win_end={win_end_val} overrun_end={window_end}"
-                    )
-                    break
-
-    if window_kind is None:
-        # Window must be large enough for smooth playback (~2 min of
-        # video) but not so large that seeks become sluggish (browser
-        # has to cancel a huge in-flight download on each seek).
-        MIN_SEEK = 20 * 1024 * 1024   # 20 MB floor
-        MAX_SEEK = 100 * 1024 * 1024  # 100 MB cap
-        two_min_bytes = int((120.0 / max(duration, 1)) * size)
-        seek_size = max(MIN_SEEK, min(two_min_bytes, MAX_SEEK))
-        window_end = min(req_start + seek_size, size - 1)
-        window_kind = "seek"
-
-    req_end = min(req_end, window_end)
-    if req_start > req_end:
-        raise HTTPException(
-            status_code=416,
-            detail="We couldn't load this video. Try again.",
-            headers={"Content-Range": f"bytes */{size}"},
-        )
-
-    segment_len = req_end - req_start + 1
-    logger.info(
-        f"[game-stream] game_id={game_id} window={window_kind} "
-        f"range={req_start}-{req_end} segment_len={segment_len}"
-    )
-
-    async def stream_from_r2():
-        async with presigned_r2_http_client(timeout=httpx.Timeout(60.0, connect=10.0)) as client, client.stream(
-            "GET",
-            presigned_url,
-            headers={"Range": f"bytes={req_start}-{req_end}"},
-        ) as response:
-            if response.status_code not in (200, 206):
-                error_body = ""
-                try:
-                    raw = await response.aread()
-                    error_body = raw[:500].decode("utf-8", errors="replace")
-                except Exception:
-                    error_body = "(unreadable)"
-                logger.error(
-                    f"[game-stream] R2 error game_id={game_id} "
-                    f"r2_status={response.status_code} blake3={blake3_hash} "
-                    f"range={req_start}-{req_end} window={window_kind} "
-                    f"body_snippet={error_body!r}"
-                )
-                logger.warning(f"R2 returned {response.status_code}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail="We couldn't load this video. Try again.",
-                )
-            bytes_streamed = 0
-            try:
-                async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
-                    bytes_streamed += len(chunk)
-                    yield chunk
-            except Exception as e:
-                logger.error(
-                    f"[game-stream] R2 stream interrupted game_id={game_id} "
-                    f"window={window_kind} range={req_start}-{req_end} "
-                    f"bytes_streamed={bytes_streamed}/{segment_len} "
-                    f"error={type(e).__name__}: {e}"
-                )
-
-    return StreamingResponse(
-        stream_from_r2(),
-        status_code=206,
-        media_type="video/mp4",
-        headers={
-            "Content-Range": f"bytes {req_start}-{req_end}/{size}",
-            "Content-Length": str(segment_len),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "private, max-age=300, immutable",
-        },
-    )
-
-
 @router.get("/{game_id:int}/poster.jpg")
 async def get_game_poster(
     game_id: int, request: Request, profile_id: str | None = None
@@ -4254,13 +4076,16 @@ async def get_game_poster(
                 "ETag": head["ETag"],
             })
 
-    if row["recap_video_url"]:
-        # Recap-derived poster wins whenever a recap exists (T5681 item 3).
-        # ensure_recap_poster operates on GLOBAL (env-prefixed) keys, same scheme
-        # as the share-unfurl path (_recap_r2_key/_recap_poster_r2_key in
-        # shares.py): {env}/users/{uid}/profiles/{pid}/...
+    # T10540: the top-rated play's frame from the live game video wins, recap or
+    # not (ensure_game_source_poster keeps the card in step with the top play and
+    # keeps an existing card when the video has expired). Only when it has nothing
+    # to serve does a game with a recap fall to the recap-derived card.
+    # ensure_recap_poster operates on GLOBAL (env-prefixed) keys, same scheme as
+    # the share-unfurl path (_recap_r2_key/_recap_poster_r2_key in shares.py).
+    if ensure_game_source_poster(user_id, profile_id, game_id):
+        pass
+    elif row["recap_video_url"]:
         recap_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
-        # Ensure card-size poster exists (generate on first request if recap exists).
         if not ensure_recap_poster(recap_key, card_poster_key, resize_width=480, jpeg_quality=3):
             log_video_resolution(
                 logger, kind="game_poster", outcome=VideoServeOutcome.MISSING,
@@ -4274,22 +4099,17 @@ async def get_game_poster(
                 media_type="image/jpeg",
             )
     else:
-        # No recap yet: extract ONE frame from the live game source (T5681 item
-        # 2/3) -- highest-rated clip's timestamp, else a fixed offset. Written at
-        # card size (T5682) to the SAME card key so the serving path below is
-        # identical. An expired/reclaimed source (no live video) -> False -> 404.
-        if not ensure_game_source_poster(user_id, profile_id, game_id):
-            log_video_resolution(
-                logger, kind="game_poster", outcome=VideoServeOutcome.MISSING,
-                key=card_poster_key, entity_id=game_id, user_id=user_id,
-                profile_id=profile_id, reason="source_poster_unavailable",
-            )
-            # T5682: negative cache on 404s (60s)
-            return Response(
-                status_code=404,
-                headers={"Cache-Control": "private, max-age=60"},
-                media_type="image/jpeg",
-            )
+        log_video_resolution(
+            logger, kind="game_poster", outcome=VideoServeOutcome.MISSING,
+            key=card_poster_key, entity_id=game_id, user_id=user_id,
+            profile_id=profile_id, reason="source_poster_unavailable",
+        )
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
     # Serve the poster with a presigned URL (private cache, session-authed).
     # generate_presigned_url's relative_path is relative to users/{uid}/ and

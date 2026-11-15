@@ -5,7 +5,6 @@ This module handles exports related to the Focus editing mode (renamed from
 "Framing" for the UI in T7700; the internal module name, wire routes, and the
 'framing' job/mode identifiers are intentionally left unchanged to avoid
 touching persisted values):
-- /crop - Basic crop export
 - /upscale - AI upscale export with de-zoom
 - /projects/{id}/working-video - Stream working video
 
@@ -14,26 +13,20 @@ and AI upscaling for the Focus mode workflow.
 """
 
 import asyncio
-import json
 import logging
-import math
-import os
 import shutil
 import tempfile
 import time as time_module
-import uuid
 from pathlib import Path
 
 import ffmpeg
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 from ...analytics import record_milestone
 from ...database import column_exists, get_db_connection
 from ...highlight_transform import canonicalize_segments_data, compute_export_credits, get_output_duration
-from ...interpolation import generate_crop_filter
-from ...models import CropKeyframe
 from ...profile_context import get_current_profile_id
 from ...queries import latest_working_clips_subquery
 from ...services.ffmpeg_service import get_video_info
@@ -46,124 +39,6 @@ from .multi_clip import BytesFile, ClipExportData, _export_clips
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-@router.post("/crop")
-async def export_crop(
-    video: UploadFile = File(...),
-    keyframes_json: str = Form(...),
-    rotation: float = Form(0)
-):
-    """
-    Export video with crop applied.
-    Accepts video file and crop keyframes, returns cropped video.
-    """
-    # Parse keyframes
-    try:
-        keyframes_data = json.loads(keyframes_json)
-    except json.JSONDecodeError as e:
-        logger.warning(f"Invalid keyframes JSON: {e!s}")
-        raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.")
-
-    keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
-
-    if len(keyframes) == 0:
-        raise HTTPException(status_code=400, detail="Set a box position first.")
-
-    # Create temporary directory for processing
-    temp_dir = tempfile.mkdtemp()
-    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4().hex}{Path(video.filename).suffix}")
-    output_path = os.path.join(temp_dir, f"output_{uuid.uuid4().hex}.mp4")
-
-    # Save uploaded file
-    with open(input_path, 'wb') as f:
-        content = await video.read()
-        f.write(content)
-
-    # Get video info
-    probe = ffmpeg.probe(input_path)
-    video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
-    duration = float(probe['format']['duration'])
-    fps = eval(video_info['r_frame_rate'])
-
-    # Convert keyframes to dict format
-    keyframes_dict = [
-        {
-            'time': kf.time,
-            'x': kf.x,
-            'y': kf.y,
-            'width': kf.width,
-            'height': kf.height
-        }
-        for kf in keyframes
-    ]
-
-    # Sort keyframes by time
-    keyframes_dict.sort(key=lambda k: k['time'])
-
-    # Generate crop filter with structured parameters
-    crop_params = generate_crop_filter(keyframes_dict, duration, fps)
-
-    # Process video with FFmpeg
-    try:
-        stream = ffmpeg.input(input_path)
-        if rotation:
-            stream = ffmpeg.filter(stream, 'rotate', a=-math.radians(rotation), ow='iw', oh='ih', c='black')
-        stream = ffmpeg.filter(stream, 'crop',
-                             w=crop_params['width_expr'],
-                             h=crop_params['height_expr'],
-                             x=crop_params['x_expr'],
-                             y=crop_params['y_expr'])
-        stream = ffmpeg.output(stream, output_path,
-                             vcodec='libx265',
-                             crf=10,
-                             preset='veryslow',
-                             **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'},
-                             acodec='aac',
-                             audio_bitrate='256k',
-                             pix_fmt='yuv420p',
-                             colorspace='bt709',
-                             color_primaries='bt709',
-                             color_trc='bt709',
-                             color_range='tv')
-        ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
-    except ffmpeg.Error as e:
-        # Fallback to average crop
-        logger.warning(f"Complex crop filter failed, falling back to average crop. Error: {e.stderr.decode()}")
-
-        avg_crop = {
-            'x': round(sum(kf['x'] for kf in keyframes_dict) / len(keyframes_dict), 3),
-            'y': round(sum(kf['y'] for kf in keyframes_dict) / len(keyframes_dict), 3),
-            'width': round(sum(kf['width'] for kf in keyframes_dict) / len(keyframes_dict), 3),
-            'height': round(sum(kf['height'] for kf in keyframes_dict) / len(keyframes_dict), 3)
-        }
-
-        stream = ffmpeg.input(input_path)
-        if rotation:
-            stream = ffmpeg.filter(stream, 'rotate', a=-math.radians(rotation), ow='iw', oh='ih', c='black')
-        stream = ffmpeg.filter(stream, 'crop',
-                             avg_crop['width'], avg_crop['height'],
-                             avg_crop['x'], avg_crop['y'])
-        stream = ffmpeg.output(stream, output_path,
-                             vcodec='libx265',
-                             crf=10,
-                             preset='veryslow',
-                             **{'x265-params': 'aq-mode=3:aq-strength=1.0:deblock=-1,-1:me=star:subme=7:merange=57:ref=6:psy-rd=2.5:psy-rdoq=1.0:bframes=8:b-adapt=2:rc-lookahead=60:rect=1:amp=1:rd=6'},
-                             acodec='aac',
-                             audio_bitrate='256k',
-                             pix_fmt='yuv420p',
-                             colorspace='bt709',
-                             color_primaries='bt709',
-                             color_trc='bt709',
-                             color_range='tv')
-        ffmpeg.run(stream, overwrite_output=True, capture_stdout=True, capture_stderr=True)
-
-    return FileResponse(
-        output_path,
-        media_type='video/mp4',
-        filename=f"cropped_{video.filename}",
-        background=None
-    )
 
 
 @router.get("/projects/{project_id}/working-video")
@@ -261,7 +136,8 @@ async def render_project(request: RenderRequest, http_request: Request):
                 rc.game_id, rc.video_sequence, rc.source,
                 rc.start_time as raw_start_time, rc.end_time as raw_end_time,
                 (rc.end_time - rc.start_time) as raw_duration,
-                COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash
+                COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash,
+                COALESCE(wc.fps, gv.fps) as fps
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             LEFT JOIN games g ON rc.game_id = g.id
@@ -302,6 +178,17 @@ async def render_project(request: RenderRequest, http_request: Request):
             status_code=400,
             detail={"error": "no_source_video", "message": "We couldn't find the video for this play."}
         )
+    # T4540: crop keyframes are stored by frame number at the clip's stored rate
+    # (the same COALESCE(wc.fps, gv.fps) GET /clips hands the editor). Without it
+    # the render could only guess, and a guessed 30 on a 60 fps clip runs the crop
+    # path at double speed, so refuse loudly instead.
+    if not clip['fps']:
+        from app.services.export_helpers import fail_export_job
+        message = "We couldn't read this play's frame rate, so we can't make this highlight."
+        logger.error(f"[Render] clip {clip['id']} has no stored fps (working_clips.fps and game_videos.fps are NULL); refusing render")
+        fail_export_job(export_id, "missing_framerate")
+        export_progress.pop(export_id, None)
+        raise HTTPException(status_code=400, detail={"error": "missing_framerate", "message": message})
     if clip['crop_data']:
         try:
             decode_data(clip['crop_data'])
@@ -430,17 +317,18 @@ async def _run_render_background(
         from ...services.export_helpers import resolve_clip_source
         source_url, source_in, source_out, source_flexible = resolve_clip_source(clip)
 
-        # ffprobe for actual fps (framing uses real fps, not default 30)
-        framerate = 30.0
+        # T4540: the clip's stored rate, the one the editor keyed the crop frames
+        # by (render_project refuses a clip without one). The probe below only
+        # supplies dimensions for the default crop.
+        framerate = clip['fps']
         source_info = {}
         try:
             if source_url:
                 _t0 = time_module.monotonic()
                 source_info = await asyncio.to_thread(get_video_info, source_url)
-                logger.info(f"[Render] get_video_info took {time_module.monotonic() - _t0:.2f}s, fps={source_info.get('fps')}")
-                framerate = source_info.get('fps', 30.0)
+                logger.info(f"[Render] get_video_info took {time_module.monotonic() - _t0:.2f}s, probed fps={source_info.get('fps')} stored fps={framerate}")
         except Exception as e:
-            logger.warning(f"[Render] Failed to probe fps, using default 30: {e}")
+            logger.warning(f"[Render] Failed to probe source dimensions: {e}")
 
         # T3700 P0: no crop set -> apply the named centered default so a zero-effort
         # export still produces a valid framing job (matches the editor's visible default).

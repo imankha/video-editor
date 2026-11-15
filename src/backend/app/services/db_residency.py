@@ -23,7 +23,7 @@ only if ALL hold:
     WAL checkpoint, so a commit not in the uploaded bytes always reads dirty.
 Idle time (MIN_IDLE_S) is a thrash guard only, never part of the proof.
 
-T14390: heartbeat, session-close and /api/quests/achievements write user.sqlite on
+T14390: heartbeat and session-close write user.sqlite on
 SKIP_SYNC_PATHS, so a user who left reads DIRTY. A pass first uploads such a user
 (idle, unheld, unmarked, no sidecar) with the CAS primitives, holding it but OUTSIDE
 _EVICT_LOCK, then runs the normal proof. A failed or refused upload keeps the user.

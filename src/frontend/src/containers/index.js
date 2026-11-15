@@ -21,12 +21,9 @@ export {
 // Overlay mode container
 export {
   OverlayContainer,
-  OverlayVideoOverlays,
-  OverlayTimeline,
 } from './OverlayContainer';
 
 // Framing mode container
 export {
   FocusContainer,
-  FocusTimeline,
 } from './FocusContainer';

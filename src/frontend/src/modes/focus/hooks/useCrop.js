@@ -53,7 +53,11 @@ const calculateDefaultPosition = (videoWidth, videoHeight, cropWidth, cropHeight
  */
 export default function useCrop(videoMetadata, trimRange = null, savedKeyframes = null, savedRotation = 0) {
   const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
-  const framerate = videoMetadata?.framerate || 30;
+  // T4540: the loaded clip's stored rate (Frame preloads metadata.framerate from
+  // working_clips.fps). null when unknown: the crop then never initializes or
+  // restores (keyframes are frame numbers, a guessed rate would mistime them)
+  // and Frame shows the missing-frame-rate error.
+  const framerate = videoMetadata?.framerate ?? null;
 
   // T5640: per-clip horizon-straighten angle (degrees, +CCW). Seeded from the
   // clip's saved rotation and re-seeded when a different clip is selected. This
@@ -80,7 +84,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
   const keyframeManager = useKeyframeController({
     interpolateFn: interpolateCropSpline,
     framerate,
-    getEndFrame: (duration) => duration ? timeToFrame(duration, framerate) : null
+    getEndFrame: (duration) => (duration && framerate) ? timeToFrame(duration, framerate) : null
   });
 
   /**
@@ -183,7 +187,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * a clip whose keyframes were already restored earlier in the session.
    */
   useLayoutEffect(() => {
-    if (savedKeyframes && savedKeyframes.length > 0) {
+    if (framerate && savedKeyframes && savedKeyframes.length > 0) {
       const keyframesKey = JSON.stringify(savedKeyframes.map(k => ({ frame: k.frame, x: k.x, y: k.y })));
 
       if (keyframesKey !== lastSavedKeyframesRef.current || machineState === 'uninitialized') {
@@ -211,7 +215,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * at trimRange.end. Trimming is non-destructive and handled via trimRange only.
    */
   useEffect(() => {
-    if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration) {
+    if (framerate && videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration) {
       // Virtual trim: end boundary is always the full clip duration.
       const effectiveDuration = videoMetadata.duration;
       const totalFrames = timeToFrame(effectiveDuration, framerate);
@@ -389,7 +393,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * @param {number} endFrame
    */
   const restoreState = useCallback((savedKeyframes) => {
-    if (!savedKeyframes || savedKeyframes.length === 0) {
+    if (!framerate || !savedKeyframes || savedKeyframes.length === 0) {
       return;
     }
 

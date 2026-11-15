@@ -73,18 +73,6 @@ export function revokeVideoURL(url) {
 }
 
 /**
- * Get estimated framerate from video element
- * Note: This is a fallback. Actual framerate detection requires more complex analysis
- * @param {HTMLVideoElement} videoElement - Video element
- * @returns {number} Estimated framerate (defaults to 30)
- */
-export function getFramerate(videoElement) {
-  // For now, default to 30fps.
-  // True framerate detection would require frame counting or metadata parsing
-  return 30;
-}
-
-/**
  * Convert time (seconds) to frame number
  * @param {number} time - Time in seconds
  * @param {number} framerate - Video framerate

@@ -2,12 +2,9 @@ import { test, expect } from '@playwright/test';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
- * T5330 — Email game-share recipient must NOT skip the new-user flow (NUF).
- *
- * Proves the live fix: a share-email recipient who signs up sees quest_1
- * ("Get Started") active and INCOMPLETE after session_init materializes the
- * shared game + a 5-star clip's auto-draft-reel -- not silently skipped past
- * onboarding. See docs/plans/tasks/T5330-share-recipient-skips-new-user-flow.md.
+ * T5330 — an email game-share recipient who signs up finds the shared game in
+ * their own profile after session_init materializes it (T3230). The quest
+ * progress half of T5330 left with the quest system (T11180).
  *
  * Drives TWO real accounts through the actual product code path (no mocking):
  *   1. SHARER -- created via the /api/test/ensure-pg-user seam (X-User-ID
@@ -184,8 +181,7 @@ test.describe('T5330 — share-email recipient sees the new-user flow', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Sanity: the shared game materialized and is present/usable (T3230's data
-    // behavior is unchanged by this fix -- only quest counting changed).
+    // THE assertion: the shared game materialized into the recipient's profile.
     const games = await page.evaluate(async (apiBase) => {
       const res = await fetch(`${apiBase}/games`, { credentials: 'include' });
       if (!res.ok) return null;
@@ -195,32 +191,6 @@ test.describe('T5330 — share-email recipient sees the new-user flow', () => {
     expect(games, 'shared game must be present in the recipient profile').not.toBeNull();
     expect(games.length, 'the materialized shared game is present').toBeGreaterThanOrEqual(1);
 
-    // --- THE assertion: quest_1 renders as the active onboarding quest in the
-    // UI, not skipped past. QuestPanel only renders a quest while it is
-    // active/incomplete (it hides once all quests are done), so visibility of
-    // "Get Started" alone proves the NUF was NOT skipped. ---
-    const questTitle = page.locator('.quest-title', { hasText: 'Get Started' });
-    await expect(questTitle, 'Quest 1 "Get Started" panel must be visible -- NUF not skipped')
-      .toBeVisible({ timeout: 15000 });
-
-    // Cross-check step-level incompleteness via the same API the UI reads, for
-    // a precise assertion matching the acceptance criterion wording exactly
-    // ("quest_1 active and incomplete") and pinpointing which step would have
-    // regressed if this ever breaks again.
-    const progress = await page.evaluate(async (apiBase) => {
-      const res = await fetch(`${apiBase}/quests/progress`, { credentials: 'include' });
-      if (!res.ok) return null;
-      return res.json();
-    }, '/api');
-    const quest1 = progress?.quests?.find((q) => q.id === 'quest_1');
-    expect(quest1, 'quest_1 present in progress response').toBeTruthy();
-    expect(quest1.completed, 'quest_1 must be incomplete for a never-started recipient').toBe(false);
-    expect(quest1.steps.upload_game, 'upload_game must NOT be pre-completed by the shared game').toBe(false);
-    expect(quest1.steps.add_clip, 'add_clip must NOT be pre-completed by the shared clip').toBe(false);
-    expect(quest1.steps.rate_clip, 'rate_clip must NOT be pre-completed by the shared 5-star clip').toBe(false);
-    expect(quest1.steps.annotate_brilliant, 'annotate_brilliant must NOT be pre-completed by the auto-draft-reel')
-      .toBe(false);
-
-    console.log('[T5330] PASS: share-email signup recipient lands on quest_1 (active, incomplete) -- NUF not skipped.');
+    console.log('[T5330] PASS: share-email signup recipient has the shared game.');
   });
 });

@@ -67,11 +67,11 @@ skipOnDeployedTarget(
 
 test.describe('T8390: Focus post-export preview + publish-exit action bar', () => {
   test('preview mounts immediately (no decision first); the hierarchy + quiet Save draft present; data-tutorial-target once; each path fires its event', async ({ page }) => {
-    const achievementCalls = [];
+    const funnelCalls = [];
     page.on('request', (req) => {
       if (!req.url().includes('/api/telemetry/funnel-event')) return;
       const event = JSON.parse(req.postData() || '{}').event || '';
-      if (event.startsWith('overlay_')) achievementCalls.push(event);
+      if (event.startsWith('overlay_')) funnelCalls.push(event);
     });
 
     await page.goto('/t8520diag.html');
@@ -152,12 +152,12 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     await saveEvidence(page, 'T8390-pathA-add-spotlight-closed');
 
     // Analytics: overlay_offered (harness reopen), overlay_deferred, overlay_declined
-    // actually POSTed by the real questStore.recordAchievement call path.
+    // actually POSTed by the real recordFunnelEvent call path.
     await page.waitForTimeout(500);
-    expect(achievementCalls).toContain('overlay_offered');
-    expect(achievementCalls).toContain('overlay_deferred');
-    expect(achievementCalls).toContain('overlay_declined');
-    console.log('[T8390] funnel-event network calls observed:', achievementCalls);
+    expect(funnelCalls).toContain('overlay_offered');
+    expect(funnelCalls).toContain('overlay_deferred');
+    expect(funnelCalls).toContain('overlay_declined');
+    console.log('[T8390] funnel-event network calls observed:', funnelCalls);
   });
 
   test('X / Escape maps to Refocus (not a silent dismiss, no Add-Spotlight-Later side effects)', async ({ page }) => {
@@ -288,7 +288,7 @@ test.describe('T8530: draft preview publish surface', () => {
 
 // T8530 board fallback (DraftTile's "Publish clip"/"Publish reel" primary
 // button) is NOT covered here. DraftTile requires ~6 store mocks (projectsStore,
-// syncStore, exportStore, questStore, profileStore, galleryStore) that
+// syncStore, exportStore, profileStore, galleryStore) that
 // DraftTile.test.jsx already wires via vi.mock — reproducing that contract in a
 // real-browser diag harness would need a fourth dedicated Vite entry for one
 // button-label assertion the Vitest suite already proves live (110/110 green,

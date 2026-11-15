@@ -278,7 +278,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       const vt = timeline.actualToVirtual(currentSegmentIndexRef.current, actualTime);
       setVirtualTime(vt);
 
-      // Record quest achievement after 2s of watching
+      // Record the annotations_played funnel event once playback is under way
       if (!hasRecordedPlaybackAchievementRef.current && vt >= 0.5) {
         hasRecordedPlaybackAchievementRef.current = true;
         recordFunnelEvent(FUNNEL_EVENTS.ANNOTATIONS_PLAYED);

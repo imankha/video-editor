@@ -2,7 +2,6 @@ import { useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { toast } from '../components/shared/Toast';
-import { useQuestStore } from '../stores/questStore';
 import { ANNOTATE, CLIP_LINK, ERROR_COPY } from '../config/displayNames';
 import { reportMarkPlayFailure } from '../utils/markPlayFailure';
 
@@ -71,21 +70,6 @@ export function surfaceClipSyncFailed(gesture, retry) {
  */
 function isNetworkFailure(err) {
   return err instanceof TypeError;
-}
-
-/**
- * T540: Refresh quest progress after any clip mutation.
- *
- * All rating-based quest steps (annotate_brilliant, annotate_4_star,
- * annotate_brilliant_2, create_mixed_project) are derived
- * from raw_clips data — no flags, just DB queries. This function tells the
- * quest store to re-derive progress after any clip change.
- *
- * Called from saveClip, updateClip, and deleteClip so that any current or
- * future rating-based quest step auto-detects completion.
- */
-function refreshQuestProgress() {
-  useQuestStore.getState().fetchProgress({ force: true });
 }
 
 /**
@@ -208,7 +192,6 @@ export function useRawClipSave(activeGameIdRef = null) {
 
       const result = await response.json();
 
-      refreshQuestProgress();
       return result;
     } catch (err) {
       setError(err.message);
@@ -269,7 +252,6 @@ export function useRawClipSave(activeGameIdRef = null) {
 
       const result = await response.json();
 
-      refreshQuestProgress();
       return result;
     } catch (err) {
       setError(err.message);
@@ -315,7 +297,6 @@ export function useRawClipSave(activeGameIdRef = null) {
       }
 
       console.log('[useRawClipSave] Deleted clip:', clipId);
-      refreshQuestProgress();
       return true;
     } catch (err) {
       setError(err.message);
@@ -372,7 +353,6 @@ export function useRawClipSave(activeGameIdRef = null) {
       }
 
       const result = await response.json();
-      refreshQuestProgress();
       return result;
     } catch (err) {
       setError(err.message);

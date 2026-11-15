@@ -54,7 +54,6 @@ vi.mock('../stores/creditStore', () => ({
     getRequiredCredits: () => 0, setBalance: vi.fn(),
   }),
 }));
-vi.mock('../stores/questStore', () => ({ useQuestStore: h.mockStore({ fetchProgress: vi.fn() }) }));
 vi.mock('../stores/overlayActionStore', () => ({
   useOverlayActionStore: h.mockStore({ failedActions: [], retryFailedOverlayActions: vi.fn() }),
 }));
@@ -73,7 +72,6 @@ const baseProps = {
   projectName: 'My Reel',
   includeAudio: true,
   onIncludeAudioChange: vi.fn(),
-  saveCurrentClipState: vi.fn().mockResolvedValue(),
   onExportComplete: vi.fn(),
 };
 

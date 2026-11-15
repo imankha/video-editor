@@ -22,12 +22,10 @@ function makeDeps({ state = {}, publish, fetchProjects } = {}) {
   const goToProjectManager = vi.fn();
   const openFinishedReel = vi.fn();
   const toastSuccess = vi.fn();
-  const refreshQuestProgress = vi.fn();
   const deps = {
     EDITOR_MODES,
     getPublishIntentState: () => usePublishIntentStore.getState(),
     fetchProjects: fetchProjectsFn,
-    refreshQuestProgress,
     getEditorMode: () => s.editorMode,
     getSelectedProjectId: () => s.selectedProjectId,
     getProjects: () => s.projects,
@@ -36,7 +34,7 @@ function makeDeps({ state = {}, publish, fetchProjects } = {}) {
     openFinishedReel,
     toastSuccess,
   };
-  return { deps, publish: publishFn, fetchProjects: fetchProjectsFn, goToProjectManager, openFinishedReel, toastSuccess, refreshQuestProgress, state: s };
+  return { deps, publish: publishFn, fetchProjects: fetchProjectsFn, goToProjectManager, openFinishedReel, toastSuccess, state: s };
 }
 
 beforeEach(() => {

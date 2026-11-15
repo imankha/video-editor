@@ -114,7 +114,6 @@ from app.routers import (
     payments_router,
     profiles_router,
     projects_router,
-    quests_router,
     settings_router,
     shared_router,
     storage_router,
@@ -293,7 +292,6 @@ app.include_router(settings_router)
 app.include_router(profiles_router)
 app.include_router(intro_cards_router)
 app.include_router(credits_router, prefix="/api")
-app.include_router(quests_router, prefix="/api")
 app.include_router(exports_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")

@@ -1,8 +1,8 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { FocusMode } from '../modes/focus';
 import { API_BASE } from '../config';
 import * as focusActions from '../api/focusActions';
-import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
+import { clipCropKeyframes, clipFramerate, clipSegments, clipSourceDuration } from '../utils/clipSelectors';
+import { nextSegments } from '../utils/segmentsMirror';
 import { resolveTargetFrame } from '../utils/keyframeUtils';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { toast } from '../components/shared';
@@ -101,6 +101,7 @@ export function FocusContainer({
   removeSegmentBoundary,
   setSegmentSpeed,
   toggleTrimSegment,
+  restoreTrim,
   getSegmentAtTime,
   getSegmentExportData,
   isTimeVisible,
@@ -123,9 +124,6 @@ export function FocusContainer({
   // Video metadata cache (keyed by clip ID)
   clipMetadataCache = {},
 
-  // Project clips hook (for backend persistence)
-  saveFramingEdits,
-
   // Callbacks
   onCropChange,
   onUserEdit,
@@ -147,26 +145,20 @@ export function FocusContainer({
   // simply session-scoped for the mounted clip's lifetime.
   const framingHistory = useFramingHistory();
 
-  // DERIVED STATE: Current crop state at playhead
-  const currentCropState = useMemo(() => {
-    if (!metadata) return null;
-    return getCropDataAtTime(currentTime);
-  }, [metadata, currentTime, getCropDataAtTime]);
+  // The timeline's cut list (useSegments), in the store's segments_data shape.
+  const liveSegments = useMemo(
+    () => ({ boundaries: segmentBoundaries, segmentSpeeds, trimRange }),
+    [segmentBoundaries, segmentSpeeds, trimRange],
+  );
 
-  // DERIVED STATE: Check for framing edits
-  const hasFramingEdits = useMemo(() => {
-    const hasCropEdits = keyframes.length > 2 || (
-      keyframes.length === 2 &&
-      (keyframes[0].x !== keyframes[1].x ||
-       keyframes[0].y !== keyframes[1].y ||
-       keyframes[0].width !== keyframes[1].width ||
-       keyframes[0].height !== keyframes[1].height)
-    );
-    const hasTrimEdits = trimRange !== null;
-    const hasSpeedEdits = Object.values(segmentSpeeds).some(speed => speed !== 1);
-    const hasSegmentSplits = segmentBoundaries.length > 2;
-    return hasCropEdits || hasTrimEdits || hasSpeedEdits || hasSegmentSplits;
-  }, [keyframes, trimRange, segmentSpeeds, segmentBoundaries]);
+  // T4470: the ONE writer of the store copy of the cut list (clip.segments_data,
+  // read by the header badge, Sharpen button and credit price). Applies the
+  // gesture to the copy as it is at write time, never to values captured before
+  // an await, so a gesture landing while another's save is in flight survives.
+  const mirrorSegments = useCallback((clipId, gesture) => {
+    if (!clipId) return;
+    updateClipData(clipId, (clip) => ({ segments_data: nextSegments(clipSegments(clip, duration), gesture) }));
+  }, [updateClipData, duration]);
 
   /**
    * Clips with current clip's live state merged.
@@ -229,11 +221,7 @@ export function FocusContainer({
         const merged = {
           ...clip,
           duration: clipDuration,
-          segments: {
-            boundaries: segmentBoundaries,
-            segmentSpeeds: segmentSpeeds,
-            trimRange: trimRange
-          },
+          segments: liveSegments,
           trimRange: trimRange
         };
         if (currentClipExportKeyframes.length > 0) {
@@ -246,8 +234,9 @@ export function FocusContainer({
       // Parse crop_data first, then convert frame-based to time-based.
       const parsedKeyframes = clipCropKeyframes(clip);
       const meta = clipMetadataCache[clip.id];
-      const clipFr = meta?.framerate || 30;
-      let convertedKeyframes = convertKeyframesToTime(parsedKeyframes, clipFr);
+      // T4540: no stored rate -> no frame->time conversion (it would be a guess).
+      const clipFr = clipFramerate(clip);
+      let convertedKeyframes = clipFr ? convertKeyframesToTime(parsedKeyframes, clipFr) : [];
 
       const sourceWidth = meta?.width;
       const sourceHeight = meta?.height;
@@ -269,7 +258,7 @@ export function FocusContainer({
         framerate: clipFr,
       };
     });
-  }, [clips, projectClipId, getKeyframesForExport, segmentBoundaries, segmentSpeeds, trimRange, hasClips, globalAspectRatio, clipMetadataCache]);
+  }, [clips, projectClipId, getKeyframesForExport, liveSegments, trimRange, hasClips, globalAspectRatio, clipMetadataCache]);
 
   /**
    * DERIVED (T5780): live output length of the SELECTED clip, from the live useSegments
@@ -285,52 +274,10 @@ export function FocusContainer({
     const eff = calculateEffectiveDuration({
       id: projectClipId,
       duration,
-      segments: { boundaries: segmentBoundaries, segmentSpeeds, trimRange },
+      segments: liveSegments,
     });
     return (eff == null || Number.isNaN(eff)) ? null : eff;
-  }, [duration, projectClipId, segmentBoundaries, segmentSpeeds, trimRange]);
-
-  /**
-   * Save current clip's framing state to backend
-   */
-  const saveCurrentClipState = useCallback(async () => {
-    if (!projectClipId || !selectedProjectId) return;
-
-    const currentClip = clips.find(c => c.id === projectClipId);
-    if (!currentClip?.id) return;
-
-    const segmentState = {
-      boundaries: segmentBoundaries,
-      segmentSpeeds: segmentSpeeds,
-      trimRange: trimRange,
-    };
-
-    try {
-      // Save to local clip manager state
-      // T280: No timing_data — trimRange lives in segments_data only
-      updateClipData(projectClipId, {
-        segments_data: segmentState,
-        crop_data: keyframes,
-      });
-
-      // Save to backend (use frame-based keyframes for storage - FFmpeg conversion happens at export)
-      if (saveFramingEdits) {
-        const result = await saveFramingEdits(currentClip.id, {
-          cropKeyframes: keyframes,  // Frame-based - NOT time-based
-          segments: segmentState,    // Internal format preserves segment indices
-          trimRange: trimRange
-        });
-
-        // If backend created a new version, update local clip's id
-        if (result?.newClipId) {
-          updateClipData(projectClipId, { id: result.newClipId });
-        }
-      }
-
-    } catch (e) {
-      console.error('[FocusContainer] Failed to save framing state:', e);
-    }
-  }, [projectClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits, getKeyframesForExport]);
+  }, [duration, projectClipId, liveSegments]);
 
   /**
    * Handle crop changes during drag/resize (live preview)
@@ -419,7 +366,7 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
     track('crop_keyframe_add', { frame: targetFrame, clipId: projectClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
-    // T3700: quest_2 "Keep your player in frame" — the user adjusted the crop box
+    // T3700: crop_adjusted — the user adjusted the crop box
     recordFunnelEvent(FUNNEL_EVENTS.CROP_ADJUSTED);
     // T10010 activation funnel: this handler IS the MANUAL framing path (a user
     // drag placing/positioning the crop box). IDs/bucket only, no PII.
@@ -436,8 +383,7 @@ export function FocusContainer({
         data: { x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin },
         actions: cropPersistActions(selectedProjectId, clipId),
         // Optimistically update clip store so sidebar framing indicator reflects the
-        // change immediately. (crop_data in the store is otherwise only written on
-        // export via saveCurrentClipState.) Store rollback is keyed by clip id — always safe.
+        // change immediately. Store rollback is keyed by clip id — always safe.
         optimistic: callerClipId && {
           apply: (frame, d) => updateClipData(callerClipId, {
             crop_data: [...previousStoreKfs.filter(kf => kf.frame !== frame), { frame, ...d }],
@@ -524,6 +470,15 @@ export function FocusContainer({
     }
   }, [rotation, setRotation, projectClip, projectClipId, selectedProjectId, updateClipData, onUserEdit, setFramingChangedSinceExport]);
 
+  // A trim/detrim save failed: put the trim back in both copies. The store copy
+  // is keyed by the caller's clip; the timeline only if that clip is still open.
+  const rollbackTrim = useCallback((callerClipId, previousTrimRange, previousTrimHistory) => {
+    mirrorSegments(callerClipId, { type: 'trim', trimRange: previousTrimRange });
+    if (latestProjectClipIdRef.current === callerClipId) {
+      restoreTrim(previousTrimRange, previousTrimHistory);
+    }
+  }, [mirrorSegments, restoreTrim]);
+
   /**
    * Coordinated segment trim handler
    *
@@ -536,6 +491,9 @@ export function FocusContainer({
   const handleTrimSegment = useCallback(async (segmentIndex) => {
     if (!duration || segmentIndex < 0 || segmentIndex >= segments.length) return;
 
+    const callerClipId = projectClipId;
+    const previousTrimRange = trimRange;
+    const previousTrimHistory = trimHistory;
     clipHasUserEditsRef.current = true;
 
     const segment = segments[segmentIndex];
@@ -550,6 +508,27 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
+    // Calculate new trim boundaries based on which segment was toggled
+    let newTrimStart = trimRange?.start ?? null;
+    let newTrimEnd = trimRange?.end ?? null;
+
+    if (!isCurrentlyTrimmed) {
+      // We just trimmed this segment
+      if (segment.isFirst) {
+        newTrimStart = segment.end;
+      } else if (segment.isLast) {
+        newTrimEnd = segment.start;
+      }
+    }
+
+    // Mirror what toggleTrimSegment did to the timeline: untrim clears the trim,
+    // trimming an edge segment sets it, anything else leaves it alone.
+    if (isCurrentlyTrimmed) {
+      mirrorSegments(callerClipId, { type: 'trim', trimRange: null });
+    } else if (segment.isFirst || segment.isLast) {
+      mirrorSegments(callerClipId, { type: 'trim', trimRange: { start: newTrimStart ?? 0, end: newTrimEnd ?? duration } });
+    }
+
     // Persist to backend with error recovery
     const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
@@ -557,21 +536,6 @@ export function FocusContainer({
 
       // Virtual trim: no crop keyframe gestures are persisted. Only the trim range
       // changes; crop keyframes are preserved as-is for reversible detrim.
-
-      // Calculate new trim boundaries based on which segment was toggled
-      let newTrimStart = trimRange?.start ?? null;
-      let newTrimEnd = trimRange?.end ?? null;
-
-      if (!isCurrentlyTrimmed) {
-        // We just trimmed this segment
-        if (segment.isFirst) {
-          newTrimStart = segment.end;
-        } else if (segment.isLast) {
-          newTrimEnd = segment.start;
-        }
-      } else {
-        // We just untrimmed this segment - handled by detrim handlers
-      }
 
       if (newTrimStart !== null || newTrimEnd !== null) {
         const result = await focusActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newTrimEnd ?? duration);
@@ -583,22 +547,10 @@ export function FocusContainer({
 
       if (hasError) {
         toast.error(ERROR_COPY.SAVE_TRIM);
-      }
-
-      // Update store so sidebar framing indicator reflects trim
-      if (projectClipId) {
-        updateClipData(projectClipId, {
-          segments_data: ({
-            boundaries: segmentBoundaries,
-            segmentSpeeds: segmentSpeeds,
-            trimRange: !isCurrentlyTrimmed
-              ? { start: newTrimStart ?? 0, end: newTrimEnd ?? duration }
-              : trimRange,
-          })
-        });
+        rollbackTrim(callerClipId, previousTrimRange, previousTrimHistory);
       }
     }
-  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, toggleTrimSegment, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [duration, segments, toggleTrimSegment, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, trimRange, trimHistory, mirrorSegments, rollbackTrim]);
 
   /**
    * Coordinated de-trim handler for start
@@ -613,6 +565,7 @@ export function FocusContainer({
     const lastStartOp = [...trimHistory].reverse().find(op => op.type === 'start');
     const newStartTime = lastStartOp?.previousRange?.start ?? 0;
     const currentEndTime = trimRange.end ?? duration;
+    const callerClipId = projectClipId;
 
     // Virtual trim: crop keyframes are NOT touched on detrim. The start permanent
     // stays at frame 0 and the end permanent at totalFrames; widening trimRange.start
@@ -622,16 +575,20 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
+    // After detrimStart, start restores to previous level (or 0)
+    const hasStartTrim = newStartTime > 0.01;
+    const hasEndTrim = currentEndTime < duration - 0.01;
+    mirrorSegments(callerClipId, {
+      type: 'trim',
+      trimRange: (hasStartTrim || hasEndTrim) ? { start: newStartTime, end: currentEndTime } : null,
+    });
+
     // Persist to backend with error recovery
     const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       let hasError = false;
 
       // Virtual trim: no crop keyframe gestures on detrim — only the trim range changes.
-
-      // After detrimStart, start restores to previous level (or 0)
-      const hasStartTrim = newStartTime > 0.01;
-      const hasEndTrim = currentEndTime < duration - 0.01;
       if (hasStartTrim || hasEndTrim) {
         const result = await focusActions.setTrimRange(selectedProjectId, clipId, newStartTime, currentEndTime);
         if (!result.success) {
@@ -649,22 +606,10 @@ export function FocusContainer({
 
       if (hasError) {
         toast.error(ERROR_COPY.SAVE_TRIM);
-      }
-
-      // Sync segments to store so sidebar indicator updates
-      if (projectClipId) {
-        updateClipData(projectClipId, {
-          segments_data: ({
-            boundaries: segmentBoundaries,
-            segmentSpeeds: segmentSpeeds,
-            trimRange: (hasStartTrim || hasEndTrim)
-              ? { start: newStartTime, end: currentEndTime }
-              : null,
-          })
-        });
+        rollbackTrim(callerClipId, trimRange, trimHistory);
       }
     }
-  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, trimHistory, duration, detrimStart, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, mirrorSegments, rollbackTrim]);
 
   /**
    * Coordinated de-trim handler for end
@@ -678,6 +623,7 @@ export function FocusContainer({
     // Determine the NEW end after detrim: previous trim level, or full duration
     const lastEndOp = [...trimHistory].reverse().find(op => op.type === 'end');
     const newEndTime = lastEndOp?.previousRange?.end ?? duration;
+    const callerClipId = projectClipId;
 
     // Virtual trim: crop keyframes are NOT touched on detrim. The end permanent
     // stays at totalFrames; widening trimRange.end simply reveals keyframes that
@@ -687,17 +633,21 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
+    // After detrimEnd, trim end restores to previous level (or full duration)
+    const newTrimStart = trimRange.start;
+    const hasStartTrim = newTrimStart && newTrimStart > 0;
+    const hasEndTrim = newEndTime < duration - 0.01;
+    mirrorSegments(callerClipId, {
+      type: 'trim',
+      trimRange: (hasStartTrim || hasEndTrim) ? { start: newTrimStart ?? 0, end: newEndTime } : null,
+    });
+
     // Persist to backend with error recovery
     const clipId = projectClip?.id;
     if (selectedProjectId && clipId) {
       let hasError = false;
 
       // Virtual trim: no crop keyframe gestures on detrim — only the trim range changes.
-
-      // After detrimEnd, trim end restores to previous level (or full duration)
-      const newTrimStart = trimRange.start;
-      const hasStartTrim = newTrimStart && newTrimStart > 0;
-      const hasEndTrim = newEndTime < duration - 0.01;
       if (hasStartTrim || hasEndTrim) {
         const result = await focusActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newEndTime);
         if (!result.success) {
@@ -715,22 +665,10 @@ export function FocusContainer({
 
       if (hasError) {
         toast.error(ERROR_COPY.SAVE_TRIM);
-      }
-
-      // Sync segments to store so sidebar indicator updates
-      if (projectClipId) {
-        updateClipData(projectClipId, {
-          segments_data: ({
-            boundaries: segmentBoundaries,
-            segmentSpeeds: segmentSpeeds,
-            trimRange: (hasStartTrim || hasEndTrim)
-              ? { start: newTrimStart ?? 0, end: newEndTime }
-              : null,
-          })
-        });
+        rollbackTrim(callerClipId, trimRange, trimHistory);
       }
     }
-  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, trimHistory, duration, detrimEnd, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, mirrorSegments, rollbackTrim]);
 
   /**
    * Handle keyframe click (seek to keyframe time)
@@ -925,18 +863,7 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Sync to clip store so sidebar indicator updates
-    // Note: segmentBoundaries won't have the new value yet (React batching), so build manually
-    if (callerClipId) {
-      const updatedBoundaries = [...segmentBoundaries, time].sort((a, b) => a - b);
-      updateClipData(callerClipId, {
-        segments_data: ({
-          boundaries: updatedBoundaries,
-          segmentSpeeds: segmentSpeeds,
-          trimRange: trimRange,
-        })
-      });
-    }
+    mirrorSegments(callerClipId, { type: 'split', time });
 
     // Persist to backend with error recovery
     const clipId = projectClip?.id;
@@ -944,21 +871,13 @@ export function FocusContainer({
       const result = await focusActions.splitSegment(selectedProjectId, clipId, time);
       if (!result.success && projectClipId === callerClipId) {
         removeSegmentBoundary(time);
-        if (callerClipId) {
-          updateClipData(callerClipId, {
-            segments_data: ({
-              boundaries: segmentBoundaries,
-              segmentSpeeds: segmentSpeeds,
-              trimRange: trimRange,
-            })
-          });
-        }
+        mirrorSegments(callerClipId, { type: 'unsplit', time });
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
         toastEditFailed(ERROR_COPY.SPLIT_SECTION, result.error);
       }
     }
-  }, [addSegmentBoundary, removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
+  }, [addSegmentBoundary, removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, mirrorSegments]);
 
   /**
    * Handle segment boundary remove
@@ -970,17 +889,7 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Sync to clip store so sidebar indicator updates
-    if (callerClipId) {
-      const updatedBoundaries = segmentBoundaries.filter(b => b !== time);
-      updateClipData(callerClipId, {
-        segments_data: ({
-          boundaries: updatedBoundaries,
-          segmentSpeeds: segmentSpeeds,
-          trimRange: trimRange,
-        })
-      });
-    }
+    mirrorSegments(callerClipId, { type: 'unsplit', time });
 
     // Persist to backend with error recovery
     const clipId = projectClip?.id;
@@ -988,32 +897,13 @@ export function FocusContainer({
       const result = await focusActions.removeSegmentSplit(selectedProjectId, clipId, time);
       if (!result.success && projectClipId === callerClipId) {
         addSegmentBoundary(time);
-        if (callerClipId) {
-          updateClipData(callerClipId, {
-            segments_data: ({
-              boundaries: segmentBoundaries,
-              segmentSpeeds: segmentSpeeds,
-              trimRange: trimRange,
-            })
-          });
-        }
+        mirrorSegments(callerClipId, { type: 'split', time });
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
         toastEditFailed(ERROR_COPY.REMOVE_SPLIT, result.error);
       }
     }
-  }, [removeSegmentBoundary, addSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
-
-  // Helper: sync current segment state to clip store so sidebar indicator updates
-  const syncSegmentsToStore = useCallback(() => {
-    if (!projectClipId) return;
-    const segmentState = {
-      boundaries: segmentBoundaries,
-      segmentSpeeds: segmentSpeeds,
-      trimRange: trimRange,
-    };
-    updateClipData(projectClipId, { segments_data: segmentState });
-  }, [projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
+  }, [removeSegmentBoundary, addSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, mirrorSegments]);
 
   /**
    * Handle segment speed change
@@ -1027,24 +917,13 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // T3700: quest_2 "Add a slow-mo moment" — completes ONLY for a genuinely slowed
+    // T3700: speed_segment_created — recorded ONLY for a genuinely slowed
     // segment (speed < 1x). A bare split, or a speed-up, must not satisfy it.
     if (speed < 1) {
       recordFunnelEvent(FUNNEL_EVENTS.SPEED_SEGMENT_CREATED);
     }
 
-    // Optimistically update store so sidebar framing indicator reflects the change
-    // Note: segmentSpeeds won't have the new value yet (React batching), so build it manually
-    if (callerClipId) {
-      const updatedSpeeds = { ...segmentSpeeds, [segmentIndex]: speed };
-      updateClipData(callerClipId, {
-        segments_data: ({
-          boundaries: segmentBoundaries,
-          segmentSpeeds: updatedSpeeds,
-          trimRange: trimRange,
-        })
-      });
-    }
+    mirrorSegments(callerClipId, { type: 'speed', index: segmentIndex, speed });
 
     // Persist to backend with error recovery
     const clipId = projectClip?.id;
@@ -1052,60 +931,13 @@ export function FocusContainer({
       const result = await focusActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed);
       if (!result.success && projectClipId === callerClipId) {
         setSegmentSpeed(segmentIndex, previousSpeed);
-        if (callerClipId) {
-          updateClipData(callerClipId, {
-            segments_data: ({
-              boundaries: segmentBoundaries,
-              segmentSpeeds: segmentSpeeds,
-              trimRange: trimRange,
-            })
-          });
-        }
+        mirrorSegments(callerClipId, { type: 'speed', index: segmentIndex, speed: previousSpeed });
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
         toastEditFailed(ERROR_COPY.SET_SPEED, result.error);
       }
     }
-  }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
-
-  /**
-   * Get filtered keyframes for export (handles trim range)
-   */
-  const getFilteredKeyframesForExport = useMemo(() => {
-    const allKeyframes = getKeyframesForExport();
-    const segmentData = getSegmentExportData();
-
-    if (!segmentData || (!segmentData.trim_start && !segmentData.trim_end)) {
-      return allKeyframes;
-    }
-
-    const trimStart = segmentData.trim_start || 0;
-    const trimEnd = segmentData.trim_end || duration || Infinity;
-
-    let lastBeforeTrimStart = null;
-    let firstAfterTrimEnd = null;
-    const keyframesInRange = [];
-
-    allKeyframes.forEach(kf => {
-      if (kf.time >= trimStart && kf.time <= trimEnd) {
-        keyframesInRange.push(kf);
-      } else if (kf.time < trimStart) {
-        if (!lastBeforeTrimStart || kf.time > lastBeforeTrimStart.time) {
-          lastBeforeTrimStart = kf;
-        }
-      } else if (kf.time > trimEnd) {
-        if (!firstAfterTrimEnd || kf.time < firstAfterTrimEnd.time) {
-          firstAfterTrimEnd = kf;
-        }
-      }
-    });
-
-    return [
-      ...(lastBeforeTrimStart ? [lastBeforeTrimStart] : []),
-      ...keyframesInRange,
-      ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
-    ];
-  }, [getKeyframesForExport, getSegmentExportData, duration]);
+  }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentSpeeds, mirrorSegments]);
 
   // Effect: Auto-cleanup trim keyframes when trimRange is cleared
   const prevTrimRangeRef = useRef(undefined);
@@ -1141,15 +973,12 @@ export function FocusContainer({
     clipHasUserEditsRef.current = false;
   }, [projectClipId]);
 
-  // NOTE: Auto-save effect removed - gesture-based actions save immediately on each user action
-  // saveCurrentClipState is still available for explicit saves (export only)
+  // T4400: every edit is saved by its own gesture handler above. There is no
+  // full-state save: the render reads what those gestures wrote.
 
   return {
     // Derived state
-    currentCropState,
-    hasFramingEdits,
     clipsWithCurrentState,
-    getFilteredKeyframesForExport,
 
     // T5780: live output-length indicator (derived at render, never persisted)
     clipEffectiveDuration,
@@ -1174,88 +1003,9 @@ export function FocusContainer({
     handleSetRotation,
     handleUndoFraming,
 
-    // Persistence
-    saveCurrentClipState,
     clipHasUserEditsRef,
   };
 }
 
-
-/**
- * FocusTimeline - Timeline component for Framing mode
- */
-export function FocusTimeline({
-  videoRef,
-  videoUrl,
-  metadata,
-  currentTime,
-  duration,
-  keyframes,
-  framerate,
-  segments,
-  trimRange,
-  onKeyframeClick,
-  onKeyframeDelete,
-  onAddSplit,
-  onRemoveSplit,
-  onTrimSegment,
-  onDetrimStart,
-  onDetrimEnd,
-  onSegmentSpeedChange,
-  selectedLayer,
-  onLayerSelect,
-  selectedCropKeyframeIndex,
-  onSeek,
-  zoom,
-  panOffset,
-  visualDuration,
-  sourceTimeToVisualTime,
-  visualTimeToSourceTime,
-  timelineZoom,
-  onTimelineZoomByWheel,
-  timelineZoomControls, // T10930: {zoomIn, zoomOut, resetZoom} -> TimelineZoomChip
-  timelineScale,
-  timelineScrollPosition,
-  onTimelineScrollPositionChange,
-  isPlaying,
-}) {
-  return (
-    <FocusMode
-      videoRef={videoRef}
-      videoUrl={videoUrl}
-      metadata={metadata}
-      currentTime={currentTime}
-      duration={duration}
-      keyframes={keyframes}
-      framerate={framerate}
-      segments={segments}
-      trimRange={trimRange}
-      onKeyframeClick={onKeyframeClick}
-      onKeyframeDelete={onKeyframeDelete}
-      onAddSplit={onAddSplit}
-      onRemoveSplit={onRemoveSplit}
-      onTrimSegment={onTrimSegment}
-      onDetrimStart={onDetrimStart}
-      onDetrimEnd={onDetrimEnd}
-      onSegmentSpeedChange={onSegmentSpeedChange}
-      selectedLayer={selectedLayer}
-      onLayerSelect={onLayerSelect}
-      selectedCropKeyframeIndex={selectedCropKeyframeIndex}
-      onSeek={onSeek}
-      zoom={zoom}
-      panOffset={panOffset}
-      visualDuration={visualDuration}
-      sourceTimeToVisualTime={sourceTimeToVisualTime}
-      visualTimeToSourceTime={visualTimeToSourceTime}
-      timelineZoom={timelineZoom}
-      onTimelineZoomByWheel={onTimelineZoomByWheel}
-      timelineZoomControls={timelineZoomControls}
-      timelineScale={timelineScale}
-      timelineScrollPosition={timelineScrollPosition}
-      onTimelineScrollPositionChange={onTimelineScrollPositionChange}
-      isPlaying={isPlaying}
-    />
-  );
-}
 
 export default FocusContainer;
