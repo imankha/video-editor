@@ -59,7 +59,7 @@ This gives three separate ways to notice that a piece has the two teams the wron
 - **Direction.** Within one period, every piece should report the same direction for the same team. A piece that disagrees with the others around it is suspect. This does not assume the teams change ends at half time, so it still works when the camera moves to the other side of the field.
 - **The overlap.** The same 30 seconds are described by two pieces. If the earlier piece credits an attack to one team and the later piece credits the same attack to the other, one of them is flipped.
 
-A suspect piece is watched again once. If it still disagrees, the result records it, and the plays from that piece are marked so the app can warn the parent (the per-play "Wrong team" button in T16190 is the parent's fix).
+A suspect piece is watched again once, with a second, narrower question written for this job (owner, 2026-11-14). The first question asks the model to find and describe every play; this one asks only who is who, and is given everything that helps: the two kit colours in words, which way each team attacks in the pieces before and after, the plays from the two overlaps with the team each neighbour credited, and the suspect piece's own list of plays with their times and one-line descriptions. The answer says, for each listed play, which team did it, or that it cannot tell. A play the answer gives to the other team is turned over to that team's side (the stored result describes every play for both teams, which is what the "Wrong team" button in T16190 uses). A play it cannot tell is marked, so the app can treat it as doubtful. The owner reads this second question and its answers in the output files like the first, and it has its own version number.
 
 The prototype tries two wordings and the owner picks one from the outputs. In the first, the piece is told only the colours and reports the direction it sees. In the second, the piece is also told which way each team attacked in the first period and that teams change ends between periods. The first keeps the direction as an independent check; the second may help the model keep the teams straight. Each is run on the same pieces, twice, and the number of pieces and plays with the teams mixed up is counted for both.
 
@@ -72,7 +72,8 @@ Each run writes one folder, and the session shows the owner these files:
 - the raw answer for each piece;
 - the joined result, in the format the server will store;
 - the joining report from step 3;
-- a team check: for each piece, the colours and directions it reported, what the neighbouring pieces said, and whether the overlap twins agreed;
+- a team check: for each piece, the colours and directions it reported, what the neighbouring pieces said, and whether the overlap twins agreed; for a suspect piece, the second question as sent, its answer, and which plays were turned over or marked;
+- six candidate example plays for the offer dialog (T16170), each with its still frame, tags, rating and coaching note, for the owner to choose from;
 - a cost table: tokens and dollars per piece, and the projected cost of a 90-minute game;
 - a list of what changed in the prompt and format since the previous run, with the owner's comments on that run.
 
@@ -96,7 +97,9 @@ Asking each piece "which way did this team attack in the first half" was ruled o
 
 ## Ruling
 
-(Empty until the owner approves a version. Record here: the approved version number, the chosen direction wording, whether the model's own cut-off flag is used, and the date.)
+Ruled on 2026-11-14, before the first run: a cut-off play with no whole version is kept only when it is rated 4 or 5; both direction wordings are run on the same video and the owner picks from the counts; a suspect piece gets the second question described above.
+
+(Still to record when the owner approves a version: the version numbers of both questions, the chosen direction wording, whether the model's own cut-off flag is used, the example plays chosen for the offer, and the date.)
 
 ## For the implementer
 
@@ -120,6 +123,7 @@ Asking each piece "which way did this team attack in the first half" was ruled o
 - Joined result gains `teams.team_N.attacks_first_period` (`left`, `right`, `unknown`), `ends_changed_at_s` (number or null), `windows[]` (`idx`, `start_s`, `end_s`, `attacking` per team, `teams_suspect`), and per play `source_window`, `stitched`, `teams_suspect`.
 - Twin matching runs after times are converted to seconds on the video's clock and after the from-zero shift (T16150 step 4). Use intersection over union at 0.5 and containment at 0.7 as named constants.
 - Slot agreement between overlap twins: compare which slot holds the higher relevance and the tag sets per slot; mirrored means both the relevance order and the tag sets match better when one side's slots are swapped. Log the score; do not auto-swap a piece on this alone before the owner has seen how often it fires.
+- Settle call (`SETTLE_TEAMS` and `SETTLE_TEAMS_SCHEMA` in `prompts.py`, own `SETTLE_VERSION`): same file and window offsets as the suspect piece; input text carries colours, neighbours' `attacking`, the overlap plays with their credited slot, and the piece's plays as `{index, start, end, summary}`. Output per play: `team` (`team_0`, `team_1`, `cannot_tell`). Joined result gains per play `settled_by` (`none`, `settle_call`) and keeps `teams_doubtful` for `cannot_tell`. To test it without waiting for a real mix-up, swap the slots of one recorded piece by hand and run the settle call on it. Record its cost per call in the cost table.
 - Direction check is a majority vote among the pieces between two changes of ends; `unclear` does not vote. Fewer than three voting pieces in a period means no verdict.
 - Test video: `videos/breakers-20min.mp4` has no change of ends. Cut a second 20-minute file across half time from a full game under `formal annotations/` (the free key takes files up to 2 GB), so the direction logic sees a real change.
 - The owner turned on billing for the Google key on 2026-11-14, so the free tier's limit of 20 requests a day no longer applies. One run of a 20-minute file is 4 calls; the two-wording comparison run twice is 16. Confirm the first run is billed (no daily-limit error) before planning a full-game run.
@@ -136,6 +140,8 @@ Asking each piece "which way did this team attack in the first half" was ruled o
 - [ ] `test_merge_windows.py` passes every case listed in the technical notes.
 - [ ] In the approved run, no joined play ends within two seconds of a line between pieces unless marked stitched, and no two joined plays share more than half their time.
 - [ ] The joined result names each team's kit colour and the direction it attacked in the first period, and on the file cut across half time it records when the teams changed ends.
+- [ ] The second question was run on at least one piece with its teams swapped by hand and one real suspect piece if any occurred; its answers and cost are in the output files, and the owner has approved its wording.
+- [ ] Six candidate example plays with still frames were shown to the owner, and the chosen ones are recorded under Ruling.
 - [ ] Both direction wordings were run twice on the same pieces; the counts of pieces and plays with the teams mixed up are in the change list, and the owner's choice is recorded.
 - [ ] A person compared every overlap in the approved run with the video and listed any play that was cut, doubled or wrongly stitched.
 - [ ] The projected cost of a 90-minute game from the approved run is recorded; if it is above $3.39, the owner has been told before the version is approved.

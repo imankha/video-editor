@@ -9,7 +9,7 @@ Today a parent who uploads a game (the full match video) has to scrub up to nine
 **Started:** not started
 **Impact:** 9 **Complexity:** 8 **Priority:** 1.1
 **Placement:** runs before the Referral programme (owner, 2026-11-12).
-**Design:** progress, team choice, AI plays, tagging and the sport chooser were approved by the owner on 2026-11-12 (review page https://claude.ai/artifact/AfoPPibjtfSS3HKx5ktoh9). The offer dialog, the short-of-credits flow, starting from a game, and sharing (UX-FEEDBACK.md sections 1, 2, 4 and 11) were drawn on 2026-11-14 and wait for the owner's approval; the review page does not show them.
+**Design:** progress, team choice, AI plays, tagging and the sport chooser were approved by the owner on 2026-11-12 (review page https://claude.ai/artifact/AfoPPibjtfSS3HKx5ktoh9). The offer dialog, the short-of-credits flow, starting from a game, and sharing (UX-FEEDBACK.md sections 1, 2, 4 and 11) were drawn on 2026-11-14 and the owner ruled on them the same day (decisions 35 to 44; review page https://claude.ai/artifact/Xm83MkV831gV5xMwJmvzz7). Three things still wait for the owner: the look of the free-share panel and the example carousel, the UX designer's proposal for where AI Coach sits on the Annotate page, and what a parent sees on a play whose team the analysis could not settle.
 
 ## Goal
 
@@ -23,7 +23,7 @@ From the request (2026-11-12, except where a later date is given):
 2. **Honest progress.** The screen says what is really happening and how much is really done. No invented percentages.
 3. **Sold as coach-level analysis.** The pitch is a coach's eye on every play, not "auto-clipping".
 4. **Out of credits is handled.** A parent who is short can buy credits on the spot and the upload carries on; they can also continue without the AI option.
-5. **Start later.** A game without AI Coach offers it from the game itself, for the same price: a card on the game's page next to Mark play, the game's menu, and the empty play list. All open the same dialog as at upload.
+5. **Start later.** A game without AI Coach offers it from the game itself, for the same price, through the same dialog as at upload. It is reachable on the game's page and from the game's menu, but it is not one of the page's main action cards (decision 40).
 6. **Profitable, but not very.** The price covers the model cost with a modest margin on every credit pack.
 7. **Analyse once.** The result is stored against the video itself and nothing is computed twice. A parent who uploads the same video on their own, without a share, pays the same price and gets the stored result at once.
 8. **One payment covers the team** (owner, 2026-11-14). When a parent who has AI Coach on a game shares that game, the receiving family gets the full AI Coach on it for free: the AI plays, the tagging screen to find their own child, the "Wrong team" button and the team switch. They can share it on. The app says "Pay once. Share it with your whole team for free." wherever AI Coach is sold and wherever a game is shared. A receiver costs us nothing, because the analysis already exists, and is a family that has now used the product (T16202).
@@ -51,8 +51,21 @@ From the design review:
 
 For the name and the teams (owner, 2026-11-14):
 
-33. **The result says which way each team attacked.** At the top of the stored result, next to each team's kit colour, is the direction that team attacked in the first period, as the camera saw it. Each window reports the direction it sees, and the joining works out the rest. Windows sometimes disagree about which team is which, and the direction is a second, independent sign of that alongside the colour; the overlap is a third, because the same 30 seconds are described twice. A window that disagrees with its neighbours is watched again, and if doubt remains its plays are marked so the parent is warned. The team chooser also shows the direction, as a second way for the parent to recognise their team.
+33. **The result says which way each team attacked.** At the top of the stored result, next to each team's kit colour, is the direction that team attacked in the first period, as the camera saw it. Each window reports the direction it sees, and the joining works out the rest. Windows sometimes disagree about which team is which, and the direction is a second, independent sign of that alongside the colour; the overlap is a third, because the same 30 seconds are described twice. A window that disagrees with its neighbours is watched again with a second, narrower question (decision 42), and a play whose team is still in doubt is marked. The team chooser also shows the direction, as a second way for the parent to recognise their team.
 34. **Called AI Coach.** That is the name on every screen. "Coach-level analysis of the whole game" is its one-line promise.
+
+From the owner's review of the open choices (2026-11-14):
+
+35. **The offer carries no small print.** The "Good to know" paragraph, the line about Google's Gemini service and the note about credits being set aside are removed from the offer. What they described still happens; the terms page says where the video is analysed.
+36. **The free-share promise looks like a celebration.** It keeps its own panel under the benefit lines, and the plain tinted box was too quiet.
+37. **Examples rotate.** A bank of real AI plays, each with its picture and coaching note, is kept for each sport. The offer shows the bank for the sport being analysed and moves to the next example every 5 seconds. Soccer starts with six that the owner picks from the first approved prototype run.
+38. **Three "Not now" answers in a row** stop the offer opening by itself. Buying AI Coach once turns it back on.
+39. **Buying the missing credits from the offer also adds AI Coach,** with no second tap.
+40. **Not a main action on the game's page.** A parent who skipped AI Coach at upload has shown it is a lower priority, so on the Annotate page it sits below the four main action cards. The UX designer proposes one quiet line under the cards, "Let AI Coach mark the plays", with the game's menu as a second door; once AI Coach is bought, its progress, the team choice and "Tag players" appear in the status card above the action cards, which is where a paid-for thing belongs. This proposal waits for the owner.
+41. **A share works as it does today.** The receiving family gets the sharer's team plays, cleaned up by the sharer and not specific to the sharer's own child, and AI Coach travels with them. There is no separate fresh set. Tags the sharer made for the receiver's child arrive as suggestions. Receivers can share on. Families the game was shared with before AI Coach was bought get it automatically, with an email. A receiving family is sold AI Coach with one quiet line after their first pass and one line in their next upload's offer, and no email.
+42. **A second question settles a suspect window.** A window that disagrees with its neighbours about which team is which is watched again once, with a narrower question that asks only who is who and is given everything that helps: the colours, the neighbours' directions, the plays from the overlaps and the window's own plays. A play it gives to the other team is turned over; a play it cannot tell is marked. This question goes through the prototype like the first (T16145).
+43. **Joining details.** A cut-off play with no whole version is kept only when it is rated 4 or 5. Both wordings for the attack direction are run on the same video and the owner picks from the counts. The team chooser shows each team's direction.
+44. **The price stays** at 1.5 credits a minute and is looked at again after the first 50 paid games, with their real cost.
 
 For the AI reel builder (owner, 2026-11-13):
 
@@ -83,13 +96,13 @@ What the prototype task (T16145) measures next, on 20-minute test videos: whethe
 
 **1.5 credits per minute of video, rounded up.** A 90-minute game is 135 credits.
 
-| Pack | Credits | Price | We keep per credit after card fees | 90-minute game earns | Model cost | Margin |
+| Pack (label in the app) | Credits | Price | We keep per credit after card fees | 90-minute game earns | Model cost | Margin |
 |---|---|---|---|---|---|---|
-| One Game | 150 | $6.99 | 4.3 cents | $5.84 | $2.95 to $3.39 | about 42% |
+| Starter | 150 | $6.99 | 4.3 cents | $5.84 | $2.95 to $3.39 | about 42% |
 | Popular | 340 | $12.99 | 3.6 cents | $4.89 | $2.95 to $3.39 | about 31% |
-| Season | 1000 | $29.99 | 2.9 cents | $3.89 | $2.95 to $3.39 | about 13% |
+| Best value | 1000 | $29.99 | 2.9 cents | $3.89 | $2.95 to $3.39 | about 13% |
 
-The upper cost of $3.39 allows 15% for windows that have to be watched again, and the margin column is worked out against it. At 1 credit a minute the Season pack would lose money on every game, and at 2 credits a 90-minute game (180 credits) no longer fits in the One Game pack, so 1.5 is the lowest round number that is profitable on every pack and still fits "one pack, one game" with room for storage. Each game is paid for once: families who receive it through a share pay nothing, so the table is the whole margin on a game and there is rarely a second sale to lift it. What a free receiver is worth is measured instead (T16202): how many are new accounts, and how many buy AI Coach for a game of their own. A new account's 88 free credits buy about 58 minutes of analysis that earns nothing, up to about $2 of model cost per new account. The rate lives in the pricing file, not in code.
+The upper cost of $3.39 allows 15% for windows that have to be watched again, and the margin column is worked out against it. The app describes a pack by roughly how many highlights it covers and never promises a game or a season, so the offer names a pack only by its credits and price. At 1 credit a minute the largest pack would lose money on every game, and at 2 credits a 90-minute game (180 credits) no longer fits in the smallest pack, so 1.5 is the lowest round number that is profitable on every pack and lets the smallest pack cover one game with room for storage. The owner will look at the price again after the first 50 paid games (decision 44). Each game is paid for once: families who receive it through a share pay nothing, so the table is the whole margin on a game and there is rarely a second sale to lift it. What a free receiver is worth is measured instead (T16202): how many are new accounts, and how many buy AI Coach for a game of their own. A new account's 88 free credits buy about 58 minutes of analysis that earns nothing, up to about $2 of model cost per new account. The rate lives in the pricing file, not in code.
 
 ## How it works (locked unless a task file says otherwise)
 
@@ -103,8 +116,8 @@ The upper cost of $3.39 allows 15% for windows that have to be watched again, an
 - **Soccer first.** Only soccer has been tried. The prompt takes its tag list from the sport, and other sports are switched on one at a time.
 - **Safety switches.** A kill switch, a daily spend cap, a per-account daily cap and a maximum video length.
 - **Feedback.** Every state, every string and every layout is defined in [UX-FEEDBACK.md](UX-FEEDBACK.md), written by the UX designer and approved by the owner. Its section 9 holds the owner's rulings and wins where it differs from earlier text. UI tasks build from it and do not invent copy.
-- **Sharing.** A share of a game with AI Coach carries AI Coach. The receiver gets a fresh set of AI plays for the sharer's team from the stored result, so nothing the sharer moved or removed is missing.
-- **Disclosure.** Game video of children is sent to Google's Gemini service. The offer carries one plain line saying so, and the terms page gains a sentence (T16170).
+- **Sharing.** A share of a game with AI Coach carries AI Coach. The receiver gets the sharer's team plays as the share delivers them today, with what the AI wrote kept on each AI play. A game shared before the purchase is brought up to date for its receivers when the AI plays are added.
+- **Disclosure.** Game video of children is sent to Google's Gemini service. The terms page gains a sentence saying so (T16170). The offer does not carry the line (decision 35).
 
 ## Tasks (dependency order)
 
@@ -126,8 +139,10 @@ T16130 has no dependency and can ship on its own. T16145 is done with the owner 
 ## Needed from the owner
 
 - Read the prototype's output files in T16145 and approve a version of the prompt and format.
-- Approve the screens drawn on 2026-11-14 (UX-FEEDBACK.md sections 1, 2, 4 and 11) before T16170, T16180 and T16202 are built.
-- Choose the example play shown in the offer.
+- Choose the look of the free-share panel and the example carousel (T16170).
+- Approve or change the UX designer's proposal for where AI Coach sits on the Annotate page (T16180).
+- Rule on what a parent sees on a play whose team the analysis could not settle (T16190).
+- Choose six soccer example plays for the offer from the first approved prototype run.
 
 ## Completion criteria
 

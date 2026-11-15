@@ -23,7 +23,7 @@ There is no price, no charge and no record of who bought an analysis. Without a 
 2. **Quote.** `GET /api/games/analysis-quote?duration_seconds=..&sport=..` (before the game exists, for the offer shown while the upload runs) and `GET /api/games/{id}/analysis-quote`. Returns credits, minutes, balance, shortfall, whether a stored result already exists for this video, whether one is running, and whether the option is available (with the reason if not: kill switch, cap, sport not supported, video too long, storage expired).
 3. **Buy.** `POST /api/games/{id}/analysis` reserves the credits, records the purchase and asks T16150 for the analysis. On ready, the reservation is confirmed, whatever the number of plays found. On failure, it is released. The parent can cancel free of charge until the upload finishes; once the analysis has started there is no cancel. A stored result confirms immediately. Short balance returns the existing 402 with required and balance.
 4. **Once per parent per game.** A second buy of the same game by the same profile returns the existing purchase and charges nothing. Changing team later (T16190) is free.
-5. **Read-out for the owner.** An admin table: per analysis, model cost in dollars, number of buyers, credits charged, and the credits valued at the Season pack rate after card fees (the most cautious figure). Totals for the last 30 days, with the share paid from free credits shown separately. T16202 adds, per analysis, the number of families who received it free.
+5. **Read-out for the owner.** An admin table: per analysis, model cost in dollars, number of buyers, credits charged, and the credits valued at the rate of the largest pack (1000 credits for $29.99) after card fees, which is the most cautious figure. Totals for the last 30 days, with the share paid from free credits shown separately. T16202 adds, per analysis, the number of families who received it free.
 6. **Measure.** `ai_analysis_purchased` and `ai_analysis_ready` as Journey milestones with the sport in context.
 
 ## Why this and not something else
@@ -47,7 +47,7 @@ A flat price per game was ruled out because a 25-minute small-sided game would p
 ### Technical Notes
 - `recover_orphaned_reservations` must know about analysis reservations so a job lost for good releases its credits.
 - The credit migration gate (`credit_migration_state`) returns 503 on mutations while closed; the buy endpoint follows the same rule.
-- T13310 removed the dollar value of a credit from the code. The read-out computes its cautious rate from the Season pack in `pricing.json` and a card-fee constant; it is an admin estimate, never shown to parents.
+- T13310 removed the dollar value of a credit from the code. The read-out computes its cautious rate from the largest pack in `pricing.json` (key `best_value`) and a card-fee constant; it is an admin estimate, never shown to parents.
 - Free-credit share: `credit_transactions` already records grants; the read-out estimates the share from the buyer's lifetime granted against purchased credits.
 - Storage keeps its own charge at activation; this task does not touch it.
 

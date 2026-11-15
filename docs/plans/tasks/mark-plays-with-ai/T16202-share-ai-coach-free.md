@@ -11,7 +11,7 @@ AI Coach is the paid option that has a video model watch a game (the full match 
 **Created:** 2026-11-14
 **Updated:** 2026-11-14
 
-Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 9 of 10. Screens and strings: section 11 of [UX-FEEDBACK.md](UX-FEEDBACK.md), which the owner has not yet approved.
+Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 9 of 10. Screens and strings: section 11 of [UX-FEEDBACK.md](UX-FEEDBACK.md). The owner approved the receiving family's card and ruled on the open choices on 2026-11-14 (its section 9, rulings 18 and 19).
 
 ## Problem
 
@@ -29,8 +29,8 @@ The app grows when one family brings in another. The referral programme is block
 ### 2. What the receiving family gets
 
 - The game arrives as it does today, with the Team lane plays the sharer has (the Team lane holds plays that are not specifically one parent's own child).
-- Their copy also gets its own fresh set of AI plays for the sharer's team, taken from the stored analysis. So an AI play the sharer moved to their own athlete, or removed, is still there for the receiver. An AI play that overlaps a play already delivered by the share is not added twice.
-- Every AI play keeps what the AI wrote about each player, so the receiver gets the player chips, the Tag players pass (T16200), the "Wrong team" button and "Switch team" (T16190), all free.
+- The AI plays among them arrive as the sharer left them (owner, 2026-11-14): a play the sharer edited arrives edited, and one the sharer deleted does not arrive. The app's share already works this way for every team play, and the sharer's clean-up is worth passing on. A play the sharer moved to their own athlete is no longer a team play, so it does not travel; that is how sharing works today and it is accepted.
+- Every AI play that travels keeps what the AI wrote about each player, so the receiver gets the player chips, the Tag players pass (T16200), the "Wrong team" button and "Switch team" (T16190), all free.
 - If the sharer tagged the receiver's child as a teammate on some plays, those plays open first in the receiver's Tag players pass with a one-tap suggestion: "Sam says this is Ava". It is a suggestion, never filled in silently.
 - The game shows who it came from: "AI Coach, shared by Sam. Free for you."
 
@@ -53,7 +53,11 @@ All of these open the app's existing game share. This task adds no new way to sh
 - After the receiver has been through the pass once, one quiet line offers AI Coach for their own games with the real rate. The next time they upload a game, the offer names what they already used: "You used AI Coach on a game Sam shared."
 - A receiver without an account creates one to open the game, as with any share today. That sign-up is the growth this task exists for.
 
-### 5. What we measure
+### 5. A game shared before AI Coach was bought
+
+A parent often shares a game first and decides on AI Coach later. When that parent's AI plays are added to the game, every family the game was already shared with gets them, and AI Coach with them, without anyone sharing again (owner, 2026-11-14). Each of those families gets one email, "Sam added AI Coach to the game", with the same button as the share email. The promise is "pay once for the whole team", and a family that got the game early should not see a price for something the team has paid for.
+
+### 6. What we measure
 
 - For each paid analysis: how many families received it, and how many of those were new accounts.
 - For receivers: how many opened the game, how many went through the Tag players pass, how many made a highlight (a finished short clip) from an AI play, and how many bought AI Coach on a game of their own within 30 days.
@@ -91,12 +95,12 @@ On staging, account A buys AI Coach on a game and shares it with account B. B op
 - `.claude/knowledge/annotate.md`, `backend-services.md`
 
 ### Technical Notes
-- T16190 said copies made by sharing drop `ai_source`. That stays true for the plays the share copies; the receiver's AI plays come from a fresh import of the stored analysis, which writes `ai_source` itself. Do not copy the sharer's `ai_source`, flips or position memory.
-- The grant and the import happen when the receiver's copy is materialized, which is a backend lifecycle step with its own contract, not a reactive write from the editor. The import is idempotent by the play's natural key.
+- The share's copy of a team play must carry `ai_source` (materialization copies named columns only today, so add it), including the sharer's flips. Reset `touched` and each mention's `assigned` on the receiver's copy, so the receiver's Tag players pass starts fresh, and do not copy the sharer's position memory. The receiver gets no separate import; "Switch team" on the receiver's copy is the one place the receiver's game reads the stored analysis directly.
+- The grant is written when the receiver's copy is materialized, which is a backend lifecycle step with its own contract, not a reactive write from the editor. Delivering a play twice must not duplicate it: use the play's natural key.
 - The sharer's team key is carried in the share so the receiver starts on the same team; "Switch team" covers a parent of the other team who was sent the game.
 - "Sam says this is Ava": the sharer's teammate tags on Team plays already travel with the share. Match them to the receiver's athlete by the share's own target (the tagged teammate the share was sent for), never by comparing names.
 - A share of a game whose analysis is still running carries the grant; the receiver sees the same progress states.
-- A game shared before the sharer bought AI Coach: when the sharer buys later, earlier receivers are not upgraded automatically at launch; re-sharing grants it. Record how often this happens before building more.
+- A game shared before the sharer bought AI Coach: when the sharer's import (T16190) adds AI plays to the Team lane, deliver them to every existing receiver of that game and write each a grant. First find out whether the existing share already delivers team plays added after the share; if it does, reuse that path and add only the grant and the email. One email per receiver per game, respecting the email opt-out; event `ai_share_granted` with context `earlier_share`.
 - Events: `ai_share_granted` (context: new account or existing), `ai_share_opened`, `ai_share_tag_pass_opened`, `ai_receiver_purchased`.
 - Behind the epic's feature flag.
 
@@ -107,8 +111,9 @@ On staging, account A buys AI Coach on a game and shares it with account B. B op
 
 - [ ] Account A buys AI Coach on a game and shares it with account B; B's copy has the AI plays for A's team with player chips, and B's balance is unchanged.
 - [ ] B can open the Tag players pass, flip a play with "Wrong team" and switch team, all without a charge.
-- [ ] An AI play that A moved to their own athlete is present in B's Team lane.
-- [ ] A play delivered by the share and an AI play covering the same moment appear once in B's game.
+- [ ] B's Team lane holds A's team AI plays as A left them: a play A edited arrives edited, and a play A deleted does not arrive.
+- [ ] Sharing the same game with B a second time adds no play twice.
+- [ ] A shares a game with B, then buys AI Coach and picks a team: B's copy gains the AI plays and AI Coach without A sharing again, and B gets exactly one email saying so.
 - [ ] B shares the game with account C, and C gets AI Coach free as well.
 - [ ] Account D uploads the same video with no share and is quoted the full price.
 - [ ] When A tagged B's child on plays before sharing, B's pass opens on those plays with the suggestion naming A, and nothing is assigned until B taps.

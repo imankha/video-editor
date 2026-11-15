@@ -21,7 +21,7 @@ Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 6 of 10. Section 4 of UX-
 
 Build section 4, "Starting on a game already uploaded", of [UX-FEEDBACK.md](UX-FEEDBACK.md), with section 2 for a short balance.
 
-1. **Entry points.** An action card beside Mark play on the Annotate page ("AI Coach"), the game tile menu, and a prompt in the empty play list. All open the offer dialog from T16170.
+1. **Entry points.** The owner ruled on 2026-11-14 that AI Coach is not one of the main action cards on the Annotate page: a parent who skipped it at upload has shown it is a lower priority. The UX designer proposes one quiet line under the four cards, "Let AI Coach mark the plays", and an item in the game tile menu; the empty play list gets no link. Both open the offer dialog from T16170. After the purchase the line is hidden and the status card above the action cards carries the progress, the team choice and "Tag players". This proposal waits for the owner's approval (UX-FEEDBACK.md section 4).
 2. **The dialog.** The same one as at upload, with two differences: there is no upload progress line, and it shows a labelled estimate of how long the analysis takes. If the sport is not set it asks first, with the chooser from T16130. A short balance offers the covering pack and returns to the dialog after payment.
 3. **States.** Has AI Coach already, bought or received through a share: the entry points lead to the team colour step or the Tag players pass, never to a price. Running: they show progress. Stored video expired: the dialog explains that the video must be stored to be analysed and offers the existing extend-storage action. Not available (switched off, daily limit reached, sport not supported, too long): a plain reason.
 4. **After confirm.** The same progress, toast and email as T16170.
@@ -33,7 +33,7 @@ A separate "AI" page listing all games was ruled out: the parent is already look
 
 ## How we will know it worked
 
-A parent opens a game uploaded last month on a phone, taps the AI Coach card, confirms, and sees the same progress as an upload-time purchase.
+A parent opens a game uploaded last month on a phone, taps the AI Coach line under the action cards, confirms, and sees the same progress as an upload-time purchase.
 
 ## For the implementer
 
@@ -46,7 +46,7 @@ A parent opens a game uploaded last month on a phone, taps the AI Coach card, co
 
 ### Technical Notes
 - Quote and buy are T16160's `GET /api/games/{id}/analysis-quote` and `POST /api/games/{id}/analysis`; no backend work is expected beyond the storage-expired reason if the quote does not already carry it.
-- The fresh-game "simplified" layout (T11860) hides extra controls; the new action card must be visible there, since a fresh game is exactly where it matters.
+- The fresh-game "simplified" layout (T11860) hides extra controls; the AI Coach line must be visible there, since a fresh game is exactly where it matters. The line reuses the "Share with tagged teammates" row pattern under the `ActionCard` grid; the grid itself is not changed.
 - A game shared in from another parent who has AI Coach already has it (T16202), so it never shows a price. A game shared in without AI Coach can be analysed like any other; the stored result is keyed on the video, so it is often already there.
 - Confirm is the gesture that buys. Nothing is bought on dialog open.
 - Accepting here resets the "three Not now in a row" count from T16170.
@@ -56,7 +56,7 @@ A parent opens a game uploaded last month on a phone, taps the AI Coach card, co
 
 ## Acceptance Criteria
 
-- [ ] A stored game without AI Coach offers it from the Annotate action card, the tile menu and the empty play list, at 390 px and on desktop.
+- [ ] A stored game without AI Coach offers it from the line under the Annotate action cards and from the tile menu, at 390 px and on desktop; the four action cards are unchanged.
 - [ ] All three open the same dialog as the upload-time offer, without an upload line and with a labelled time estimate.
 - [ ] The dialog shows the same price the server charges for that game.
 - [ ] Confirm starts the analysis and shows the same progress states as an upload-time purchase.
