@@ -69,7 +69,7 @@ describe('T11175 rerouted engagement events', () => {
 
   it('no production code records a quest achievement any more', () => {
     const out = execSync(
-      "git grep -n 'recordAchievement(' -- 'src/**/*.js' 'src/**/*.jsx' ':!*.test.*' ':!src/stores/questStore.js' || true",
+      "git grep -n 'recordAchievement(' -- 'src/**/*.js' 'src/**/*.jsx' ':!*.test.*' || true",
       { cwd: resolve(__dirname, '../..'), encoding: 'utf8' },
     );
     expect(out.trim()).toBe('');

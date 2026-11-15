@@ -17,12 +17,6 @@ vi.mock('../utils/funnelEvents', async (orig) => ({
   ...(await orig()),
   recordFunnelEvent: (...args) => recordFunnelEventSpy(...args),
 }));
-vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: vi.fn() };
-  const useQuestStore = (sel) => (sel ? sel(state) : state);
-  useQuestStore.getState = () => state;
-  return { useQuestStore };
-});
 
 vi.mock('../stores/creditStore', () => {
   const state = { balance: 88, loaded: true, fetchCredits: vi.fn() };

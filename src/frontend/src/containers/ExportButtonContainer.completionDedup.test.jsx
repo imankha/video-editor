@@ -61,7 +61,6 @@ vi.mock('../stores/creditStore', () => ({
     getRequiredCredits: () => 0, setBalance: vi.fn(),
   }),
 }));
-vi.mock('../stores/questStore', () => ({ useQuestStore: h.mockStore({ fetchProgress: vi.fn() }) }));
 vi.mock('../stores/overlayActionStore', () => ({
   useOverlayActionStore: h.mockStore({ failedActions: [], retryFailedOverlayActions: vi.fn() }),
 }));

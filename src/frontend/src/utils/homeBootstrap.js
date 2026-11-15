@@ -17,8 +17,6 @@ export async function runHomeBootstrap({ apiFetch, API_BASE, stores }) {
       stores.useCreditStore.getState().setFromBootstrap(data.credits);
       stores.useProjectsStore.getState().setFromBootstrap(data.projects);
       stores.useGamesDataStore.getState().setFromBootstrap(data.games);
-      stores.useQuestStore.getState().setFromBootstrap(data.quests_progress);
-      stores.useQuestStore.getState().setPanelCollapsed(data.quest_panel_collapsed);
       stores.useGalleryStore.getState().setFromBootstrap(data.downloads);
       // T10250: mirror the clip-upload caps for the "Add Video" pre-flight
       // size check (no-op if the server predates the field).
@@ -40,7 +38,6 @@ export async function runHomeBootstrap({ apiFetch, API_BASE, stores }) {
       stores.useSettingsStore.getState().loadSettings(),
       stores.useProjectsStore.getState().fetchProjects({ reason: 'bootstrap' }),
       stores.useGamesDataStore.getState().fetchGames({ reason: 'bootstrap' }),
-      stores.useQuestStore.getState().fetchProgress(),
       stores.useGalleryStore.getState().fetchCount({ reason: 'bootstrap' }),
     ]);
   }

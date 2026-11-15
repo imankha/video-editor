@@ -30,7 +30,6 @@ vi.mock('../modes/annotate', async (importOriginal) => {
 import apiFetch from '../utils/apiFetch';
 import { AnnotateContainer } from './AnnotateContainer';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { useToastStore } from '../components/shared/Toast';
 
 const flushMicrotasks = () => new Promise((r) => setTimeout(r, 0));
@@ -58,16 +57,11 @@ function baseProps(overrides = {}) {
 }
 
 const authOriginal = useAuthStore.getState();
-const questOriginal = useQuestStore.getState();
 
 describe('AnnotateContainer create-at-tap (T10610)', () => {
   beforeEach(() => {
     apiFetch.mockReset();
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({
-      recordAchievement: vi.fn(),
-      fetchProgress: vi.fn().mockResolvedValue(undefined),
-    });
     // useIsMobile (via AnnotateContainer) needs matchMedia — jsdom has none.
     window.matchMedia = (query) => ({
       matches: false,
@@ -84,7 +78,6 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
 
   afterEach(() => {
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useToastStore.setState({ toasts: [] });
   });
 

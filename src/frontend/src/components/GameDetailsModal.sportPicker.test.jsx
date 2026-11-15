@@ -4,15 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // T12160 (Q9 = B): upload modal 'Sport (for play tags)' row, shown only while the
 // profile sport is no_sport, nothing preselected, written to the profile only on Upload.
 
-const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
 // T12830: submit probes footage; jsdom cannot decode video, so stub the probe.
 vi.mock('../utils/videoMetadata', () => ({ extractVideoMetadata: vi.fn().mockResolvedValue({}) }));
-vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: recordAchievementSpy };
-  const useQuestStore = (sel) => (sel ? sel(state) : state);
-  useQuestStore.getState = () => state;
-  return { useQuestStore };
-});
 
 vi.mock('../stores/creditStore', () => {
   const state = { balance: 88, loaded: true, fetchCredits: vi.fn() };

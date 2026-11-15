@@ -124,7 +124,7 @@ function drive(initialProps) {
 
 describe('OverlayContainer guided-pick wiring (T11570 BLOCKING fix)', () => {
   beforeEach(() => {
-    // recordAchievement fire-and-forgets a real fetch; stub it so an
+    // The funnel beacon fire-and-forgets a real fetch; stub it so an
     // accidental all-picked state in these tests doesn't hit the network.
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
   });

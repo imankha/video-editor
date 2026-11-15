@@ -41,10 +41,8 @@ export default function OverlaySpotlightPanel({
   // T11570: the guided athlete-pick walk's step checklist, replacing the old
   // single-pick "done" copy. `pickProgress` is one bool per detection marker
   // in timeline order (OverlayModeView's own `detectionAssignmentStates(
-  // highlightRegions)` memo — the SAME derivation questStore.
-  // detectionAssignProgress uses, recomputed here rather than read from that
-  // store, so this panel stays presentational/prop-driven with no store
-  // read of its own). `activeStep` is the 1-based marker the guide is
+  // highlightRegions)` memo, passed in so this panel stays
+  // presentational/prop-driven with no store read of its own). `activeStep` is the 1-based marker the guide is
   // currently on (or null).
   pickProgress = [],
   activeStep = null,

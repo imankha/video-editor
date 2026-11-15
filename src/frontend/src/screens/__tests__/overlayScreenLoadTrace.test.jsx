@@ -143,9 +143,6 @@ vi.mock('../../stores/focusStore', () => ({
 vi.mock('../../stores/exportStore', () => ({
   useExportStore: (selector) => selector({ exportingProject: null, dismissExportCompleteToast: vi.fn() }),
 }));
-vi.mock('../../stores/questStore', () => ({
-  useQuestStore: { getState: () => ({ recordAchievement: vi.fn() }) },
-}));
 
 const projectsState = vi.hoisted(() => ({ projects: [] }));
 vi.mock('../../stores/projectsStore', () => {

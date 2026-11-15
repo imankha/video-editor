@@ -398,7 +398,6 @@ async function _clearDataStores() {
   stores.useGalleryStore.getState().reset();
   stores.useSettingsStore.getState().reset();
   stores.useCreditStore.getState().reset();
-  stores.useQuestStore.getState().reset();
   // T11175: once-per-session funnel events count again for the next profile
   // (same scope the quest achievement dedup had). Dynamic import, same cycle reason.
   const { resetFunnelEventSession } = await import('../utils/funnelEvents');
@@ -416,7 +415,6 @@ async function _refetchDataStores() {
   stores.useProjectsStore.getState().fetchProjects();
   stores.useGamesDataStore.getState().fetchGames();
   stores.useCreditStore.getState().fetchCredits();
-  stores.useQuestStore.getState().fetchProgress();
 }
 
 // Selector hooks

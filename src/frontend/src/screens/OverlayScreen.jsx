@@ -1103,7 +1103,7 @@ export function OverlayScreen({
   const wrappedSetHighlightColor = useCallback((color) => {
     track('overlay_settings_change', { field: 'highlightColor', value: color }, { debugOnly: true });
     setHighlightColor(color);
-    // T3700: quest_3 "Pick your highlight color"
+    // T3700: overlay_color_set funnel event
     recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_COLOR_SET);
     setOverlayChangedSinceExport(true);
     if (!canSyncActions) return;
@@ -1152,7 +1152,7 @@ export function OverlayScreen({
   const wrappedSetHighlightShape = useCallback((val) => {
     track('overlay_settings_change', { field: 'highlightShape', value: val }, { debugOnly: true });
     setHighlightShape(val);
-    // T3700: quest_3 "Choose the spotlight shape" (Body/Ground)
+    // T3700: overlay_shape_set funnel event (Body/Ground)
     recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_SHAPE_SET);
     if (canSyncActions) {
       dispatchOverlayAction('setHighlightShape', () => overlayActions.setHighlightShape(projectId, val));

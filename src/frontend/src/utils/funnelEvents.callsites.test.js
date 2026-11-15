@@ -49,12 +49,6 @@ const CALL_SITES = {
   draft_preview: [
     ['previewed_draft_reel_1s', 'components/DraftReelPreview.jsx', 'useEffect', 'recordFunnelEvent(FUNNEL_EVENTS.PREVIEWED_DRAFT_REEL_1S)'],
   ],
-  tutorial: [
-    ['watched_annotate_tutorial', 'components/TutorialVideoModal.jsx', 'fireWatched', 'recordFunnelEvent(watchedEvent)', 'quest_1: FUNNEL_EVENTS.WATCHED_ANNOTATE_TUTORIAL'],
-    ['watched_framing_tutorial', 'components/TutorialVideoModal.jsx', 'fireWatched', 'recordFunnelEvent(watchedEvent)', 'quest_2: FUNNEL_EVENTS.WATCHED_FRAMING_TUTORIAL'],
-    ['watched_overlay_tutorial', 'components/TutorialVideoModal.jsx', 'fireWatched', 'recordFunnelEvent(watchedEvent)', 'quest_3: FUNNEL_EVENTS.WATCHED_OVERLAY_TUTORIAL'],
-    ['watched_publish_tutorial', 'components/TutorialVideoModal.jsx', 'fireWatched', 'recordFunnelEvent(watchedEvent)', 'quest_4: FUNNEL_EVENTS.WATCHED_PUBLISH_TUTORIAL'],
-  ],
 };
 
 // The innermost named function (const x = [useCallback(](..) => {, function x(..) {)
@@ -98,11 +92,6 @@ describe('T11175 rerouted call sites fire their milestone', () => {
         const owners = [];
         for (let i = at; i !== -1; i = src.indexOf(call, i + 1)) owners.push(enclosing(src, i)?.name);
         expect(owners, `${file}: ${call} not inside ${handler}`).toContain(handler);
-        if (call === 'recordFunnelEvent(watchedEvent)') {
-          expect(src, `${file}: ${milestone} not mapped`).toContain(guard);
-          expect(FUNNEL_EVENTS[guard.split('FUNNEL_EVENTS.')[1]]).toBe(milestone);
-          continue;
-        }
         expect(eventOf(call), `${file}: ${call} sends the wrong name`).toBe(milestone);
         if (guard) expect(fn.body, `${file}: ${call} not under ${guard}`).toContain(guard);
       }

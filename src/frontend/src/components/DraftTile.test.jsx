@@ -59,12 +59,6 @@ vi.mock('../stores/galleryStore', () => {
   useGalleryStore.getState = () => api;
   return { useGalleryStore };
 });
-vi.mock('../stores/questStore', () => {
-  const api = { recordAchievement: vi.fn() };
-  const useQuestStore = () => api;
-  useQuestStore.getState = () => api;
-  return { useQuestStore };
-});
 // T7940: DraftTile appends the current profile's id to the poster URL so a
 // URL-keyed cache can't cross-serve same-numbered drafts across accounts.
 vi.mock('../stores/profileStore', () => ({
@@ -196,14 +190,13 @@ describe('DraftTile (T5672)', () => {
     expect(primary.textContent).toMatch(/^finish$/i);
   });
 
-  it('publishes via the primary button click (no quest moved_to_my_reels step, T11175)', async () => {
+  it('publishes via the primary button click', async () => {
     const apiFetch = (await import('../utils/apiFetch')).default;
     apiFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({ archived: true, final_video_id: 99 }),
     });
-    const { useQuestStore } = await import('../stores/questStore');
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Finish highlight' }));
@@ -212,7 +205,6 @@ describe('DraftTile (T5672)', () => {
       expect.stringMatching(/\/api\/downloads\/publish\/7$/),
       expect.objectContaining({ method: 'POST' })
     );
-    expect(useQuestStore.getState().recordAchievement).not.toHaveBeenCalled();
   });
 
   it('has no primary "Publish clip" action once the draft is published', () => {

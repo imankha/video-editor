@@ -11,7 +11,6 @@ import { SECTION_NAMES, EXPORT_PROGRESS, FRAME_COPY, CREDITS, ERROR_COPY } from 
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
-import { useQuestStore } from '../stores/questStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
 import { calculateEffectiveDuration, knownEffectiveDuration, buildClipMetadata } from '../utils/effectiveDuration';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
@@ -675,9 +674,6 @@ export function ExportButtonContainer({
         });
         renderRequestAccepted = true;
 
-        // Refresh quest progress now that export job exists in DB
-        useQuestStore.getState().fetchProgress({ force: true });
-
         // T760: 202 = background processing, completion comes via WebSocket
         if (renderResponse.status === 202) {
           console.log('[ExportButtonContainer] Render accepted (202), waiting for WebSocket completion');
@@ -788,9 +784,6 @@ export function ExportButtonContainer({
           }
         }
       );
-
-      // Refresh quest progress now that export job exists in DB
-      useQuestStore.getState().fetchProgress({ force: true });
 
       // Overlay's legacy no-projectId path — backend returns a blob for download.
       // (Framing always returns early above; this tail no longer runs for it.)

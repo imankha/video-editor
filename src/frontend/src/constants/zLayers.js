@@ -55,7 +55,7 @@
  *                             (wrapped at ALERT) can paint its scrub bar over it.
  *   ALERT             z-[90]  alerts that must sit above everything modal/player:
  *                             LockedReasonModal over the player, hero intros.
- *   TOAST             z-[100] toasts, quest popovers, editor-mode chrome, the recap
+ *   TOAST             z-[100] toasts, editor-mode chrome, the recap
  *                             player.
  *   POPOVER           z-[110] an anchored popover portaled to document.body that
  *                             must clear editor-mode chrome — the Annotate rating

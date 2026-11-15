@@ -258,9 +258,6 @@ vi.mock('../../stores', () => {
   const overlayState = { reset: vi.fn(), setIsLoadingWorkingVideo: vi.fn() };
   const useOverlayStore = (selector) => selector(overlayState);
 
-  const questState = { recordAchievement: vi.fn() };
-  const useQuestStore = { getState: () => questState };
-
   const projectsState = { selectedProjectId: 42, projects: [] };
   // T10190: FocusScreen now also reads useProjectsStore as a selector-hook
   // (mirroring OverlayScreen's existing projectListItem derivation), so the
@@ -286,7 +283,6 @@ vi.mock('../../stores', () => {
     useProjectsStore,
     useVideoStore: () => ({}),
     useRegisterActiveSaveHandler: vi.fn(),
-    useQuestStore,
   };
 });
 

@@ -19,9 +19,6 @@ const { gamesDataStoreMock } = vi.hoisted(() => ({
 vi.mock('../stores/gamesDataStore', () => ({
   useGamesDataStore: { getState: () => gamesDataStoreMock },
 }));
-vi.mock('../stores/questStore', () => ({
-  useQuestStore: { getState: () => ({ fetchProgress: vi.fn() }) },
-}));
 vi.mock('../stores/editorStore', () => ({
   useEditorStore: {
     getState: () => ({ isAnnotateMode: () => false, activeAnnotateGameId: null }),

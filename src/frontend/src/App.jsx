@@ -8,9 +8,6 @@ import { SharedAnnotationView } from './components/SharedAnnotationView';
 import { SharedCollectionView } from './components/SharedCollectionView';
 import { SharedGameView } from './components/SharedGameView';
 import { ClaimGameView } from './components/ClaimGameView';
-import { TutorialVideoModal } from './components/TutorialVideoModal';
-import { useTutorialStore } from './stores/useTutorialStore';
-import { getTutorialAssets } from './config/tutorialVideos';
 import { ReportProblemButton } from './components/ReportProblemButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { DraftReelPreview } from './components/DraftReelPreview';
@@ -54,7 +51,6 @@ import ImpersonationBanner from './components/ImpersonationBanner';
 import { useEditorStore, useExportStore, useFocusStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES, APP_SCREENS, resolveEditorScreen } from './stores';
 import { useAuthStore } from './stores/authStore';
 import useUploadStore from './stores/uploadStore';
-import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
 import { useConfigStore } from './stores/configStore';
 import { API_BASE } from './config';
@@ -120,11 +116,6 @@ function App() {
   // Overlay store - for loading state and tracking changes
   const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
   const overlayChangedSinceExport = useOverlayStore(state => state.overlayChangedSinceExport);
-
-  // T4780: Tutorial video modal — read open quest from store, derive assets
-  const openQuestId = useTutorialStore((s) => s.openQuestId);
-  const closeTutorial = useTutorialStore((s) => s.closeTutorial);
-  const tutorialAssets = openQuestId ? getTutorialAssets(openQuestId) : null;
 
   // Clip data for "Edit in Annotate" button - single source of truth from projectDataStore
   const projectClipId = useProjectDataStore(state => state.projectClipId);
@@ -235,7 +226,7 @@ function App() {
           API_BASE,
           stores: {
             useProfileStore, useSettingsStore, useCreditStore, useProjectsStore,
-            useGamesDataStore, useQuestStore, useGalleryStore, useConfigStore,
+            useGamesDataStore, useGalleryStore, useConfigStore,
           },
         });
       });
@@ -406,7 +397,6 @@ function App() {
         useProfileStore.getState().fetchProfiles();
         useProjectsStore.getState().fetchProjects({ reason: 'bootstrap' });
         useGamesDataStore.getState().fetchGames({ reason: 'bootstrap' });
-        useQuestStore.getState().fetchProgress();
         useSettingsStore.getState().loadSettings();
         useGalleryStore.getState().fetchCount({ reason: 'bootstrap' });
       }
@@ -570,7 +560,6 @@ function App() {
       EDITOR_MODES,
       getPublishIntentState: () => usePublishIntentStore.getState(),
       fetchProjects,
-      refreshQuestProgress: () => useQuestStore.getState().fetchProgress(),
       getEditorMode: () => useEditorStore.getState().editorMode,
       getSelectedProjectId: () => useProjectsStore.getState().selectedProjectId,
       getProjects: () => useProjectsStore.getState().projects,
@@ -925,10 +914,6 @@ function App() {
         <FocusCompletionRecovery />
         {/* T1780: Shared video overlay */}
         {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
-        {/* T4780: Tutorial video modal — also available on home screen */}
-        {openQuestId && tutorialAssets && (
-          <TutorialVideoModal questId={openQuestId} assets={tutorialAssets} onClose={closeTutorial} />
-        )}
       </>
     );
   }
@@ -1064,15 +1049,6 @@ function App() {
 
       {/* T1780: Shared video overlay */}
       {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
-
-      {/* T4780: Tutorial video modal — mounted once here, opened via useTutorialStore */}
-      {openQuestId && tutorialAssets && (
-        <TutorialVideoModal
-          questId={openQuestId}
-          assets={tutorialAssets}
-          onClose={closeTutorial}
-        />
-      )}
 
     </div>
     </AppStateProvider>

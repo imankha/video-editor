@@ -419,7 +419,7 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
     track('crop_keyframe_add', { frame: targetFrame, clipId: projectClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
-    // T3700: quest_2 "Keep your player in frame" — the user adjusted the crop box
+    // T3700: crop_adjusted — the user adjusted the crop box
     recordFunnelEvent(FUNNEL_EVENTS.CROP_ADJUSTED);
     // T10010 activation funnel: this handler IS the MANUAL framing path (a user
     // drag placing/positioning the crop box). IDs/bucket only, no PII.
@@ -1027,7 +1027,7 @@ export function FocusContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // T3700: quest_2 "Add a slow-mo moment" — completes ONLY for a genuinely slowed
+    // T3700: speed_segment_created — recorded ONLY for a genuinely slowed
     // segment (speed < 1x). A bare split, or a speed-up, must not satisfy it.
     if (speed < 1) {
       recordFunnelEvent(FUNNEL_EVENTS.SPEED_SEGMENT_CREATED);

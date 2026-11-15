@@ -1,5 +1,5 @@
 /**
- * Detection-frame assignment helpers (quest_3 "Pick Your Player").
+ * Detection-frame assignment helpers (the athlete-pick guide).
  *
  * The step completes only when EVERY detected frame (the green markers on the
  * timeline) has had a player assigned — not just one marker per region. A

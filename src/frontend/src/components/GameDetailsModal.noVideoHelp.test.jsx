@@ -5,12 +5,6 @@ import { describe, it, expect, vi } from 'vitest';
 // Upload game modal, how to get it and a one-tap way to upload a play instead.
 // The disclosure is collapsed by default and never gates the real upload path.
 
-vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: vi.fn() };
-  const useQuestStore = (sel) => (sel ? sel(state) : state);
-  useQuestStore.getState = () => state;
-  return { useQuestStore };
-});
 
 vi.mock('../stores/creditStore', () => {
   const state = { balance: 100, loaded: true, fetchCredits: vi.fn() };

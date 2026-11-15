@@ -167,9 +167,6 @@ vi.mock('../../stores', () => {
   const overlayState = { reset: vi.fn(), setIsLoadingWorkingVideo: vi.fn() };
   const useOverlayStore = (selector) => selector(overlayState);
 
-  const questState = { recordAchievement: vi.fn() };
-  const useQuestStore = { getState: () => questState };
-
   function useProjectsStore(selector) {
     return selector(projectsState);
   }
@@ -187,7 +184,6 @@ vi.mock('../../stores', () => {
     useProjectsStore,
     useVideoStore: () => ({}),
     useRegisterActiveSaveHandler: vi.fn(),
-    useQuestStore,
   };
 });
 

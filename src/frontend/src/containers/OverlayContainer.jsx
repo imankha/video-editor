@@ -497,7 +497,7 @@ export function OverlayContainer({
     // When a detection marker is parked, the browser's seek lands NEAR but not
     // exactly on the detection frame. Anchoring the keyframe to the detection's
     // exact timestamp (not the imprecise currentTime) guarantees it falls within
-    // ASSIGN_TOLERANCE_S so the marker counts as assigned and quest_3 completes.
+    // ASSIGN_TOLERANCE_S so the marker counts as assigned.
     const assignTime = clickedDetection?.timestamp ?? currentTime;
     const region = getRegionAtTime(assignTime);
     if (!region) {

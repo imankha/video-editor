@@ -24,4 +24,3 @@ export { useProfileStore, useCurrentProfile, useHasMultipleProfiles, useProfiles
 export { useIntroCardStore } from './introCardStore';
 export { useAuthStore, useIsAuthenticated, useAuthEmail, useShowAuthModal } from './authStore';
 export { useCreditStore } from './creditStore';
-export { useQuestStore, useQuestProgress } from './questStore';

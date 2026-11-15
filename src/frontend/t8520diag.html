@@ -11,8 +11,8 @@
 
   Mounts the REAL CollectionPlayer + REAL FocusPublishActionBar with the exact
   props/handler shape FocusScreen uses, including REAL calls to
-  questStore.recordAchievement and a REAL usePublishIntentStore stake on
-  Publish (so a Playwright spec asserting the achievement POST / flag state
+  recordFunnelEvent (T11175) and a REAL usePublishIntentStore stake on
+  Publish (so a Playwright spec asserting the funnel-event POST / flag state
   observes the real gesture-handler code path, not a synthetic fetch). Only
   the "an export just finished" premise + video source are synthetic —
   everything downstream of that is the real component tree.
@@ -31,8 +31,8 @@
     <script>
       // T8390 (found live-driving QA): editorStore.js has module-scope
       // URL-canonicalization code that runs the INSTANT anything imports it
-      // (even transitively) -- and questStore.js -> utils/analytics.js does,
-      // for the `track` call. Since ES module imports always fully evaluate
+      // (even transitively) -- and utils/funnelEvents.js -> stores/authStore.js
+      // does. Since ES module imports always fully evaluate
       // before the importing module's own body runs, by the time main.jsx's
       // top-level code would read location.hash, editorStore has ALREADY
       // replaceState'd this non-canonical path (/t8520diag.html isn't a real

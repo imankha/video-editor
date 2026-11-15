@@ -323,11 +323,8 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
   const bothFailed = recapFetchFailed && noContentAtAll;
   if (bothFailed && !isLoading) {
     return (
-      // T5710: z-[100], not z-50 -- must outrank QuestPanel's persistent floating
-      // nudge (also z-50, mounted after this modal in App.jsx's tree so it would
-      // otherwise win the paint order and eat clicks). z-[100] matches the tier
-      // this codebase already reserves for top-of-stack overlays (QuestPanel's
-      // own completion modal, Toast).
+      // T5710: z-[100], the tier this codebase reserves for top-of-stack
+      // overlays (Toast).
       <div className="fixed inset-0 z-[100] flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
         <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 border border-gray-700 p-8">

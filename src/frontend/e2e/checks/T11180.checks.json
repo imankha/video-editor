@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T11180:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/utils/questRemoval.test.js --testTimeout=120000"
+    },
+    "T11180:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/utils/homeBootstrap.versionSkew.test.js --testTimeout=60000"
+    },
+    "T11180:C3": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/services/uploadManager.test.js --testTimeout=60000 --hookTimeout=60000"
+    }
+  }
+}

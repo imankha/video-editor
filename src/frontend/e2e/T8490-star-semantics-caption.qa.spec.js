@@ -97,10 +97,6 @@ async function enterAnnotateMode(page) {
     useAuthStore.setState({ isAuthenticated: true, email: 'test@e2e.local', showAuthModal: false });
   });
 
-  await page.evaluate(() => {
-    document.querySelectorAll('.quest-overlay').forEach(el => el.remove());
-  });
-
   await expect(page.locator('[data-testid="clip-row"]')).toHaveCount(0);
 }
 

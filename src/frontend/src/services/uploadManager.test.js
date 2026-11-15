@@ -21,9 +21,6 @@ import {
 } from './uploadManager';
 
 // Mock stores that uploadGame triggers via dynamic import
-vi.mock('../stores/questStore', () => ({
-  useQuestStore: { getState: () => ({ fetchProgress: vi.fn() }) },
-}));
 vi.mock('../stores/gamesDataStore', () => ({
   useGamesDataStore: { getState: () => ({ invalidateGames: vi.fn() }) },
 }));
@@ -486,49 +483,42 @@ describe('uploadManager', () => {
     // activateGame has resolved — the backend's own status check (T7870) is the real
     // invariant, this is defense in depth on the client.
     it('never fires the cleanup DELETE once activateGame already succeeded', async () => {
-      const { useQuestStore } = await import('../stores/questStore');
-      const originalGetState = useQuestStore.getState;
-      useQuestStore.getState = () => ({
-        fetchProgress: () => {
-          throw new Error('Post-activation store update failed');
-        },
+      // Mock 1: POST /api/games -> game created as pending.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'created',
+          game_id: 999,
+          name: 'Activated Then Later Throw',
+          video_url: 'https://example.com/video.mp4',
+        }),
+      });
+      // Mock 2: POST /api/games/prepare-upload -> video already in R2, skip upload.
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'exists', blake3_hash: 'a'.repeat(64), file_size: 1024 }),
+      });
+      // Mock 3: POST /api/games/999/activate -> activation succeeds (game is now
+      // READY, credits already charged server-side).
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ game_id: 999, status: 'ready' }),
       });
 
-      try {
-        // Mock 1: POST /api/games -> game created as pending.
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            status: 'created',
-            game_id: 999,
-            name: 'Activated Then Later Throw',
-            video_url: 'https://example.com/video.mp4',
-          }),
-        });
-        // Mock 2: POST /api/games/prepare-upload -> video already in R2, skip upload.
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ status: 'exists', blake3_hash: 'a'.repeat(64), file_size: 1024 }),
-        });
-        // Mock 3: POST /api/games/999/activate -> activation succeeds (game is now
-        // READY, credits already charged server-side).
-        mockFetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ game_id: 999, status: 'ready' }),
-        });
+      const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
 
-        const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });
+      // The first progress notify after activateGame resolved throws.
+      const activated = () => mockFetch.mock.calls.some(([url]) => String(url).includes('/activate'));
+      const onProgress = () => {
+        if (activated()) throw new Error('Post-activation step failed');
+      };
+      await expect(uploadGame(mockFile, onProgress)).rejects.toThrow(
+        'Post-activation step failed'
+      );
 
-        await expect(uploadGame(mockFile, () => {})).rejects.toThrow(
-          'Post-activation store update failed'
-        );
-
-        // No DELETE call must have been made at all — the game is already activated.
-        const deleteCall = mockFetch.mock.calls.find(([, opts]) => opts?.method === 'DELETE');
-        expect(deleteCall).toBeUndefined();
-      } finally {
-        useQuestStore.getState = originalGetState;
-      }
+      // No DELETE call must have been made at all — the game is already activated.
+      const deleteCall = mockFetch.mock.calls.find(([, opts]) => opts?.method === 'DELETE');
+      expect(deleteCall).toBeUndefined();
     });
 
     // T8180: bug 47p — annotate-during-upload (T1540) is the normal case, so when the

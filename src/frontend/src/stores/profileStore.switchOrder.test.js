@@ -11,7 +11,7 @@ const hoisted = vi.hoisted(() => ({ profileIdAtGamesReset: undefined, getProfile
 const store = (extra = {}) => ({
   getState: () => ({
     reset: vi.fn(), fetchProjects: vi.fn(), fetchGames: vi.fn(), fetchCredits: vi.fn(),
-    fetchProgress: vi.fn(), setEditorMode: vi.fn(), ...extra,
+    setEditorMode: vi.fn(), ...extra,
   }),
 });
 vi.mock('./index', () => ({
@@ -22,7 +22,7 @@ vi.mock('./index', () => ({
   useProjectDataStore: store(), useFocusStore: store(), useOverlayStore: store(),
   useVideoStore: store(), useExportStore: store(), useUploadStore: store(),
   useGalleryStore: store(), useSettingsStore: store(), useCreditStore: store(),
-  useQuestStore: store(), useIntroCardStore: store(), useEditorStore: store(),
+  useIntroCardStore: store(), useEditorStore: store(),
   EDITOR_MODES: { PROJECT_MANAGER: 'project_manager' },
 }));
 
