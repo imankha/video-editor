@@ -20,7 +20,7 @@ import { GuideScope } from '../components/instructions/GuideScope';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
-import { FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW } from '../config/displayNames';
+import { FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW, FRAME_COPY } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { deriveFramingCtaState } from '../utils/framingCtaState';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
@@ -160,19 +160,17 @@ export function FocusScreen({
   } = useClipManager();
 
   // Reel-level aspect-ratio change (T3910): a single gesture that re-fits every clip's crop
-  // to the new ratio server-side, then refreshes clips + project so the UI reflects the
-  // authoritative re-fit. Surgical (sends only the ratio); no reactive write-back.
+  // to the new ratio server-side. T10990: one request; the store shows the new shape at once
+  // (useCrop ratio-sync effect) and takes the re-fit crops from the answer. A failed switch
+  // has already been reverted by the store; say so. Surgical, no reactive write-back.
   const handleAspectRatioChange = useCallback(async (newRatio) => {
     if (!projectId || newRatio === projectAspectRatio) return;
     const result = await changeAspectRatioAction(projectId, newRatio);
-    if (result?.success) {
-      // Re-fetch the project so projectAspectRatio updates → the useCrop ratio-sync effect
-      // sets the active clip's reticule shape; re-fit boxes arrive via the refreshed clips.
-      await refreshProject();
-    } else if (result?.error) {
-      console.error('[Framing] Aspect ratio change failed:', result.error);
+    if (!result?.success) {
+      console.error('[Framing] Aspect ratio change failed:', result?.error);
+      toast.error(FRAME_COPY.ASPECT_CHANGE_FAILED);
     }
-  }, [projectId, projectAspectRatio, changeAspectRatioAction, refreshProject]);
+  }, [projectId, projectAspectRatio, changeAspectRatioAction]);
 
   // Games — Zustand store (ready-only: pending uploads excluded).
   // Hydrated by /api/bootstrap (App.jsx setFromBootstrap); Framing reads the cached

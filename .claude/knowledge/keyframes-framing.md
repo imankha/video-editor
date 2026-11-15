@@ -840,7 +840,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   restore) or exclude the restore fixup from the export read path.
 - **Empty list → default centered crop**: frontend `useCrop.js:293-307` (`?? defaultCropData`);
   backend export applies `default_crop_keyframes` when crop_data empty (`export/framing.py:565-573`,
-  `export/multi_clip.py:2205-2217`); shapes mirrored: `DEFAULT_CROP_SIZES` in useCrop.js:17-20 ≡
+  `export/multi_clip.py:2205-2217`); shapes mirrored: `DEFAULT_CROP_SIZES` in `modes/focus/defaultCropSizes.js` (T10990; also read by the ratio-switch preview `utils/refitCropKeyframes.js`) ≡
   `src/backend/app/services/default_crop.py:12-15`. Keep these in sync.
 - **Trim is virtual**: `segments_data.trimRange` never drops crop keyframes. CropLayer filters
   out-of-window keyframes for display only (CropLayer.jsx:49-60); useCrop end boundary is full
@@ -1705,8 +1705,9 @@ keyframed** — camera tilt is constant for a recording.
   frame / overlay moves to clicked frame) get decided there.
 - **Backend crop geometry fallback** (clips.py:401-408): `x or 0, width or 640...` fabricates
   geometry into the DB — flagged by audit A10 → T4280 sweep. Don't imitate.
-- **Backend interpolation divergence**: Catmull-Rom copies across local/Modal paths → T4420
-  (the LINEAR-ffmpeg-expression crop module died with `POST /api/export/crop`, T16500).
+- **Backend interpolation**: Spotlight mapping (`highlight_transform.interpolate_crop_at_frame`) uses the renderers'
+  Catmull-Rom curve via `KeyframeInterpolator.interpolate_crop` (was linear until T4420: ~56 px off at a mid frame with
+  3 keyframes). `interpolation.generate_crop_filter` (LINEAR FFmpeg expr) only serves dead `POST /api/export/crop` (T16500).
 - **fps `|| 30` fallback landscape**: FocusScreen.jsx:219/541/623, useClipManager.js:46,
   projectDataStore.js:402, FocusContainer.jsx:238, overlay chain OverlayContainer.jsx:162/196/250;
   `videoUtils.timeToFrame/frameToTime` default 30. One canonical source is T4540 (audit C7).

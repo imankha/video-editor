@@ -20,7 +20,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
-import { openFramingDraft } from './helpers/framingDraft.js';
+import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
 import { createUnframedDraft, deleteClip } from './helpers/annotateClips.js';
 
 // reference_dev_fixture_account (house standard, T10780/T10810/T10820): its dev DB
@@ -55,8 +55,7 @@ test.describe('T4880 mobile editor reachability', () => {
     // control is the crop box, present on EVERY
     // layout; proving IT reachable+clickable is the current-flow form of this
     // regression guard. The disabled Generate CTA / compact locked band is proven
-    // in T8510 + T11700-frame-unlock. (openFramingDraft kept imported for the
-    // overlay test below.)
+    // in T8510 + T11700-frame-unlock.
     let rawClipId = null;
     try {
       const draft = await createUnframedDraft(context, {});
@@ -140,42 +139,31 @@ test.describe('T4880 mobile editor reachability', () => {
     }
   });
 
-  test('Overlay: Create Reel control reachable + clickable (portrait & landscape)', async ({ browser }) => {
-    test.setTimeout(180_000);
+  test('Overlay: primary CTA reachable + clickable (portrait & landscape)', async ({ browser }) => {
+    test.setTimeout(240_000);
     const context = await browser.newContext({ viewport: PORTRAIT, hasTouch: true, isMobile: true });
     await loginAsRealUser(context, EMAIL);
     const page = await context.newPage();
 
-    await openFramingDraft(page);
+    // T11905: open a Spotlight draft through the shared helper (tile actions found by test id)
+    // instead of the account's first Framing draft, which may never have been exported.
+    const opened = await openLoadableOverlayDraft(page, { minReadyState: 2 });
+    expect(opened.ok, `no Spotlight draft opened: ${opened.reason}`).toBe(true);
 
-    // Overlay mode is only reachable once the reel has an exported/working video.
-    // If this env's first draft isn't exported, skip here rather than pass
-    // silently — the overlay layout is deterministically covered by the Vitest
-    // regression OverlayModeView.mobileReachable.test.jsx.
-    // Detect reachability without depending on a single selector: the mode-switcher
-    // Overlay tab is disabled (title "Export from Framing first…") until exported.
-    const overlayTab = page.getByTestId('mode-overlay');
-    const disabledOverlay = page.getByRole('button', { name: /Export from Framing first to enable Overlay mode/ });
-    const overlayReachable =
-      (await overlayTab.count()) > 0
-        ? await overlayTab.isEnabled()
-        : (await disabledOverlay.count()) === 0;
-    test.skip(!overlayReachable, 'Overlay needs an exported reel in this env; covered by Vitest OverlayModeView.mobileReachable');
-    await (await overlayTab.count() ? overlayTab : page.getByRole('button', { name: /Spotlight/ }).first()).click();
-
-    // In overlay mode the primary export button is labelled "Create Reel" (T7580).
-    const createReel = page.getByRole('button', { name: /Create Reel/ });
+    // The overlay primary CTA ('Add spotlight to highlight'; once 'Create Reel', T7580/T7700),
+    // found by test id so a label change cannot hide it from this spec.
+    const overlayCta = page.locator('[data-testid="primary-cta"]:visible').first();
 
     // --- Portrait ---
     await page.setViewportSize(PORTRAIT);
-    await createReel.waitFor({ timeout: 90000 });
-    await assertReachableAndClickable(page, createReel, 'Create Reel (portrait)');
+    await overlayCta.waitFor({ timeout: 90000 });
+    await assertReachableAndClickable(page, overlayCta, 'Overlay primary CTA (portrait)');
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 'T4880-overlay-createreel-portrait');
 
     // --- Landscape ---
     await page.setViewportSize(LANDSCAPE);
-    await assertReachableAndClickable(page, createReel, 'Create Reel (landscape)');
+    await assertReachableAndClickable(page, overlayCta, 'Overlay primary CTA (landscape)');
     await assertNoHorizontalOverflow(page);
     await saveEvidence(page, 'T4880-overlay-createreel-landscape');
 

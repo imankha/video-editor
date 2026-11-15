@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleOverlayExportCompletion } from './handleOverlayExportCompletion';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
+import { EDITOR_MODES } from '../stores/editorStore';
 
 // T9740 (fix v3) — Test 2: the REAL decision logic (not a hand-copied replica).
 // The deleted appPublishAfterRender.test.js copied App.jsx's branch into the test
@@ -8,8 +9,6 @@ import { usePublishIntentStore } from '../stores/publishIntentStore';
 // production. This test drives the extracted `handleOverlayExportCompletion`
 // module directly, using the REAL publishIntentStore for the stake so the
 // stake-claimed-before-await fix is exercised against real store semantics.
-
-const EDITOR_MODES = { OVERLAY: 'overlay', FRAMING: 'framing', PROJECT_MANAGER: 'project_manager' };
 
 function makeDeps({ state = {}, publish, fetchProjects } = {}) {
   const s = {

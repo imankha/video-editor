@@ -529,6 +529,15 @@ class TestSetProjectAspectRatio:
                 assert kf["width"] == 1280
                 assert kf["height"] == 720
 
+    def test_response_carries_refit_crops(self, multi_clip_project):
+        """T10990: the POST returns every re-fit crop so the client needs no clip refetch."""
+        project_id, (clip_a, clip_b) = multi_clip_project
+        body = client.post(
+            f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"}
+        ).json()
+        returned = {c["id"]: c["crop_data"] for c in body["clips"]}
+        assert returned == {clip_a: self._crop(clip_a), clip_b: self._crop(clip_b)}
+
     def test_refit_preserves_center_when_unclamped(self, multi_clip_project):
         project_id, (clip_a, _clip_b) = multi_clip_project
         client.post(f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"})

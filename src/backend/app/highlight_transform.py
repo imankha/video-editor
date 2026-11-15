@@ -504,7 +504,12 @@ def interpolate_crop_at_frame(
     """
     Get the interpolated crop rectangle at a specific frame.
 
-    Uses linear interpolation between keyframes.
+    Uses the renderers' Catmull-Rom spline (KeyframeInterpolator.interpolate_crop,
+    the local upscaler's copy; Modal's inline `_interpolate_crop` is the same maths),
+    so a Spotlight circle is placed against the crop rectangle the final video
+    actually shows (T4420). Frames stand in for the renderers' seconds: the spline
+    only uses each keyframe's relative position, so frame = time * fps gives the
+    same rectangle.
 
     Args:
         crop_keyframes: List of {frame, x, y, width, height} from crop_data
@@ -516,52 +521,30 @@ def interpolate_crop_at_frame(
     if not crop_keyframes:
         return None
 
-    # Sort by frame
-    sorted_kfs = sorted(crop_keyframes, key=lambda kf: kf.get('frame', 0))
+    # Function-local like overlay.py's: importing app.ai_upscaler runs its package
+    # __init__ (optional torch/diffusers probes), which module load must not pay.
+    from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
 
-    # Handle edge cases
-    if frame <= sorted_kfs[0].get('frame', 0):
-        kf = sorted_kfs[0]
-        return {
-            'x': kf.get('x', 0),
-            'y': kf.get('y', 0),
-            'width': kf.get('width', 0),
-            'height': kf.get('height', 0)
-        }
-
-    if frame >= sorted_kfs[-1].get('frame', 0):
-        kf = sorted_kfs[-1]
-        return {
-            'x': kf.get('x', 0),
-            'y': kf.get('y', 0),
-            'width': kf.get('width', 0),
-            'height': kf.get('height', 0)
-        }
-
-    # Find surrounding keyframes
-    for i in range(len(sorted_kfs) - 1):
-        kf1 = sorted_kfs[i]
-        kf2 = sorted_kfs[i + 1]
-
-        frame1 = kf1.get('frame', 0)
-        frame2 = kf2.get('frame', 0)
-
-        if frame1 <= frame <= frame2:
-            # Linear interpolation
-            if frame2 == frame1:
-                t = 0
-            else:
-                t = (frame - frame1) / (frame2 - frame1)
-
-            return {
-                'x': kf1.get('x', 0) + t * (kf2.get('x', 0) - kf1.get('x', 0)),
-                'y': kf1.get('y', 0) + t * (kf2.get('y', 0) - kf1.get('y', 0)),
-                'width': kf1.get('width', 0) + t * (kf2.get('width', 0) - kf1.get('width', 0)),
-                'height': kf1.get('height', 0) + t * (kf2.get('height', 0) - kf1.get('height', 0))
+    sorted_kfs = sorted(
+        (
+            {
+                'time': kf.get('frame', 0),
+                'x': kf.get('x', 0),
+                'y': kf.get('y', 0),
+                'width': kf.get('width', 0),
+                'height': kf.get('height', 0),
             }
-
-    # Fallback (shouldn't reach here)
-    return None
+            for kf in crop_keyframes
+        ),
+        key=lambda kf: kf['time'],
+    )
+    crop = KeyframeInterpolator.interpolate_crop(sorted_kfs, frame)
+    return {
+        'x': crop['x'],
+        'y': crop['y'],
+        'width': crop['width'],
+        'height': crop['height'],
+    }
 
 
 def working_coords_to_raw_coords(

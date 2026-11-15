@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
+import { useProjectsStore } from './projectsStore';
+import { refitCropKeyframes } from '../utils/refitCropKeyframes';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -177,13 +179,33 @@ export const useProjectDataStore = create((set, get) => ({
    * Change the reel-level aspect ratio (T3910).
    *
    * Surgical gesture: POSTs only the new ratio. The backend updates projects.aspect_ratio
-   * and re-fits EVERY clip's crop keyframes (center-preserving). On success we refresh the
-   * clip list so the store holds the authoritative re-fit crop_data. Caller is responsible
-   * for refreshing the selected project: projects.aspect_ratio is the ONLY copy of the ratio
-   * (selector, reticule and export all read it), so nothing updates until that refresh lands.
+   * and re-fits EVERY clip's crop keyframes (center-preserving). T10990: that POST is the
+   * only request. projects.aspect_ratio (the selected project) is the ONLY copy of the ratio,
+   * so it and an in-memory re-fit of each crop are applied first and the frame changes shape
+   * at once; a failed POST puts the old ratio and crops back. The server's re-fit crops come
+   * back in the POST's answer and replace the preview, so the crop shown is the one stored.
    */
   changeAspectRatio: async (projectId, newAspectRatio) => {
     if (!projectId) return { success: false };
+    const projects = useProjectsStore.getState();
+    const previousAspectRatio = projects.selectedProject?.aspect_ratio;
+    const previousCrops = new Map(get().clips.map((clip) => [clip.id, clip.crop_data]));
+    projects.setSelectedProjectAspectRatio(projectId, newAspectRatio);
+    set((state) => ({
+      clips: state.clips.map((clip) => (
+        clip.crop_data?.length
+          ? { ...clip, crop_data: refitCropKeyframes(clip.crop_data, clip.width, clip.height, newAspectRatio) }
+          : clip
+      )),
+    }));
+    const revert = () => {
+      useProjectsStore.getState().setSelectedProjectAspectRatio(projectId, previousAspectRatio);
+      set((state) => ({
+        clips: state.clips.map((clip) => (
+          previousCrops.has(clip.id) ? { ...clip, crop_data: previousCrops.get(clip.id) } : clip
+        )),
+      }));
+    };
     try {
       const response = await apiFetch(
         `${API_BASE_URL}/clips/projects/${projectId}/aspect-ratio`,
@@ -194,13 +216,20 @@ export const useProjectDataStore = create((set, get) => ({
         }
       );
       if (!response.ok) {
+        revert();
         const err = await response.json().catch(() => ({}));
         return { success: false, error: err.error || `HTTP ${response.status}` };
       }
       const result = await response.json();
-      await get().fetchClips(projectId);
+      const refitById = new Map(result.clips.map((c) => [c.id, c.crop_data]));
+      set((state) => ({
+        clips: state.clips.map((clip) => (
+          refitById.has(clip.id) ? { ...clip, crop_data: refitById.get(clip.id) } : clip
+        )),
+      }));
       return result;
     } catch (err) {
+      revert();
       console.error('[projectDataStore] changeAspectRatio error:', err);
       return { success: false, error: err.message };
     }

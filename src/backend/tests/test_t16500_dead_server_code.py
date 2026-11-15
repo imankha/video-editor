@@ -151,7 +151,8 @@ def _git(*args):
 def _t16500_commits():
     base = _git("merge-base", "HEAD", "origin/master").strip()
     commits = _git("log", "--format=%H", "--grep=^T16500:", f"{base}..HEAD").split()
-    assert commits, "no T16500 commit on this branch"
+    if not commits:
+        pytest.skip("no T16500 commit on this branch (T16500 already merged)")
     return commits
 
 

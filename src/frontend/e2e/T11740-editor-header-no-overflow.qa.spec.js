@@ -147,12 +147,7 @@ test.describe('T11740 Overlay editor header fits phones', () => {
       // if none opens, skip loudly rather than fail (helper's contract).
       // minReadyState:2 — a pure geometry/no-overflow read, no seeking.
       //
-      // NOTE (T11905): openLoadableOverlayDraft currently skips in EVERY env — its
-      // drafts-filter regex still looks for "In Spotlight (N)" but the chip was
-      // renamed "In Overlay (N)" in a Sept copy-pass, so it never matches. Until
-      // T11905 fixes the helper, THIS case asserts nothing at runtime (not live-proven).
-      //
-      // Overlay's header is instead a BYTE-FOR-BYTE STRICT SUBSET of Focus's header,
+      // Overlay's header is also a BYTE-FOR-BYTE STRICT SUBSET of Focus's header,
       // established by reading the render code (not a live sample): App.jsx:1011-1026
       // renders ONE shared <UnifiedHeader editorMode={editorMode}
       // extraControls={<FramingHeaderStatus editorMode=.../>}> for the whole
@@ -162,7 +157,7 @@ test.describe('T11740 Overlay editor header fits phones', () => {
       // returns null outside framing (FramingHeaderStatus.jsx:18). Back button, title
       // block and the ModeSwitcher row are the same nodes. So Overlay's header == a
       // Focus header with strictly fewer chips → it cannot overflow where Focus (which
-      // IS asserted live above) does not. The case is kept so it runs live once T11905 lands.
+      // IS asserted live above) does not. T11905 fixed the helper, so this case runs live.
       const opened = await openLoadableOverlayDraft(page, { minReadyState: 2 });
       test.skip(!opened.ok, `[T11740] no openable In-Overlay draft: ${opened.reason}`);
 
