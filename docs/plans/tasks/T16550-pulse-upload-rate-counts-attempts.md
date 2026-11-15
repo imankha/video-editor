@@ -1,6 +1,6 @@
 # T16550: The pulse card's upload success rate counts attempts
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-11-14

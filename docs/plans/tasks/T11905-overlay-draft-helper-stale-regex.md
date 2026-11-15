@@ -1,6 +1,6 @@
 # T11905: Spotlight tests run instead of skipping
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-10-04
