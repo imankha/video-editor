@@ -11,7 +11,7 @@ Today the upload dialog asks for a few details about the game (the full match vi
 **Created:** 2026-11-12
 **Updated:** 2026-11-14
 
-Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 5 of 10. The owner ruled on the offer dialog on 2026-11-14 (UX-FEEDBACK.md section 9, rulings 12 to 16) and approved the short-of-credits flow (section 2) and progress (section 3). The look of the free-share panel and of the example carousel still waits for the owner's choice.
+Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 5 of 10. The owner ruled on the offer dialog on 2026-11-14 (UX-FEEDBACK.md section 9, rulings 12 to 16) and approved the short-of-credits flow (section 2) and progress (section 3). The redrawn dialog is approved, with the free-share panel as a gold ribbon (ruling 22).
 
 ## Problem
 
@@ -22,7 +22,7 @@ The engine (T16150) and the charge (T16160) exist but a parent cannot reach them
 Build what [UX-FEEDBACK.md](UX-FEEDBACK.md) defines in sections 1 ("The AI Coach offer"), 2 ("Not enough credits") and 3 ("Honest progress"). Do not invent copy; lift strings from its section 8 table. In outline:
 
 1. **When it opens.** The parent taps Upload in the unchanged upload dialog. The upload starts, and the offer opens over the Games tab with the upload carrying on behind it. It opens once per upload. It does not open when AI Coach cannot be bought for this game (sport not supported, paused, full for today, length unreadable); those games offer it later from the game itself (T16180).
-2. **What it shows.** The name and the one-line promise; a carousel of example plays from real analysed games of the same sport, each a picture with its tags, rating and coaching note, labelled as examples and changing every 5 seconds; three benefit lines; the free-share promise in its own celebratory panel; the price for this game, the balance and the balance after; and the upload's real progress in one small line. The owner removed three pieces of small print from the dialog on 2026-11-14: the "Good to know" paragraph, the line about Google's Gemini service, and the note about credits being set aside. What they described still happens, and the terms page says where the video is analysed.
+2. **What it shows.** The name and the one-line promise; a carousel of example plays from real analysed games of the same sport, each a picture with its tags, rating and coaching note, labelled as examples and changing every 5 seconds; three benefit lines; the free-share promise in its own gold-ribbon panel with the label "FREE FOR YOUR TEAM"; the price for this game, the balance and the balance after; and the upload's real progress in one small line. The owner removed three pieces of small print from the dialog on 2026-11-14: the "Good to know" paragraph, the line about Google's Gemini service, and the note about credits being set aside. What they described still happens, and the terms page says where the video is analysed.
 3. **Two answers.** "Add AI Coach: 135 credits" or "Not now". The dialog closes only by one of these or its close button. "Not now" says where the offer lives afterwards.
 4. **Sport.** If the athlete's profile has no sport, the dialog asks for it with the chooser from T16130 before showing a price.
 5. **Short of credits.** The dialog names the shortfall and the smallest pack that covers it. Buying that pack from the dialog also adds AI Coach, with no second tap (owner, 2026-11-14). There is nothing to fall back to and nothing to lose: the upload is already running.

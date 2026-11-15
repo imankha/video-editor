@@ -9,7 +9,7 @@ Today a parent who uploads a game (the full match video) has to scrub up to nine
 **Started:** not started
 **Impact:** 9 **Complexity:** 8 **Priority:** 1.1
 **Placement:** runs before the Referral programme (owner, 2026-11-12).
-**Design:** progress, team choice, AI plays, tagging and the sport chooser were approved by the owner on 2026-11-12 (review page https://claude.ai/artifact/AfoPPibjtfSS3HKx5ktoh9). The offer dialog, the short-of-credits flow, starting from a game, and sharing (UX-FEEDBACK.md sections 1, 2, 4 and 11) were drawn on 2026-11-14 and the owner ruled on them the same day (decisions 35 to 44; review page https://claude.ai/artifact/Xm83MkV831gV5xMwJmvzz7). Three things still wait for the owner: the look of the free-share panel and the example carousel, the UX designer's proposal for where AI Coach sits on the Annotate page, and what a parent sees on a play whose team the analysis could not settle.
+**Design:** progress, team choice, AI plays, tagging and the sport chooser were approved by the owner on 2026-11-12 (review page https://claude.ai/artifact/AfoPPibjtfSS3HKx5ktoh9). The offer dialog, the short-of-credits flow, starting from a game, and sharing (UX-FEEDBACK.md sections 1, 2, 4 and 11) were drawn on 2026-11-14 and the owner ruled on them the same day (decisions 35 to 44; review page https://claude.ai/artifact/Xm83MkV831gV5xMwJmvzz7). All four are approved as they now stand (decisions 36, 40 and 45).
 
 ## Goal
 
@@ -51,21 +51,22 @@ From the design review:
 
 For the name and the teams (owner, 2026-11-14):
 
-33. **The result says which way each team attacked.** At the top of the stored result, next to each team's kit colour, is the direction that team attacked in the first period, as the camera saw it. Each window reports the direction it sees, and the joining works out the rest. Windows sometimes disagree about which team is which, and the direction is a second, independent sign of that alongside the colour; the overlap is a third, because the same 30 seconds are described twice. A window that disagrees with its neighbours is watched again with a second, narrower question (decision 42), and a play whose team is still in doubt is marked. The team chooser also shows the direction, as a second way for the parent to recognise their team.
+33. **The result says which way each team attacked.** At the top of the stored result, next to each team's kit colour, is the direction that team attacked in the first period, as the camera saw it. Each window reports the direction it sees, and the joining works out the rest. Windows sometimes disagree about which team is which, and the direction is a second, independent sign of that alongside the colour; the overlap is a third, because the same 30 seconds are described twice. A window that disagrees with its neighbours is watched again with a second, narrower question (decision 42), and a play whose team is still in doubt is recorded and counted (decision 45). The team chooser also shows the direction, as a second way for the parent to recognise their team.
 34. **Called AI Coach.** That is the name on every screen. "Coach-level analysis of the whole game" is its one-line promise.
 
 From the owner's review of the open choices (2026-11-14):
 
 35. **The offer carries no small print.** The "Good to know" paragraph, the line about Google's Gemini service and the note about credits being set aside are removed from the offer. What they described still happens; the terms page says where the video is analysed.
-36. **The free-share promise looks like a celebration.** It keeps its own panel under the benefit lines, and the plain tinted box was too quiet.
+36. **The free-share promise looks like a celebration.** It keeps its own panel under the benefit lines, drawn as a gold ribbon: a gold border, a gold "FREE FOR YOUR TEAM" label and a bold heading. The plain tinted box was too quiet.
 37. **Examples rotate.** A bank of real AI plays, each with its picture and coaching note, is kept for each sport. The offer shows the bank for the sport being analysed and moves to the next example every 5 seconds. Soccer starts with six that the owner picks from the first approved prototype run.
 38. **Three "Not now" answers in a row** stop the offer opening by itself. Buying AI Coach once turns it back on.
 39. **Buying the missing credits from the offer also adds AI Coach,** with no second tap.
-40. **Not a main action on the game's page.** A parent who skipped AI Coach at upload has shown it is a lower priority, so on the Annotate page it sits below the four main action cards. The UX designer proposes one quiet line under the cards, "Let AI Coach mark the plays", with the game's menu as a second door; once AI Coach is bought, its progress, the team choice and "Tag players" appear in the status card above the action cards, which is where a paid-for thing belongs. This proposal waits for the owner.
+40. **Not a main action on the game's page.** A parent who skipped AI Coach at upload has shown it is a lower priority, so on the Annotate page it sits below the four main action cards. The UX designer drew, and the owner approved, one quiet line under the cards, "Let AI Coach mark the plays", with the game's menu as a second door; once AI Coach is bought, its progress, the team choice and "Tag players" appear in the status card above the action cards, which is where a paid-for thing belongs.
 41. **A share works as it does today.** The receiving family gets the sharer's team plays, cleaned up by the sharer and not specific to the sharer's own child, and AI Coach travels with them. There is no separate fresh set. Tags the sharer made for the receiver's child arrive as suggestions. Receivers can share on. Families the game was shared with before AI Coach was bought get it automatically, with an email. A receiving family is sold AI Coach with one quiet line after their first pass and one line in their next upload's offer, and no email.
 42. **A second question settles a suspect window.** A window that disagrees with its neighbours about which team is which is watched again once, with a narrower question that asks only who is who and is given everything that helps: the colours, the neighbours' directions, the plays from the overlaps and the window's own plays. A play it gives to the other team is turned over; a play it cannot tell is marked. This question goes through the prototype like the first (T16145).
 43. **Joining details.** A cut-off play with no whole version is kept only when it is rated 4 or 5. Both wordings for the attack direction are run on the same video and the owner picks from the counts. The team chooser shows each team's direction.
 44. **The price stays** at 1.5 credits a minute and is looked at again after the first 50 paid games, with their real cost.
+45. **A play whose team stays in doubt gets no screen of its own yet.** The analysis records and counts such plays, and the prototype and the staging run report how many there are. Until one has been seen in real results, the app treats it like any other AI play. The owner ruled that we do not design for a state we have not seen.
 
 For the AI reel builder (owner, 2026-11-13):
 
@@ -109,7 +110,7 @@ The upper cost of $3.39 allows 15% for windows that have to be watched again, an
 - **Prototype first.** The prompt and the answer format live in the prototype. The server's copy must equal the version the owner approved, and a test enforces it.
 - **One analysis per video, for everyone.** Results are stored in the shared database against the video's fingerprint, the sport and the prompt version. The analysis covers both teams, so parents on either side reuse it.
 - **Overlap and joining.** Windows start every five minutes and run 30 seconds into the next. Joining keeps complete plays over cut-off ones, removes doubles, stitches plays longer than the overlap, and keeps a report of every decision beside the result.
-- **Three checks on which team is which.** Kit colour named in words to every window; attack direction, which must agree among the windows of one period; and the overlap, where two windows describe the same seconds. A suspect window is watched again once, and plays from a window still in doubt are marked.
+- **Three checks on which team is which.** Kit colour named in words to every window; attack direction, which must agree among the windows of one period; and the overlap, where two windows describe the same seconds. A suspect window is watched again once with a second, narrower question that asks only who is who. A play still in doubt after that is recorded and counted, not shown differently.
 - **Per-parent choices stay per parent.** Which team is theirs, which plays were imported, and which players they tagged live in the parent's own data.
 - **Charge.** Credits are reserved when the analysis starts, taken when the result is ready, and released in full if it does not finish. One parent is never charged twice for the same game. A family that receives the game through a share is recorded as having AI Coach at no charge.
 - **Import.** Plays with relevance 4 or 5 for the chosen team, and every Brilliant play (scoutable, or impressive for social media), become real plays in the Team lane with tags, note and rating filled in, and a small AI mark until the parent touches them.
@@ -139,9 +140,6 @@ T16130 has no dependency and can ship on its own. T16145 is done with the owner 
 ## Needed from the owner
 
 - Read the prototype's output files in T16145 and approve a version of the prompt and format.
-- Choose the look of the free-share panel and the example carousel (T16170).
-- Approve or change the UX designer's proposal for where AI Coach sits on the Annotate page (T16180).
-- Rule on what a parent sees on a play whose team the analysis could not settle (T16190).
 - Choose six soccer example plays for the offer from the first approved prototype run.
 
 ## Completion criteria

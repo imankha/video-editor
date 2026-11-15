@@ -1,6 +1,6 @@
 # AI Coach: user feedback spec
 
-Status: sections 3, 5, 6, 7, 8 and 10 were approved by the owner on 2026-11-12, with the rulings in section 9. Sections 1, 2, 4 and 11 were drawn on 2026-11-14 and the owner ruled on them the same day (section 9, rulings 12 to 21). Section 2 and the receiving family's card are approved. Three things still wait for the owner: the look of the free-share panel and the example carousel in section 1, where AI Coach sits on the Annotate page in section 4, and what a parent sees on a play whose team the analysis could not settle. Nothing here is built yet.
+Status: sections 3, 5, 6, 7, 8 and 10 were approved by the owner on 2026-11-12, with the rulings in section 9. Sections 1, 2, 4 and 11 were drawn on 2026-11-14 and the owner ruled on them the same day (section 9, rulings 12 to 21). Section 2 and the receiving family's card are approved. All four are approved as they now stand (rulings 22 to 24). Nothing here is built yet.
 
 This file defines everything the parent sees and can do around the new paid option: the offer, the price, the shortfall, the waiting, the team choice, what lands in the game, the pass where they say which plays are their athlete's, and what another family gets when the game is shared with them. The option is called AI Coach everywhere the parent can see it. Each section is written in plain sentences first. Component and file pointers are in a short "For the implementer" list at the end of each section. Every visible string is repeated once in the table in section 8, which is the source to copy from.
 
@@ -16,7 +16,7 @@ Running example used throughout: a 90-minute game, 3 credits of storage, 135 cre
 
 ## 1. The AI Coach offer
 
-(Redrawn 2026-11-14 and changed by the owner's rulings 12 to 14 the same day. The look of the free-share panel and of the example carousel waits for the owner's approval.)
+(Redrawn 2026-11-14 and approved by the owner the same day with rulings 12 to 14 and 22.)
 
 ### What the parent sees
 
@@ -50,6 +50,7 @@ Phone, 90-minute game, 200 credits, 3 credits of storage already agreed in the u
 |   it looked like.                          |
 |                                            |
 | +========================================+ |
+| |  ( FREE FOR YOUR TEAM )                | |
 | |  Pay once. Share it with your whole    | |
 | |  team for free.                        | |
 | |  Every family you share this game with | |
@@ -69,7 +70,7 @@ Phone, 90-minute game, 200 credits, 3 credits of storage already agreed in the u
 ```
 
 - **The examples** are real AI plays from other games, kept as a bank for each sport: a still frame, the time, the tags, the rating and the coaching note, exactly as an AI play looks in the app. The offer shows the bank for the sport of the game being uploaded, one example at a time, and moves to the next every 5 seconds. Dots show how many there are, a swipe or a tap on a dot changes the example, and touching the example pauses the timer. A parent who has asked their device for less motion gets no timer and changes the example by hand. Each one is labelled "Example from another game" so nobody takes it for a result from their own video. Soccer starts with six, chosen by the owner from the first approved prototype run (T16145). A sport with no bank yet shows no example.
-- **The free-share panel** sits under the benefit lines and is the one decorated element in the dialog. It is the reason to buy for a team and the reason the feature spreads, so it should read as a celebration, not as a note: the owner ruled on 2026-11-14 that the plain tinted box was too quiet. Its final look waits for the owner's choice between the drawn treatments.
+- **The free-share panel** sits under the benefit lines and is the one decorated element in the dialog (owner, 2026-11-14: a gold ribbon). It has a warm gold border, a soft gold-to-cyan wash behind the text, a small solid gold label reading "FREE FOR YOUR TEAM", and the heading in bold. Nothing in it moves. It is the reason to buy for a team and the reason the feature spreads, so it reads as a prize, not as a note.
 - **The upload line** shows the browser upload's real percentage, the one number the app already measures. It reads "Upload finished" once that is true.
 - **The main button always carries the price.**
 
@@ -107,7 +108,7 @@ A parent who answers "Not now" (or closes it) on three uploads in a row stops ge
 - Availability (daily limit, switch) and the rate come from one config call made when Upload is tapped, so the decision to open is made before the dialog renders.
 - The example bank is a set of fixed assets shipped with the app, keyed by sport: for each example a still frame and the play's time, tags, rating and note. It is not a live query. The carousel advances on a 5-second timer that stops on touch, on focus, when the dialog is hidden, and under `prefers-reduced-motion`.
 - The "Not now three times in a row" count is an account preference written by the dismiss and accept gestures.
-- Free-share panel: the treatment the owner chooses; it must not use solid cyan, which stays the main button's alone.
+- Free-share panel: `border-amber-400/70`, background a gradient from `amber-400/20` to `cyan-500/15`, label `bg-amber-400 text-slate-950` in the style of the pack badge. It must not use solid cyan, which stays the main button's alone.
 
 ---
 
@@ -256,7 +257,7 @@ No "ready" email is sent when the result was ready within one minute of the uplo
 
 ### Entry points
 
-(Proposed by the UX designer on 2026-11-14 after ruling 17. Waits for the owner's approval.)
+(Drawn by the UX designer on 2026-11-14 after ruling 17 and approved by the owner the same day, ruling 23.)
 
 1. Annotate, one quiet line under the action cards. The four action cards (Mark play, Watch plays, Share game, Add video) do not change. Under them, where "Share with tagged teammates" already sits, one line of grey text with a small sparkle icon reads "Let AI Coach mark the plays". It is always drawn, at least 44 px tall, and never tinted or boxed. This is the door for a parent who said "Not now" at upload.
 2. Game tile menu (the three-dot button). A new item, "AI Coach", sits after "Share game" when the game does not have it. It is not shown for games whose video is no longer stored and cannot be extended.
@@ -310,7 +311,7 @@ There is no storage row and no upload line: storage was paid at upload. In their
 
 ### For the implementer
 
-- (Superseded by ruling 17: no action card. The line reuses the "Share with tagged teammates" row under the `ActionCard` grid in `modes/AnnotateModeView.jsx`, sharing one centred wrapping line with it.) Earlier note, kept until the owner approves the proposal: action card in the grid in `modes/AnnotateModeView.jsx` (the non-edit `ActionCard` grid). Five cards break the current `lg:grid-cols-4`: use five columns at `lg` when the card is present, and on phones make "Mark play" span both columns. Use the secondary `ActionCard` variant; never a second solid cyan card. The card must be visible in the fresh-game simplified layout.
+- The line reuses the "Share with tagged teammates" row under the `ActionCard` grid in `modes/AnnotateModeView.jsx`, sharing one centred wrapping line with it. The grid and its four cards are not changed.
 - Menu item in `components/GameTile.jsx` (same list the mobile sheet and desktop popover share).
 - Dialog: `components/analysis/AICoachOfferDialog.jsx` from section 1 with `context="game"`. Portal to `document.body`; never `position: fixed` inside the Annotate blur card.
 - Sport step uses `components/shared/InlineSportSelect.jsx`; the pick writes the profile sport on that tap.
@@ -414,7 +415,6 @@ Right after import, the status card becomes a summary card, in the same place:
 - In the play editor, a quiet line under the title reads "Marked by AI. Check the start, end and rating." with two small buttons: "Looks right" and "Wrong team" (see "Wrong team on one play" below).
 - The play arrives filled in: start and end, the one-sentence summary as its name, tags, rating, and the coaching notes in the notes field. The player chips from section 7 sit under "Who is this play about?".
 - The AI mark and the dashed outline go away, for that play, the moment the parent edits anything, taps "Looks right", tags a player on it, or moves it to their athlete's plays. From then on it is simply their play.
-- Sometimes the analysis itself doubted which team was which during a stretch of the game. Plays from that stretch carry one more grey line in the editor: "The AI was unsure which team was which here. Check the team." The "Wrong team" button beside it is the fix. (The owner has not yet ruled on this line; the alternatives are to leave such plays out or to show them without a warning.)
 - The play list gets one extra filter chip, "AI, not checked ({n})", shown only while there are some.
 
 ### Wrong team on one play
@@ -790,7 +790,6 @@ Every failure message has three parts in this order: what happened, what happene
 | COST_AFTER_BOTH | Balance after both |
 | START_SHARED_ALREADY | AI Coach on this game was shared by {name}. It is free for you. |
 | TEAM_DIRECTION | Attacked toward the {side} in the {period} |
-| AI_TEAM_UNSURE | The AI was unsure which team was which here. Check the team. |
 | SHARE_BUTTON | Share with your team, free |
 | SHARE_SUMMARY_LINE | Every family you share this game with gets AI Coach on it, at no cost to them. |
 | SHARE_DONE_LINE | Other families can find their own athlete's plays the same way. |
@@ -838,11 +837,14 @@ All screens in this file were approved by the owner on 2026-11-12. Where a rulin
 14. (2026-11-14) The example is a carousel, not one play. A bank of real AI plays, each with its picture and coaching note, is kept for each sport, and the offer rotates through the bank for the sport being analysed, a new one every 5 seconds. Soccer starts with six that the owner picks from the first approved prototype run.
 15. (2026-11-14) The offer stops opening by itself after three "Not now" answers in a row. Buying AI Coach once turns it back on.
 16. (2026-11-14) Section 2 is approved: a parent short of credits who buys the named pack from the offer has also added AI Coach, with no second tap.
-17. (2026-11-14) AI Coach is not one of the main action cards on the Annotate page. It is reachable there, but below them in weight: a parent who skipped it at upload has shown it is a lower priority for them. Section 4's first entry point is being redrawn by the UX designer to this ruling.
+17. (2026-11-14) AI Coach is not one of the main action cards on the Annotate page. It is reachable there, but below them in weight: a parent who skipped it at upload has shown it is a lower priority for them. Section 4 is drawn to this ruling.
 18. (2026-11-14) The receiving family's card is approved. A share works as it does today: the receiver gets the sharer's team plays, cleaned up by the sharer and not specific to the sharer's own athlete. AI Coach travels with those plays. There is no separate fresh set of AI plays.
 19. (2026-11-14) Tags the sharer made for the receiver's child arrive as suggestions, shown first, never assigned without a tap. A family that received AI Coach can share it on. Families the game was shared with before the sharer bought AI Coach get it automatically, with an email. A receiving family is sold AI Coach with one quiet line after their first pass and one line in their next upload's offer, and no email.
 20. (2026-11-14) The team chooser shows which way each team attacked in the first period, one grey line under each colour.
 21. (2026-11-14) The price stays at 1.5 credits a minute and is looked at again after the first 50 paid games.
+22. (2026-11-14) The redrawn offer is approved. The free-share panel is the gold ribbon: a gold border, a gold "FREE FOR YOUR TEAM" label and a bold heading, with no pictures of people and no animation.
+23. (2026-11-14) Section 4 is approved: one quiet line under the four action cards and an item in the game tile's menu, with the paid-for states in the status card above the cards.
+24. (2026-11-14) No screen is designed for a play whose team the analysis could not settle. The analysis records and counts such plays; until one has been seen in real results, the app treats it like any other AI play, and the "Wrong team" button is there as on every AI play.
 
 ---
 
