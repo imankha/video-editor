@@ -973,7 +973,7 @@ graph LR
 
 ## Staging export timeline + overlay-export-mount gap (T6120, 2026-07-27)
 - **The overlay->final pipeline is HEALTHY and FAST on staging** (`modal_enabled=true`). Measured on the
-  imankh fixture (`9fa7378c`) via read-only `GET /api/exports/project/{id}`: framing renders complete in
+  imankh fixture (`9fa7378c`) via read-only GET /api/exports/project/{id} (route deleted T16500): framing renders complete in
   **64-114s** (proj 37: 64s, proj 51: 114s); a real overlay export completed in **~16s** (proj 31,
   2026-07-22, `final_31_eda94512.mp4`). None of these is anywhere near the derisk spec's 480s budget.
 - **The `derisk-staging-export.qa.spec.js` 480s failure / T5420 SKIP were the SAME root cause, and it is

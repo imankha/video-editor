@@ -577,13 +577,13 @@ class TestStoredImagesMatch:
             stored_img = cv2.imread(str(img_path))
 
             # Extract fresh image at same coordinates
-            # Use 10% padding to match image_extractor.py
+            # Use 10% padding (the old highlight image extractor's value)
             fresh_img = extract_region_from_frame(
                 str(raw_clip_path),
                 kf['raw_frame'],
                 kf['raw_x'], kf['raw_y'],
                 kf['raw_radiusX'], kf['raw_radiusY'],
-                padding_percent=0.1  # Match image_extractor.py
+                padding_percent=0.1  # Match the padding above
             )
 
             if stored_img is not None and fresh_img is not None:

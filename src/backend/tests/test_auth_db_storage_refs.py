@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-# Prevent cv2 import failure when app.services.__init__ loads image_extractor
+# Prevent cv2 import failure if an app import pulls in cv2
 if "cv2" not in sys.modules:
     sys.modules["cv2"] = types.ModuleType("cv2")
 

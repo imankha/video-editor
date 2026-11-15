@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 import anyio.to_thread
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from ..analytics import record_milestone
@@ -128,23 +128,6 @@ def get_export_job(job_id: str) -> dict | None:
             d.setdefault("output_key", None)
             return d
     return None
-
-
-def get_project_exports(project_id: int) -> list[dict]:
-    """Get all exports for a project, ordered by creation time desc."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        extra = ", stage" if _has_stage_columns(conn) else ""
-        cursor.execute(f"""
-            SELECT id, project_id, type, status, error,
-                   output_video_id, output_filename,
-                   created_at, started_at, completed_at{extra}
-            FROM export_jobs
-            WHERE project_id = ?
-            ORDER BY created_at DESC
-        """, (project_id,))
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
 
 
 def update_job_started(job_id: str):
@@ -490,24 +473,6 @@ def get_active_exports() -> list[dict]:
         return [dict(row) for row in rows]
 
 
-def get_recent_exports(hours: int = 24) -> list[dict]:
-    """Get exports from the last N hours."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        # SQLite datetime comparison
-        extra = ", stage" if _has_stage_columns(conn) else ""
-        cursor.execute(f"""
-            SELECT id, project_id, type, status, error,
-                   output_video_id, output_filename,
-                   created_at, started_at, completed_at{extra}
-            FROM export_jobs
-            WHERE created_at >= datetime('now', ? || ' hours')
-            ORDER BY created_at DESC
-        """, (f'-{hours}',))
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
-
-
 def get_exports_by_status(statuses: list[str]) -> list[dict]:
     """Get exports filtered by status list."""
     if not statuses:
@@ -784,39 +749,6 @@ async def list_active_exports():
                 # T12: Include game_id and game_name for annotate exports
                 game_id=e.get('game_id'),
                 game_name=e.get('game_name'),
-                stage=e.get('stage'),
-            )
-            for e in exports
-        ]
-    )
-
-
-@router.get("/recent", response_model=ExportJobListResponse)
-async def list_recent_exports(hours: int = Query(default=24, ge=1, le=168)):
-    """
-    Get exports from the last N hours (default: 24, max: 168/1 week).
-
-    Use this to:
-    - Show recent export history
-    - Find completed exports that may have been missed
-    - Display export activity feed
-    """
-    exports = get_recent_exports(hours)
-
-    return ExportJobListResponse(
-        exports=[
-            ExportJobResponse(
-                job_id=e['id'],
-                project_id=e['project_id'],
-                project_name=e.get('project_name'),
-                type=e['type'],
-                status=e['status'],
-                error=e['error'],
-                output_video_id=e['output_video_id'],
-                output_filename=e['output_filename'],
-                created_at=e['created_at'],
-                started_at=e['started_at'],
-                completed_at=e['completed_at'],
                 stage=e.get('stage'),
             )
             for e in exports
@@ -1251,40 +1183,3 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(progress_loop)
 
     return {"message": "Progress loop started", "job_id": job_id}
-
-
-# ============================================================================
-# Project-scoped endpoints (for discovering exports on page load)
-# ============================================================================
-
-@router.get("/project/{project_id}", response_model=ExportJobListResponse)
-async def list_project_exports(project_id: int):
-    """
-    List all exports for a project.
-
-    Use this on page load to discover:
-    - In-progress exports (reconnect WebSocket for progress)
-    - Completed exports (show download/continue options)
-    - Failed exports (show error message)
-    """
-    exports = get_project_exports(project_id)
-
-    return ExportJobListResponse(
-        exports=[
-            ExportJobResponse(
-                job_id=e['id'],
-                project_id=e['project_id'],
-                project_name=e.get('project_name'),
-                type=e['type'],
-                status=e['status'],
-                error=e['error'],
-                output_video_id=e['output_video_id'],
-                output_filename=e['output_filename'],
-                created_at=e['created_at'],
-                started_at=e['started_at'],
-                completed_at=e['completed_at'],
-                stage=e.get('stage'),
-            )
-            for e in exports
-        ]
-    )

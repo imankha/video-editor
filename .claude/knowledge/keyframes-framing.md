@@ -513,8 +513,9 @@ keyframes are covered where they diverge from crop — they are the "one refacto
   `src/frontend/src/components/timeline/RegionLayer.jsx` (highlight — forked, stale rules).
 - **Persistence helper**: `src/frontend/src/utils/persistKeyframeEdit.js` (T3800 single path);
   transport `src/frontend/src/api/focusActions.js`.
-- **Spline math**: `src/frontend/src/utils/splineInterpolation.js`; backend mirror
-  `src/backend/app/interpolation.py`.
+- **Spline math**: `src/frontend/src/utils/splineInterpolation.js`; backend copies in
+  `ai_upscaler/keyframe_interpolator.py` and the Modal `video_processing.py` (the unused
+  app/interpolation module went with `POST /api/export/crop`, T16500).
 - **Backend actions**: `POST /api/clips/projects/{project_id}/clips/{clip_id}/actions` →
   `framing_action` in `src/backend/app/routers/clips.py:326`. Overlay:
   `POST .../projects/{project_id}/overlay/actions` → `overlay_action` in
@@ -1000,8 +1001,7 @@ opacity/radii between the region bounds. **ALWAYS-ON: standard behavior, no sett
   - Backend local path: `overlay._process_frames_to_ffmpeg` computes reveal from
     `_region_bounds(active_region)` + `current_time` and passes `reveal_opacity`/
     `reveal_scale` (optional params, default 1.0) to
-    `KeyframeInterpolator.render_highlight_on_frame`. `processor_local.py` render loop
-    wired the same way. Modal path: `_render_highlight` computes it internally. No
+    `KeyframeInterpolator.render_highlight_on_frame`. Modal path: `_render_highlight` computes it internally. No
     settings/flag read — always applied.
   - Applied AFTER `_normalize_region_keys` (T5120) — the envelope sits ON TOP of whatever
     the interpolator yields; no bare-key access added to the spline helpers.
@@ -1717,9 +1717,8 @@ keyframed** — camera tilt is constant for a recording.
   frame / overlay moves to clicked frame) get decided there.
 - **Backend crop geometry fallback** (clips.py:401-408): `x or 0, width or 640...` fabricates
   geometry into the DB — flagged by audit A10 → T4280 sweep. Don't imitate.
-- **Backend interpolation divergence**: `interpolation.interpolate_crop` is Catmull-Rom
-  (interpolation.py:51-87) but `generate_crop_filter` builds a LINEAR FFmpeg expression (L188-195).
-  Plus 4 Catmull-Rom copies across local/Modal paths → T4420.
+- **Backend interpolation divergence**: Catmull-Rom copies across local/Modal paths → T4420
+  (the LINEAR-ffmpeg-expression crop module died with `POST /api/export/crop`, T16500).
 - **fps `|| 30` fallback landscape**: FocusScreen.jsx:219/541/623, useClipManager.js:46,
   projectDataStore.js:402, FocusContainer.jsx:238, overlay chain OverlayContainer.jsx:162/196/250;
   `videoUtils.timeToFrame/frameToTime` default 30. One canonical source is T4540 (audit C7).

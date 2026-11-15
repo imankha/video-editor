@@ -51,7 +51,6 @@
   "tests/test_export_golden_sweep.py": 0.29,
   "tests/test_export_golden_worker.py": 0.16,
   "tests/test_export_worker_sync.py": 0.01,
-  "tests/test_ffmpeg_errors.py": 0.08,
   "tests/test_ffmpeg_helpers.py": 0.0,
   "tests/test_fk_cascades.py": 0.22,
   "tests/test_frame_reading.py": 0.9,
@@ -93,7 +92,6 @@
   "tests/test_profile_db_first_touch_race.py": 3.27,
   "tests/test_profiles.py": 0.27,
   "tests/test_profiling.py": 0.37,
-  "tests/test_progress_reporter.py": 0.01,
   "tests/test_query_counter.py": 0.0,
   "tests/test_r2_restore_retry.py": 0.04,
   "tests/test_r2_restructure.py": 0.18,
@@ -466,6 +464,5 @@
   "tests/test_vacuum_on_signout.py": 0.11,
   "tests/test_version_conflict.py": 0.1,
   "tests/test_version_filtering.py": 0.06,
-  "tests/test_video_processor.py": 0.04,
   "tests/test_write_lock.py": 0.66
 }

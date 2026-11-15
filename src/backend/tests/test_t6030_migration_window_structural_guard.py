@@ -453,10 +453,9 @@ def test_collections_summary(below_head):
 
 
 def test_exports_lists(below_head):
-    from app.routers.exports import list_active_exports, list_recent_exports
+    from app.routers.exports import list_active_exports
 
     _run(list_active_exports())
-    _run(list_recent_exports())  # export_jobs.stage/output_key (v028)
 
 
 def test_upsert_working_video_v046_window(monkeypatch):
