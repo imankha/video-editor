@@ -12,7 +12,7 @@ export { useEditorStore, EDITOR_MODES, SCREENS, getScreenByType, MODE_PATHS, PAT
 export { useExportStore } from './exportStore';
 export { useVideoStore } from './videoStore';
 export { useProjectDataStore, useProjectClips, useProjectClipId, useWorkingVideo } from './projectDataStore';
-export { useFocusStore, useFocusVideoFile, useFocusIncludeAudio, useFocusChangedSinceExport, useRegisterActiveSaveHandler } from './focusStore';
+export { useFocusStore, useFocusVideoFile, useFocusIncludeAudio, useFocusChangedSinceExport } from './focusStore';
 export { useOverlayStore, useOverlayEffectType, useOverlayIsLoading } from './overlayStore';
 export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions } from './galleryStore';
 export { useGamesDataStore, useGames as useGamesList, useSelectedGame, useGamesLoading } from './gamesDataStore';

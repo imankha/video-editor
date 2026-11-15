@@ -22,6 +22,29 @@ function RateCard({ label, rate }) {
   );
 }
 
+// T2580: how many uploads in the window have their index (moov) at the end of
+// the file, so they cannot start playing until fully downloaded. null =
+// the environment has no upload_index_checks table yet.
+function IndexChecksCard({ checks }) {
+  return (
+    <div data-testid="upload-index-checks" className="bg-white/5 rounded-lg p-4 border border-white/10">
+      <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">Cannot start at once</div>
+      {checks == null ? (
+        <div className="text-xs text-gray-400">Index check not migrated on this environment yet.</div>
+      ) : (
+        <>
+          <div data-testid="upload-index-not-at-front" className="text-2xl font-bold text-white">
+            {checks.not_at_front}
+          </div>
+          <div className="text-xs mt-0.5 text-gray-400">
+            of {checks.checked} uploads checked have their index at the end of the file
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function UploadFailuresPanel({ data, loading, error, onRefresh }) {
   return (
     <div>
@@ -60,6 +83,10 @@ export function UploadFailuresPanel({ data, loading, error, onRefresh }) {
           <div className="grid grid-cols-2 gap-4 mb-4">
             <RateCard label="Game Upload Rate" rate={data.rates.game} />
             <RateCard label="Clip Upload Rate" rate={data.rates.clip} />
+          </div>
+
+          <div className="mb-4">
+            <IndexChecksCard checks={data.index_checks} />
           </div>
 
           {data.rows.length === 0 ? (

@@ -138,6 +138,10 @@ def _purge_user_data(user_id: str) -> dict:
         cur.execute("SELECT to_regclass('public.upload_failures') IS NOT NULL AS ok")
         if cur.fetchone()["ok"]:
             cur.execute("DELETE FROM upload_failures WHERE user_id = %s", (user_id,))
+        # T2580: the per-upload index-at-front verdicts go with the user too.
+        cur.execute("SELECT to_regclass('public.upload_index_checks') IS NOT NULL AS ok")
+        if cur.fetchone()["ok"]:
+            cur.execute("DELETE FROM upload_index_checks WHERE user_id = %s", (user_id,))
 
     # Invalidate in-process caches so a same-process relogin cannot resurrect old data
     # from a stale "already initialized" flag / cached version.

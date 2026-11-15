@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T2580:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t2580_upload_index_check.py::TestFinalizeStoresVerdict -q -p no:cacheprovider"},
+    "T2580:C2": {"kind": "browser"},
+    "T2580:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t2580_upload_index_check.py::TestOneRangedRead -q -p no:cacheprovider"}
+  }
+}

@@ -198,10 +198,9 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     const net = recordRequests(page);
 
     // T6190 regression guard: entering Framing from Annotate must not trip React's
-    // "Maximum update depth exceeded" (the annotate->framing render-loop crash). The
-    // register/clear of the mounted saveCurrentClipState is now a STABLE ref-registration
-    // (framingStore.useRegisterActiveSaveHandler), so the whole-store subscriber can't
-    // feed itself. Fail the test if that error ever reaches the console.
+    // "Maximum update depth exceeded" (the annotate->framing render-loop crash; its
+    // store registration was removed with the full-state save in T4400). Fail the test
+    // if that error ever reaches the console.
     const maxDepthErrors = [];
     page.on('console', (m) => {
       if (m.type() === 'error' && /Maximum update depth exceeded/i.test(m.text())) maxDepthErrors.push(m.text());

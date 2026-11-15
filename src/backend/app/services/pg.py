@@ -679,6 +679,19 @@ CREATE TABLE IF NOT EXISTS user_resume_points (
     point      JSONB NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- T2580: one index-at-front verdict per finalized upload (services/upload_index_check.py).
+-- Mirrored in migrations/postgres/v048_upload_index_checks.py; the texts must match.
+CREATE TABLE IF NOT EXISTS upload_index_checks (
+    id             BIGSERIAL PRIMARY KEY,
+    checked_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    user_id        TEXT,
+    kind           TEXT NOT NULL,
+    blake3_hash    TEXT NOT NULL,
+    index_at_front BOOLEAN NOT NULL,
+    boxes          TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_upload_index_checks_checked ON upload_index_checks(checked_at DESC);
 """
 
 _SEED_SQL = """

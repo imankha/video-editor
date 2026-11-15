@@ -511,7 +511,7 @@ describe('useSegments', () => {
         result.current.setSegmentSpeed(2, 0.5);
       });
 
-      // Save as INTERNAL format (what saveCurrentClipState now uses)
+      // Save as INTERNAL format (the stored segments_data shape)
       const internalFormat = {
         boundaries: [...result.current.boundaries],
         segmentSpeeds: { ...result.current.segmentSpeeds },
