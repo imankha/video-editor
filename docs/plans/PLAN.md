@@ -73,7 +73,7 @@ The owner sat on the loading screen on production on 2026-11-13. Measured the sa
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T16460 | [Production accounts database to Los Angeles](tasks/T16460-accounts-database-move-production.md) | 6 | 3 | 2.0 | TODO | [ ] | Owner ruling 2026-11-13 on T16410. Production's accounts database sits in Chicago while its server runs in Los Angeles. After T16410 rehearses the move on staging, repeat it on production in a quiet hour the owner picks; about five minutes without sign-in. |
+| T16460 | [Production accounts database to Los Angeles](tasks/T16460-accounts-database-move-production.md) | 6 | 3 | 2.0 | WAITING ON USER | [ ] | Owner ruling 2026-11-13 on T16410. Production's accounts database sits in Chicago while its server runs in Los Angeles. After T16410 rehearses the move on staging, repeat it on production in a quiet hour the owner picks; about five minutes without sign-in. |
 
 ### Code health: bugs (code review 2026-11-13, BUGS FIRST)
 
