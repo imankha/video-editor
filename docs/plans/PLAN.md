@@ -71,6 +71,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T16560 | [Staging check failed: T10540:C10 In the browser, on a fresh upload: mark and rate](tasks/T16560-staging-check-failed-t10540-c10-in.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T16570 | [Staging check failed: T10990:C1 Switching portrait and landscape sends exactly one request.](tasks/T16570-staging-check-failed-t10990-c1-switching.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
