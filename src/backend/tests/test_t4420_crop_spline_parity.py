@@ -8,8 +8,8 @@ Live copies of the Catmull-Rom crop spline:
 - `app/highlight_transform.py` `interpolate_crop_at_frame` (Spotlight mapping;
   frame-based keyframes, delegates to the local upscaler's copy)
 
-`app/interpolation.py` and `modal_functions/video_processing_optimized.py` are
-dead (deleted by T16500) and deliberately not listed. The frontend's
+The linear crop module and the optimized benchmark Modal app were dead
+(deleted by T16500) and are deliberately not listed. The frontend's
 `interpolateCropSpline` is checked by `src/utils/splineInterpolation.test.js`.
 """
 
