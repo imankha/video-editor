@@ -73,8 +73,8 @@ def _seed_project_with_final(db_path, final_filename="old_final.mp4",
         "VALUES ('raw.mp4', 4, 0.0, 0.0)")
     raw_clip_id = cur.lastrowid
     cur.execute(
-        "INSERT INTO working_clips (project_id, raw_clip_id, version, sort_order) "
-        "VALUES (?, ?, 1, 0)",
+        "INSERT INTO working_clips (project_id, raw_clip_id, version, sort_order, fps) "
+        "VALUES (?, ?, 1, 0, 30.0)",
         (project_id, raw_clip_id))
 
     cur.execute("UPDATE projects SET working_video_id = ?, final_video_id = ? WHERE id = ?",
@@ -182,7 +182,7 @@ class TestFramingRenderPreservesPointers:
             "id": 1, "raw_clip_id": 1, "uploaded_filename": None,
             "crop_data": None, "game_id": None, "raw_filename": "raw.mp4",
             "clip_name": "Goal", "raw_start_time": 0.0, "raw_end_time": 5.0,
-            "raw_duration": 5.0, "game_blake3_hash": None, "video_sequence": None,
+            "raw_duration": 5.0, "game_blake3_hash": None, "video_sequence": None, "fps": 30.0,
         }
 
         with patch("app.services.export_helpers.resolve_clip_source",

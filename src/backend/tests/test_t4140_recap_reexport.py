@@ -81,7 +81,7 @@ def _seed_draft(db_path):
         "crop_data": None, "timing_data": None, "segments_data": None, "sort_order": 0,
         "raw_filename": "", "clip_name": "Recap Clip", "game_id": GAME_ID,
         "video_sequence": 1, "raw_start_time": RECAP_START, "raw_end_time": RECAP_END,
-        "raw_duration": RECAP_END - RECAP_START, "game_blake3_hash": GAME_HASH,
+        "raw_duration": RECAP_END - RECAP_START, "game_blake3_hash": GAME_HASH, "fps": 30.0,
     }
     return project_id, export_id, clip
 

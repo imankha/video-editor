@@ -2,7 +2,7 @@ import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { FocusMode } from '../modes/focus';
 import { API_BASE } from '../config';
 import * as focusActions from '../api/focusActions';
-import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
+import { clipCropKeyframes, clipFramerate, clipSourceDuration } from '../utils/clipSelectors';
 import { resolveTargetFrame } from '../utils/keyframeUtils';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { toast } from '../components/shared';
@@ -246,8 +246,9 @@ export function FocusContainer({
       // Parse crop_data first, then convert frame-based to time-based.
       const parsedKeyframes = clipCropKeyframes(clip);
       const meta = clipMetadataCache[clip.id];
-      const clipFr = meta?.framerate || 30;
-      let convertedKeyframes = convertKeyframesToTime(parsedKeyframes, clipFr);
+      // T4540: no stored rate -> no frame->time conversion (it would be a guess).
+      const clipFr = clipFramerate(clip);
+      let convertedKeyframes = clipFr ? convertKeyframesToTime(parsedKeyframes, clipFr) : [];
 
       const sourceWidth = meta?.width;
       const sourceHeight = meta?.height;
