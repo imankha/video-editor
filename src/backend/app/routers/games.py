@@ -13,10 +13,8 @@ This router handles game storage and management:
 """
 
 import asyncio
-import contextlib
 import json
 import logging
-import os
 from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
@@ -3097,239 +3095,66 @@ class ShareGameRequest(BaseModel):
     recipients: list[RecipientShare]
 
 
+def _load_shareable_game(cursor, game_id: int) -> tuple[str, str | None]:
+    """The game's (name, blake3) for a share, or the 404 / T3970 410 a share must
+    refuse with. blake3 falls back to the first video's hash for a multi-video game."""
+    cursor.execute("SELECT id, name, blake3_hash FROM games WHERE id = ?", (game_id,))
+    game = cursor.fetchone()
+    if not game:
+        raise HTTPException(status_code=404, detail="We couldn't find that game.")
+    game_name = game["name"] or default_game_name()
+
+    game_blake3 = game["blake3_hash"]
+    if not game_blake3:
+        cursor.execute(
+            "SELECT blake3_hash FROM game_videos WHERE game_id = ? ORDER BY sequence LIMIT 1",
+            (game_id,),
+        )
+        gv_row = cursor.fetchone()
+        if gv_row:
+            game_blake3 = gv_row["blake3_hash"]
+
+    if _is_game_storage_expired(cursor, game_blake3):
+        raise HTTPException(
+            status_code=410,
+            detail="This game's storage has expired. Extend storage to share it.",
+        )
+    return game_name, game_blake3
+
+
 @router.post("/{game_id:int}/share")
 async def share_game(game_id: int, body: ShareGameRequest):
     """Share a game with recipients via email, each recipient receiving the clips
     for their per-recipient scope (T5740: all team clips / only clips they're tagged
     in / game only). My-Athlete clips never cross (EPIC 1/3)."""
-    import asyncio
-
-    from app.migrations import MigrationBlocked
-    from app.services.auth_db import get_user_by_email, get_user_by_id
-    from app.services.db_refresh import RefreshFailed
-    from app.services.email import _is_existing_user, _resolve_sender_name, send_game_share_email
-    from app.services.materialization import (
-        RecipientProfileBelowHead,
-        materialize_game_share,
-        resolve_scoped_clips,
-        serialize_clip_data,
-    )
-    from app.services.sharing_db import (
-        create_game_share,
-        create_pending_share,
-        get_share_by_token,
-        revoke_share,
-    )
-    from app.services.user_db import get_profiles
-
-    user_id = get_current_user_id()
-    profile_id = get_current_profile_id()
-    sharer = get_user_by_id(user_id)
-    sharer_email = sharer["email"] if sharer else user_id
-    sender_name = _resolve_sender_name(sharer_email)
-
-    emails = [r.email for r in body.recipients]
+    from app.services.email import send_game_share_email
+    from app.services.game_share import share_game_flow
+    from app.services.materialization import resolve_scoped_clips
 
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name, blake3_hash FROM games WHERE id = ?", (game_id,))
-        game = cursor.fetchone()
-        if not game:
-            raise HTTPException(status_code=404, detail="We couldn't find that game.")
-        game_name = game["name"] or default_game_name()
-
-        game_blake3 = game["blake3_hash"]
-        if not game_blake3:
-            cursor.execute(
-                "SELECT blake3_hash FROM game_videos WHERE game_id = ? ORDER BY sequence LIMIT 1",
-                (game_id,),
-            )
-            gv_row = cursor.fetchone()
-            if gv_row:
-                game_blake3 = gv_row["blake3_hash"]
-
-        if _is_game_storage_expired(cursor, game_blake3):
-            raise HTTPException(
-                status_code=410,
-                detail="This game's storage has expired. Extend storage to share it.",
-            )
-
+        game_name, game_blake3 = _load_shareable_game(conn.cursor(), game_id)
         # Resolve each recipient's clips ONCE, up front, on the sharer's profile DB
         # (this same conn). resolve_scoped_clips is the shared source of truth with
         # the /share-preview read, so what a recipient is shown == what they receive.
-        clip_data_by_email = {
+        clips_by_email = {
             r.email: resolve_scoped_clips(conn, game_id, r.email, r.scope.value)
             for r in body.recipients
         }
 
-    email_results = []
-    all_sent = True
-
-    share_records = []
-    for email in emails:
-        try:
-            share = create_game_share(
-                game_id=game_id,
-                tag_name=None,
-                sharer_user_id=user_id,
-                sharer_profile_id=profile_id,
-                recipient_email=email,
-                game_name=game_name,
-                game_blake3=game_blake3,
-            )
-            share_records.append(share)
-        except Exception as e:
-            logger.error(f"[share-game] Failed to create share record: {e}")
-            share_records.append(None)
-
-    if any(share_records):
-        # T5270: warm the recap poster now (share-creation gesture) so the
-        # crawler that pastes this link never pays the ffmpeg cost.
-        from app.services.poster import warm_recap_poster
-        await warm_recap_poster(user_id, profile_id, game_id)
-
-    tasks = {}
-    for email, share in zip(emails, share_records):
-        is_first_touch = not _is_existing_user(email)
-        tasks[email] = send_game_share_email(
-            recipient_email=email,
-            sharer_email=sharer_email,
-            game_name=game_name,
-            share_token=share["share_token"] if share else None,
-            sender_name=sender_name,
-            is_first_touch=is_first_touch,
-        )
-
-    if tasks:
-        send_results = await asyncio.gather(*tasks.values())
-        for (email, share), sent in zip(
-            zip(emails, share_records), send_results
-        ):
-            email_results.append({"email": email, "sent": sent})
-            if not sent:
-                all_sent = False
-                if share:
-                    with contextlib.suppress(Exception):
-                        revoke_share(share["share_token"], user_id)
-
-    if all_sent and email_results:
-        for email, share in zip(emails, share_records):
-            if not share:
-                continue
-            # T5740: the clips this recipient's scope resolved to, up front. Both the
-            # pending-share snapshot and the live materialize below use this so the
-            # scope choice is honored on every delivery path.
-            scoped_clips = clip_data_by_email.get(email, [])
-            try:
-                recipient_user = get_user_by_email(email)
-                share_record = get_share_by_token(share["share_token"])
-                if not share_record:
-                    continue
-
-                if not recipient_user:
-                    create_pending_share(
-                        share_id=share_record["id"],
-                        sharer_user_id=user_id,
-                        sharer_profile_id=profile_id,
-                        invited_email=email,
-                        game_id=game_id,
-                        tag_name=None,
-                        clip_data_bytes=serialize_clip_data(scoped_clips),
-                    )
-                    logger.info(f"[share-game] Created pending share for non-user {email}")
-                    continue
-
-                # T4315 round 3 (MAJOR NEW-D): get_profiles(recipient_user_id)
-                # is a foreign-user get_user_db_connection call -- round 2's
-                # structural guard (MAJOR-4) makes it a possible R2 HEAD, so
-                # it needs the same asyncio.to_thread offload as
-                # materialize_game_share below, not just that call alone.
-                #
-                # T4315 round 5 (BLOCKING-2): get_profiles used to sit
-                # OUTSIDE this try. An R2 blip there raises RefreshFailed
-                # (the PARENT of ProfileDBRefreshFailed, which the round-4
-                # except did not catch) straight into the outer
-                # `except Exception` below -- logged and silently dropped,
-                # no pending-share row, permanently unrecoverable without
-                # the sharer re-sharing. Both R2-touching calls
-                # (get_profiles AND materialize_game_share) are now inside
-                # ONE try/except RefreshFailed with the SAME
-                # create_pending_share fallback either way -- correct even
-                # when the profile count is unknown (T3230 / resolve-
-                # pending-shares resolves it later).
-                try:
-                    profiles = await asyncio.to_thread(get_profiles, recipient_user["user_id"])
-                    if len(profiles) == 1:
-                        # T4315 round 2 (MAJOR-2): materialize_game_share
-                        # does a real R2 HEAD (require_fresh) and possibly a
-                        # full profile.sqlite download -- offload so a batch
-                        # of teammate emails never blocks this worker's
-                        # event loop.
-                        await asyncio.to_thread(
-                            materialize_game_share,
-                            sharer_user_id=user_id,
-                            sharer_profile_id=profile_id,
-                            recipient_user_id=recipient_user["user_id"],
-                            recipient_profile_id=profiles[0]["id"],
-                            game_id=game_id,
-                            # tag_name stays None: this is the game-share channel,
-                            # not a teammate share. The scope is expressed by the
-                            # explicit clip_data, not by re-querying a tag.
-                            tag_name=None,
-                            share_id=share_record["id"],
-                            clip_data=scoped_clips,
-                            sharer_email=sharer_email,
-                        )
-                        logger.info(f"[share-game] Materialized for {email}")
-                    else:
-                        create_pending_share(
-                            share_id=share_record["id"],
-                            sharer_user_id=user_id,
-                            sharer_profile_id=profile_id,
-                            invited_email=email,
-                            game_id=game_id,
-                            tag_name=None,
-                            clip_data_bytes=serialize_clip_data(scoped_clips),
-                        )
-                        logger.info(f"[share-game] Created pending share for multi-profile user {email}")
-                except (RefreshFailed, RecipientProfileBelowHead, MigrationBlocked):
-                    # T5085: MigrationBlocked (get_profiles -> ensure_user_database,
-                    # or materialize_game_share -> ensure_profile_db_local) is the
-                    # SAME "can't materialize now, defer + retry after migration"
-                    # class T6780 added RecipientProfileBelowHead here for -- must
-                    # ride the same pending-share fallback, never the bare
-                    # except Exception below (T4315 round 5's silently-dropped-
-                    # share bug this whole try/except exists to prevent).
-                    # T4315 round 4 (MINOR) + round 5 (BLOCKING-2): a
-                    # refused freshness confirmation (get_profiles' foreign-
-                    # user HEAD, or materialize_game_share's require_fresh /
-                    # contended-checkpoint refusal) must not silently drop
-                    # the share -- fall back to a pending-share row so login
-                    # auto-materialize (T3230) or a manual resolve-pending-
-                    # shares retries it.
-                    # T6780: a below-head recipient profile DB (v026 shared_by
-                    # absent, deploy->migrate window) is the same "can't
-                    # materialize now, defer + retry after migration" case, so
-                    # it rides the SAME pending-share fallback (NOT a 503 that
-                    # would fail the whole multi-recipient share for one
-                    # below-head recipient).
-                    create_pending_share(
-                        share_id=share_record["id"],
-                        sharer_user_id=user_id,
-                        sharer_profile_id=profile_id,
-                        invited_email=email,
-                        game_id=game_id,
-                        tag_name=None,
-                        clip_data_bytes=serialize_clip_data(scoped_clips),
-                    )
-                    logger.warning(
-                        f"[share-game] Materialization refused for {email} "
-                        f"(target DB unconfirmed) -- created pending share for retry"
-                    )
-            except Exception as e:
-                logger.error(f"[share-game] Materialization failed for {email}: {e}")
-
-    return {"results": email_results, "all_sent": all_sent}
+    return await share_game_flow(
+        game_id=game_id,
+        game_name=game_name,
+        game_blake3=game_blake3,
+        emails=[r.email for r in body.recipients],
+        clips_by_email=clips_by_email,
+        send_email=send_game_share_email,
+        find_existing_share=None,
+        # tag_name stays None: this is the game-share channel, not a teammate
+        # share. The scope is expressed by the explicit clip data.
+        tag_name=None,
+        share_fields={},
+        log_tag="[share-game]",
+    )
 
 
 class SharePreviewClip(BaseModel):
@@ -3561,241 +3386,47 @@ class SharePlaybackRequest(BaseModel):
 @router.post("/{game_id:int}/share-playback")
 async def share_playback(game_id: int, body: SharePlaybackRequest):
     """Share all annotated clips for a game with recipients via email."""
-    import asyncio
-
-    from app.migrations import MigrationBlocked
-    from app.services.auth_db import get_user_by_email, get_user_by_id
-    from app.services.db_refresh import RefreshFailed
-    from app.services.email import _is_existing_user, _resolve_sender_name, send_playback_share_email
-    from app.services.materialization import (
-        RecipientProfileBelowHead,
-        materialize_game_share,
-        serialize_clip_data,
-    )
-    from app.services.sharing_db import (
-        create_game_share,
-        create_pending_share,
-        get_share_by_token,
-        list_shares_for_game,
-        revoke_share,
-    )
-    from app.services.user_db import get_profiles
-
-    user_id = get_current_user_id()
-    profile_id = get_current_profile_id()
-    sharer = get_user_by_id(user_id)
-    sharer_email = sharer["email"] if sharer else user_id
-    sender_name = _resolve_sender_name(sharer_email)
+    from app.services.email import send_playback_share_email
+    from app.services.game_share import share_game_flow
+    from app.services.sharing_db import list_shares_for_game
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, blake3_hash FROM games WHERE id = ?", (game_id,))
-        game = cursor.fetchone()
-        if not game:
-            raise HTTPException(status_code=404, detail="We couldn't find that game.")
-        game_name = game["name"] or default_game_name()
-
-        game_blake3 = game["blake3_hash"]
-        if not game_blake3:
-            cursor.execute(
-                "SELECT blake3_hash FROM game_videos WHERE game_id = ? ORDER BY sequence LIMIT 1",
-                (game_id,),
-            )
-            gv_row = cursor.fetchone()
-            if gv_row:
-                game_blake3 = gv_row["blake3_hash"]
-
-        if _is_game_storage_expired(cursor, game_blake3):
-            raise HTTPException(
-                status_code=410,
-                detail="This game's storage has expired. Extend storage to share it.",
-            )
-
+        game_name, game_blake3 = _load_shareable_game(cursor, game_id)
         cursor.execute(
             """SELECT id, rating, tags, name, notes, start_time, end_time, video_sequence
                FROM raw_clips WHERE game_id = ?""",
             (game_id,),
         )
         clips = [dict(row) for row in cursor.fetchall()]
-        clip_names = [c["name"] for c in clips if c.get("name")]
-        first_clip_start = clips[0]["start_time"] if clips else None
 
-    existing_shares = list_shares_for_game(game_id, user_id)
+    existing_shares = list_shares_for_game(game_id, get_current_user_id())
 
-    email_results = []
-    all_sent = True
-    share_records = []
-
-    for email in body.emails:
-        duplicate = next(
+    def active_playback_share(email: str) -> dict | None:
+        return next(
             (s for s in existing_shares
              if s["recipient_email"] == email.lower().strip()
              and s["share_type"] == "annotation_playback"
              and not s.get("revoked_at")),
             None,
         )
-        if duplicate:
-            share_records.append({
-                "share_token": duplicate["share_token"],
-                "recipient_email": email,
-                "duplicate": True,
-            })
-            continue
 
-        try:
-            share = create_game_share(
-                game_id=game_id,
-                tag_name="",
-                sharer_user_id=user_id,
-                sharer_profile_id=profile_id,
-                recipient_email=email,
-                game_name=game_name,
-                game_blake3=game_blake3,
-                first_clip_start=first_clip_start,
-                clip_names=clip_names,
-                share_type="annotation_playback",
-            )
-            share_records.append(share)
-        except Exception as e:
-            logger.error(f"[share-playback] Failed to create share record: {e}")
-            share_records.append(None)
-
-    if any(share_records):
-        # T5270: warm the recap poster now (share-creation gesture) so the
-        # crawler that pastes this link never pays the ffmpeg cost.
-        from app.services.poster import warm_recap_poster
-        await warm_recap_poster(user_id, profile_id, game_id)
-
-    if not os.getenv("RESEND_API_KEY"):
-        from app.services.email import _get_share_url
-        for email, share in zip(body.emails, share_records):
-            if share:
-                url = _get_share_url(share["share_token"], "game")
-                logger.warning(f"[share-playback] DEV MODE -- {email}: {url}")
-
-    tasks = {}
-    for email, share in zip(body.emails, share_records):
-        if email in [r["email"] for r in email_results]:
-            continue
-        if share and share.get("duplicate"):
-            # Recipient already has an active share for this game; don't resend email.
-            continue
-        is_first_touch = not _is_existing_user(email)
-        tasks[email] = send_playback_share_email(
-            recipient_email=email,
-            sharer_email=sharer_email,
-            game_name=game_name,
-            share_token=share["share_token"] if share else None,
-            sender_name=sender_name,
-            is_first_touch=is_first_touch,
-        )
-
-    if tasks:
-        send_results = await asyncio.gather(*tasks.values())
-        for (email, share), sent in zip(
-            [(e, s) for e, s in zip(body.emails, share_records) if e not in [r["email"] for r in email_results]],
-            send_results,
-        ):
-            email_results.append({"email": email, "sent": sent})
-            if not sent:
-                all_sent = False
-                if share:
-                    with contextlib.suppress(Exception):
-                        revoke_share(share["share_token"], user_id)
-
-    if all_sent and email_results:
-        clip_data_bytes = serialize_clip_data(clips)
-        for email, share in zip(body.emails, share_records):
-            if not share:
-                continue
-            try:
-                recipient_user = get_user_by_email(email)
-                share_record = get_share_by_token(share["share_token"])
-                if not share_record:
-                    continue
-
-                if not recipient_user:
-                    create_pending_share(
-                        share_id=share_record["id"],
-                        sharer_user_id=user_id,
-                        sharer_profile_id=profile_id,
-                        invited_email=email,
-                        game_id=game_id,
-                        tag_name="",
-                        clip_data_bytes=clip_data_bytes,
-                    )
-                    logger.info(f"[share-playback] Created pending share for non-user {email}")
-                    continue
-
-                # T4315 round 3 (MAJOR NEW-D): get_profiles(recipient_user_id)
-                # is a foreign-user get_user_db_connection call -- round 2's
-                # structural guard (MAJOR-4) makes it a possible R2 HEAD, so
-                # it needs the same asyncio.to_thread offload as
-                # materialize_game_share below, not just that call alone.
-                #
-                # T4315 round 5 (BLOCKING-2): see share_game above -- both
-                # R2-touching calls now share ONE try/except RefreshFailed
-                # (the parent of ProfileDBRefreshFailed) with the SAME
-                # create_pending_share fallback either way.
-                try:
-                    profiles = await asyncio.to_thread(get_profiles, recipient_user["user_id"])
-                    if len(profiles) == 1:
-                        # T4315 round 2 (MAJOR-2): see share_game above.
-                        await asyncio.to_thread(
-                            materialize_game_share,
-                            sharer_user_id=user_id,
-                            sharer_profile_id=profile_id,
-                            recipient_user_id=recipient_user["user_id"],
-                            recipient_profile_id=profiles[0]["id"],
-                            game_id=game_id,
-                            tag_name="",
-                            share_id=share_record["id"],
-                            clip_data=clips,
-                            sharer_email=sharer_email,
-                        )
-                        logger.info(f"[share-playback] Materialized for {email}")
-                    else:
-                        create_pending_share(
-                            share_id=share_record["id"],
-                            sharer_user_id=user_id,
-                            sharer_profile_id=profile_id,
-                            invited_email=email,
-                            game_id=game_id,
-                            tag_name="",
-                            clip_data_bytes=clip_data_bytes,
-                        )
-                        logger.info(f"[share-playback] Created pending share for multi-profile user {email}")
-                except (RefreshFailed, RecipientProfileBelowHead, MigrationBlocked):
-                    # T5085: MigrationBlocked (get_profiles -> ensure_user_database,
-                    # or materialize_game_share -> ensure_profile_db_local) is the
-                    # SAME "can't materialize now, defer + retry after migration"
-                    # class T6780 added RecipientProfileBelowHead here for -- must
-                    # ride the same pending-share fallback, never the bare
-                    # except Exception below (T4315 round 5's silently-dropped-
-                    # share bug this whole try/except exists to prevent).
-                    # T4315 round 4 (MINOR) + round 5 (BLOCKING-2): see
-                    # share_game above -- a refused freshness confirmation
-                    # (get_profiles or materialize_game_share) must not
-                    # silently drop the share.
-                    # T6780: a below-head recipient (v026 shared_by absent)
-                    # rides the SAME defer-to-pending fallback (see share_game).
-                    create_pending_share(
-                        share_id=share_record["id"],
-                        sharer_user_id=user_id,
-                        sharer_profile_id=profile_id,
-                        invited_email=email,
-                        game_id=game_id,
-                        tag_name="",
-                        clip_data_bytes=clip_data_bytes,
-                    )
-                    logger.warning(
-                        f"[share-playback] Materialization refused for {email} "
-                        f"(target DB unconfirmed) -- created pending share for retry"
-                    )
-            except Exception as e:
-                logger.error(f"[share-playback] Materialization failed for {email}: {e}")
-
-    return {"results": email_results, "all_sent": all_sent}
+    return await share_game_flow(
+        game_id=game_id,
+        game_name=game_name,
+        game_blake3=game_blake3,
+        emails=body.emails,
+        clips_by_email={email: clips for email in body.emails},
+        send_email=send_playback_share_email,
+        find_existing_share=active_playback_share,
+        tag_name="",
+        share_fields={
+            "first_clip_start": clips[0]["start_time"] if clips else None,
+            "clip_names": [c["name"] for c in clips if c.get("name")],
+            "share_type": "annotation_playback",
+        },
+        log_tag="[share-playback]",
+    )
 
 
 @router.get("/{game_id:int}/playback-url")
