@@ -719,6 +719,62 @@ export function OverlayScreen({
     }
   }, [effectiveOverlayMetadata?.duration, duration, initializeHighlightRegions]);
 
+  // T4480: the ONE place loaded overlay-data reaches the editor. Both load triggers
+  // below (fresh export, plain open) call it, so a new Spotlight setting is wired
+  // once and can never go missing from one of the two cases. Read-only hydration
+  // (T5225 design 5.1): callers run it while overlaySyncState is still 'loading',
+  // so canSyncActions is false and none of these local sets can fire a surgical POST.
+  // `resetRegions` (fresh export only) clears regions left over from before the
+  // render; it sits in the saved-regions branch because reset() also nulls the
+  // region duration that the default-region addHighlightRegion(0) needs.
+  const applyOverlayData = useCallback((data, regionDuration, { resetRegions = false } = {}) => {
+    // T4330: seed the action client's version tracker from this load,
+    // BEFORE any overlay action can fire -- otherwise a tab's first-ever
+    // edit always omits expected_version and skips the 409 conflict check.
+    overlayActions.seedProjectVersion(projectId, data.version);
+
+    // Hold the flat video-level detection payload (T5600) so addRegion can
+    // slice instant tracking squares for newly created regions.
+    // T5646: this survives resetHighlightRegions() -- reset() no longer nulls the
+    // video-level payload (it clears only per-region state).
+    setHighlightVideoDetections(data.detections_data || null);
+    setHighlightCarryNote(data.highlight_carry_note || null);  // T4350
+
+    if (data.has_data && data.highlights_data?.length > 0) {
+      if (resetRegions) resetHighlightRegions();
+      restoreHighlightRegions(data.highlights_data, regionDuration);
+      console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions, duration:', regionDuration);
+    } else {
+      // No saved regions - create default for first 2 seconds
+      console.log('[OverlayScreen] No saved highlight regions - creating default');
+      addHighlightRegion(0);
+    }
+
+    if (data.effect_type) setHighlightEffectType(data.effect_type);
+    if (data.highlight_color) setHighlightColor(data.highlight_color);
+    if (data.highlight_shape) setHighlightShape(data.highlight_shape);
+    if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
+    if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
+    if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
+    if (data.dim_strength != null) setDimStrength(data.dim_strength);
+    // T5410: read-only restore of the pre-export poster marker + the
+    // slow-mo section (feeds the client-side default-preview midpoint).
+    setPosterMarkerTime(data.poster_marker_time ?? null);
+    setPosterSlowmoSection(data.poster_slowmo_section ?? null);
+    // T6380: hydrate the uploaded-cover state from poster_source so a
+    // reload restores "Custom image in use" when the served cover is an upload.
+    setPosterUploadedFilename(
+      data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
+    );
+
+    // T5225: restore text blocks.
+    restoreTextOverlays(data.text_overlays || [], regionDuration);
+
+    setOverlayLoadedProjectId(projectId);
+    setOverlaySyncState('ready');
+    setOverlayChangedSinceExport(false);
+  }, [projectId, setHighlightVideoDetections, setHighlightCarryNote, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setPosterMarkerTime, setPosterSlowmoSection, setPosterUploadedFilename, restoreTextOverlays, setOverlayLoadedProjectId, setOverlaySyncState, setOverlayChangedSinceExport]);
+
   // Handle fresh export transition - load highlight regions from backend
   // The backend now creates regions with player detection data during export
   // We must fetch from backend to get that detection data (not create from clip metadata)
@@ -745,79 +801,13 @@ export function OverlayScreen({
           if (!response.ok) throw new Error(`overlay-data HTTP ${response.status}`);
           const data = await response.json();
 
-          // T4330: seed the action client's version tracker from this load,
-          // BEFORE any overlay action can fire -- otherwise a tab's first-ever
-          // edit always omits expected_version and skips the 409 conflict check.
-          overlayActions.seedProjectVersion(projectId, data.version);
-
-          // Hold the flat video-level detection payload (T5600) so addRegion can
-          // slice instant tracking squares for newly created regions.
-          // T5646: this survives the resetHighlightRegions() below — reset() no
-          // longer nulls the video-level payload (it clears only per-region state),
-          // so the ordering here is safe and a later delete->re-add still slices
-          // detections. (reset() also nulls `duration`, so it cannot be hoisted
-          // above the else-branch addHighlightRegion(0), which needs duration set.)
-          setHighlightVideoDetections(data.detections_data || null);
-          setHighlightCarryNote(data.highlight_carry_note || null);  // T4350
-
           // Use video_duration from backend, fall back to video metadata or region end times
           const videoDuration = data.video_duration
             || effectiveOverlayMetadata?.duration
             || Math.max(...(data.highlights_data || []).map(r => r.end_time || 0), 0)
             || 0;
 
-          if (data.has_data && data.highlights_data?.length > 0) {
-            // Reset existing regions first
-            resetHighlightRegions();
-
-            restoreHighlightRegions(data.highlights_data, videoDuration);
-            console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions with detection data, duration:', videoDuration);
-
-            // Check if detection data was loaded
-            const hasDetections = data.highlights_data.some(r => r.detections?.some(d => d.boxes?.length > 0));
-            if (hasDetections) {
-              console.log('[OverlayScreen] Detection data loaded - green bar should appear');
-            } else {
-              console.log('[OverlayScreen] No detection boxes in highlight regions (detection may have found no players)');
-            }
-          } else {
-            // Fallback: create default region if backend has no data
-            console.log('[OverlayScreen] No saved highlight regions - creating default');
-            addHighlightRegion(0);
-          }
-
-          if (data.effect_type) {
-            setHighlightEffectType(data.effect_type);
-          }
-          if (data.highlight_color) {
-            setHighlightColor(data.highlight_color);
-          }
-          if (data.highlight_shape) setHighlightShape(data.highlight_shape);
-          if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
-          if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
-          if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
-          if (data.dim_strength != null) setDimStrength(data.dim_strength);
-          // T5410: read-only restore of the pre-export poster marker + the
-          // slow-mo section (feeds the client-side default-preview midpoint).
-          setPosterMarkerTime(data.poster_marker_time ?? null);
-          setPosterSlowmoSection(data.poster_slowmo_section ?? null);
-          // T6380: hydrate the uploaded-cover state from poster_source so a
-          // reload restores "Custom image in use" when the served cover is an
-          // upload (bug 2 -- this was previously hardcoded null and only ever
-          // set from the upload response, so the state was session-local).
-          setPosterUploadedFilename(
-            data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
-          );
-
-          // T5225: restore text blocks. Read-only hydration
-          // (design §5.1) -- no write-back; runs while overlaySyncState is
-          // still 'loading' (set above), so canSyncActions is false and none
-          // of these local sets can fire a surgical POST.
-          restoreTextOverlays(data.text_overlays || [], videoDuration);
-
-          setOverlayLoadedProjectId(projectId);
-          setOverlaySyncState('ready');
-          setOverlayChangedSinceExport(false);
+          applyOverlayData(data, videoDuration, { resetRegions: true });
         } catch (err) {
           // T16480: never stand a default circle in for the saved spotlights.
           // 'error' keeps canSyncActions false and the editor unmounted until Retry.
@@ -827,7 +817,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setHighlightVideoDetections, setHighlightCarryNote, restoreTextOverlays]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, applyOverlayData, setOverlaySyncState, setOverlayLoadedProjectId]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -869,52 +859,7 @@ export function OverlayScreen({
           // T16480: a server error is a failed load, never "nothing saved".
           if (!response.ok) throw new Error(`overlay-data HTTP ${response.status}`);
           const data = await response.json();
-
-          // T4330: seed the action client's version tracker from this load,
-          // BEFORE any overlay action can fire -- otherwise a tab's first-ever
-          // edit always omits expected_version and skips the 409 conflict check.
-          overlayActions.seedProjectVersion(projectId, data.version);
-
-          // Hold the flat video-level detection payload (T5600) so addRegion can
-          // slice instant tracking squares for newly created regions.
-          setHighlightVideoDetections(data.detections_data || null);
-          setHighlightCarryNote(data.highlight_carry_note || null);  // T4350
-
-          if (data.has_data && data.highlights_data?.length > 0) {
-            restoreHighlightRegions(data.highlights_data, effectiveDuration);
-            console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions');
-          } else {
-            // No saved regions - create default for first 2 seconds
-            console.log('[OverlayScreen] No saved highlight regions - creating default');
-            addHighlightRegion(0);
-          }
-          if (data.effect_type) {
-            setHighlightEffectType(data.effect_type);
-          }
-          if (data.highlight_color) {
-            setHighlightColor(data.highlight_color);
-          }
-          if (data.highlight_shape) setHighlightShape(data.highlight_shape);
-          if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
-          if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
-          if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
-          if (data.dim_strength != null) setDimStrength(data.dim_strength);
-          // T5410: read-only restore of the pre-export poster marker + the
-          // slow-mo section (feeds the client-side default-preview midpoint).
-          setPosterMarkerTime(data.poster_marker_time ?? null);
-          setPosterSlowmoSection(data.poster_slowmo_section ?? null);
-          // T6380: hydrate the uploaded-cover state from poster_source (bug 2).
-          setPosterUploadedFilename(
-            data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
-          );
-
-          // T5225: restore text blocks (read-only, see the
-          // fresh-export effect above for the write-back-safety rationale).
-          restoreTextOverlays(data.text_overlays || [], effectiveDuration);
-
-          setOverlayLoadedProjectId(projectId);
-          setOverlaySyncState('ready');
-          setOverlayChangedSinceExport(false);
+          applyOverlayData(data, effectiveDuration);
         } catch (err) {
           // T16480: see the fresh-export loader's catch above.
           console.error('[OverlayScreen] Failed to load overlay data:', err);
@@ -923,7 +868,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections, setHighlightCarryNote, restoreTextOverlays]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, overlayClipMetadata, applyOverlayData, setOverlaySyncState, setOverlayLoadedProjectId]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)
