@@ -26,7 +26,9 @@ ghost_env = ghost_harness.ghost_env
 APP = Path(__file__).resolve().parent.parent / "app"
 
 # Admin/dev-only surfaces (task file: "Admin-only endpoints are out of scope").
-SKIP_FILES = {"admin.py", "_debug.py", "dev_accounts.py", "qa.py", "test_seams.py"}
+# T5940: the admin router is the package routers/admin/, skipped as a directory.
+SKIP_DIR = APP / "routers" / "admin"
+SKIP_FILES = {"_debug.py", "dev_accounts.py", "qa.py", "test_seams.py"}
 
 SCANNED = sorted(
     p for p in (
@@ -35,7 +37,7 @@ SCANNED = sorted(
         APP / "middleware" / "db_sync.py",
         APP / "services" / "export_helpers.py",
         APP / "services" / "progress_reporter.py",
-    ) if p.name not in SKIP_FILES
+    ) if p.name not in SKIP_FILES and SKIP_DIR not in p.parents
 )
 
 # Functions whose raises exist only for dev/test tooling or Stripe, never a parent.

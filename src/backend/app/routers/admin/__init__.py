@@ -20,15 +20,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from ..analytics import (
+from ...analytics import (
     ARRIVAL_SPORT_KEYS,
     EVENT_INSTRUMENTED_AT,
     RETRY_BURST_ACTIONS,
     usage_daily_has_upload_outcomes,
 )
-from ..analytics import detect_retry_bursts as _detect_retry_bursts
-from ..services import credit_ledger
-from ..services.auth_db import (
+from ...analytics import detect_retry_bursts as _detect_retry_bursts
+from ...services import credit_ledger
+from ...services.auth_db import (
     IMPERSONATION_TTL_MINUTES,
     create_impersonation_session,
     find_or_create_admin_restore_session,
@@ -38,13 +38,13 @@ from ..services.auth_db import (
     log_impersonation,
     validate_session,
 )
-from ..services.credit_ledger import CreditsUnavailable
-from ..services.pg import get_pg
-from ..storage import APP_ENV
-from ..user_context import get_current_user_id
-from ..utils.cookies import delete_cookie as _delete_cookie_raw
-from ..utils.cookies import set_cookie as _set_cookie_raw
-from ..version import APP_BUILD, APP_VERSION
+from ...services.credit_ledger import CreditsUnavailable
+from ...services.pg import get_pg
+from ...storage import APP_ENV
+from ...user_context import get_current_user_id
+from ...utils.cookies import delete_cookie as _delete_cookie_raw
+from ...utils.cookies import set_cookie as _set_cookie_raw
+from ...version import APP_BUILD, APP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ def _append_sport(where_parts: list, params: list, sport: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 def _compute_last_step(actions: set[str]) -> str:
-    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
+    from ...analytics import FLOW_EVENTS, FUNNEL_STEPS
     for step in reversed(FUNNEL_STEPS):
         if step in actions:
             return FLOW_EVENTS[step]["label"]
@@ -373,7 +373,7 @@ _RANK_TO_LABEL: dict[int, str] | None = None
 
 def _build_last_step_rank():
     global _LAST_STEP_RANK_SQL, _RANK_TO_LABEL
-    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
+    from ...analytics import FLOW_EVENTS, FUNNEL_STEPS
     arms = []
     rank_to_label: dict[int, str] = {}
     for i, step in enumerate(FUNNEL_STEPS):
@@ -484,11 +484,11 @@ def list_users(
 
         journey_ids = None
         if spend_gate:
-            from ..services.analytics_spend_readiness import gate_lost_user_ids
+            from ...services.analytics_spend_readiness import gate_lost_user_ids
 
             journey_ids = gate_lost_user_ids(cur, excl, datetime.now(UTC), spend_gate)
         elif journey_stage:
-            from ..services.analytics_journey import stopped_user_ids
+            from ...services.analytics_journey import stopped_user_ids
 
             try:
                 journey_ids = stopped_user_ids(
@@ -632,7 +632,7 @@ def list_users(
         rows = cur.fetchall()
         page_user_ids = [row["user_id"] for row in rows]
 
-        from ..analytics import FLOW_EVENTS, FUNNEL_STEPS, session_engaged_seconds
+        from ...analytics import FLOW_EVENTS, FUNNEL_STEPS, session_engaged_seconds
 
         # Funnel totals must honor BOTH the segment filter (needs user_segments s)
         # and the test-account exclusion (needs users u) -- thread the SAME
@@ -863,7 +863,7 @@ async def admin_bulk_email(request: BulkEmailRequest):
     if not body.strip() or len(body) > BULK_BODY_MAX:
         raise HTTPException(status_code=400, detail=f"body must be 1..{BULK_BODY_MAX} chars")
 
-    from ..services.email import body_text_to_html, send_admin_update_email
+    from ...services.email import body_text_to_html, send_admin_update_email
     body_html = body_text_to_html(body)
 
     if request.test:
@@ -1005,8 +1005,8 @@ async def admin_reset_test_account_data(user_id: str):
             detail="Only accounts flagged is_test_account can be reset this way",
         )
 
-    from ..middleware.db_sync import _get_user_write_lock
-    from ..services.test_account_reset import (
+    from ...middleware.db_sync import _get_user_write_lock
+    from ...services.test_account_reset import (
         ActiveExportInProgress,
         TestAccountResetFailed,
         reset_test_account_data,
@@ -1172,7 +1172,7 @@ def _compute_reconciliation(exclude_test: bool = True) -> tuple[list, dict]:
       one-sided phantom.
     - id-only (deleted) rows carry `deleted_at` from account_deletions (Decision D).
     """
-    from ..services.revenue_reconciliation import (
+    from ...services.revenue_reconciliation import (
         build_stripe_net_by_user,
         classify_users,
         fetch_stripe_intents,
@@ -1229,7 +1229,7 @@ async def revenue_reconciliation(exclude_test: bool = True):
     local and the Stripe side."""
     _require_stripe_configured()
 
-    from ..services.revenue_reconciliation import GO_LIVE_DATE
+    from ...services.revenue_reconciliation import GO_LIVE_DATE
 
     rows, _ = _compute_reconciliation(exclude_test)
     drifted = [r for r in rows if r["drifted"]]
@@ -1278,8 +1278,8 @@ async def heal_revenue_reconciliation(request: RevenueHealRequest):
     """
     _require_stripe_configured()
 
-    from ..analytics import set_total_spent
-    from ..services.revenue_reconciliation import DriftCause
+    from ...analytics import set_total_spent
+    from ...services.revenue_reconciliation import DriftCause
 
     rows, stripe_agg = _compute_reconciliation(request.exclude_test)
     row_by_uid = {r["user_id"]: r for r in rows}
@@ -1399,7 +1399,7 @@ async def impersonate(target_user_id: str, request: Request, response: Response)
     # T14990: hand the target's resume point (resolved) back so the admin's
     # browser can land there instead of '/' -- read-only, same as the detail
     # panel's read; never writes the target's own point.
-    from ..services.resume_points import get_resume_point, resolve_resume_point_titles
+    from ...services.resume_points import get_resume_point, resolve_resume_point_titles
     raw_resume_point = get_resume_point(target_user_id)
     resume_point = resolve_resume_point_titles(target_user_id, raw_resume_point) if raw_resume_point else None
 
@@ -1428,10 +1428,10 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
     user by design — this is the incident-response tool for a specific account, not
     an all-users sweep (log tag `[UPLOAD_LIFECYCLE]` covers the fleet-wide view)."""
 
-    from ..routers.games_upload import _pending_kind, upload_object_key
-    from ..services.materialization import open_profile_db_readonly
-    from ..services.user_db import get_profiles
-    from ..storage import r2_is_multipart_upload_valid, r2_list_multipart_parts
+    from ...routers.games_upload import _pending_kind, upload_object_key
+    from ...services.materialization import open_profile_db_readonly
+    from ...services.user_db import get_profiles
+    from ...storage import r2_is_multipart_upload_valid, r2_list_multipart_parts
 
     if not get_user_by_id(user_id):
         raise HTTPException(status_code=404, detail="user_not_found")
@@ -1532,7 +1532,7 @@ def r2_usage():
     """Per-source daily R2 Class A/B merged across every writer's analytics shard,
     plus the billing cycle vs the free tier. Admin only, on-demand; sync def -> threadpool
     (blocking R2 LIST/GET). Logic lives in services/r2_usage_report.py."""
-    from ..services.r2_usage_report import build_r2_usage_report
+    from ...services.r2_usage_report import build_r2_usage_report
     return build_r2_usage_report()
 
 
@@ -1712,7 +1712,7 @@ def list_upload_failures(
 async def cleanup_shares():
     """Run share table retention cleanup. Admin only."""
 
-    from ..services.sharing_db import (
+    from ...services.sharing_db import (
         cleanup_old_shares,
         cleanup_resolved_pending_shares,
         expire_stale_pending_shares,
@@ -1747,7 +1747,7 @@ async def run_postgres_migration():
 
 
 def _run_migrate_postgres() -> dict:
-    from ..migrations import migrate_postgres
+    from ...migrations import migrate_postgres
     return migrate_postgres()
 
 
@@ -1758,7 +1758,7 @@ async def migration_status(user_id: str | None = Query(default=None)):
     user's registered profiles, so an operator can ask "is this env at head?" without
     running the mutating full-R2-walk migrate. Side-effect-free (temp download + read
     + delete; no R2 write)."""
-    from ..migrations import get_migration_status, get_migration_status_for_user
+    from ...migrations import get_migration_status, get_migration_status_for_user
 
     if user_id is None:
         return get_migration_status()
@@ -1791,7 +1791,7 @@ async def backfill_hiq_recaps(limit: int = Query(25, ge=1, le=500),
     same path to poll `running`/`last_result` (a repeat POST while idle would
     start ANOTHER run).
     """
-    from ..services.auto_export import backfill_hiq_recaps as _backfill
+    from ...services.auto_export import backfill_hiq_recaps as _backfill
 
     if dry_run:
         return await asyncio.to_thread(_backfill, limit, True)
@@ -1855,7 +1855,7 @@ async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
     manual cover choice is never clobbered by a sweep. See `backfill_posters` for
     the full per-row contract.
     """
-    from ..services.poster import backfill_posters as _backfill
+    from ...services.poster import backfill_posters as _backfill
 
     if dry_run:
         return await asyncio.to_thread(_backfill, limit, True, force)
@@ -1915,7 +1915,7 @@ def analytics_funnel(
     d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
     d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
 
-    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
+    from ...analytics import FLOW_EVENTS, FUNNEL_STEPS
 
     # T8110: exclude internal accounts from the population funnel. These queries
     # key on user_segments s, so join users u to reach the flag.
@@ -2008,7 +2008,7 @@ def analytics_journey_map(
     country: CountryFilter = None,
     sport: SportFilter = None,
 ):
-    from ..services.analytics_journey import build_journey
+    from ...services.analytics_journey import build_journey
 
     # No `from` = every signup, matching the users list under the same (empty) global filter.
     d_from = date.fromisoformat(date_from) if date_from else None
@@ -2043,9 +2043,9 @@ def analytics_journey_step(
     d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
     if stage == "visited":
         # T14960: not a per-user ladder stage -- no Postgres read, no people tab.
-        from ..analytics import VISIT_BEACON_INSTRUMENTED_AT
-        from ..services.analytics_journey import build_head_step
-        from ..services.analytics_store import load_visit_totals
+        from ...analytics import VISIT_BEACON_INSTRUMENTED_AT
+        from ...services.analytics_journey import build_head_step
+        from ...services.analytics_store import load_visit_totals
 
         totals, partial = load_visit_totals()
         result = build_head_step(
@@ -2054,7 +2054,7 @@ def analytics_journey_step(
         )
         result["partial"] = partial
         return result
-    from ..services.analytics_journey import build_step
+    from ...services.analytics_journey import build_step
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -2068,7 +2068,7 @@ def analytics_journey_step(
             raise HTTPException(status_code=404, detail=f"Unknown journey stage {stage!r}") from None
     result["why"]["retry_bursts"] = _retry_bursts_for_stopped(result["people"])
     # T14030: "Where they left" from the newest journey rollup run (analytics.sqlite).
-    from ..services.analytics_journey_rollup import journey_left, load_newest_rollup
+    from ...services.analytics_journey_rollup import journey_left, load_newest_rollup
 
     rollup, partial = load_newest_rollup()
     result["left"] = {**journey_left(rollup, stage), "partial": partial}
@@ -2080,8 +2080,8 @@ def analytics_journey_step(
 # user in-process through the JIT seam and writes one aggregate run to this writer's
 # analytics.sqlite shard. Returns the run summary.
 def analytics_journey_rollup():
-    from ..services import analytics_journey_rollup as rollup
-    from ..services.analytics_store import current_store
+    from ...services import analytics_journey_rollup as rollup
+    from ...services.analytics_store import current_store
 
     try:
         return rollup.sweep(rollup.rollup_population(), current_store())
@@ -2096,8 +2096,8 @@ def analytics_journey_rollup():
 # every non-test user in-process through the JIT seam and writes one full-rebuild
 # action-weekly/engagement-monthly run to this writer's analytics.sqlite shard.
 def analytics_action_rollup():
-    from ..services import analytics_rollup as rollup
-    from ..services.analytics_store import current_store
+    from ...services import analytics_rollup as rollup
+    from ...services.analytics_store import current_store
 
     try:
         return rollup.sweep(rollup.rollup_population(), current_store())
@@ -2110,7 +2110,7 @@ def analytics_action_rollup():
 @router.get("/analytics/rollup")
 # T7400: freshness/status read -- the newest run's meta across shards, no row data.
 def analytics_action_rollup_status():
-    from ..services.analytics_rollup import load_newest_action_rollup
+    from ...services.analytics_rollup import load_newest_action_rollup
 
     rollup, partial = load_newest_action_rollup()
     return {"computed_at": None, "partial": partial} if rollup is None else {**rollup["meta"], "partial": partial}
@@ -2120,7 +2120,7 @@ def analytics_action_rollup_status():
 # T14950: "By sport" admin table source -- one read of the existing rollup's
 # rollup_action_by_sport table (no per-user DB access at read, no new sweep trigger).
 def analytics_by_sport():
-    from ..services.analytics_rollup import load_newest_action_rollup
+    from ...services.analytics_rollup import load_newest_action_rollup
 
     rollup, partial = load_newest_action_rollup(tables=("rollup_action_by_sport",))
     if rollup is None:
@@ -2139,7 +2139,7 @@ def analytics_by_sport():
 def analytics_spend_readiness(exclude_test: bool = True, sport: SportFilter = None):
     # T14930: `sport` is accepted (and validated) so the admin's global Sport pill never 422s
     # here; the gate payload itself has no segment filters of any kind yet (not just sport).
-    from ..services.analytics_spend_readiness import build_spend_readiness
+    from ...services.analytics_spend_readiness import build_spend_readiness
 
     with get_pg() as conn:
         return build_spend_readiness(conn.cursor(), _test_exclusion(exclude_test), datetime.now(UTC))
@@ -2148,7 +2148,7 @@ def analytics_spend_readiness(exclude_test: bool = True, sport: SportFilter = No
 @router.get("/analytics/spend-readiness/gate/{key}")
 # T14910: one gate's Diagnose drawer (weekly, by build, by platform, by country), read on open.
 def analytics_spend_readiness_gate(key: str, exclude_test: bool = True, sport: SportFilter = None):
-    from ..services.analytics_spend_readiness import build_gate_diagnosis, has_diagnosis
+    from ...services.analytics_spend_readiness import build_gate_diagnosis, has_diagnosis
 
     # Validate the key here; nothing below is caught, so a KeyError inside the builder is a
     # bug that surfaces as a 500, never a 404 (review follow-up 2026-11-06).
@@ -2245,7 +2245,7 @@ def _campaign_name(raw: str) -> str:
 
 
 def _campaign_url(campaign_id: str) -> str:
-    from ..frontend_url import CAMPAIGN_LINK_BASE
+    from ...frontend_url import CAMPAIGN_LINK_BASE
     return f"{CAMPAIGN_LINK_BASE}/?ref={campaign_id}"
 
 
@@ -2313,7 +2313,7 @@ def list_campaigns(exclude_test: bool = True):
 def create_campaign(body: CampaignNameRequest):
     import psycopg2
 
-    from ..analytics import generate_campaign_id
+    from ...analytics import generate_campaign_id
 
     name = _campaign_name(body.name)
     with get_pg() as conn:
@@ -2522,7 +2522,7 @@ def analytics_share_funnel(limit: int = Query(25, ge=1, le=100)):
       - claims:    distinct claimers in share_claims (T5730)
       - activated: claimers who then recorded an `export_completed` milestone
     Analytics stays OFF any user path -- this is a normal admin query (T4840)."""
-    from ..analytics import share_view_counts
+    from ...analytics import share_view_counts
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -2609,7 +2609,7 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
     `first_highlight_14d` {aged, hit, pct}: of signups acquired at least 14 days ago, the
     share with a render by midnight UTC 14 days after their acquired_at DATE (pct null
     with none aged). Grouped by `group_expr` (aliased `grp`). Returns {group value: row}."""
-    from ..analytics import FLOW_EVENTS
+    from ...analytics import FLOW_EVENTS
 
     aged_before = datetime.now(UTC).date() - timedelta(days=FIRST_HIGHLIGHT_DAYS)
     cur.execute(f"""
@@ -2818,8 +2818,8 @@ def analytics_activation(
     expression) or per signup build; every row carries `group` + display `label`.
     Scope-shrunk 2026-10-30 (owner-approved, see task file): stage-conversion/stall-
     distribution live in T14020's Journey step inspector instead. Reads existing Postgres only."""
-    from ..analytics import segment_has_signup_build
-    from ..services.analytics_activation import SIGNUP_MONTH_EXPR, compute_activation_report
+    from ...analytics import segment_has_signup_build
+    from ...services.analytics_activation import SIGNUP_MONTH_EXPR, compute_activation_report
 
     excl = _test_exclusion(exclude_test)
     with get_pg() as conn:
@@ -2876,9 +2876,9 @@ def analytics_retention_chart(
     curve row carries `group` + display `label`, and `day_n` is grouped the same way.
     `cohort_bin` is the weekly/monthly toggle for the Cohorts grouping (signup month
     instead of signup week); the other groupings ignore it."""
-    from ..analytics import segment_has_signup_build
-    from ..services.analytics_retention import compute_day_n_retention
-    from ..services.analytics_retention_chart import (
+    from ...analytics import segment_has_signup_build
+    from ...services.analytics_retention import compute_day_n_retention
+    from ...services.analytics_retention_chart import (
         LOW_VOLUME_RATIO,
         LOW_VOLUME_TRAILING_WEEKS,
         RETURN_AFTER_GAP_DAYS,
@@ -2945,7 +2945,7 @@ def analytics_retention_chart(
         "action": None,
     }
     if action:
-        from ..services.analytics_rollup import load_newest_action_rollup
+        from ...services.analytics_rollup import load_newest_action_rollup
 
         rollup, partial = load_newest_action_rollup(tables=("rollup_action_weekly",))
         if rollup is None:
@@ -2973,7 +2973,7 @@ def analytics_builds(
     under (user_segments.signup_build, server-stamped), newest build first. Accounts
     that signed up before capture existed share one trailing `"unrecorded"` row, so
     the summed signups equal the cohort grid's for the same window and filters."""
-    from ..analytics import segment_has_signup_build
+    from ...analytics import segment_has_signup_build
 
     where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, origin, exclude_test, country)
 
@@ -3020,7 +3020,7 @@ def analytics_countries(
     """T15100: the Country selector's options, most sign-ups first. Deliberately ignores the
     country filter, or picking one would empty the list of the others. Loads on every admin
     page, so unlike the country filter it probes for the column before v043 has run."""
-    from ..analytics import segment_has_country
+    from ...analytics import segment_has_country
 
     where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, "all", exclude_test)
     with get_pg() as conn:
@@ -3050,8 +3050,8 @@ def _retry_bursts_for_stopped(people: dict[str, list]) -> dict:
     RETRY_BURST_SAMPLE of the users who stopped (stuck first, then gone, then in-window).
     Returns {sampled, with_bursts, by_action: {action: users}}; read-only. Each foreign
     user.sqlite open is an R2 freshness HEAD, so the reads overlap (map_users)."""
-    from ..services.analytics_journey_rollup import map_users
-    from ..services.user_db import get_user_db_connection
+    from ...services.analytics_journey_rollup import map_users
+    from ...services.user_db import get_user_db_connection
 
     ids = [p["user_id"] for o in ("stuck", "gone", "in_window") for p in people[o]][:RETRY_BURST_SAMPLE]
     placeholders = ",".join("?" for _ in RETRY_BURST_ACTIONS)
@@ -3121,7 +3121,7 @@ def analytics_journey(user_id: str):
         name_select, name_join = _campaign_name_join(cur)
         # T15010: landing_path probed like signup_build/country -- this page loads
         # on every admin user click, so it must not 500 before v044 has run.
-        from ..analytics import segment_has_landing_path, segment_has_signup_build
+        from ...analytics import segment_has_landing_path, segment_has_signup_build
         landing_path_select = "s.landing_path" if segment_has_landing_path(cur) else "NULL::text AS landing_path"
         # T14990: signup_build backs the "where they left off" null-state
         # message ("no resume point (never navigated since build N)") --
@@ -3156,7 +3156,7 @@ def analytics_journey(user_id: str):
         "at": seg["created_at"].isoformat() if seg["created_at"] else None,
     })
 
-    from ..analytics import FLOW_EVENTS
+    from ...analytics import FLOW_EVENTS
 
     # T7510: roll up "<base>:<reason>" failure rows under their base event so the
     # journey renders an attempted-vs-succeeded gap plus per-reason breakdown.
@@ -3209,7 +3209,7 @@ def analytics_journey(user_id: str):
 
     # T7510 tier 5 (partial): retry-burst, derived at read time from the
     # per-user SQLite action log — no new storage.
-    from ..services.user_db import get_user_db_connection
+    from ...services.user_db import get_user_db_connection
     placeholders = ",".join("?" for _ in RETRY_BURST_ACTIONS)
     with get_user_db_connection(user_id) as user_conn:
         burst_rows = user_conn.execute(
@@ -3245,7 +3245,7 @@ def analytics_journey(user_id: str):
 
     # T14990: "Where they left off" -- the server-held resume point (T14980),
     # read-only, with human titles resolved for the panel.
-    from ..services.resume_points import get_resume_point, resolve_resume_point_titles
+    from ...services.resume_points import get_resume_point, resolve_resume_point_titles
     raw_resume_point = get_resume_point(user_id)
     resume_point = resolve_resume_point_titles(user_id, raw_resume_point) if raw_resume_point else None
 
@@ -3281,7 +3281,7 @@ async def analytics_user_clip_phases(user_id: str):
     path). A multi-clip reel is one final_videos row, so it counts as 1 published.
     """
 
-    from ..services.clip_phases import compute_user_clip_phases
+    from ...services.clip_phases import compute_user_clip_phases
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -3303,7 +3303,7 @@ def analytics_user_actions(
     page_size: int = Query(50, ge=1, le=200),
 ):
 
-    from ..services.pg import get_pg
+    from ...services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute("SELECT 1 FROM users WHERE user_id = %s", (user_id,))
@@ -3312,7 +3312,7 @@ def analytics_user_actions(
 
     import json
 
-    from ..services.user_db import get_user_db_connection
+    from ...services.user_db import get_user_db_connection
     with get_user_db_connection(user_id) as conn:
         total_row = conn.execute("SELECT COUNT(*) as cnt FROM user_action_log").fetchone()
         total = total_row["cnt"]
@@ -3782,7 +3782,7 @@ def analytics_pulse(
 @router.get("/referrals/leaderboard")
 async def referral_leaderboard():
     """Referral counts per user, ordered descending."""
-    from ..services.pg import get_pg
+    from ...services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute("""
@@ -3798,7 +3798,7 @@ async def referral_leaderboard():
 @router.get("/referrals/by-channel")
 async def referrals_by_channel():
     """Referral counts broken down by channel."""
-    from ..services.pg import get_pg
+    from ...services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute("""
@@ -3813,7 +3813,7 @@ async def referrals_by_channel():
 @router.get("/referrals/user/{user_id}")
 async def referrals_for_user(user_id: str):
     """Direct referrals for a single user."""
-    from ..services.pg import get_pg
+    from ...services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute("""
@@ -3829,7 +3829,7 @@ async def referrals_for_user(user_id: str):
 @router.get("/referrals/tree/{user_id}")
 async def referral_tree(user_id: str):
     """Recursive referral tree size (depth <= 5)."""
-    from ..services.pg import get_pg
+    from ...services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute("""
@@ -3861,7 +3861,7 @@ def analytics_platforms(
     exclude_test: bool = True,
 ):
     """Platform breakdown: % of users and actions on mobile/desktop/pwa."""
-    from ..services.pg import get_pg
+    from ...services.pg import get_pg
 
     # T8110: this is a real population aggregate ("% of users/actions on
     # mobile/desktop/pwa") and the heavy test accounts skew it. user_actions has
@@ -4081,7 +4081,7 @@ async def get_bug(bug_id: int):
     if not row:
         raise HTTPException(status_code=404, detail="Bug not found")
 
-    from ..storage import generate_presigned_url_global
+    from ...storage import generate_presigned_url_global
 
     screenshot_url = None
     if row["screenshot_r2_key"]:
@@ -4127,7 +4127,7 @@ async def get_correlated_bugs(bug_id: int):
     if len(cluster) <= 1:
         return {"primary_id": primary_id, "cluster_size": len(cluster), "bugs": []}
 
-    from ..storage import generate_presigned_url_global
+    from ...storage import generate_presigned_url_global
 
     bugs = []
     for row in cluster:
@@ -4257,7 +4257,7 @@ async def purge_old_bugs(days: int = Query(14, ge=1, le=365)):
         if not rows:
             return {"purged": 0}
 
-        from ..storage import r2_delete_object_global
+        from ...storage import r2_delete_object_global
 
         for row in rows:
             for key in (row["screenshot_r2_key"], row["logs_r2_key"]):
@@ -4287,7 +4287,7 @@ async def delete_bug(bug_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="Bug not found")
 
-        from ..storage import r2_delete_object_global
+        from ...storage import r2_delete_object_global
 
         for key in (row["screenshot_r2_key"], row["logs_r2_key"]):
             if key:
@@ -4312,7 +4312,7 @@ async def get_bug_screenshot(bug_id: int):
     if not row["screenshot_r2_key"]:
         raise HTTPException(status_code=404, detail="No screenshot for this bug")
 
-    from ..storage import generate_presigned_url_global
+    from ...storage import generate_presigned_url_global
     url = generate_presigned_url_global(row["screenshot_r2_key"])
     if not url:
         raise HTTPException(status_code=500, detail="Failed to generate screenshot URL")
@@ -4348,7 +4348,7 @@ async def credits_backfill_report(
     so an unbounded scan can run minutes past a proxy timeout once the user
     base is nontrivial). A COMPLETE unchunked run is saved as the stored
     report POST /credits/open-gate consumes."""
-    from ..services.credit_backfill import reconcile_against_stripe, run_backfill
+    from ...services.credit_backfill import reconcile_against_stripe, run_backfill
 
     ids = [u.strip() for u in user_ids.split(",") if u.strip()] if user_ids else None
     report = run_backfill(user_ids=ids, apply=False, limit=limit, offset=offset)
@@ -4365,7 +4365,7 @@ async def credits_backfill_apply(request: BackfillRequest):
     """Apply -- inserts missing ledger rows and re-derives balances. Safe to
     re-run (idempotent); `user_ids` targets a re-run for specific accounts;
     `limit`/`offset` chunk a full-population apply run (M7)."""
-    from ..services.credit_backfill import run_backfill
+    from ...services.credit_backfill import run_backfill
 
     return run_backfill(user_ids=request.user_ids, apply=True, limit=request.limit, offset=request.offset)
 
@@ -4414,8 +4414,8 @@ async def credits_open_gate(request: OpenGateRequest = OpenGateRequest()):
     state for purged/guest accounts, not drift."""
     from datetime import UTC, datetime
 
-    from ..services.credit_backfill import load_last_report
-    from ..services.credit_ledger import reset_ready_cache_for_tests
+    from ...services.credit_backfill import load_last_report
+    from ...services.credit_ledger import reset_ready_cache_for_tests
 
     stored = load_last_report()
     if stored is None:
