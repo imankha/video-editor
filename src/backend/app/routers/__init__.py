@@ -14,7 +14,7 @@ This package contains FastAPI routers organized by functionality:
 - storage.py: Presigned URL generation for R2 direct access
 """
 
-from .admin import router as admin_router
+from .admin.analytics import router as admin_analytics_router
 from .admin.bugs import router as admin_bugs_router
 from .admin.campaigns import router as admin_campaigns_router
 from .admin.credits import router as admin_credits_router
@@ -46,4 +46,4 @@ from .storage import router as storage_router
 from .suggestions import router as suggestions_router
 from .users import router as users_router
 
-__all__ = ['admin_bugs_router', 'admin_campaigns_router', 'admin_credits_router', 'admin_open_router', 'admin_ops_router', 'admin_referrals_router', 'admin_revenue_router', 'admin_router', 'admin_session_router', 'admin_users_router', 'auth_router', 'bootstrap_router', 'clips_router', 'collections_router', 'credits_router', 'detection_router', 'downloads_router', 'export_router', 'gallery_shares_router', 'games_router', 'games_upload_router', 'health_router', 'intro_cards_router', 'payments_router', 'profiles_router', 'projects_router', 'quests_router', 'settings_router', 'shared_router', 'storage_router', 'suggestions_router', 'users_router']
+__all__ = ['admin_analytics_router', 'admin_bugs_router', 'admin_campaigns_router', 'admin_credits_router', 'admin_open_router', 'admin_ops_router', 'admin_referrals_router', 'admin_revenue_router', 'admin_session_router', 'admin_users_router', 'auth_router', 'bootstrap_router', 'clips_router', 'collections_router', 'credits_router', 'detection_router', 'downloads_router', 'export_router', 'gallery_shares_router', 'games_router', 'games_upload_router', 'health_router', 'intro_cards_router', 'payments_router', 'profiles_router', 'projects_router', 'quests_router', 'settings_router', 'shared_router', 'storage_router', 'suggestions_router', 'users_router']

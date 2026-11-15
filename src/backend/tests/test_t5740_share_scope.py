@@ -375,7 +375,7 @@ class TestShareViewCounts:
 
 class TestAdminShareFunnel:
     def test_multi_claim_aggregation(self, pg_conn):
-        from app.routers import admin as admin_mod
+        from app.routers.admin import analytics as admin_mod
         from app.services.auth_db import create_user
         from app.services.pg import get_pg
         from app.services.sharing_db import (

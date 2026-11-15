@@ -10,7 +10,7 @@ from app.analytics import (
     create_user_segment,
     record_funnel_event,
 )
-from app.routers import admin
+from app.routers.admin import analytics as admin
 from app.services import pg as pg_service
 from app.services.auth_db import create_user
 

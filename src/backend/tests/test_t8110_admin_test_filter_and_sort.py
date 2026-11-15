@@ -21,7 +21,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.analytics import create_user_segment
-from app.routers import admin
+from app.routers.admin import analytics as admin_analytics
 from app.routers.admin import users as admin_users
 from app.services import pg as pg_service
 from app.services.auth_db import create_user
@@ -198,8 +198,8 @@ def test_exclude_test_applies_to_platforms_aggregate(pg_conn):
     _add_action("user-b", "export_completed", 7, platform="web")
     _mark_test("user-b", True)
 
-    excluded = admin.analytics_platforms(action="export_completed", exclude_test=True)
-    included = admin.analytics_platforms(action="export_completed", exclude_test=False)
+    excluded = admin_analytics.analytics_platforms(action="export_completed", exclude_test=True)
+    included = admin_analytics.analytics_platforms(action="export_completed", exclude_test=False)
 
     def _web_users(resp):
         return next((p["users"] for p in resp["platforms"] if p["platform"] == "web"), 0)

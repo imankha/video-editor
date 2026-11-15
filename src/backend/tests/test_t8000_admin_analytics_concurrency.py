@@ -158,11 +158,11 @@ def _run_concurrency_probe(url, monkeypatch):
     `get_pg` name bound at MODULE IMPORT TIME (`from ..services.pg import get_pg` at the
     top of admin.py, line ~32) — patching only the source attribute would silently miss
     it and let the test hit a REAL Postgres connection. Patching
-    `app.routers.admin.get_pg` too covers that binding regardless of which style the
+    `app.routers.admin.analytics.get_pg` too covers that binding regardless of which style the
     specific handler under test uses."""
     monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg)
-    monkeypatch.setattr("app.routers.admin.get_pg", _blocking_get_pg)
+    monkeypatch.setattr("app.routers.admin.analytics.get_pg", _blocking_get_pg)
     _seed_owned_profile(monkeypatch)
 
     async def go():
@@ -335,7 +335,7 @@ def test_all_nine_admin_dashboard_handlers_are_sync_def():
     which shared the same async-def-blocking bug, missed by both prior sweeps) and the
     new get_admin_dashboard composer (which calls all of these inline, so it too must be
     sync all the way down)."""
-    from app.routers import admin
+    from app.routers.admin import analytics as admin_analytics
     from app.routers.admin import users as admin_users
     for name in (
         "analytics_funnel",
@@ -349,7 +349,7 @@ def test_all_nine_admin_dashboard_handlers_are_sync_def():
         "list_users",
         "get_admin_dashboard",
     ):
-        fn = getattr(admin_users if name == "list_users" else admin, name)
+        fn = getattr(admin_users if name == "list_users" else admin_analytics, name)
         assert not inspect.iscoroutinefunction(fn), (
             f"{name} is async def — it must be a plain def so FastAPI runs its "
             f"blocking DB body in the threadpool, off the event loop (T8000/T8010/T8020)."

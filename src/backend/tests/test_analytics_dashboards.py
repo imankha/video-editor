@@ -288,7 +288,7 @@ class TestRetryBurstDetection:
     suite and so can't assert a precise ABSENCE of historical bursts."""
 
     def test_three_within_window_is_a_burst(self):
-        from app.routers.admin import _detect_retry_bursts
+        from app.routers.admin.analytics import _detect_retry_bursts
         ts = [
             "2026-08-20T10:00:00.000000Z",
             "2026-08-20T10:00:20.000000Z",
@@ -299,12 +299,12 @@ class TestRetryBurstDetection:
         assert bursts[0]["count"] == 3
 
     def test_two_within_window_is_not_a_burst(self):
-        from app.routers.admin import _detect_retry_bursts
+        from app.routers.admin.analytics import _detect_retry_bursts
         ts = ["2026-08-20T10:00:00.000000Z", "2026-08-20T10:00:20.000000Z"]
         assert _detect_retry_bursts(ts) == []
 
     def test_three_spread_beyond_window_is_not_a_burst(self):
-        from app.routers.admin import _detect_retry_bursts
+        from app.routers.admin.analytics import _detect_retry_bursts
         ts = [
             "2026-08-20T10:00:00.000000Z",
             "2026-08-20T10:05:00.000000Z",
@@ -313,7 +313,7 @@ class TestRetryBurstDetection:
         assert _detect_retry_bursts(ts) == []
 
     def test_empty_timestamps_returns_no_bursts(self):
-        from app.routers.admin import _detect_retry_bursts
+        from app.routers.admin.analytics import _detect_retry_bursts
         assert _detect_retry_bursts([]) == []
 
 
@@ -603,7 +603,7 @@ class TestUploadAlarmCountsUsers:
             def now(cls, tz=None):
                 return datetime.now(tz) + timedelta(days=1)
 
-        with patch("app.routers.admin.datetime", AppClockPastMidnight):
+        with patch("app.routers.admin.analytics.datetime", AppClockPastMidnight):
             card = client.get(f"/api/admin/analytics/pulse{query}", headers=_auth()).json()["cards"]["upload_success_rate"]
         assert (card["failed"], card["failed_users"]) == (3, 1)
 
@@ -660,7 +660,7 @@ class TestUploadAlarmCountsUsers:
         the alarm: with no user counts the old rate-and-sample rule still applies."""
         self._reset()
         self._fail("user-a", 8)
-        with patch("app.routers.admin.usage_daily_has_upload_outcomes", return_value=False):
+        with patch("app.routers.admin.analytics.usage_daily_has_upload_outcomes", return_value=False):
             card = client.get(f"/api/admin/analytics/pulse{query}", headers=_auth()).json()["cards"]["upload_success_rate"]
         assert card["failed_users"] is None
         assert card["succeeded_users"] is None
@@ -701,7 +701,7 @@ class TestPulseUtcDateWindow:
     `date.today()` -- a mismatch silently excludes today's rows for any admin in a
     negative-UTC-offset timezone for a ~7-8h window after local midnight.
 
-    Reproduced by patching `app.routers.admin.date` to a `date` subclass whose
+    Reproduced by patching `app.routers.admin.analytics.date` to a `date` subclass whose
     `today()` returns "yesterday" relative to the REAL current UTC date -- this
     simulates the local-lags-UTC scenario deterministically, independent of the
     host's actual timezone (so it fails reliably pre-fix and passes post-fix in CI,
@@ -732,7 +732,7 @@ class TestPulseUtcDateWindow:
 
         # T8110: pin exclude_test=false so pulse reads the seeded daily_counters
         # (the default ON path aggregates cumulative user_actions instead).
-        with patch("app.routers.admin.date", LocalDateLagsUtc):
+        with patch("app.routers.admin.analytics.date", LocalDateLagsUtc):
             resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
 
         assert resp.status_code == 200
@@ -769,7 +769,7 @@ class TestPulseUtcDateWindow:
             def today(cls):
                 return datetime.now(UTC).date() - timedelta(days=1)
 
-        with patch("app.routers.admin.date", LocalDateLagsUtc):
+        with patch("app.routers.admin.analytics.date", LocalDateLagsUtc):
             resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
 
         assert resp.status_code == 200
@@ -1204,7 +1204,7 @@ class TestUploadSuccessWindow:
     def test_no_cap_or_floor_on_upload_counts(self):
         import inspect
 
-        from app.routers import admin
+        from app.routers.admin import analytics as admin
         src = inspect.getsource(admin._segment_group_rows)
         for capper in ("GREATEST(", "LEAST(", "max(", "min("):
             assert capper not in src, capper

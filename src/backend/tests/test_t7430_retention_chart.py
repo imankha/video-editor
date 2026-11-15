@@ -221,8 +221,8 @@ class TestActionRetention:
     def test_endpoint_serves_a_clip_library_action_curve_from_the_rollup(self, pg_conn, monkeypatch):
         """C4: the admin endpoint reads T7400's rollup_action_weekly for the requested
         action (a T7450 clip-library event here) and returns its cohorts for the chart."""
-        import app.routers.admin as admin
         import app.services.analytics_rollup as rollup
+        from app.routers.admin import analytics as admin
 
         rows = [
             ("2026-06-01", "basketball", "collection_viewed", 0, 6),
@@ -326,7 +326,7 @@ class TestMonthlyCohortBin:
     """Amended C1: the weekly/monthly toggle bins the Cohorts grouping by signup month."""
 
     def test_monthly_bin_groups_signups_by_month(self, pg_conn, monkeypatch):
-        import app.routers.admin as admin
+        from app.routers.admin import analytics as admin
 
         register_test_user_ids("t7430-m1", "t7430-m2")
         _seed_user("t7430-m1", date(2025, 3, 3))
