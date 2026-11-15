@@ -98,6 +98,7 @@ logging.getLogger("s3transfer").setLevel(logging.WARNING)
 from app.middleware import RequestContextMiddleware
 from app.routers import (
     admin_bugs_router,
+    admin_campaigns_router,
     admin_open_router,
     admin_referrals_router,
     admin_router,
@@ -304,6 +305,7 @@ app.include_router(admin_open_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(admin_bugs_router, prefix="/api")
 app.include_router(admin_referrals_router, prefix="/api")
+app.include_router(admin_campaigns_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 app.include_router(gallery_shares_router)
 app.include_router(shared_router)
