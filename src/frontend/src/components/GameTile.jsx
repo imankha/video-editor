@@ -230,7 +230,7 @@ export function GameTile({
   // T10540: `v` is the game's top-rated play (poster_version from GET /api/games). The
   // picture is cached for a day under its address, so the address changes when the
   // top play does; the endpoint ignores the value.
-  const posterUrl = `${API_BASE}/api/games/${game.id}/poster.jpg?profile_id=${currentProfileId}&v=${encodeURIComponent(game.poster_version)}`;
+  const posterUrl = `${API_BASE}/api/games/${game.id}/poster.jpg?profile_id=${currentProfileId}${game.poster_version != null ? `&v=${encodeURIComponent(game.poster_version)}` : ''}`;
 
   // Action descriptors -- rendered once for the desktop popover and once for the
   // mobile sheet (Delete is separate: it carries the two-tap confirm).
