@@ -54,7 +54,7 @@ Reply to this email if anything gets in your way. We read every one.
 ## Sending (always in this order)
 
 Remote envs need the Postgres proxy running first:
-`fly proxy 15433:5432 -a reel-ballers-db-prod` (staging: `15432`, `reel-ballers-db-staging`).
+`fly proxy 15433:5432 -a reel-ballers-db-prod` (staging: `15432`, `reel-ballers-db-staging-lax`).
 
 ```bash
 cd src/backend
