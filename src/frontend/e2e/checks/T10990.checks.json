@@ -2,6 +2,6 @@
   "criteria": {
     "T10990:C1": {"kind": "browser"},
     "T10990:C2": {"kind": "browser"},
-    "T10990:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/stores/projectDataStore.changeAspectRatio.test.js -t \"re-fit crops from its answer\""}
+    "T10990:C3": {"kind": "browser"}
   }
 }
