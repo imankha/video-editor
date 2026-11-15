@@ -27,6 +27,7 @@
  * are dangling (31, 33, 51) — so these specs run GREEN by opening 54/37, and would skip
  * loudly if a re-seed dropped the streamable ones.
  */
+import { test } from '@playwright/test';
 import { waitForRealVideoReady } from './videoRoute.js';
 
 const API_BASE = process.env.E2E_API_BASE || '/api';
@@ -143,7 +144,12 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3, exclud
       continue;
     }
     const verdict = await waitForRealVideoReady(page, { requireAspectRatio: true, minReadyState });
-    if (verdict.ready) return { ok: true, projectId: targetId };
+    if (verdict.ready) {
+      // Read by the T11905 check (e2e/checks), which runs the specs that use this helper and
+      // needs proof each one got past it, not just that it did not skip.
+      test.info().annotations.push({ type: 'overlay-draft-opened', description: `project ${targetId}` });
+      return { ok: true, projectId: targetId };
+    }
 
     // Streamable yet the stage never hydrated in-app — reset and try the next candidate.
     skipped.push(`project ${targetId}: probed streamable (R2 206) yet overlay never hydrated: ${verdict.reason}`);
