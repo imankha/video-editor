@@ -33,7 +33,7 @@ import psycopg2
 
 BACKEND = Path(__file__).resolve().parents[1]
 REPO = BACKEND.parents[1]
-SHARDS = 5
+SHARDS = 4  # Branch CI runs 4 shards; the same split keeps file co-location (module stubs) as in CI
 
 sys.path.insert(0, str(REPO / "scripts"))
 from split_pytest import split  # noqa: E402
