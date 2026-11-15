@@ -441,5 +441,3 @@ def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_
             )
         """)
     return where_parts, params
-
-
