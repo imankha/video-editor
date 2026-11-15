@@ -19,7 +19,7 @@ TARGET_ID = "grantee-user-id"
 @pytest.fixture
 def admin_stub(monkeypatch):
     """Neutralise auth/db and record credit_ledger calls -- no R2 involved."""
-    from app.routers import admin as m
+    from app.routers.admin import credits as m
 
     calls = {"grant": [], "set_balance": []}
 
