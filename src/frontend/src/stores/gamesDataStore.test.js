@@ -171,3 +171,32 @@ describe('gamesDataStore: a single game failing does not fail the list', () => {
     expect(useGamesDataStore.getState().isLoading).toBe(false);
   });
 });
+
+// T10540: leaving Annotate (Home/back) is the gesture after marking plays; the Games
+// list must be fetched again so each tile gets its new poster_version, even when no
+// video was watched (viewedDuration 0).
+describe('gamesDataStore: finishAnnotation refreshes the games list (T10540)', () => {
+  beforeEach(async () => {
+    await loadModule();
+    const { useAuthStore } = await import('./authStore');
+    useAuthStore.setState({ isAuthenticated: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it.each([0, 120])('refetches /api/games after finish-annotation (viewedDuration %s)', async (viewed) => {
+    const fetchMock = vi.fn((url) => Promise.resolve({
+      ok: true, status: 200,
+      json: () => Promise.resolve(String(url).endsWith('/api/games') ? { games: [] } : {}),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await useGamesDataStore.getState().finishAnnotation(4, viewed);
+    await vi.waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/api/games'))).toBe(true);
+    });
+  });
+});
