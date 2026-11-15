@@ -1332,6 +1332,10 @@ export const SPOTLIGHT_COPY = {
   NEEDS_SHARPEN_EDITS: 'You changed your framing. Sharpen your highlight, then add a spotlight.',
   GO_TO_FRAME: `Go to ${MODE_NAMES.FRAMING}`,
   LOADING_VIDEO: 'Loading video...',
+  // T16480: the saved spotlights failed to load; editing stays off until Retry lands them.
+  LOAD_FAILED_TITLE: "We couldn't load your spotlights",
+  LOAD_FAILED_BODY: 'Your saved spotlights are safe. Tap Retry to load them before you edit.',
+  LOAD_RETRY: 'Retry',
   checklistStep: (n) => `Tap ${n}`,
   // Notices when a new sharpen moved or dropped spotlights (utils/highlightCarryNote.js).
   carryDropped: (n) => (n === 1
