@@ -274,7 +274,7 @@ def test_build_metadata_omits_date_when_game_date_absent(monkeypatch):
     import app.database as database
     monkeypatch.setattr(database, "column_exists", lambda *a, **k: True)
     monkeypatch.setattr(
-        "app.routers.downloads._generate_game_display_name",
+        dm, "game_display_name",
         lambda *a, **k: "Vs Sharks",
     )
     fv_row = _row({
@@ -305,7 +305,7 @@ def test_build_metadata_writes_date_when_present(monkeypatch):
     import app.database as database
     monkeypatch.setattr(database, "column_exists", lambda *a, **k: True)
     monkeypatch.setattr(
-        "app.routers.downloads._generate_game_display_name",
+        dm, "game_display_name",
         lambda *a, **k: "Vs Sharks Dec 6",
     )
     fv_row = _row({

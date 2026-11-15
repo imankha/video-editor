@@ -401,10 +401,8 @@ def collections_summary(sport: str | None = None):
     server-computed regardless of the value passed.
     """
     # Reuse the downloads helpers (router->router import has precedent here).
-    from app.routers.downloads import (
-        _generate_game_display_name,
-        _get_season_for_month,
-    )
+    from app.routers.downloads import _get_season_for_month
+    from app.services.game_display import game_display_name
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -469,7 +467,7 @@ def collections_summary(sport: str | None = None):
             )
             for g in cursor.fetchall():
                 games_info[g["id"]] = {
-                    "name": _generate_game_display_name(
+                    "name": game_display_name(
                         g["opponent_name"], g["game_date"], g["game_type"],
                         g["tournament_name"], g["name"] or default_game_name(g["game_date"]),
                     ),
@@ -1479,7 +1477,7 @@ def _build_collection_title(conn, d: CollectionDefinition) -> str:
     """Build the frozen share title server-side (don't trust the client title)."""
     ratio_word = RATIO_WORD.get(d.aspect_ratio, d.aspect_ratio)
     if d.scope.type == "game":
-        from app.routers.downloads import _generate_game_display_name
+        from app.services.game_display import game_display_name
         cur = conn.cursor()
         cur.execute(
             "SELECT name, game_date, opponent_name, game_type, tournament_name "
@@ -1488,7 +1486,7 @@ def _build_collection_title(conn, d: CollectionDefinition) -> str:
         )
         g = cur.fetchone()
         base = (
-            _generate_game_display_name(
+            game_display_name(
                 g["opponent_name"], g["game_date"], g["game_type"],
                 g["tournament_name"], g["name"] or default_game_name(g["game_date"]),
             )

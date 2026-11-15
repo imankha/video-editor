@@ -748,9 +748,8 @@ re-introduced it; the testid string is the same one the old T8700 test already p
 **Honest fallback title (the S11 core fix):** the date input no longer defaults to today and the
 `OPPONENT_PLACEHOLDER='Unnamed opponent'` was DELETED — an untouched opponent/date now submits
 EMPTY (`opponentName.trim()`, `gameDate=''`; `uploadManager.createGame` maps `''`->null). Backend
-`games.py` gained pure helpers `format_short_date()` (extracted verbatim from
-`generate_game_display_name`'s inline strftime — Windows `%-d` fallback preserved) and
-`upload_fallback_name()`; `create_game`'s fallback changed `"New Game"` -> `"Game uploaded <today>"`
+`games.py` gained the pure helper
+`upload_fallback_name()` (its date comes from `queries.short_game_date()`; T4660 retired `format_short_date()`); `create_game`'s fallback changed `"New Game"` -> `"Game uploaded <today>"`
 (uses TODAY's server date, never `request.game_date` — a date typed without an opponent is still a
 claimed match date). So a metadata-skipped game now titles "Game uploaded Sep 12" instead of the
 false "Vs Unnamed opponent Sep 12". `localTodayISO` export deleted (was only the today-default).
@@ -3291,7 +3290,7 @@ The full checklist for an 11th→Nth sport:
 
 - **The Games tab organizes by MATCH date (`game_date`), never upload date (T7290).** Month headers,
   cross-group order and within-group order all key off `game_date` — the date the user thinks in and
-  the one already baked into the tile title by `generate_game_display_name`. Two halves that must stay
+  the one already baked into the tile title by `game_display_name` (`services/game_display.py`). Two halves that must stay
   in agreement: `groupGamesByMonth` (ProjectManager.jsx, exported for tests) and
   `GAMES_MATCH_DATE_ORDER_BY` (games.py, the `_read_games_for_list` ORDER BY). Invariants: `game_date`
   is date-only TEXT `YYYY-MM-DD`, so the frontend parses it as a **local calendar date** — `new
@@ -3316,7 +3315,7 @@ The full checklist for an 11th→Nth sport:
   match date ("Sat, Mar 21") from `game_date`. T7290's reasoning for removing it (already the
   title suffix) was wrong in practice: the name is `truncate`d in ~120px and the suffix sits at
   the truncation end, so it is the FIRST thing lost — and a game with no `opponent_name` gets no
-  suffix at all from `generate_game_display_name`. Empty when there is no match date; NEVER an
+  suffix at all from `game_display_name` (`services/game_display.py`). Empty when there is no match date; NEVER an
   upload-date fallback. (2) **`groupGamesByMonth` is gone**, replaced by `groupGamesForTab`,
   which returns ONE ORDERED ARRAY of `{key, kind: 'month'|'tournament', label, sublabel,
   sortDate, games}` instead of `{groups, order}`.
@@ -3623,7 +3622,7 @@ AnnotateMode instances (only the inline one gets amber/segments).
 
 ## T13246 - Veo "make a game" details step
 - `VeoZipPickList` (gameMode) shows the Upload dialog's "Game details (optional)" via the shared `GameDetailsFields` (also used by `GameDetailsModal`, `EditGameModal`). Prefill = `veoGameDetails(zipName, profileTeam)` in `veoHighlights/clipImport.js` (reuses `parseGameFilename(..., {ourTeamFromMatchup: true})`; date only if the NAME holds one, short M_D_YY only when the numbers force a reading). Entry/mvhd times are never a match date.
-- Payload keeps `name` = zip title; the server's `GET /api/games` rebuilds the title as "Vs/at X Mon D" whenever an opponent is set, so the preview and AnnotateContainer's local name both use `utils/gameDisplayTitle.js` (mirror of `generate_game_display_name`). Keep the two in step.
+- Payload keeps `name` = zip title; the server's `GET /api/games` rebuilds the title as "Vs/at X Mon D" whenever an opponent is set, so the preview and AnnotateContainer's local name both use `utils/gameDisplayTitle.js` (mirror of `game_display_name` (`services/game_display.py`)). Keep the two in step.
 - `parseGameFilename` takes the extension off at the LAST dot: a title like "A vs. B" needs a fake extension appended or it is cut at "vs.".
 
 - **T13600 (2026-10-26) picker truth:** `VeoZipPickList` rows/chips are built from the UPLOADED entry per moment (its stamp/length, `labels[0]` as the one label): chip counts sum to the rows, a chip filters to those rows, and `veoSuggestions` carry only that label, so the game shows no chip without a suggestion. Payload `name` = `gameDisplayTitle(details, zipTitle)` (the promised title; the server stores an explicit `name` as-is). Game videos are renamed `{Label} {h}m{ss}s.mp4` (`VEO_CLIP_IMPORT.gameVideoName`) because the Videos lane shows the file name. Game mode shows `CreditCostRow` (cost = `calculateUploadCost` over the picked entries' sizes). The details disclosure lives inside the scrolling body (no nested scroller).

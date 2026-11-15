@@ -43,6 +43,8 @@ import logging
 import os
 from pathlib import Path
 
+from app.services.game_display import game_display_name
+
 logger = logging.getLogger(__name__)
 
 # Machine-readable attribution to pair with the burned-in branded outro. ASCII
@@ -82,9 +84,8 @@ def _athlete_name(user_id: str | None, profile_id: str | None) -> str | None:
 def _game_attribution(conn, game_id: int | None) -> tuple[str | None, str | None]:
     """(display_name, game_date) for a single-game reel, or (None, None).
 
-    Reuses `downloads._generate_game_display_name` (the SAME "Vs <Opp> <Date>"
-    the gallery shows) -- lazily imported to avoid a router<->service import
-    cycle. `game_date` is returned VERBATIM ('YYYY-MM-DD') only when present; a
+    Uses `game_display_name` (the SAME "Vs <Opp> <Date>" the gallery shows).
+    `game_date` is returned VERBATIM ('YYYY-MM-DD') only when present; a
     missing date yields None so the caller omits `date`/`creation_time` rather
     than guessing (task file: a visibly absent date beats a wrong one)."""
     if game_id is None:
@@ -100,8 +101,7 @@ def _game_attribution(conn, game_id: int | None) -> tuple[str | None, str | None
         if row is None:
             return (None, None)
         from app.queries import default_game_name
-        from app.routers.downloads import _generate_game_display_name
-        display = _generate_game_display_name(
+        display = game_display_name(
             row["opponent_name"], row["game_date"], row["game_type"],
             row["tournament_name"], row["name"] or default_game_name(row["game_date"]),
         )

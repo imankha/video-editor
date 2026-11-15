@@ -35,9 +35,9 @@ from app.queries import (
     default_game_name,
     downloads_counts,
     latest_final_videos_subquery,
-    short_game_date,
 )
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
+from app.services.game_display import game_display_name
 from app.services.intro_cards import (
     load_profile_cards,
     resolve_intro_card,
@@ -132,42 +132,6 @@ def _get_season_for_month(month: int) -> str:
         return "Spring"
     else:  # Jun-Aug
         return "Summer"
-
-
-def _generate_game_display_name(
-    opponent_name: str | None,
-    game_date: str | None,
-    game_type: str | None,
-    tournament_name: str | None,
-    fallback_name: str
-) -> str:
-    """
-    Generate a display name for a game based on its details.
-
-    Format:
-    - Home: "Vs <Opponent> <Date>"
-    - Away: "at <Opponent> <Date>"
-    - Tournament: "<Tournament>: Vs <Opponent> <Date>"
-    """
-    if not opponent_name:
-        return fallback_name
-
-    # Format date as "Mon D" (e.g., "Dec 6")
-    date_str = short_game_date(game_date)
-
-    # Build the name based on game type
-    if game_type == 'tournament' and tournament_name:
-        prefix = f"{tournament_name}: Vs"
-    elif game_type == 'away':
-        prefix = "at"
-    else:  # home or default
-        prefix = "Vs"
-
-    parts = [prefix, opponent_name]
-    if date_str:
-        parts.append(date_str)
-
-    return " ".join(parts)
 
 
 def _generate_group_key(game_names: list[str], game_dates: list[str]) -> str | None:
@@ -426,7 +390,7 @@ async def list_downloads(
             """, list(game_ids_to_fetch))
             for game_row in cursor.fetchall():
                 # Generate display name from game details (not stored name which may be filename)
-                display_name = _generate_game_display_name(
+                display_name = game_display_name(
                     game_row['opponent_name'],
                     game_row['game_date'],
                     game_row['game_type'],
@@ -469,7 +433,7 @@ async def list_downloads(
                 if game_row['game_id'] not in project_games[project_id]['game_ids']:
                     project_games[project_id]['game_ids'].append(game_row['game_id'])
                     # Generate display name from game details (not stored name which may be filename)
-                    display_name = _generate_game_display_name(
+                    display_name = game_display_name(
                         game_row['opponent_name'],
                         game_row['game_date'],
                         game_row['game_type'],

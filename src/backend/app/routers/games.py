@@ -27,7 +27,7 @@ from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, Sh
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import acquire_write_lock, durable_sync
 from app.profile_context import get_current_profile_id
-from app.queries import default_game_name, derive_clip_name
+from app.queries import default_game_name, derive_clip_name, short_game_date
 
 # T11430: router-to-router import of the highlight-instances read helper (the
 # only `from app.routers` import in this module). Left here (not lifted to a
@@ -45,6 +45,7 @@ from app.services.auth_db import (
 )
 from app.services.auto_export import auto_export_game, recap_r2_keys
 from app.services.credit_ledger import CreditsUnavailable, deduct_credits, get_balance
+from app.services.game_display import game_display_name
 from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
 from app.services.upload_failures import record_upload_failure_from_payload
 from app.storage import (
@@ -208,28 +209,6 @@ def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
 
 
 
-def format_short_date(iso_date: str | None) -> str:
-    """
-    Format a YYYY-MM-DD string as "Mon D" (e.g. "Dec 6"). Returns "" for a
-    missing/blank date and the raw value if it cannot be parsed. Platform-safe:
-    %-d is not portable (fails on Windows), so it falls back to %#d-style zero
-    stripping. Extracted (T9930) so the create-time fallback title and the
-    display-name builder share one date format.
-    """
-    if not iso_date:
-        return ""
-    from datetime import datetime
-    try:
-        dt = datetime.strptime(iso_date, "%Y-%m-%d")
-    except (ValueError, TypeError):
-        return iso_date
-    try:
-        return dt.strftime("%b %-d")  # "Dec 6"
-    except (ValueError, Exception):
-        # On Windows, %-d may not work; strip the leading zero manually.
-        return dt.strftime("%b %d").replace(" 0", " ")
-
-
 def upload_fallback_name(upload_date: str | None) -> str:
     """
     Honest title for a game created with no opponent (T9930). The parent gave no
@@ -238,7 +217,7 @@ def upload_fallback_name(upload_date: str | None) -> str:
     day as a match date (the old default titled these "Vs Unnamed opponent
     <today>", asserting a match date the user never entered — evaluator S11).
     """
-    date_str = format_short_date(upload_date)
+    date_str = short_game_date(upload_date)
     return f"Game uploaded {date_str}" if date_str else "Game uploaded"
 
 
@@ -265,44 +244,6 @@ def unnamed_upload_name(original_filename: str | None, upload_date: str | None, 
         name = f"{base} ({n})"
         n += 1
     return name
-
-
-def generate_game_display_name(
-    opponent_name: str | None,
-    game_date: str | None,
-    game_type: str | None,
-    tournament_name: str | None,
-    fallback_name: str
-) -> str:
-    """
-    Generate a display name for a game based on its details.
-
-    Format:
-    - Home: "Vs <Opponent> <Date>"
-    - Away: "at <Opponent> <Date>"
-    - Tournament: "<Tournament>: Vs <Opponent> <Date>"
-
-    Falls back to the stored name if opponent_name is not set.
-    """
-    if not opponent_name:
-        return fallback_name
-
-    # Format date as "Mon D" (e.g., "Dec 6")
-    date_str = format_short_date(game_date)
-
-    # Build the name based on game type
-    if game_type == GameType.TOURNAMENT and tournament_name:
-        prefix = f"{tournament_name}: Vs"
-    elif game_type == GameType.AWAY:
-        prefix = "at"
-    else:  # home or default
-        prefix = "Vs"
-
-    parts = [prefix, opponent_name]
-    if date_str:
-        parts.append(date_str)
-
-    return " ".join(parts)
 
 
 # ==============================================================================
@@ -690,7 +631,7 @@ async def create_game(request: CreateGameRequest):
             display_name = f"{explicit_name} ({suffix})"
             suffix += 1
     else:
-        display_name = generate_game_display_name(
+        display_name = game_display_name(
             request.opponent_name,
             request.game_date,
             request.game_type,
@@ -1765,7 +1706,7 @@ async def _list_games_impl(skip_presigned_urls=False):
                 f"date={row['game_date']}, type={row['game_type']}, name={row['name']}"
             )
 
-        display_name = generate_game_display_name(
+        display_name = game_display_name(
             row['opponent_name'],
             row['game_date'],
             row['game_type'],
@@ -2428,7 +2369,7 @@ async def get_game(game_id: int):
 
         annotations = load_annotations_from_db(game_id)
 
-        display_name = generate_game_display_name(
+        display_name = game_display_name(
             row['opponent_name'],
             row['game_date'],
             row['game_type'],
@@ -2517,7 +2458,7 @@ async def update_game(
             final_date = updates.get('game_date', game['game_date'])
             final_type = updates.get('game_type', game['game_type'])
             final_tournament = updates.get('tournament_name', game['tournament_name'])
-            updates['name'] = generate_game_display_name(
+            updates['name'] = game_display_name(
                 final_opponent, final_date, final_type, final_tournament, game['name']
             )
 
@@ -3901,7 +3842,7 @@ async def load_game(game_id: int):
 
         annotations = load_annotations_from_db(game_id)
 
-        display_name = generate_game_display_name(
+        display_name = game_display_name(
             row['opponent_name'],
             row['game_date'],
             row['game_type'],
