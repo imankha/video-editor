@@ -17,6 +17,7 @@ This package contains FastAPI routers organized by functionality:
 from .admin import open_router as admin_open_router
 from .admin import router as admin_router
 from .admin.bugs import router as admin_bugs_router
+from .admin.referrals import router as admin_referrals_router
 from .auth import router as auth_router
 from .bootstrap import router as bootstrap_router
 from .clips import router as clips_router
@@ -39,4 +40,4 @@ from .storage import router as storage_router
 from .suggestions import router as suggestions_router
 from .users import router as users_router
 
-__all__ = ['admin_bugs_router', 'admin_open_router', 'admin_router', 'auth_router', 'bootstrap_router', 'clips_router', 'collections_router', 'credits_router', 'detection_router', 'downloads_router', 'export_router', 'gallery_shares_router', 'games_router', 'games_upload_router', 'health_router', 'intro_cards_router', 'payments_router', 'profiles_router', 'projects_router', 'quests_router', 'settings_router', 'shared_router', 'storage_router', 'suggestions_router', 'users_router']
+__all__ = ['admin_bugs_router', 'admin_open_router', 'admin_referrals_router', 'admin_router', 'auth_router', 'bootstrap_router', 'clips_router', 'collections_router', 'credits_router', 'detection_router', 'downloads_router', 'export_router', 'gallery_shares_router', 'games_router', 'games_upload_router', 'health_router', 'intro_cards_router', 'payments_router', 'profiles_router', 'projects_router', 'quests_router', 'settings_router', 'shared_router', 'storage_router', 'suggestions_router', 'users_router']
