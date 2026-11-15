@@ -35,7 +35,7 @@ Usage
 Requires a Fly proxy tunnel to prod Postgres (same convention as
 scripts/verify_t9680_credits.py / scripts/copy_user_between_envs.py):
 
-    fly proxy 15433:5432 --app reel-ballers-db-prod
+    fly proxy 15433:5432 --app reel-ballers-db-prod-lax
 
 then, from a shell with R2 access + the fly proxy already up:
 

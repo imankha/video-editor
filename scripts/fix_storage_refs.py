@@ -5,7 +5,7 @@ Compares Postgres game_storage_refs against the actual blake3 hashes in
 the user's profile SQLite (games + game_videos tables) and reconciles.
 
 Requires:
-  - Fly proxy for prod Postgres: fly proxy 15433:5432 --app reel-ballers-db-prod
+  - Fly proxy for prod Postgres: fly proxy 15433:5432 --app reel-ballers-db-prod-lax
   - .env.prod at project root
 
 Usage:
