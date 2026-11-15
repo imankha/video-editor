@@ -159,8 +159,8 @@ URLs — `playwright.config.js` reads them:
 
 ```bash
 cd src/frontend
-E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
-E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
+E2E_BASE_URL=https://staging.reelballers.com \
+E2E_API_BASE=https://api-staging.reelballers.com/api \
 npm run test:e2e
 ```
 

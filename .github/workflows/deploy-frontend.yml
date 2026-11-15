@@ -40,7 +40,7 @@ jobs:
       - run: npm run build
         working-directory: src/frontend
         env:
-          VITE_API_BASE: https://reel-ballers-api-staging.fly.dev
+          VITE_API_BASE: https://api-staging.reelballers.com
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           # T4940: staging Stripe publishable key. A pk_ is not secret, but no keys
           # are hardcoded in workflows (standard). OPERATOR: create the repo secret
@@ -60,5 +60,5 @@ jobs:
       - name: Verify frontend/backend build lockstep
         run: |
           bash scripts/verify-build-lockstep.sh \
-            --frontend-url https://reel-ballers-staging.pages.dev \
-            --backend-url https://reel-ballers-api-staging.fly.dev/api/version
+            --frontend-url https://staging.reelballers.com \
+            --backend-url https://api-staging.reelballers.com/api/version

@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
  * origin on split-host staging/prod. A non-empty base is forced so a bare path is
  * distinguishable from the fix (see GameTile.posterUrl.test.jsx for the rationale).
  */
-const { API_HOST } = vi.hoisted(() => ({ API_HOST: 'https://reel-ballers-api-staging.fly.dev' }));
+const { API_HOST } = vi.hoisted(() => ({ API_HOST: 'https://api-staging.reelballers.com' }));
 
 vi.mock('../config', async (importOriginal) => ({
   ...(await importOriginal()),
