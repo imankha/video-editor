@@ -96,11 +96,15 @@ test.describe('T10990 portrait/landscape switch in one step', () => {
     page.on('request', (req) => {
       if (req.url().includes(`/projects/${project.id}`)) requests.push(`${req.method()} ${new URL(req.url()).pathname}`);
     });
+    const answer = page.waitForResponse((res) => res.url().includes(`/clips/projects/${project.id}/aspect-ratio`)
+      && res.request().method() === 'POST', { timeout: 60000 });
     await otherRatioButton(page).click();
     await expect.poll(() => boxShape(page), { timeout: 60000 }).not.toBe(before);
-    // Let any follow-up refetch (the old clips + project GETs) arrive before counting.
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await page.waitForTimeout(3000);
+    await answer;
+    // Let any follow-up refetch (the old clips + project GETs) arrive before counting. A fixed
+    // window, not 'networkidle': on staging the video keeps streaming, so the network never goes
+    // idle and that wait ran into the test timeout (T16570).
+    await page.waitForTimeout(5000);
     expect(requests, `requests for project ${project.id}`).toEqual([
       `POST /api/clips/projects/${project.id}/aspect-ratio`,
     ]);
