@@ -17,6 +17,10 @@ The name shown for a game, such as the opponent and the date, is built by three 
 - The remaining `game_type` string literals sit inside the duplicated code and go with it.
 - The per-user database opener half of the old scope is done (`services/db_residency.py` `connect_db`).
 
+## Ruling
+
+**No difference on screen** (owner, 2026-11-15). Checked on staging with Playwright (signed in as the seeded check account) and by reading both code paths. `projects.py` and `downloads.py` both write a game's date as "Mon D" (for example "Dec 6", no leading zero) and both fall back to the stored text when the date cannot be parsed. The staging account's one game has no date, so the screens show no date at all in all three places. Nothing for the owner to pick: keep the `short_game_date()` behaviour in `queries.py` as the single copy.
+
 ## Acceptance Criteria
 
 - [ ] One function builds a game's display name; `projects.py` and `downloads.py` hold no copy.
