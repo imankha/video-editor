@@ -1,6 +1,6 @@
 # T16560: Staging check failed: T10540:C10 In the browser, on a fresh upload: mark and rate
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-15
