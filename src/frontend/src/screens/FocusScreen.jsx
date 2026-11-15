@@ -97,8 +97,6 @@ export function FocusScreen({
   const {
     includeAudio,
     setIncludeAudio,
-    videoFile: storedVideoFile,
-    setVideoFile: setStoredVideoFile,
     framingChangedSinceExport,
     setFramingChangedSinceExport,
   } = useFocusStore();

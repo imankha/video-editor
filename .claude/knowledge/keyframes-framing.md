@@ -520,8 +520,9 @@ keyframes are covered where they diverge from crop — they are the "one refacto
   `framing_action` in `src/backend/app/routers/clips.py:326`. Overlay:
   `POST .../projects/{project_id}/overlay/actions` → `overlay_action` in
   `src/backend/app/routers/export/overlay.py:347`.
-- **Store**: `src/frontend/src/stores/focusStore.js` — export dirty tracking is hash-based
-  (`markExported`/`hasChangedSinceExport` L38-50).
+- **Store**: `src/frontend/src/stores/focusStore.js` — export dirty tracking is the boolean
+  `framingChangedSinceExport` (the never-called hash pair and the never-written per-clip
+  state/video-file fields were deleted, T4440).
 
 ## Data flow
 ```
@@ -1722,8 +1723,8 @@ keyframed** — camera tilt is constant for a recording.
 - **fps `|| 30` fallback landscape**: FocusScreen.jsx:219/541/623, useClipManager.js:46,
   projectDataStore.js:402, FocusContainer.jsx:238, overlay chain OverlayContainer.jsx:162/196/250;
   `videoUtils.timeToFrame/frameToTime` default 30. One canonical source is T4540 (audit C7).
-- **getFilteredKeyframesForExport duplicated verbatim**: FocusContainer.jsx:862-896 (the wired
-  one) ≡ FocusScreen.jsx:750-784 (audit D7).
+- **getFilteredKeyframesForExport**: one copy, in `FocusScreen.jsx` (the FocusContainer twin,
+  plus its unconsumed `hasFramingEdits`/`currentCropState` returns, was deleted, T4440).
 - **FocusContainer hand-mirrors** hook→store per gesture at 8 sites (~L352-835) to dodge React
   batch ordering → T4470 (audit D1).
 
@@ -1850,8 +1851,13 @@ the numbers below are the answer.
 - **T4250**: replace both spline specializations with `interpolateGenericSpline`; fixes
   strokeOpacity/fillOpacity snapping; characterization tests pin crop behavior.
 - **Keyframe System Unification epic (STRICT order)**:
-  - **T4440** dead-code sweep (dead OverlayTimeline/HighlightLayer/components-Timeline,
-    useHighlight, focusStore corpses).
+  - **T4440** dead-code sweep (done): old Spotlight timeline (OverlayTimeline,
+    HighlightLayer, components/Timeline.jsx), useCurrentVideoState, useTimeline,
+    the container FocusTimeline/OverlayVideoOverlays wrappers, focusStore corpses, initializeFromClipMetadata.
+    `OverlayContainer` takes the screen's `effectiveOverlayVideoUrl` and has NO Frame params and
+    no video-source derivation of its own; `OverlayScreen.deriveOverlayVideoSource` is the only
+    picker. Guard: `src/frontend/src/utils/deadEditorCode.test.js`. `syncSegmentsToStore` kept
+    (unused) for T4470.
   - **T4450** shared KeyframeTrack — unify delete gating to the flat-list rule; the gating change
     is the single intended diff.
   - **T4460** overlay onto keyframe controller (**Stage 2 design gate**): region-scoped tracks;

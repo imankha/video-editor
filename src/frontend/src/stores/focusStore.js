@@ -3,21 +3,13 @@ import { create } from 'zustand';
 
 /**
  * Store for framing mode state that needs to persist across mode switches
- * and be accessible from other screens (like overlay for export comparison)
+ * and be read by the update-gate flush and bug reports
  */
-export const useFocusStore = create((set, get) => ({
-  // Per-clip framing state (crop keyframes, segments)
-  clipStates: {},
-
-  // Current video file (for persisting across mode switches)
-  videoFile: null,
-
+export const useFocusStore = create((set) => ({
   // Global settings
   includeAudio: true,
 
   // Export tracking
-  hasExported: false,
-  exportedStateHash: null,
   framingChangedSinceExport: false,
 
   // Currently loaded clip data (from projectDataStore, but needed for framing)
@@ -30,14 +22,6 @@ export const useFocusStore = create((set, get) => ({
   activeSaveCurrentClipState: null,
 
   // Actions
-  setClipState: (clipId, state) => set(prev => ({
-    clipStates: { ...prev.clipStates, [clipId]: state }
-  })),
-
-  getClipState: (clipId) => get().clipStates[clipId] || null,
-
-  setVideoFile: (file) => set({ videoFile: file }),
-
   setIncludeAudio: (value) => set({ includeAudio: value }),
 
   setCurrentClipId: (clipId) => set({ currentClipId: clipId }),
@@ -45,26 +29,10 @@ export const useFocusStore = create((set, get) => ({
   registerSaveCurrentClipState: (fn) => set({ activeSaveCurrentClipState: fn }),
   clearSaveCurrentClipState: () => set({ activeSaveCurrentClipState: null }),
 
-  markExported: (stateHash) => set({
-    hasExported: true,
-    exportedStateHash: stateHash,
-    framingChangedSinceExport: false,
-  }),
-
   setFramingChangedSinceExport: (changed) => set({ framingChangedSinceExport: changed }),
-
-  hasChangedSinceExport: (currentStateHash) => {
-    const { hasExported, exportedStateHash } = get();
-    if (!hasExported) return false;
-    return currentStateHash !== exportedStateHash;
-  },
 
   // Reset for new project
   reset: () => set({
-    clipStates: {},
-    videoFile: null,
-    hasExported: false,
-    exportedStateHash: null,
     framingChangedSinceExport: false,
     currentClipId: null,
   }),
@@ -96,6 +64,5 @@ export function useRegisterActiveSaveHandler(saveHandler) {
 }
 
 // Selector hooks
-export const useFocusVideoFile = () => useFocusStore(state => state.videoFile);
 export const useFocusIncludeAudio = () => useFocusStore(state => state.includeAudio);
 export const useFocusChangedSinceExport = () => useFocusStore(state => state.framingChangedSinceExport);

@@ -321,15 +321,6 @@ describe('AnnotateControls.jsx:194 inline elapsed/clipLength', () => {
   });
 });
 
-describe('HighlightLayer.jsx:259 inline highlightDuration.toFixed(1) + "s"', () => {
-  const expected = ['0.0s', '0.4s', '0.5s', '3.0s', '6.0s', '60.0s', '60.0s', '3599.9s', '3600.0s'];
-  POSITIVE_INPUTS.forEach((v, i) => {
-    it(`(${v}) -> ${expected[i]}`, () => {
-      expect(`${v.toFixed(1)}s`).toBe(expected[i]);
-    });
-  });
-});
-
 describe('SegmentLayer.jsx:150 inline title', () => {
   it('(6.027) -> "6.0s -> 6.0s"', () => {
     const d = 6.027;

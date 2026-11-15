@@ -23,7 +23,7 @@ vi.mock('../../containers', () => ({ OverlayContainer: () => ({}) }));
 vi.mock('../../modes/overlay', () => ({
   useHighlightRegions: () => ({
     boundaries: [], regions: [], keyframes: [], framerate: 30,
-    initializeWithDuration: vi.fn(), initializeFromClipMetadata: vi.fn(),
+    initializeWithDuration: vi.fn(),
     addRegion: vi.fn(), deleteRegionByIndex: vi.fn(), moveRegionStart: vi.fn(), moveRegionEnd: vi.fn(),
     toggleRegionEnabled: vi.fn(), addOrUpdateKeyframe: vi.fn(), removeKeyframe: vi.fn(),
     isTimeInEnabledRegion: vi.fn(), getRegionAtTime: vi.fn(), getHighlightAtTime: vi.fn(),
@@ -136,9 +136,6 @@ vi.mock('../../stores/projectDataStore', () => ({
     clipMetadataCache: {},
     getClipFileUrl: () => testState.framingVideoUrl,
   }),
-}));
-vi.mock('../../stores/focusStore', () => ({
-  useFocusStore: (selector) => selector({ hasChangedSinceExport: false }),
 }));
 vi.mock('../../stores/exportStore', () => ({
   useExportStore: (selector) => selector({ exportingProject: null, dismissExportCompleteToast: vi.fn() }),

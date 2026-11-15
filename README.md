@@ -169,7 +169,6 @@ video-editor/
 │           │   ├── useExportManager.js   # Export job management
 │           │   ├── useExportRecovery.js  # Resume interrupted exports
 │           │   ├── useKeyboardShortcuts.js # Keyboard shortcuts
-│           │   ├── useTimeline.js        # Timeline state management
 │           │   └── useTimelineZoom.js    # Timeline zoom controls
 │           ├── screens/            # Self-contained screen components
 │           │   ├── ProjectsScreen.jsx    # Owns project selection

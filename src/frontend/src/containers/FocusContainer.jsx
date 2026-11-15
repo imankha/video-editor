@@ -1,5 +1,4 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { FocusMode } from '../modes/focus';
 import { API_BASE } from '../config';
 import * as focusActions from '../api/focusActions';
 import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
@@ -146,27 +145,6 @@ export function FocusContainer({
   // exactly one clip there is no other clip's history to leak into, so it is
   // simply session-scoped for the mounted clip's lifetime.
   const framingHistory = useFramingHistory();
-
-  // DERIVED STATE: Current crop state at playhead
-  const currentCropState = useMemo(() => {
-    if (!metadata) return null;
-    return getCropDataAtTime(currentTime);
-  }, [metadata, currentTime, getCropDataAtTime]);
-
-  // DERIVED STATE: Check for framing edits
-  const hasFramingEdits = useMemo(() => {
-    const hasCropEdits = keyframes.length > 2 || (
-      keyframes.length === 2 &&
-      (keyframes[0].x !== keyframes[1].x ||
-       keyframes[0].y !== keyframes[1].y ||
-       keyframes[0].width !== keyframes[1].width ||
-       keyframes[0].height !== keyframes[1].height)
-    );
-    const hasTrimEdits = trimRange !== null;
-    const hasSpeedEdits = Object.values(segmentSpeeds).some(speed => speed !== 1);
-    const hasSegmentSplits = segmentBoundaries.length > 2;
-    return hasCropEdits || hasTrimEdits || hasSpeedEdits || hasSegmentSplits;
-  }, [keyframes, trimRange, segmentSpeeds, segmentBoundaries]);
 
   /**
    * Clips with current clip's live state merged.
@@ -1068,45 +1046,6 @@ export function FocusContainer({
     }
   }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, projectClip, projectClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
-  /**
-   * Get filtered keyframes for export (handles trim range)
-   */
-  const getFilteredKeyframesForExport = useMemo(() => {
-    const allKeyframes = getKeyframesForExport();
-    const segmentData = getSegmentExportData();
-
-    if (!segmentData || (!segmentData.trim_start && !segmentData.trim_end)) {
-      return allKeyframes;
-    }
-
-    const trimStart = segmentData.trim_start || 0;
-    const trimEnd = segmentData.trim_end || duration || Infinity;
-
-    let lastBeforeTrimStart = null;
-    let firstAfterTrimEnd = null;
-    const keyframesInRange = [];
-
-    allKeyframes.forEach(kf => {
-      if (kf.time >= trimStart && kf.time <= trimEnd) {
-        keyframesInRange.push(kf);
-      } else if (kf.time < trimStart) {
-        if (!lastBeforeTrimStart || kf.time > lastBeforeTrimStart.time) {
-          lastBeforeTrimStart = kf;
-        }
-      } else if (kf.time > trimEnd) {
-        if (!firstAfterTrimEnd || kf.time < firstAfterTrimEnd.time) {
-          firstAfterTrimEnd = kf;
-        }
-      }
-    });
-
-    return [
-      ...(lastBeforeTrimStart ? [lastBeforeTrimStart] : []),
-      ...keyframesInRange,
-      ...(firstAfterTrimEnd ? [firstAfterTrimEnd] : [])
-    ];
-  }, [getKeyframesForExport, getSegmentExportData, duration]);
-
   // Effect: Auto-cleanup trim keyframes when trimRange is cleared
   const prevTrimRangeRef = useRef(undefined);
   useEffect(() => {
@@ -1146,10 +1085,7 @@ export function FocusContainer({
 
   return {
     // Derived state
-    currentCropState,
-    hasFramingEdits,
     clipsWithCurrentState,
-    getFilteredKeyframesForExport,
 
     // T5780: live output-length indicator (derived at render, never persisted)
     clipEffectiveDuration,
@@ -1180,82 +1116,5 @@ export function FocusContainer({
   };
 }
 
-
-/**
- * FocusTimeline - Timeline component for Framing mode
- */
-export function FocusTimeline({
-  videoRef,
-  videoUrl,
-  metadata,
-  currentTime,
-  duration,
-  keyframes,
-  framerate,
-  segments,
-  trimRange,
-  onKeyframeClick,
-  onKeyframeDelete,
-  onAddSplit,
-  onRemoveSplit,
-  onTrimSegment,
-  onDetrimStart,
-  onDetrimEnd,
-  onSegmentSpeedChange,
-  selectedLayer,
-  onLayerSelect,
-  selectedCropKeyframeIndex,
-  onSeek,
-  zoom,
-  panOffset,
-  visualDuration,
-  sourceTimeToVisualTime,
-  visualTimeToSourceTime,
-  timelineZoom,
-  onTimelineZoomByWheel,
-  timelineZoomControls, // T10930: {zoomIn, zoomOut, resetZoom} -> TimelineZoomChip
-  timelineScale,
-  timelineScrollPosition,
-  onTimelineScrollPositionChange,
-  isPlaying,
-}) {
-  return (
-    <FocusMode
-      videoRef={videoRef}
-      videoUrl={videoUrl}
-      metadata={metadata}
-      currentTime={currentTime}
-      duration={duration}
-      keyframes={keyframes}
-      framerate={framerate}
-      segments={segments}
-      trimRange={trimRange}
-      onKeyframeClick={onKeyframeClick}
-      onKeyframeDelete={onKeyframeDelete}
-      onAddSplit={onAddSplit}
-      onRemoveSplit={onRemoveSplit}
-      onTrimSegment={onTrimSegment}
-      onDetrimStart={onDetrimStart}
-      onDetrimEnd={onDetrimEnd}
-      onSegmentSpeedChange={onSegmentSpeedChange}
-      selectedLayer={selectedLayer}
-      onLayerSelect={onLayerSelect}
-      selectedCropKeyframeIndex={selectedCropKeyframeIndex}
-      onSeek={onSeek}
-      zoom={zoom}
-      panOffset={panOffset}
-      visualDuration={visualDuration}
-      sourceTimeToVisualTime={sourceTimeToVisualTime}
-      visualTimeToSourceTime={visualTimeToSourceTime}
-      timelineZoom={timelineZoom}
-      onTimelineZoomByWheel={onTimelineZoomByWheel}
-      timelineZoomControls={timelineZoomControls}
-      timelineScale={timelineScale}
-      timelineScrollPosition={timelineScrollPosition}
-      onTimelineScrollPositionChange={onTimelineScrollPositionChange}
-      isPlaying={isPlaying}
-    />
-  );
-}
 
 export default FocusContainer;

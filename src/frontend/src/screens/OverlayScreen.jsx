@@ -26,7 +26,6 @@ import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
-import { useFocusStore } from '../stores/focusStore';
 import { useExportStore } from '../stores/exportStore';
 import { startLoadTrace } from '../utils/loadTrace';
 import * as overlayActions from '../api/overlayActions';
@@ -210,9 +209,6 @@ export function OverlayScreen({
       console.warn(`[OverlayScreen] Single-clip project ${projectId} references a game but has no in-match timestamp - data gap (re-export to backfill).`);
     }
   }, [projectId, projectListItem, gameName, gameClock]);
-
-  // Framing store - for detecting uncommitted changes
-  const hasChangedSinceExport = useFocusStore(state => state.hasChangedSinceExport);
 
   // Export store - for dismissing "export complete" toast on changes
   const dismissExportCompleteToast = useExportStore(state => state.dismissExportCompleteToast);
@@ -434,7 +430,6 @@ export function OverlayScreen({
     keyframes: highlightRegionKeyframes,
     framerate: highlightRegionsFramerate,
     initializeWithDuration: initializeHighlightRegions,
-    initializeFromClipMetadata: initializeHighlightRegionsFromClips,
     addRegion: addHighlightRegion,
     deleteRegionByIndex: deleteHighlightRegion,
     moveRegionStart: moveHighlightRegionStart,
@@ -1438,22 +1433,12 @@ export function OverlayScreen({
     isSeeking,
     seek,
     togglePlay,
-    framingVideoUrl,
-    framingMetadata,
-    keyframes: [], // No framing keyframes in overlay mode
-    segments: null,
-    segmentSpeeds: {},
-    segmentBoundaries: [],
-    trimRange: null,
     selectedProjectId: projectId,
     selectedProject: project,
     hasClips,
     editorMode: 'overlay',
-    setEditorMode: () => {},
     setSelectedLayer,
-    overlayVideoFile: workingVideo?.file,
-    overlayVideoUrl: workingVideo?.url,
-    overlayVideoMetadata: workingVideo?.metadata,
+    effectiveOverlayVideoUrl,
     overlayClipMetadata,
     isLoadingWorkingVideo,
     setOverlayClipMetadata,
@@ -1488,7 +1473,6 @@ export function OverlayScreen({
     getRegionHighlightAtTime,
     getRegionsForExport,
     restoreHighlightRegions,
-    initializeHighlightRegionsFromClips,
   });
 
   const {
