@@ -719,10 +719,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     """
 
     # Skip sync for these path prefixes (static files, health checks, auth, etc.)
-    # T1531: /api/quests/achievements — idempotent INSERT OR IGNORE writes that
-    # don't need immediate R2 sync. Skipping avoids the ~768ms R2 upload (and
-    # the per-user write lock) on a fire-and-forget POST. The local SQLite
-    # commit is durable; data syncs to R2 on the next non-achievement write.
     SKIP_SYNC_PATHS = (
         '/docs',
         '/redoc',
@@ -730,7 +726,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/health',
         '/api/version',      # T5070: version handshake, no DB involvement
         '/api/auth',
-        '/api/quests/achievements',
         '/api/games/upload-heartbeat',  # T15130: liveness stamp only; no lock, no R2 sync
         '/api/games/upload-release',    # T15140: clears that stamp; same reasoning
         '/api/shared/',
@@ -769,8 +764,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/auth/',               # All auth sub-routes (google, email/*, me, logout)
         '/api/health',              # Health check
         '/api/version',             # T5070: version handshake works pre-login too
-        '/api/quests/definitions',  # T1330: quest catalog is public (onboarding checklist)
-        '/api/quests/progress',     # Pre-login quest panel: returns all-incomplete shape for anonymous callers
         '/api/shared/',             # T1750: public share links work without auth
         '/api/payments/webhook',    # T4940: Stripe server-to-server calls carry no session; signature verification IS the auth
         '/api/client-errors/',      # T5641: video-error beacon must land even when the session is dead

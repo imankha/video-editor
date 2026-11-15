@@ -354,11 +354,11 @@ class TestBatchClipUpload:
 
 
 # ---------------------------------------------------------------------------
-# INV-U3 guard: no games row, no quest step, no game_created/game_upload_succeeded
+# INV-U3 guard: no games row, no game_created/game_upload_succeeded
 # ---------------------------------------------------------------------------
 
 class TestInvU3NoGameSurface:
-    def test_clip_upload_creates_no_games_row_and_leaves_upload_game_quest_incomplete(self, monkeypatch):
+    def test_clip_upload_creates_no_games_row(self, monkeypatch):
         blake3_hash = uuid.uuid4().hex + uuid.uuid4().hex
         monkeypatch.setattr("app.routers.clips.r2_head_object", lambda user_id, key: _fake_head(6 * 1024 * 1024))
         monkeypatch.setattr("app.routers.clips.probe_r2_video", lambda key: _fake_probe(8.0))
@@ -376,13 +376,6 @@ class TestInvU3NoGameSurface:
             games_resp = client.get("/api/games")
             assert games_resp.status_code == 200
             assert games_resp.json()["games"] == []
-
-            quests_resp = client.get("/api/quests/progress")
-            assert quests_resp.status_code == 200
-            steps = quests_resp.json().get("steps", quests_resp.json())
-            # Whatever shape /progress returns, upload_game must not read complete
-            # off the back of a clip upload.
-            assert steps.get("upload_game") is not True
 
     def test_clip_upload_records_no_game_created_or_game_upload_succeeded_milestones(self, monkeypatch, pg_conn):
         from app.services.pg import get_pg

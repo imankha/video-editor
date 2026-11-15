@@ -77,11 +77,6 @@ _USER_DB_SCHEMA = """
         customer_id TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS completed_quests (
-        quest_id TEXT PRIMARY KEY,
-        completed_at TEXT DEFAULT (datetime('now'))
-    );
-
     CREATE TABLE IF NOT EXISTS profiles (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -548,89 +543,6 @@ def set_stripe_customer_id(user_id: str, stripe_customer_id: str):
 
 
 # ---------------------------------------------------------------------------
-# Completed quests (T970: user-scoped quest achievements)
-# ---------------------------------------------------------------------------
-
-def mark_quest_completed(user_id: str, quest_id: str) -> None:
-    """Record a quest as completed in user.sqlite. Idempotent (INSERT OR IGNORE)."""
-    with get_user_db_connection(user_id) as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO completed_quests (quest_id) VALUES (?)",
-            (quest_id,),
-        )
-        conn.commit()
-    logger.info(f"[UserDB] Quest {quest_id} marked completed for user {user_id}")
-
-
-def get_completed_quest_ids(user_id: str) -> set[str]:
-    """Return set of quest_ids the user has completed."""
-    with get_user_db_connection(user_id) as conn:
-        rows = conn.execute("SELECT quest_id FROM completed_quests").fetchall()
-        return {row["quest_id"] for row in rows}
-
-
-def get_completed_and_claimed_quest_ids(user_id: str) -> tuple[set[str], set[str]]:
-    """Return (completed_quest_ids, claimed_quest_ids).
-
-    T5840: credits (and their credit_transactions ledger) moved to Postgres, so
-    the claimed set is now a separate PG query -- completed_quests itself stays
-    in user.sqlite (T1536's single-open optimisation applied to a cold R2
-    restore that no longer exists for the ledger; both stores are fast).
-
-    - completed: SELECT quest_id FROM completed_quests (was get_completed_quest_ids)
-    - claimed:   credit_transactions WHERE source = 'quest_reward' (Postgres)
-    """
-    with get_user_db_connection(user_id) as conn:
-        completed = {
-            row["quest_id"]
-            for row in conn.execute("SELECT quest_id FROM completed_quests").fetchall()
-        }
-    from .pg import get_pg
-    with get_pg() as pg_conn:
-        cur = pg_conn.cursor()
-        cur.execute(
-            "SELECT reference_id FROM credit_transactions WHERE user_id = %s AND source = 'quest_reward'",
-            (user_id,),
-        )
-        claimed = {row["reference_id"] for row in cur.fetchall()}
-    return completed, claimed
-
-
-def backfill_completed_quests(user_id: str) -> int:
-    """Backfill completed_quests from the Postgres quest_reward ledger.
-
-    Idempotent — INSERT OR IGNORE. Called once during session init.
-    Returns count of newly backfilled quests.
-    """
-    from .pg import get_pg
-    with get_pg() as pg_conn:
-        cur = pg_conn.cursor()
-        cur.execute(
-            "SELECT reference_id FROM credit_transactions "
-            "WHERE user_id = %s AND source = 'quest_reward' AND reference_id IS NOT NULL",
-            (user_id,),
-        )
-        quest_ids = [row["reference_id"] for row in cur.fetchall()]
-
-    if not quest_ids:
-        return 0
-
-    count = 0
-    with get_user_db_connection(user_id) as conn:
-        for quest_id in quest_ids:
-            result = conn.execute(
-                "INSERT OR IGNORE INTO completed_quests (quest_id) VALUES (?)",
-                (quest_id,),
-            )
-            if result.rowcount > 0:
-                count += 1
-        if count > 0:
-            conn.commit()
-            logger.info(f"[UserDB] Backfilled {count} completed quests for user {user_id}")
-    return count
-
-
-# ---------------------------------------------------------------------------
 # Profile management (T960: profiles in user.sqlite)
 # ---------------------------------------------------------------------------
 
@@ -705,34 +617,6 @@ def set_notification_email_optout(user_id: str, opted_out: bool) -> None:
         conn.execute(
             "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
             (_NOTIFICATION_EMAIL_OPTOUT_KEY, "1" if opted_out else "0"),
-        )
-        conn.commit()
-
-
-# T8120: collapsed/expanded state of the onboarding quest (Help) panel. A
-# user-level UI preference persisted in the existing user_settings KV (no
-# schema/migration) so a collapse survives navigation AND reload — the collapse
-# click is the gesture. Absent key = expanded (the default first-run
-# presentation); the panel never auto-re-expands once this is "1".
-_QUEST_PANEL_COLLAPSED_KEY = "quest_panel_collapsed"
-
-
-def get_quest_panel_collapsed(user_id: str) -> bool:
-    """True if the user has collapsed the quest/help panel (default False)."""
-    with get_user_db_connection(user_id) as conn:
-        row = conn.execute(
-            "SELECT value FROM user_settings WHERE key = ?",
-            (_QUEST_PANEL_COLLAPSED_KEY,),
-        ).fetchone()
-        return bool(row) and row["value"] == "1"
-
-
-def set_quest_panel_collapsed(user_id: str, collapsed: bool) -> None:
-    """Persist the collapsed state of the quest/help panel (gesture-driven)."""
-    with get_user_db_connection(user_id) as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
-            (_QUEST_PANEL_COLLAPSED_KEY, "1" if collapsed else "0"),
         )
         conn.commit()
 

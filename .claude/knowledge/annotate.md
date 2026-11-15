@@ -816,7 +816,7 @@ subject, always possessive/singular ("your athlete", "My athlete" — `ANNOTATE.
 makes the UI agree with the persisted `my_athlete` column instead of diverging from it. **Destination
 noun (D1):** `SECTION_NAMES.LIBRARY` ("Highlight Reels") deleted; the published destination is now
 `SECTION_NAMES.PUBLISHED` ("Published") everywhere, including the quest step `move_to_my_reels`
-(now `LIBRARY_ACTIONS.PUBLISH_CLIP`, FE+BE `quest_config.py` mirror updated together).
+(now `LIBRARY_ACTIONS.PUBLISH_CLIP`, FE+BE quest_config.py mirror updated together).
 **Publish-audience copy (D5, safety-critical):** every publish caption/toast that claimed "anyone with
 the link can watch it" was FALSE (T9670/T9710 verified publishing grants no audience by itself —
 sharing is a separate gesture) — replaced with `STAGE_REASONS.PUBLISH` ("Nobody else can see this
@@ -845,7 +845,7 @@ Prior:)
 updated: 2026-09-14 (T9850 — first-result onboarding guidance now completes on saved playable VALUE,
 not a mandatory Preview-plays click. **The defect (B05·R4):** quest_1's last step
 `playback_annotations` gated SOLELY on the `played_annotations` achievement
-(`routers/quests.py` `_check_all_steps`), which fires ONLY from entering Preview-plays mode inside
+(routers/quests.py `_check_all_steps`), which fires ONLY from entering Preview-plays mode inside
 Annotate (`modes/annotate/hooks/useAnnotationPlayback.js:284`). A user who saved a clip and moved to
 Focus/Spotlight/Library was pinned at "4/5" while the guide pointed at Preview plays — a control that
 exists ONLY on the Annotate screen. **The fix (1 line + copy):** OR-satisfy the step with
@@ -863,7 +863,7 @@ vocabulary; the FE/BE STEP_TITLES sync test still passes); `data/questDefinition
 hard-requires rating/tag/source-preview (`rate_clip` was already OR'd with `reels>=1`). The already-
 shipped stageCta/keepMarkingCta persistent-next-action UI (T9580) was NOT rebuilt — brief's core ask
 was already met by existing code; only the guide's completion PREDICATE + description were wrong.
-Tests: new `tests/test_t9850_playback_step_gating.py` (3 — saved-clip completes step without the
+Tests: new tests/test_t9850_playback_step_gating.py (3 — saved-clip completes step without the
 achievement, achievement still sufficient, router-seam claim succeeds via saved-value path) +
 `config/questDefinitions.test.jsx` T9850 assertion (desc names Frame-this-clip/Keep-marking, never
 Preview plays). QA: container has no browser (same limit as T9830/T9820/T9630) — no live e2e drive;

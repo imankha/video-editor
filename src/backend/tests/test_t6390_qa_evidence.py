@@ -132,7 +132,7 @@ async def test_x_sync_diag_header_present_and_cross_origin_readable(tmp_path):
             )
             # /api/version skips sync; use a per-user route that runs the sync middleware.
             resp = await client.get(
-                "/api/quests/progress",
+                "/api/settings",
                 headers={**HEADERS, "Origin": "https://app.reelballers.com"},
             )
 

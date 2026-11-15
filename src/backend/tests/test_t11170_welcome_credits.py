@@ -77,10 +77,7 @@ class TestFreshSignupDecoupledFromQuests:
         Post-change: the grant lives in storage_credits and never touches
         quest_config, so the full 88 still lands (GREEN).
         """
-        import app.quest_config as qc
-        # Remove the quest-system credit constant the OLD grant path depended on.
-        monkeypatch.delattr(qc, "QUEST_CHAIN_CREDIT_TOTAL", raising=False)
-
+        # T11185 deleted quest_config entirely, so the constant is gone for real.
         from app.services.credit_ledger import get_credit_balance
         from app.session_init import _init_cache, user_session_init
         from app.user_context import set_current_user_id

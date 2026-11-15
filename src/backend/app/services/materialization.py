@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 
 # T5330: provenance sentinel written to games.shared_by / raw_clips.shared_by when a
 # share has no resolvable sharer identity at all. The marker is NEVER NULL for a shared
-# item (precedence: sharer_email -> sharer_user_id -> this sentinel) so onboarding-blind
-# quest counts (quests._check_all_steps) can rely on `shared_by IS NOT NULL` == shared-in.
+# item (precedence: sharer_email -> sharer_user_id -> this sentinel) so any count of the
+# user's OWN content can rely on `shared_by IS NOT NULL` == shared-in.
 SHARED_PROVENANCE_LOST = "lost"
 
 

@@ -1565,14 +1565,6 @@ def _create_profile_schema(user_id: str, db_path: Path) -> None:
             ON before_after_tracks(final_video_id)
         """)
 
-        # T540: Achievements — non-derivable quest step completion (e.g., opened_framing_editor)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS achievements (
-                key TEXT PRIMARY KEY,
-                achieved_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-
         # Indexes for efficient version queries
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_working_clips_project_version
