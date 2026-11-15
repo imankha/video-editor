@@ -850,6 +850,8 @@ export const FRAME_COPY = {
   LOADING_VIDEO: 'Loading video...',
   LOADING_PLAYS: 'Loading your plays...',
   LOADING: 'Loading...',
+  // T10990: the portrait/landscape switch failed and the frame went back to its old shape.
+  ASPECT_CHANGE_FAILED: "We couldn't change the shape. Try again.",
   VIDEO_ERROR_TITLE: "We couldn't load this video",
   STUCK_EMPTY_TITLE: "This highlight has nothing to show",
   STUCK_EMPTY_BODY: "We couldn't find anything to frame for this play.",

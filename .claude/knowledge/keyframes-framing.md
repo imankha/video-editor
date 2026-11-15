@@ -851,7 +851,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   restore) or exclude the restore fixup from the export read path.
 - **Empty list → default centered crop**: frontend `useCrop.js:293-307` (`?? defaultCropData`);
   backend export applies `default_crop_keyframes` when crop_data empty (`export/framing.py:565-573`,
-  `export/multi_clip.py:2205-2217`); shapes mirrored: `DEFAULT_CROP_SIZES` in useCrop.js:17-20 ≡
+  `export/multi_clip.py:2205-2217`); shapes mirrored: `DEFAULT_CROP_SIZES` in `modes/focus/defaultCropSizes.js` (T10990; also read by the ratio-switch preview `utils/refitCropKeyframes.js`) ≡
   `src/backend/app/services/default_crop.py:12-15`. Keep these in sync.
 - **Trim is virtual**: `segments_data.trimRange` never drops crop keyframes. CropLayer filters
   out-of-window keyframes for display only (CropLayer.jsx:49-60); useCrop end boundary is full

@@ -15,7 +15,7 @@ default (not a silent fallback hiding a bug). It mirrors the frontend default in
 # vs ~12% for a max-fit crop). Evidence: T9970 benchmark + T9950 design review
 # (9:16) and this task's 16:9 benchmark pass.
 # MUST stay mirrored with DEFAULT_CROP_SIZES in the frontend
-# (src/frontend/src/modes/focus/hooks/useCrop.js) — guarded by
+# (src/frontend/src/modes/focus/defaultCropSizes.js) — guarded by
 # test_frontend_backend_parity in tests/test_default_crop.py.
 DEFAULT_CROP_SIZES = {
     "9:16": (410, 730),

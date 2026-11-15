@@ -207,6 +207,17 @@ export const useProjectsStore = create((set, get) => ({
   },
 
   /**
+   * Show a reel aspect ratio on the selected project in memory only (T10990). The ratio's
+   * one writer is projectDataStore.changeAspectRatio, which calls this before its POST so the
+   * frame changes shape at once, and again with the old ratio if the POST fails.
+   */
+  setSelectedProjectAspectRatio: (projectId, aspectRatio) => {
+    const project = get().selectedProject;
+    if (!project || project.id !== projectId) return;
+    set({ selectedProject: { ...project, aspect_ratio: aspectRatio } });
+  },
+
+  /**
    * Clear project selection
    */
   clearSelection: () => {

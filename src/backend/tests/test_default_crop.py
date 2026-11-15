@@ -50,19 +50,19 @@ def test_fallback_fits_within_video():
 def test_frontend_backend_parity():
     """DEFAULT_CROP_SIZES must never drift between the two mirrored constants.
 
-    Parses the frontend constant straight out of useCrop.js and asserts it matches
+    Parses the frontend constant straight out of defaultCropSizes.js and asserts it matches
     the backend dict exactly. This is the drift guard the two "MUST stay mirrored"
     comments refer to (T10150 AC): a change to one side without the other fails here.
     """
     js_path = (
         Path(__file__).resolve().parents[3]
-        / "src" / "frontend" / "src" / "modes" / "focus" / "hooks" / "useCrop.js"
+        / "src" / "frontend" / "src" / "modes" / "focus" / "defaultCropSizes.js"
     )
     source = js_path.read_text(encoding="utf-8")
     block = re.search(
         r"const DEFAULT_CROP_SIZES\s*=\s*\{(.*?)\};", source, re.DOTALL
     )
-    assert block, "DEFAULT_CROP_SIZES literal not found in useCrop.js"
+    assert block, "DEFAULT_CROP_SIZES literal not found in defaultCropSizes.js"
 
     frontend = {
         ratio: (int(w), int(h))
@@ -71,11 +71,11 @@ def test_frontend_backend_parity():
             block.group(1),
         )
     }
-    # Guard the inner regex too: if a future reformat of useCrop.js stops the
+    # Guard the inner regex too: if a future reformat of defaultCropSizes.js stops the
     # entry regex from matching, fail with a clear "parsed 0 ratios" signal
     # rather than silently comparing an empty dict.
     assert len(frontend) == len(DEFAULT_CROP_SIZES), (
-        f"parsed {len(frontend)} ratios from useCrop.js "
+        f"parsed {len(frontend)} ratios from defaultCropSizes.js "
         f"({sorted(frontend)}); expected {sorted(DEFAULT_CROP_SIZES)} — "
         "the entry regex likely no longer matches the JS formatting"
     )
