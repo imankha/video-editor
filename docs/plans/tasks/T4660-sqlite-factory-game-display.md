@@ -1,6 +1,6 @@
 # T4660: One game name builder
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-07-03

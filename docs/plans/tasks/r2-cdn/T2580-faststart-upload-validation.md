@@ -1,6 +1,6 @@
 # T2580: Know which uploads cannot start at once
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-06-02

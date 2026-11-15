@@ -1,6 +1,6 @@
 # T4640: One share flow for games
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-07-03
