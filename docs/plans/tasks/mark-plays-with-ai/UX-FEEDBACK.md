@@ -1,8 +1,8 @@
-# Mark plays with AI: user feedback spec
+# AI Coach: user feedback spec
 
-Status: APPROVED by the owner on 2026-11-12, with the rulings in section 9. Nothing here is built yet.
+Status: sections 3, 5, 6, 7, 8 and 10 were approved by the owner on 2026-11-12, with the rulings in section 9. Sections 1, 2, 4 and 11 were drawn on 2026-11-14 and the owner ruled on them the same day (section 9, rulings 12 to 21). Section 2 and the receiving family's card are approved. All four are approved as they now stand (rulings 22 to 24). Nothing here is built yet.
 
-This file defines everything the parent sees and can do around the new paid option: the offer, the price, the shortfall, the waiting, the team choice, what lands in the game, and the pass where they say which plays are their athlete's. Each section is written in plain sentences first. Component and file pointers are in a short "For the implementer" list at the end of each section. Every visible string is repeated once in the table in section 8, which is the source to copy from.
+This file defines everything the parent sees and can do around the new paid option: the offer, the price, the shortfall, the waiting, the team choice, what lands in the game, the pass where they say which plays are their athlete's, and what another family gets when the game is shared with them. The option is called AI Coach everywhere the parent can see it. Each section is written in plain sentences first. Component and file pointers are in a short "For the implementer" list at the end of each section. Every visible string is repeated once in the table in section 8, which is the source to copy from.
 
 Three things hold everywhere in this file:
 
@@ -14,121 +14,149 @@ Running example used throughout: a 90-minute game, 3 credits of storage, 135 cre
 
 ---
 
-## 1. The offer at upload
+## 1. The AI Coach offer
+
+(Redrawn 2026-11-14 and approved by the owner the same day with rulings 12 to 14 and 22.)
 
 ### What the parent sees
 
-The upload dialog keeps its order: the one-line explanation, the cost row, the video picker, the optional details. A new card, "Mark plays with AI", sits directly under the video picker, because the price depends on the video and the parent has just dealt with the video.
+The upload dialog does not change at all: same order, same cost row, same Upload button. AI Coach is not mentioned in it.
 
-The card is a single large checkbox row. It is not ticked by default (see section 9). Unticked, it is compact: three lines and a link. Ticked, it opens to show the full pitch, the honesty line and the disclosure, so nobody pays without having had those two lines on screen.
+When the parent taps Upload, the upload starts and the upload dialog closes as it does today. The offer then opens over the Games tab, with the upload carrying on behind it. The parent is waiting anyway, and nothing they do in the offer can stop or lose the upload.
 
-Phone, unticked, video already picked:
+On a phone the offer is a full-height sheet with its buttons pinned at the bottom; on desktop it is a centred dialog. It closes only by "Add AI Coach", "Not now" or its close button, never by a tap outside it.
+
+Phone, 90-minute game, 200 credits, 3 credits of storage already agreed in the upload dialog:
 
 ```
 +--------------------------------------------+
-| [ ] Mark plays with AI                     |
-|     Coach-level analysis of the whole game |
-|     135 credits for this 90 min game       |
-|     See what you get                       |
+| AI Coach                                X  |
+| Coach-level analysis of the whole game     |
+|                                            |
+| +----------------------------------------+ |
+| | [ frame from example play 2 of 6 ]     | |
+| | 34:12   Goal, Dribble       Brilliant  | |
+| | Coach's note: Took on the full back at | |
+| | speed and finished low.                | |
+| | Example from another game      o O o o | |
+| +----------------------------------------+ |
+|                                            |
+| - Watches the full game and marks your     |
+|   team's best plays for you.               |
+| - Every play gets tags, a rating and a     |
+|   one-sentence summary.                    |
+| - A coaching note for the players          |
+|   involved: what to learn, or which pro    |
+|   it looked like.                          |
+|                                            |
+| +========================================+ |
+| |  ( FREE FOR YOUR TEAM )                | |
+| |  Pay once. Share it with your whole    | |
+| |  team for free.                        | |
+| |  Every family you share this game with | |
+| |  gets AI Coach on it too, at no cost   | |
+| |  to them.                              | |
+| +========================================+ |
++--------------------------------------------+
+| AI Coach, 90 min              135 credits  |
+| Storage, already agreed         3 credits  |
+| Your balance                  200 credits  |
+| Balance after both             62 credits  |
+| Uploading your game: 12%                   |
+| [ Add AI Coach: 135 credits ]              |
+| [ Not now ]                                |
+| You can add it later from the game.        |
 +--------------------------------------------+
 ```
 
-Ticked, the card opens in place and shows, in this order: the three benefit lines as a short list, the "Good to know" paragraph, and the Gemini line. The exact words are in the table in section 8.
+- **The examples** are real AI plays from other games, kept as a bank for each sport: a still frame, the time, the tags, the rating and the coaching note, exactly as an AI play looks in the app. The offer shows the bank for the sport of the game being uploaded, one example at a time, and moves to the next every 5 seconds. Dots show how many there are, a swipe or a tap on a dot changes the example, and touching the example pauses the timer. A parent who has asked their device for less motion gets no timer and changes the example by hand. Each one is labelled "Example from another game" so nobody takes it for a result from their own video. Soccer starts with six, chosen by the owner from the first approved prototype run (T16145). A sport with no bank yet shows no example.
+- **The free-share panel** sits under the benefit lines and is the one decorated element in the dialog (owner, 2026-11-14: a gold ribbon). It has a warm gold border, a soft gold-to-cyan wash behind the text, a small solid gold label reading "FREE FOR YOUR TEAM", and the heading in bold. Nothing in it moves. It is the reason to buy for a team and the reason the feature spreads, so it reads as a prize, not as a note.
+- **The upload line** shows the browser upload's real percentage, the one number the app already measures. It reads "Upload finished" once that is true.
+- **The main button always carries the price.**
 
-The "Good to know" paragraph is ordinary grey body text, not a warning box. It is honest without being a scare. The Gemini line is one size smaller and is always visible when the box is ticked.
+### What each answer does
 
-### How the cost row changes
+- **Add AI Coach.** The dialog closes. A toast confirms: "AI Coach added. It starts when the upload finishes." The game tile gains the "AI next" chip (section 3, state A). No credits are set aside yet; that happens when the analysis starts, after the upload. The parent can cancel free of charge until then.
+- **Not now**, or the close button. The dialog closes and nothing else happens. The offer stays on the game (section 4).
+- If the upload has already finished when the parent taps "Add AI Coach", the analysis starts at once and the toast is the usual "The AI is now watching your game."
 
-Unticked, the cost row is exactly what it is today ("Cost: 3 credits", "Balance: 200 credits", and the 30-day note).
+### When the offer opens, and when it does not
 
-Ticked, the row becomes a short itemised list. Each line is a label on the left and credits on the right, and each line stays whole when the screen is narrow:
+It opens once for each upload, after Upload is tapped. It never opens by itself at any other time.
 
-```
-Storage for 30 days             3 credits
-AI analysis, 90 min           135 credits
------------------------------------------
-Total                         138 credits
-Your balance                  200 credits
-Balance after                  62 credits
-The AI credits are set aside when the analysis starts and
-only taken when it finishes. If it fails, you get them all back.
-```
+A parent who answers "Not now" (or closes it) on three uploads in a row stops getting it automatically. The offer is still on every game. Buying AI Coach once, from anywhere, turns the automatic offer back on.
 
-When the balance does not cover the total, the "Balance after" line is replaced by the shortfall line described in section 2.
-
-### States of the card
-
-| State | What the card says | What the parent can do |
-|---|---|---|
-| No video picked yet | Price line reads "1.5 credits per minute of video. A 90-minute game is 135 credits." If ticked, the itemised row shows "AI analysis: price appears when you pick the video" and no total. | Tick or untick. The Upload button is still waiting for a video, as today. |
-| Video picked | Price line reads "135 credits for this 90 min game". Exact, because the length is read from the file. | Tick or untick. The total updates at once. |
-| Several videos for one game | Price line reads "135 credits for 90 min across 2 videos". One analysis, one price, lengths added up, rounded up once at the end. | Same. |
-| Length cannot be read | Price line reads "We could not read this video's length, so we cannot price the AI analysis. You can start it after the upload." The checkbox is off and cannot be ticked. | Upload without it. Start later from the game (section 4). |
-| Sport not chosen on the profile | When the box is ticked, the existing sport field becomes a required step and its label changes to "Which sport is this?". It moves to sit directly under the card. Until a sport is chosen the Upload button reads "Pick a sport to upload". | One tap to choose. Nothing else changes and nothing is lost. |
-| Sport is not soccer | The checkbox is off and cannot be ticked. One calm line: "AI play marking is soccer only for now." No pitch, no price. | Upload as normal. |
-| Already analysed (cache) | We only learn this once the upload has started reading the file, a few seconds after the parent taps Upload. From then on the game tile and the status card say: "This game has already been analysed, so your plays will be ready right after the upload. Same price: 135 credits." We do not show a waiting animation for work that is not happening. | Carry on. They can still cancel the AI option before the upload finishes, at no charge. |
-| Unavailable today (daily limit reached) | Checkbox off. "AI play marking is full for today. Upload now and start it from the game tomorrow." | Upload as normal. |
-| Switched off (maintenance) | Checkbox off. "AI play marking is paused right now. Upload now and start it from the game later." | Upload as normal. |
-
-The Upload button reads "Upload game" when the box is unticked and "Upload and mark plays with AI" when it is ticked, so the last thing the parent taps says what they are buying.
+| Situation | What happens |
+|---|---|
+| Normal | The offer opens as drawn, with the exact price: the length is read from the file when it is picked. |
+| Several videos for one game | One offer, one price, lengths added up and rounded up once. The price row reads "AI Coach, 90 min across 2 videos". |
+| Sport not chosen on the profile | The offer opens. Above the price sits one step: "Which sport is this?" with the sport chooser. The main button is off and reads "Pick a sport to continue" until one is chosen. Choosing soccer shows the price in place. |
+| Sport is not soccer | The offer does not open. |
+| Length cannot be read from the file | The offer does not open. Once the upload has finished the server knows the length, and the game offers AI Coach (section 4). |
+| Unavailable today (daily limit reached) or switched off | The offer does not open. The game's own entry points say why (section 4). |
+| Already analysed (cache) | We learn this a few seconds into the upload. If the offer is open, the estimate is replaced in place by: "This game has already been analysed, so your plays will be ready right after the upload. Same price: 135 credits." |
+| The parent used AI Coach on a game someone shared with them | One line under the tagline: "You used AI Coach on a game {name} shared." (section 11). |
+| Not enough credits | Section 2. |
 
 ### For the implementer
 
-- New card in `components/GameDetailsModal.jsx`, placed after `GameFootagePicker`, inside the scroll body. The submit button stays in the pinned footer.
-- Extend `components/shared/CreditCostRow.jsx` with an itemised mode (list of label and credits lines, a total, balance, balance after). Keep each line `whitespace-nowrap` in a wrapping pair, as today.
-- Duration comes from `utils/videoMetadata.js` (`extractVideoMetadata`), already called on submit. Call it on pick so the price is exact before submit. Price rule lives in one helper next to `utils/storageCost.js`; the backend stays the authority.
-- Sport: reuse the existing sport `select` block and `SPORT_PICK` strings; soccer check against `SUPPORTED_SPORTS` ids in `modes/annotate/constants/tagRegistry.js`.
-- Availability (daily limit, switch) and the rate come from one config call when the dialog opens.
-- Cache hit is known after hashing in the upload manager. If hashing can be moved before submit later, show the same sentence inside the card.
+- New component `components/analysis/AICoachOfferDialog.jsx`, built like `VeoImportSheet`: portalled to `document.body`, close by X or its buttons only. The same component serves section 4 with `context="game"`.
+- `components/GameDetailsModal.jsx` keeps its layout. Its submit handler opens the offer after the upload has been handed to the upload manager. `components/shared/CreditCostRow.jsx` is not changed.
+- Duration comes from `utils/videoMetadata.js` (`extractVideoMetadata`) at pick time. Price rule lives in one helper next to `utils/storageCost.js`; the backend stays the authority.
+- The upload percentage and the fingerprint result come from the upload manager; the dialog subscribes, it does not poll.
+- Sport: `components/shared/InlineSportSelect.jsx` and the chooser from section 10; soccer check against `SUPPORTED_SPORTS` ids in `modes/annotate/constants/tagRegistry.js`.
+- Availability (daily limit, switch) and the rate come from one config call made when Upload is tapped, so the decision to open is made before the dialog renders.
+- The example bank is a set of fixed assets shipped with the app, keyed by sport: for each example a still frame and the play's time, tags, rating and note. It is not a live query. The carousel advances on a 5-second timer that stops on touch, on focus, when the dialog is hidden, and under `prefers-reduced-motion`.
+- The "Not now three times in a row" count is an account preference written by the dismiss and accept gestures.
+- Free-share panel: `border-amber-400/70`, background a gradient from `amber-400/20` to `cyan-500/15`, label `bg-amber-400 text-slate-950` in the style of the pack badge. It must not use solid cyan, which stays the main button's alone.
 
 ---
 
 ## 2. Not enough credits
 
-### In the upload dialog
+(Redrawn 2026-11-14 with section 1. Waits for the owner's approval.)
 
-Nothing pops up when the parent ticks the box. The shortfall is shown in place, in the cost row, as soon as it is true, so they see it before they tap Upload.
+### In the offer
 
-A new account has 88 credits. With the box ticked on our example game the list ends like this:
+Nothing pops up. The shortfall is shown in place, in the price rows, as soon as the offer opens, so the parent sees it before tapping anything.
+
+A new account has 88 credits. On our example game the rows end like this:
 
 ```
-Total                         138 credits
+AI Coach, 90 min              135 credits
+Storage, already agreed         3 credits
 Your balance                   88 credits   (red)
 You need 50 more credits.
 The 150 credit pack ($6.99) covers it.
 ```
 
-The footer then holds two buttons instead of one:
+The buttons become:
 
 - Main button: "Buy 150 credits for $6.99". This opens the existing in-page payment sheet with that pack already chosen. The parent can still pick a bigger pack there.
-- Second button, same width, quieter: "Upload without AI". This unticks the box and uploads straight away. The parent can still start the analysis later from the game.
+- Second button: "Not now". It closes the offer. The upload was never waiting on this, so there is no "upload without AI" choice to make.
 
 We always name the smallest pack that covers the gap: 150 credits for $6.99 up to 150 missing, 340 for $12.99 up to 340 missing, 1000 for $29.99 above that. If no single pack covers the gap (a very long, multi-video game), the line reads "You need {n} more credits." and the button reads "Buy credits".
 
 ### After paying
 
-When the payment succeeds the payment sheet closes, a green toast says "Credits added. Uploading your game with AI play marking.", and the upload starts by itself with the box still ticked. The parent does not have to tap Upload again.
+When the payment succeeds the payment sheet and the offer both close, and a green toast says "Credits added. AI Coach starts when the upload finishes." (or "Credits added. Starting AI Coach." when the upload has already finished, or when the offer was opened from a game). The parent does not have to tap "Add AI Coach" again: buying the pack from this button was the choice.
 
 ### If the payment fails or is abandoned
 
 - A card that is declined shows the payment provider's own message inside the payment sheet, and the parent can try another card there.
-- If they close the payment sheet, they are back in the upload dialog exactly as they left it: same video, same details, box still ticked, both buttons still there. A grey line above the buttons says "Payment did not go through. Nothing was charged. Try again, or upload without AI."
-- Nothing is uploaded and nothing is charged until they choose one of the two buttons.
-
-### In the start-later sheet (section 4)
-
-Same pattern, one difference: there is no upload to fall back to. The two buttons are "Buy 150 credits for $6.99" and "Not now". After paying, the toast says "Credits added. Starting AI play marking." and the analysis starts by itself.
+- If they close the payment sheet, they are back in the offer exactly as they left it, both buttons still there. A grey line above the buttons says "Payment did not go through. Nothing was charged."
+- The upload carries on throughout.
 
 ### One late case
 
-Credits are set aside when the analysis starts, which is after the upload. If the parent spent credits on something else during the upload and no longer has enough, the analysis does not start and nothing fails silently. The game tile and the status card say "AI play marking is waiting: you need {n} more credits." with the same two choices ("Buy {pack} credits for {price}", "Skip AI for this game").
+Credits are set aside when the analysis starts, which is after the upload. If the parent spent credits on something else during the upload and no longer has enough, the analysis does not start and nothing fails silently. The game tile and the status card say "AI Coach is waiting: you need {n} more credits." with two choices ("Buy {pack} credits for {price}", "Skip AI Coach for this game").
 
 ### For the implementer
 
-- `components/GameDetailsModal.jsx` already opens `components/BuyCreditsModal.jsx` and resumes through `handlePaymentSuccess`. Add a preselected-pack prop to `BuyCreditsModal`, and a neutral reason panel: its current `insufficientCredits` panel says "This export requires", which is wrong here.
-- Do not use `components/InsufficientCreditsModal.jsx` for this flow. It adds a second dialog on top of a dialog and has no "without AI" exit. The in-place row plus two buttons replaces it.
+- The offer opens `components/BuyCreditsModal.jsx` and resumes through its success callback. Add a preselected-pack prop to `BuyCreditsModal`, and a neutral reason panel: its current `insufficientCredits` panel says "This export requires", which is wrong here.
+- Do not use `components/InsufficientCreditsModal.jsx` for this flow. The in-place rows plus two buttons replace it.
 - Pack list comes from `/api/payments/config` (already cached in `BuyCreditsModal`). Never hard-code prices.
-- Fire the existing paywall funnel beacon when the shortfall row first appears with the box ticked.
+- Fire the existing paywall funnel beacon when the shortfall rows first appear.
 
 ---
 
@@ -145,7 +173,7 @@ The status card, while the AI is watching the game:
 
 ```
 +--------------------------------------------+
-| AI is marking plays                        |
+| AI Coach is working                        |
 |                                            |
 | (done) 1. Getting the video ready          |
 | (now)  2. Watching the game                |
@@ -167,8 +195,8 @@ The 18 boxes are the 18 five-minute sections of the game, in game order. A box f
 
 | # | State | What is true | Game tile | Status card in Annotate | What the parent can do |
 |---|---|---|---|---|---|
-| A | Uploading, AI next | The browser is uploading. The analysis has not started. No credits are set aside yet. | Existing uploading tile, unchanged, plus a second chip "AI next". | Title "AI play marking starts after the upload". Line "Keep this tab open until the upload finishes. After that you can leave." The three steps are listed, all not started. | Mark plays by hand while waiting. Cancel the AI option ("Cancel AI play marking", no charge). |
-| B | Getting the video ready | The video is being sent to the analysis service and prepared. We have no finer measure than "started". Credits are set aside. | Chip "AI: getting ready". Line "Getting the video ready". | Title "AI is marking plays". Step 1 is current, with a spinner and "Started 3 min ago. Usually 5 to 10 minutes for a game this long. This is an estimate." No bar. | Leave. Mark plays by hand. No cancel from here on (see section 9). |
+| A | Uploading, AI next | The browser is uploading. The analysis has not started. No credits are set aside yet. | Existing uploading tile, unchanged, plus a second chip "AI next". | Title "AI Coach starts after the upload". Line "Keep this tab open until the upload finishes. After that you can leave." The three steps are listed, all not started. | Mark plays by hand while waiting. Cancel the AI option ("Cancel AI Coach", no charge). |
+| B | Getting the video ready | The video is being sent to the analysis service and prepared. We have no finer measure than "started". Credits are set aside. | Chip "AI: getting ready". Line "Getting the video ready". | Title "AI Coach is working". Step 1 is current, with a spinner and "Started 3 min ago. Usually 5 to 10 minutes for a game this long. This is an estimate." No bar. | Leave. Mark plays by hand. No cancel from here on (see section 9). |
 | C | Watching the game | Sections are being watched in parallel. We know the exact number finished. | Chip "AI: watching". Line "11 of 18 sections watched". A thin strip of 18 cells along the bottom edge of the tile. | Step 2 is current. "11 of 18 sections watched", the 18 boxes, and "Usually 2 to 4 minutes for this step. This is an estimate." | Leave. Mark plays by hand. |
 | D | Taking a second look | Some sections stopped early and are being watched again. They were never counted as watched, so the count never goes backwards. | Same as C. | Same as C plus one line: "Taking a second look at 2 sections." Those boxes show a dashed outline. | Same as C. |
 | E | Putting the plays together | All sections are watched. Results are being merged. Seconds. | Chip "AI: finishing". Line "18 of 18 sections watched". | Step 3 is current: "Putting the plays together. A few seconds." | Wait or leave. |
@@ -177,8 +205,8 @@ The 18 boxes are the 18 five-minute sections of the game, in game order. A box f
 | H | Joined an analysis already running | Someone else started an analysis of this same video. This account joined it. Credits are set aside. | Same as B, C, D or E, whichever is true. | Whichever of B to E is true, with one line on top: "This game is already being analysed from another upload of the same video. You joined it, so it will be ready sooner." | Same as B to E. |
 | I | Taking longer than usual | The current step has run past the top of its estimate. It is still running. | Chip unchanged. Line "Taking longer than usual". | The estimate line is replaced by "Taking longer than usual. It is still working. There is nothing you need to do." | Leave. |
 | J | Trying again | The service was busy and we are retrying by ourselves. | Chip unchanged. Line "Service busy, trying again". | "The analysis service is busy. Trying again (attempt 2 of 3)." The count of finished sections stays as it was. | Leave. |
-| K | Failed, credits returned | The analysis did not finish after retries. All set-aside credits are back. Nothing was taken. | Chip "AI did not finish" in rose. Line "135 credits returned". | Title "AI play marking did not finish". One reason line (below). "Your 135 credits are back in your balance. Nothing was charged." Buttons "Try again" and "Dismiss". | Try again (same price, set aside again). Dismiss. Mark plays by hand. |
-| L | Waiting for credits | The upload finished but the balance no longer covers the analysis. Nothing is set aside. | Chip "AI waiting". Line "Needs 50 more credits". | Section 2, "One late case". | Buy and start. Skip AI for this game. |
+| K | Failed, credits returned | The analysis did not finish after retries. All set-aside credits are back. Nothing was taken. | Chip "AI did not finish" in rose. Line "135 credits returned". | Title "AI Coach did not finish". One reason line (below). "Your 135 credits are back in your balance. Nothing was charged." Buttons "Try again" and "Dismiss". | Try again (same price, set aside again). Dismiss. Mark plays by hand. |
+| L | Waiting for credits | The upload finished but the balance no longer covers the analysis. Nothing is set aside. | Chip "AI waiting". Line "Needs 50 more credits". | Section 2, "One late case". | Buy and start. Skip AI Coach for this game. |
 | M | Came back later | The parent left and returned. | The tile shows whichever state above is true right now. | Whichever card above is true right now. If it became ready while they were away, the first screen they land on also shows the "ready" toast once. | As per the true state. |
 | N | Plays added | The team was picked and plays were imported. | Chip "Tag players" in cyan until the tag pass has been opened once, then no chip. | The summary card from section 6. | Section 6 and 7. |
 
@@ -197,7 +225,7 @@ If the analysis finishes but finds only a handful of plays, that is not a failur
 |---|---|---|
 | Analysis starts after upload | "Upload finished. The AI is now watching your game. You can leave, we will email you." | None. |
 | Ready (states F and G) | "The AI finished watching {game}. Pick your team to add the plays." with a "Pick your team" action. | Subject: "The AI finished watching {game}". Body: "The AI has watched {game} and marked the plays. Open the game and pick your team's jersey color, and we add your team's plays for you to check. The AI marks plays for the whole team and can miss a play or include a weak one. You can edit or remove anything." Button: "Open the game". |
-| Failed (state K) | "AI play marking did not finish for {game}. Your {n} credits are back." | Subject: "AI play marking did not finish. Your credits are back". Body: "We could not finish marking plays in {game}. {reason line} Your {n} credits are back in your balance and nothing was charged. You can try again from the game." Button: "Open the game". |
+| Failed (state K) | "AI Coach did not finish for {game}. Your {n} credits are back." | Subject: "AI Coach did not finish. Your credits are back". Body: "We could not finish marking plays in {game}. {reason line} Your {n} credits are back in your balance and nothing was charged. You can try again from the game." Button: "Open the game". |
 
 No "ready" email is sent when the result was ready within one minute of the upload finishing and the parent is still in the app (the cache case). The toast is enough.
 
@@ -225,63 +253,69 @@ No "ready" email is sent when the result was ready within one minute of the uplo
 
 ## 4. Starting on a game already uploaded
 
+(Redrawn 2026-11-14 to use the offer dialog from section 1. Waits for the owner's approval.)
+
 ### Entry points
 
-1. Game tile menu (the three-dot button). A new item, "Mark plays with AI", sits first in the menu when the game has no analysis. It is not shown for games whose video is no longer stored and cannot be extended.
-2. Annotate, next to "Mark play". A new action card titled "Mark plays with AI", with the line "The AI watches the game and marks your team's plays." It sits second, right after "Mark play". "Mark play" stays the one solid cyan card on the screen. On a phone "Mark play" takes the full width on top and the other cards sit two-up beneath it.
-3. The empty play list. Where the list says there are no plays yet, a second line offers: "Or let the AI mark your team's plays." as a link that opens the same sheet.
+(Drawn by the UX designer on 2026-11-14 after ruling 17 and approved by the owner the same day, ruling 23.)
 
-This one card slot follows the game through its life, so the parent always finds the AI in the same place: "Mark plays with AI", then "AI is marking plays" with the real count, then "Pick your team", then "Tag players" with "12 of 46".
-
-### The confirm sheet
-
-All three entry points open one sheet. On a phone it slides up from the bottom and has its own close button. It does not close when the parent taps outside it.
+1. Annotate, one quiet line under the action cards. The four action cards (Mark play, Watch plays, Share game, Add video) do not change. Under them, where "Share with tagged teammates" already sits, one line of grey text with a small sparkle icon reads "Let AI Coach mark the plays". It is always drawn, at least 44 px tall, and never tinted or boxed. This is the door for a parent who said "Not now" at upload.
+2. Game tile menu (the three-dot button). A new item, "AI Coach", sits after "Share game" when the game does not have it. It is not shown for games whose video is no longer stored and cannot be extended.
 
 ```
-+--------------------------------------------+
-| Mark plays with AI                      X  |
-| Coach-level analysis of the whole game     |
-| (the three benefit lines from section 1)   |
-| (the "Good to know" paragraph)             |
-| (the Gemini line)                          |
-| AI analysis, 90 min         135 credits    |
-| Your balance                200 credits    |
-| Balance after                65 credits    |
-| Credits are set aside now and only taken   |
-| when the analysis finishes. If it fails,   |
-| you get them all back.                     |
+[ + Mark play                    ]
+[   Watch plays                  ]
+[   Share game                   ]
+[   Add video                    ]
+   * Let AI Coach mark the plays >
+```
+
+The empty play list carries no AI Coach link: it disappears after the first play, and the list area is a tap-to-seek surface.
+
+Once AI Coach is bought the line is hidden, and everything about it appears in the status card above the action cards (section 3), which is larger and higher on the page than the line because the parent has now paid: "AI Coach is working" with the real count, then "Pick your team", then the summary card with "Tag players". If the parent dismisses the summary card with plays still untagged, the line returns in cyan as "Tag players, 12 of 46".
+
+The line is hidden when the sport is not supported, when the video is no longer stored and cannot be extended, and while the page is in edit mode.
+
+### The dialog
+
+Every entry point opens the offer dialog from section 1: the same examples, the same benefit lines and the same free-share panel. Two things differ in the pinned bottom part:
+
+```
+| AI Coach, 90 min              135 credits  |
+| Your balance                  200 credits  |
+| Balance after                  65 credits  |
 | Usually ready in 10 to 15 minutes. This is |
 | an estimate. You can leave, we email you.  |
-| [ Start: 135 credits ]                     |
+| [ Start AI Coach: 135 credits ]            |
 | [ Not now ]                                |
-+--------------------------------------------+
 ```
 
-There is no storage line here: storage was paid at upload. The main button always carries the price.
+There is no storage row and no upload line: storage was paid at upload. In their place is the labelled time estimate.
 
-### States of the sheet
+### States of the dialog
 
-| State | What the sheet says | What the parent can do |
+| State | What the dialog says | What the parent can do |
 |---|---|---|
 | Normal | As drawn. | Start, or Not now. |
-| Sport not chosen | A step appears above the price: "Which sport is this?" with the sport picker. The Start button is off and reads "Pick a sport to start" until one is chosen. Choosing soccer turns it on in place. | Pick. Nothing else on the sheet moves. |
-| Sport is not soccer | The pitch is replaced by one line: "AI play marking is soccer only for now." One button: "OK". | Close. |
-| Not enough credits | Section 2, start-later variant. | Buy and start, or Not now. |
-| Video no longer stored, can be extended | "This game's video is no longer stored, so the AI has nothing to watch. Extend storage first, then start." Button "Extend storage" (the existing flow), then the sheet reopens. | Extend, or close. |
-| Video no longer stored, cannot be extended | "This game's video is no longer stored, so the AI has nothing to watch. Upload the game again to use AI play marking." One button: "OK". | Close. |
-| Analysis already running for this game | No sheet. The entry point opens the game and scrolls to the status card. | See progress. |
-| Analysis already done, team not picked | No sheet. Opens the team chooser (section 5). | Pick the team. |
-| Analysis already done, plays added | A small sheet: "This game is already analysed. You will not be charged again." Buttons: "Tag players", "Switch team", "Add the AI plays again" (only if some were removed). | Any of the three, all free. |
+| Sport not chosen | A step appears above the price: "Which sport is this?" with the sport chooser. The Start button is off and reads "Pick a sport to continue" until one is chosen. Choosing soccer turns it on in place. | Pick. Nothing else in the dialog moves. |
+| Sport is not soccer | The pitch is replaced by one line: "AI Coach is soccer only for now." One button: "OK". | Close. |
+| Not enough credits | Section 2. | Buy and start, or Not now. |
+| Video no longer stored, can be extended | "This game's video is no longer stored, so the AI has nothing to watch. Extend storage first, then start." Button "Extend storage" (the existing flow), then the dialog reopens. | Extend, or close. |
+| Video no longer stored, cannot be extended | "This game's video is no longer stored, so the AI has nothing to watch. Upload the game again to use AI Coach." One button: "OK". | Close. |
+| Analysis already running for this game | No dialog. The entry point opens the game and scrolls to the status card. | See progress. |
+| Has AI Coach, team not picked | No dialog. Opens the team chooser (section 5). | Pick the team. |
+| Has AI Coach, plays added | A small sheet: "This game already has AI Coach. You will not be charged again." Buttons: "Tag players", "Share with your team, free", "Switch team", "Add the AI plays again" (only if some were removed). | Any of them, all free. |
+| Has AI Coach through a share | Same as the two rows above; the small sheet's first line reads "AI Coach on this game was shared by {name}. It is free for you." | Same. |
 | Already analysed by someone else (cache) | The estimate line is replaced by "This game has already been analysed, so your plays will be ready in seconds. Same price: 135 credits." | Start, or Not now. |
-| Unavailable today or paused | The lines from section 1, with one button: "OK". | Close. |
+| Unavailable today or paused | The pitch is replaced by "AI Coach is full for today. Start it from here tomorrow." or "AI Coach is paused right now. Start it from here later.", with one button: "OK". | Close. |
 
 ### For the implementer
 
+- The line reuses the "Share with tagged teammates" row under the `ActionCard` grid in `modes/AnnotateModeView.jsx`, sharing one centred wrapping line with it. The grid and its four cards are not changed.
 - Menu item in `components/GameTile.jsx` (same list the mobile sheet and desktop popover share).
-- Action card in the grid in `modes/AnnotateModeView.jsx` (the non-edit `ActionCard` grid). Five cards break the current `lg:grid-cols-4`: use five columns at `lg` when the card is present, and on phones make "Mark play" span both columns. Use the secondary `ActionCard` variant; never a second solid cyan card.
-- Sheet: new component, built like `VeoImportSheet`. Portal to `document.body`; never `position: fixed` inside the Annotate blur card.
+- Dialog: `components/analysis/AICoachOfferDialog.jsx` from section 1 with `context="game"`. Portal to `document.body`; never `position: fixed` inside the Annotate blur card.
 - Sport step uses `components/shared/InlineSportSelect.jsx`; the pick writes the profile sport on that tap.
-- "Never charged twice" is enforced by the server per account and game; the sheet only reflects it.
+- "Never charged twice" and "has it through a share" are decided by the server per account and game; the dialog only reflects the quote.
 
 ---
 
@@ -321,6 +355,7 @@ The analysis names the two teams by jersey color. Before anything is added to th
 - The swatch always has a thin light ring, so white shows on a light frame and navy shows on the dark background. The color name is always written out, so the choice never depends on seeing color.
 - Tapping a card selects it (blue selected border and a filled radio dot). Nothing is added yet. The button at the bottom then reads "Add 46 plays". Two taps on purpose: a mis-tap here would fill the game with the other team's plays.
 - If no frame is available for a team, the card shows only the large swatch and name.
+- Under the color name, one grey line says which way that team attacked in the first half, as the camera saw it: "Attacked toward the left in the first half". It is shown only when the analysis knows it. Two kits can look alike on video, and the direction is a second way for the parent to tell which team is theirs.
 - The play counts are exact, not "about": the analysis is finished, so we know them.
 - "Neither looks right" opens two lines of help in place: "The AI names teams by the jersey color it sees. Pick the closer one. If the plays turn out to be the other team's, switch for free from the game." It does not block.
 
@@ -360,6 +395,7 @@ Right after import, the status card becomes a summary card, in the same place:
 | It does not know which player is yours.    |
 |                                            |
 | [ Tag players ]                            |
+| [ Share with your team, free ]             |
 | Watch the plays                            |
 +--------------------------------------------+
 ```
@@ -367,6 +403,7 @@ Right after import, the status card becomes a summary card, in the same place:
 - The title is the real number.
 - The second line is the real spread of ratings, using the app's rating words.
 - "Tag players" is the next step and opens the pass in section 7. It is styled as a tinted cyan secondary button, because "Mark play" remains the single solid cyan action on this screen.
+- "Share with your team, free" opens the existing game share. Every family that receives the game gets AI Coach on it at no cost (section 11).
 - "Watch the plays" opens the existing play-through of the team plays.
 - The "..." menu holds "Switch team" and "Remove AI plays I have not touched".
 - The card can be dismissed with its close button. The same actions stay reachable from the "Tag players" action card and the tile menu.
@@ -532,7 +569,7 @@ On desktop the chip's choices open as a small popover next to the chip instead o
 | No AI plays in this game | The pass is not offered at all. | Nothing to do. |
 | Last play reached | Done screen, below. | Finish, or go back. |
 
-Done screen: the title "You went through all 46 plays", then three lines with real numbers ("14 are Maya's plays", "20 have teammates tagged", "12 left as team plays"), a main button "Watch Maya's plays" and a quiet "Done".
+Done screen: the title "You went through all 46 plays", then three lines with real numbers ("14 are Maya's plays", "20 have teammates tagged", "12 left as team plays"), a main button "Watch Maya's plays", a second button "Share with your team, free" with the line "Other families can find their own athlete's plays the same way." (section 11), and a quiet "Done".
 
 The three numbers are real and add up to the total. If the parent skipped some, the first line reads "You reached the end. 9 plays still have nobody tagged." with a button "Go through those".
 
@@ -561,7 +598,6 @@ The three numbers are real and add up to the total. If the parent skipped some, 
 | "set aside", "only taken when it finishes", "returned" | "held", "pending charge", "refund" | Credits, not money; plain words. |
 | "already analysed" | "instant AI", any waiting animation | Do not pretend to work. |
 | "play", "team plays", "{athlete}'s plays", "teammate" | "clip", "layer", "Team line", "player" for the parent's kid | Copy glossary. |
-| "Your video is sent to Google's Gemini service to be analysed." | Hiding the provider, or legal wording | One plain line, always visible when buying. |
 | "did not finish", "could not" | "error", "failed job", codes | Calm, and says what happened to their credits. |
 
 Tone for "coach-level analysis": a good youth coach on the sideline. Specific, warm, short. A mistake is a lesson ("Look up before the pass next time"), a great play gets a comparison to a well-known player. Never harsh, never gushing. The app's own voice around it stays factual: numbers, what happened, what to do next. No exclamation marks in status or money copy.
@@ -570,49 +606,34 @@ Every failure message has three parts in this order: what happened, what happene
 
 ### Every string in this spec
 
-`{n}`, `{m}`, `{min}`, `{price}`, `{pack}`, `{athlete}`, `{name}`, `{game}`, `{color}` are filled in at run time. Plurals go through the shared helper ("1 play", "2 plays", "1 credit", "2 credits", "1 section", "2 sections").
+`{n}`, `{m}`, `{min}`, `{price}`, `{pack}`, `{athlete}`, `{name}`, `{game}`, `{color}`, `{sharer}`, `{side}`, `{period}` are filled in at run time. `{period}` comes from the sport's own strings ("first half" for soccer), so the sentence itself stays sport-neutral. Plurals go through the shared helper ("1 play", "2 plays", "1 credit", "2 credits", "1 section", "2 sections").
 
 | Key | Text |
 |---|---|
-| OFFER_TITLE | Mark plays with AI |
+| OFFER_TITLE | AI Coach |
 | OFFER_TAGLINE | Coach-level analysis of the whole game |
-| OFFER_SEE_MORE | See what you get |
 | OFFER_BENEFIT_1 | Watches the full game and marks your team's best plays for you. |
 | OFFER_BENEFIT_2 | Every play gets tags, a rating and a one-sentence summary. |
 | OFFER_BENEFIT_3 | A coaching note for the players involved: what to learn, or which pro it looked like. |
-| OFFER_HONESTY | Good to know: it finds plays for the whole team and cannot tell which player is yours, so you pick your athlete's plays afterwards. It can miss a play or include a weak one. You can edit or remove anything. |
-| OFFER_DISCLOSURE | Your video is sent to Google's Gemini service to be analysed. |
-| OFFER_RATE | 1.5 credits per minute of video. A 90-minute game is 135 credits. |
-| OFFER_PRICE | {n} credits for this {min} min game |
-| OFFER_PRICE_MULTI | {n} credits for {min} min across {m} videos |
-| OFFER_NO_LENGTH | We could not read this video's length, so we cannot price the AI analysis. You can start it after the upload. |
-| OFFER_SOCCER_ONLY | AI play marking is soccer only for now. |
-| OFFER_FULL_TODAY | AI play marking is full for today. Upload now and start it from the game tomorrow. |
-| OFFER_PAUSED | AI play marking is paused right now. Upload now and start it from the game later. |
+| OFFER_SOCCER_ONLY | AI Coach is soccer only for now. |
+| OFFER_FULL_TODAY | AI Coach is full for today. Start it from here tomorrow. |
+| OFFER_PAUSED | AI Coach is paused right now. Start it from here later. |
 | OFFER_CACHED | This game has already been analysed, so your plays will be ready right after the upload. Same price: {n} credits. |
 | SPORT_QUESTION | Which sport is this? |
-| SPORT_REQUIRED_UPLOAD | Pick a sport to upload |
-| SPORT_REQUIRED_START | Pick a sport to start |
-| COST_STORAGE | Storage for {n} days |
-| COST_AI | AI analysis, {min} min |
-| COST_AI_PENDING | AI analysis: price appears when you pick the video |
-| COST_TOTAL | Total |
+| SPORT_REQUIRED_START | Pick a sport to continue |
+| COST_AI | AI Coach, {min} min |
 | COST_BALANCE | Your balance |
 | COST_AFTER | Balance after |
-| COST_RESERVE_NOTE_UPLOAD | The AI credits are set aside when the analysis starts and only taken when it finishes. If it fails, you get them all back. |
-| COST_RESERVE_NOTE_START | Credits are set aside now and only taken when the analysis finishes. If it fails, you get them all back. |
-| UPLOAD_WITH_AI | Upload and mark plays with AI |
 | SHORT_NEED | You need {n} more credits. |
 | SHORT_PACK | The {pack} credit pack ({price}) covers it. |
 | SHORT_BUY | Buy {pack} credits for {price} |
 | SHORT_BUY_GENERIC | Buy credits |
-| SHORT_WITHOUT_AI | Upload without AI |
 | SHORT_NOT_NOW | Not now |
-| SHORT_PAID_UPLOAD | Credits added. Uploading your game with AI play marking. |
-| SHORT_PAID_START | Credits added. Starting AI play marking. |
-| SHORT_PAY_FAILED | Payment did not go through. Nothing was charged. Try again, or upload without AI. |
-| SHORT_WAITING | AI play marking is waiting: you need {n} more credits. |
-| SHORT_SKIP_AI | Skip AI for this game |
+| SHORT_PAID_UPLOAD | Credits added. AI Coach starts when the upload finishes. |
+| SHORT_PAID_START | Credits added. Starting AI Coach. |
+| SHORT_PAY_FAILED | Payment did not go through. Nothing was charged. |
+| SHORT_WAITING | AI Coach is waiting: you need {n} more credits. |
+| SHORT_SKIP_AI | Skip AI Coach for this game |
 | CHIP_AI_NEXT | AI next |
 | CHIP_GETTING_READY | AI: getting ready |
 | CHIP_WATCHING | AI: watching |
@@ -628,10 +649,10 @@ Every failure message has three parts in this order: what happened, what happene
 | TILE_RETRY | Service busy, trying again |
 | TILE_RETURNED | {n} credits returned |
 | TILE_NEEDS | Needs {n} more credits |
-| STATUS_TITLE_QUEUED | AI play marking starts after the upload |
+| STATUS_TITLE_QUEUED | AI Coach starts after the upload |
 | STATUS_QUEUED_BODY | Keep this tab open until the upload finishes. After that you can leave. |
-| STATUS_CANCEL | Cancel AI play marking |
-| STATUS_TITLE_RUNNING | AI is marking plays |
+| STATUS_CANCEL | Cancel AI Coach |
+| STATUS_TITLE_RUNNING | AI Coach is working |
 | STATUS_STEP_1 | Getting the video ready |
 | STATUS_STEP_2 | Watching the game |
 | STATUS_STEP_3 | Putting the plays together |
@@ -650,7 +671,7 @@ Every failure message has three parts in this order: what happened, what happene
 | STATUS_READY_FEW | The AI found {n} plays for both teams. |
 | STATUS_TITLE_CACHED | Ready already |
 | STATUS_CACHED_BODY | This game was analysed earlier from another upload of the same video, so there was nothing to wait for. Same price: {n} credits. |
-| STATUS_TITLE_FAILED | AI play marking did not finish |
+| STATUS_TITLE_FAILED | AI Coach did not finish |
 | STATUS_FAILED_CREDITS | Your {n} credits are back in your balance. Nothing was charged. |
 | FAIL_BUSY | The analysis service was too busy, even after we retried. |
 | FAIL_INCOMPLETE | Some sections of the game could not be watched, so we stopped instead of giving you half a result. |
@@ -660,21 +681,22 @@ Every failure message has three parts in this order: what happened, what happene
 | FAIL_DISMISS | Dismiss |
 | TOAST_STARTED | Upload finished. The AI is now watching your game. You can leave, we will email you. |
 | TOAST_READY | The AI finished watching {game}. Pick your team to add the plays. |
-| TOAST_FAILED | AI play marking did not finish for {game}. Your {n} credits are back. |
+| TOAST_FAILED | AI Coach did not finish for {game}. Your {n} credits are back. |
 | EMAIL_READY_SUBJECT | The AI finished watching {game} |
 | EMAIL_READY_BODY | The AI has watched {game} and marked the plays. Open the game and pick your team's jersey color, and we add your team's plays for you to check. The AI marks plays for the whole team and can miss a play or include a weak one. You can edit or remove anything. |
-| EMAIL_FAILED_SUBJECT | AI play marking did not finish. Your credits are back |
+| EMAIL_FAILED_SUBJECT | AI Coach did not finish. Your credits are back |
 | EMAIL_FAILED_BODY | We could not finish marking plays in {game}. {reason} Your {n} credits are back in your balance and nothing was charged. You can try again from the game. |
 | EMAIL_BUTTON | Open the game |
 | START_CARD_BODY | The AI watches the game and marks your team's plays. |
-| START_EMPTY_LIST | Or let the AI mark your team's plays. |
-| START_BUTTON | Start: {n} credits |
+| START_ROW | Let AI Coach mark the plays |
+| TAG_ROW | Tag players, {n} of {m} |
+| START_BUTTON | Start AI Coach: {n} credits |
 | START_ESTIMATE | Usually ready in {n} to {m} minutes. This is an estimate. You can leave, we email you. |
 | START_CACHED | This game has already been analysed, so your plays will be ready in seconds. Same price: {n} credits. |
 | START_EXPIRED_EXTEND | This game's video is no longer stored, so the AI has nothing to watch. Extend storage first, then start. |
 | START_EXTEND_BUTTON | Extend storage |
-| START_EXPIRED_GONE | This game's video is no longer stored, so the AI has nothing to watch. Upload the game again to use AI play marking. |
-| START_ALREADY | This game is already analysed. You will not be charged again. |
+| START_EXPIRED_GONE | This game's video is no longer stored, so the AI has nothing to watch. Upload the game again to use AI Coach. |
+| START_ALREADY | This game already has AI Coach. You will not be charged again. |
 | START_ADD_AGAIN | Add the AI plays again |
 | OK | OK |
 | TEAM_TITLE | Which team is yours? |
@@ -754,6 +776,41 @@ Every failure message has three parts in this order: what happened, what happene
 | SPORT_TAGS_SHEET_TITLE | Which sport is this? |
 | SPORT_TAGS_SET | {sport} tags. |
 | SPORT_TAGS_CHANGE | Change |
+| OFFER_EXAMPLE_LABEL | Example from another game |
+| OFFER_SHARE_TITLE | Pay once. Share it with your whole team for free. |
+| OFFER_SHARE_BODY | Every family you share this game with gets AI Coach on it too, at no cost to them. |
+| OFFER_UPLOADING | Uploading your game: {n}% |
+| OFFER_UPLOAD_DONE | Upload finished |
+| OFFER_ADD | Add AI Coach: {n} credits |
+| OFFER_LATER_HINT | You can add it later from the game. |
+| OFFER_ADDED_TOAST | AI Coach added. It starts when the upload finishes. |
+| OFFER_USED_SHARED | You used AI Coach on a game {name} shared. |
+| COST_AI_MULTI | AI Coach, {min} min across {m} videos |
+| COST_STORAGE_AGREED | Storage, already agreed |
+| COST_AFTER_BOTH | Balance after both |
+| START_SHARED_ALREADY | AI Coach on this game was shared by {name}. It is free for you. |
+| TEAM_DIRECTION | Attacked toward the {side} in the {period} |
+| SHARE_BUTTON | Share with your team, free |
+| SHARE_SUMMARY_LINE | Every family you share this game with gets AI Coach on it, at no cost to them. |
+| SHARE_DONE_LINE | Other families can find their own athlete's plays the same way. |
+| SHARE_TEAMMATE_LINE | {name}'s family gets this game with AI Coach, free. |
+| SHARE_DIALOG_LINE | This game has AI Coach. Everyone you share it with gets it free. |
+| SHARE_EMAIL_READY_LINE | Pay once, share free: every family you share this game with gets AI Coach on it too. |
+| SHARE_EMAIL_SUBJECT | {sharer} shared {game} with AI Coach |
+| SHARE_EMAIL_BODY | {sharer} shared {game} with you. It comes with AI Coach: the AI has watched the whole game and marked the team's plays, with tags, a rating and a coaching note on each. {sharer} already paid for it, so it is free for you. |
+| SHARE_EMAIL_TAGGED | {sharer} tagged {athlete} in {n} plays. |
+| SHARE_EMAIL_BUTTON | Find {athlete}'s plays |
+| SHARE_CARD_TITLE | AI Coach, shared by {sharer} |
+| SHARE_CARD_FREE | Free for you. {sharer} paid once for the team. |
+| SHARE_CARD_COUNT | {n} plays for {color} are in team plays. |
+| SHARE_CARD_TAGGED | {sharer} tagged {athlete} in {n} of them. |
+| SHARE_CARD_FIND | Find {athlete}'s plays |
+| SHARE_CHIP | AI Coach: shared |
+| SHARE_SUGGEST | {sharer} says this is {athlete} |
+| SHARE_RUNNING_LINE | {sharer} shared this game with AI Coach. Free for you. |
+| SHARE_OWN_GAMES | Want this on your own games? AI Coach is 1.5 credits per minute of video. |
+| SHARE_ADDED_EMAIL_SUBJECT | {sharer} added AI Coach to {game} |
+| OFFER_EXAMPLE_COUNT | Example {n} of {m} |
 
 Implementer note: the strings go in `src/frontend/src/config/displayNames.js` as one new group. Copy never uses "her" or "his" for the athlete; it repeats the name.
 
@@ -763,7 +820,7 @@ Implementer note: the strings go in `src/frontend/src/config/displayNames.js` as
 
 All screens in this file were approved by the owner on 2026-11-12. Where a ruling below differs from text earlier in the file, the ruling wins and the implementer follows it.
 
-1. The box starts unticked.
+1. AI Coach is never added without the parent's own tap. Nothing in the offer is selected in advance.
 2. An analysis that finishes is always charged, even when it finds few plays. The ready state still says the real number found. There is no automatic return of credits for a small result; credits come back only when the analysis does not finish.
 3. Lane names do not change. Use the labels the app shows today ("My athlete" and "Team", and the existing headings for each list of plays). This feature adds no new name for a lane.
 4. Moving a play between My athlete and Team, and editing a play, work exactly as they do today. "This is {athlete}" on a chip is the existing switch and nothing more: the play keeps the tags, rating and note it arrived with, and the parent edits them if they want to. The existing rule that the athlete's own plays carry no teammate names stays.
@@ -771,6 +828,23 @@ All screens in this file were approved by the owner on 2026-11-12. Where a rulin
 6. Free cancel until the upload finishes; no cancel after the analysis starts.
 7. Tagging a teammate from a chip is the app's existing teammate tagging: the parent enters the player's name and email address, and that family gets the game and the plays in the Team lane, as today. That flow is not changed. This feature only makes it one tap away from each chip ("Right winger", "Player 10"): the chip opens the existing name entry with names already used in this game offered first, and the existing step that collects the email address and shares.
 8. (2026-11-13) The AI sometimes mixes the teams up, so every AI play carries a "Wrong team" button that flips that one play to the other team's side of it and records the miss. The owner ruled out removing the play: that is no more help than deleting it. See "Wrong team on one play" in section 6. This was added after the screens were approved and has no approved mock-up; it follows the "Looks right" button's style.
+
+9. (2026-11-14) The option is called AI Coach on every screen. "Coach-level analysis of the whole game" stays as its one-line promise.
+10. (2026-11-14) AI Coach is offered in its own dialog once the upload is running, and the upload dialog does not change. The same dialog opens from the game. Sections 1, 2 and 4 are drawn to this ruling and wait for the owner's approval.
+11. (2026-11-14) One payment covers the team. A family that receives a shared game from someone who has AI Coach on it gets the full AI Coach on that game for free, and can share it on. A parent who uploads the same video on their own, without a share, pays the normal price. Section 11 is drawn to this ruling and waits for the owner's approval.
+12. (2026-11-14) The offer does not carry the "Good to know" paragraph, the line about Google's Gemini service, or the note about credits being set aside. The behaviour is unchanged: credits are still set aside when the analysis starts, taken when it finishes and returned if it fails, and every failure message still says so. That video is analysed by Google's Gemini service is stated on the terms page.
+13. (2026-11-14) The free-share promise keeps its own panel under the benefit lines, and the panel should look celebratory. The plain tinted box was too quiet.
+14. (2026-11-14) The example is a carousel, not one play. A bank of real AI plays, each with its picture and coaching note, is kept for each sport, and the offer rotates through the bank for the sport being analysed, a new one every 5 seconds. Soccer starts with six that the owner picks from the first approved prototype run.
+15. (2026-11-14) The offer stops opening by itself after three "Not now" answers in a row. Buying AI Coach once turns it back on.
+16. (2026-11-14) Section 2 is approved: a parent short of credits who buys the named pack from the offer has also added AI Coach, with no second tap.
+17. (2026-11-14) AI Coach is not one of the main action cards on the Annotate page. It is reachable there, but below them in weight: a parent who skipped it at upload has shown it is a lower priority for them. Section 4 is drawn to this ruling.
+18. (2026-11-14) The receiving family's card is approved. A share works as it does today: the receiver gets the sharer's team plays, cleaned up by the sharer and not specific to the sharer's own athlete. AI Coach travels with those plays. There is no separate fresh set of AI plays.
+19. (2026-11-14) Tags the sharer made for the receiver's child arrive as suggestions, shown first, never assigned without a tap. A family that received AI Coach can share it on. Families the game was shared with before the sharer bought AI Coach get it automatically, with an email. A receiving family is sold AI Coach with one quiet line after their first pass and one line in their next upload's offer, and no email.
+20. (2026-11-14) The team chooser shows which way each team attacked in the first period, one grey line under each colour.
+21. (2026-11-14) The price stays at 1.5 credits a minute and is looked at again after the first 50 paid games.
+22. (2026-11-14) The redrawn offer is approved. The free-share panel is the gold ribbon: a gold border, a gold "FREE FOR YOUR TEAM" label and a bold heading, with no pictures of people and no animation.
+23. (2026-11-14) Section 4 is approved: one quiet line under the four action cards and an item in the game tile's menu, with the paid-for states in the status card above the cards.
+24. (2026-11-14) No screen is designed for a play whose team the analysis could not settle. The analysis records and counts such plays; until one has been seen in real results, the app treats it like any other AI play, and the "Wrong team" button is there as on every AI play.
 
 ---
 
@@ -820,7 +894,8 @@ One tap chooses the sport and closes the sheet. The "Pick sport" chip becomes th
 | Play form on phone, portrait (details pop-up) | Boxed notice with dropdown | Sport chips under "Tags" |
 | Full-screen editor, landscape scrub bar | Dead text pointing at the top bar | "Pick sport" chip that opens the sheet |
 | Suggested plays list (imported plays) | Boxed notice with dropdown | Sport chips under "Tags" |
-| Upload dialog | Optional sport field | Unchanged, except it becomes a required step when "Mark plays with AI" is ticked (section 1) |
+| Upload dialog | Optional sport field | Unchanged |
+| AI Coach offer (sections 1 and 4) | New | Asks for the sport with the same chips when the profile has none |
 | Tag players pass (section 7) | New | Never needed: the sport is always known before an analysis can start |
 
 ### For the implementer
@@ -832,3 +907,82 @@ One tap chooses the sport and closes the sheet. The "Pick sport" chip becomes th
 - "Change" and the "Soccer tags." line are form-local view state; nothing about them is stored.
 - Existing strings `SPORT_PICK.CHIP` ("Pick sport") and `SPORT_PICK.CHIP_ARIA` are reused; `SPORT_PICK.HELPER` and the "Pick your sport to tag this play" heading are retired.
 - This section does not depend on the AI epic and can ship first.
+
+---
+
+## 11. Sharing AI Coach
+
+(New 2026-11-14. The owner approved the receiving family's card and ruled on the open choices the same day: section 9, rulings 15 to 19. Built by T16202.)
+
+### The rule the parent is told
+
+One payment covers the team. When a parent who has AI Coach on a game shares that game, the family that receives it gets AI Coach on it too, free, and can share it on. The words are always the same: "Pay once. Share it with your whole team for free."
+
+Sharing itself is the app's existing game share and the existing teammate step (name and email address). Nothing about how a game is shared changes. What changes is what arrives, and what the screens say.
+
+### Where the sharer sees it
+
+| Place | What it says | What it does |
+|---|---|---|
+| The offer (sections 1 and 4) | The free-share box. | Nothing to tap; it is part of the pitch. |
+| Summary card after the plays are added (section 6) | A second button under "Tag players": "Share with your team, free". One grey line: "Every family you share this game with gets AI Coach on it, at no cost to them." | Opens the existing game share. |
+| Last screen of the Tag players pass (section 7) | Under the three numbers: "Other families can find their own athlete's plays the same way." Button "Share with your team, free". | Opens the existing game share. |
+| The teammate step, when a teammate is tagged from a chip (section 7) | One added line above the email field: "{name}'s family gets this game with AI Coach, free." | Nothing new; the step shares as it does today. |
+| The existing share dialog, on a game with AI Coach | One added line at the top: "This game has AI Coach. Everyone you share it with gets it free." | Nothing new. |
+| The "AI Coach finished" email (section 3) | A last line: "Pay once, share free: every family you share this game with gets AI Coach on it too." | None. |
+
+The share button on the summary card is a tinted secondary button, like "Tag players". "Mark play" remains the one solid cyan action on the screen.
+
+### What the receiving family sees
+
+The share email:
+
+- Subject: "{sharer} shared {game} with AI Coach"
+- Body: "{sharer} shared {game} with you. It comes with AI Coach: the AI has watched the whole game and marked the team's plays, with tags, a rating and a coaching note on each. {sharer} already paid for it, so it is free for you." When the sharer tagged their child, one more sentence: "{sharer} tagged {athlete} in {n} plays."
+- Button: "Find {athlete}'s plays", or "Open the game" when the receiver has no athlete profile yet.
+
+A receiver without an account creates one to open the game, as with any share today.
+
+On the game, in the slot the other AI Coach cards use:
+
+```
++--------------------------------------------+
+| AI Coach, shared by Sam               ...  |
+| Free for you. Sam paid once for the team.  |
+|                                            |
+| 46 plays for White are in team plays.      |
+| Sam tagged Ava in 6 of them.               |
+|                                            |
+| [ Find Ava's plays ]                       |
+| Watch the plays                            |
++--------------------------------------------+
+```
+
+- The numbers are real. The second line of the count appears only when the sharer tagged the receiver's child.
+- "Find {athlete}'s plays" opens the Tag players pass (section 7). The plays the sharer tagged open first, each with a suggestion chip: "Sam says this is Ava", with the two small buttons "Ava" and "No". Nothing is assigned until the receiver taps.
+- The "..." menu holds "Switch team" (for a parent of the other team), "Share with your team, free" and "Remove AI plays I have not touched".
+- The game tile shows the chip "AI Coach: shared" in cyan until the pass has been opened once.
+- The receiver's plays are the sharer's team plays, as the app's share delivers them today: what the sharer edited arrives edited and what the sharer deleted does not arrive. The AI plays among them keep what the AI wrote, so they look and behave like any AI play (section 6): the "AI" pill, "Looks right", "Wrong team". A play the sharer moved to their own athlete is not a team play and does not travel.
+
+### The receiver's own next game
+
+- On the done screen of the receiver's first Tag players pass, under the share button, one quiet line: "Want this on your own games? AI Coach is 1.5 credits per minute of video." It is a line, not a dialog.
+- The next time the receiver uploads a game, the offer (section 1) carries the line "You used AI Coach on a game {name} shared." under the tagline.
+- No email is sent to sell AI Coach to a receiver.
+
+### States
+
+| State | What the receiver sees | What they can do |
+|---|---|---|
+| Shared while the analysis is still running | The usual progress card (section 3) with one line on top: "{sharer} shared this game with AI Coach. Free for you." | Leave; the ready toast and email follow as usual. |
+| Shared, team not yet picked by the sharer | "Pick your team" as in section 5, free. | Pick. |
+| Receiver already bought AI Coach on this same game | Nothing changes for them. No card, no second set of plays. | Carry on. |
+| Receiver is a parent of the other team | The card as drawn, with the sharer's team. "Switch team" is in the menu and in the "Neither looks right" help of the chooser. | Switch, free. |
+| The game was shared before the sharer had AI Coach | When the sharer's AI plays are added, every family the game was already shared with gets AI Coach on it, and an email: subject "{sharer} added AI Coach to {game}", the same body and button as the share email. The game shows the card as drawn. Nobody has to share again. | Find their athlete's plays, free. |
+
+### For the implementer
+
+- The card is the summary card component from section 6 with a shared-by variant; do not build a second card.
+- Strings are in section 8 under the `SHARE_` keys. `{sharer}` is the sharing account's display name as the existing share email shows it.
+- "Sam says this is Ava" reuses the suggestion chip from "Remembering positions" in section 7; the source of the suggestion differs, the chip does not.
+- Events and the server side are in T16202.

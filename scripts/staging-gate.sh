@@ -41,8 +41,8 @@
 #                GATE2_EMAIL/GATE2_PROFILE (lane B), GATE3_EMAIL/GATE3_PROFILE (lane C).
 set -u
 
-BASE_URL="${E2E_BASE_URL:-https://reel-ballers-staging.pages.dev}"
-API_BASE="${E2E_API_BASE:-https://reel-ballers-api-staging.fly.dev/api}"
+BASE_URL="${E2E_BASE_URL:-https://staging.reelballers.com}"
+API_BASE="${E2E_API_BASE:-https://api-staging.reelballers.com/api}"
 GATE1_EMAIL="${GATE1_EMAIL:-imankh@gmail.com}"
 GATE1_PROFILE="${GATE1_PROFILE:-9fa7378c}"
 # The alias clones mirror imankh's data, so their profile GUID is the same.

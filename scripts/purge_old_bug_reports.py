@@ -9,7 +9,7 @@ date) and accepts any subset of BUG_STATUSES via --status; default (no
 --status) is all statuses.
 
 Requires:
-  - Fly proxy for prod Postgres: fly proxy 15433:5432 --app reel-ballers-db-prod
+  - Fly proxy for prod Postgres: fly proxy 15433:5432 --app reel-ballers-db-prod-lax
   - .env.prod at project root
 
 Usage (dry-run is the default -- lists what would be deleted, deletes nothing):

@@ -184,7 +184,7 @@ Key services (`app/services/`): `pg.py` (Postgres pool + `_SCHEMA_DDL`), `user_d
 ## Data flow
 Three databases, different access patterns:
 1. **Fly Postgres** (auth/sharing/sessions/analytics/game storage refs): `from app.services.pg import get_pg`; context manager auto-commits/rolls back. `%s` params, RealDictCursor (rows are dicts). Schema: `_SCHEMA_DDL` in pg.py:21 (`CREATE TABLE IF NOT EXISTS`, run at startup — fresh DBs only). **T4960**: `get_pg()` pre-pings each checkout with `SELECT 1` (rollback after, no txn leak) and discards+refetches stale conns, bounded to `maxconn+1` attempts then re-raise, WARNING `[PG] discarded stale connection` per discard — fixes first-request-after-idle 500s (Fly closes idle sockets while `conn.closed` stays 0; keepalives alone didn't catch it). Gated by `_IDLE_PING_THRESHOLD_S=5s` (conns reused within the window skip the ping → ~0 hot-path overhead; only idle-past-window conns are pinged). A fixed 2-attempt bound is insufficient — after idle ALL pooled conns are dead, so the bound must exceed the free-list size.
-   - **Where it runs (T16410, 2026-11-14):** staging is `reel-ballers-db-staging-lax` (lax, next to `reel-ballers-api-staging`; database `reel_ballers_api_staging`). Production is still `reel-ballers-db-prod` in **ord** while the API is in lax, ~45 ms per query (T16460 moves it with the runbook in its task file). The old `reel-ballers-db-staging` (ord) is detached and kept as the way back until T16460 removes it. `DATABASE_URL` comes from `fly postgres attach`, which STAGES the secret (apply with `fly secrets deploy`); the `postgres` user's password is the DB machine's `OPERATOR_PASSWORD`.
+   - **Where it runs (T16410, 2026-11-14):** staging is `reel-ballers-db-staging-lax` (lax, next to `reel-ballers-api-staging`; database `reel_ballers_api_staging`). Production is `reel-ballers-db-prod-lax` (lax, database `reel_ballers_api`) since T16460 (2026-11-15, 55 s down; query round trip 0.5 ms, was ~45 ms from ord). The old `reel-ballers-db-prod` and `reel-ballers-db-staging` (both ord) are detached and kept as the way back for a week, then backed up to R2 and destroyed (T16460 C3). `DATABASE_URL` comes from `fly postgres attach`, which STAGES the secret (apply with `fly secrets deploy`); the `postgres` user's password is the DB machine's `OPERATOR_PASSWORD`.
 2. **Per-user-per-profile SQLite** `profile.sqlite` (clips/projects/games/final videos): `from app.database import get_db_connection` → `TrackedConnection` (write tracking for R2 sync). `?` params, `sqlite3.Row` (bracket access only — `.get()` does not exist). Schema: `ensure_database()` in database.py:479.
 3. **Per-user SQLite** `user.sqlite` (profiles list/quests/activity — **credits moved OUT to Postgres, T5840**, see below): `app/services/user_db.py`, schema `_USER_DB_SCHEMA` (user_db.py:39).
 
@@ -771,6 +771,20 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   sent from "Iman at ReelBallers" `<hello@>`. Links come only from `TUTORIAL_URL` / `SOCIAL_LINKS`.
   NUF reset test accounts are `is_new` on every login, so they get it every time.
   Guard tests: `tests/test_t12610_welcome_email.py`.
+
+## Upload index-at-front check (T2580)
+
+`finalize_upload` (games_upload.py), once per released pending row, calls
+`services/upload_index_check.check_and_record` via `asyncio.to_thread`: ONE ranged GET
+(`bytes=0-65535`) of the landed object, a top-level box walk (moov before mdat/moof = True;
+mdat/moof first, non-MP4, or no moov in the bytes read = False, with the walked boxes stored
+so an admin can tell them apart), and one row in Postgres `upload_index_checks` (v048; no FK,
+purged with the user in `_purge_user_data`). A failed check logs `[UPLOAD_INDEX] check FAILED`
+and never fails the upload (the bytes are already durable). Read by `GET
+/api/admin/upload-failures` as `index_checks: {checked, not_at_front}` over the panel's date
+window (null when the table is missing) and shown as the "Cannot start at once" card in
+`UploadFailuresPanel.jsx`. Tests patch `app.services.upload_index_check.get_r2_client`;
+`pg_conn` patches its `get_pg`. Guard: `tests/test_t2580_upload_index_check.py`.
 
 ## Upload-failure observability (T10270)
 
@@ -1478,6 +1492,10 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   `POST /api/sync/flush-verify` (health router) is the update-gate's step-3 durable-flush barrier:
   checkpoints WAL + awaits R2 upload → **200** clean / **503** still-pending / **401** unauthenticated
   (the client treats 401 as a no-op, not a failure — logged-out users have nothing to flush).
+
+## Staging hosts (T16370)
+
+Staging has prod's shape: app `https://staging.reelballers.com` (Pages project `reel-ballers-staging`), API `https://api-staging.reelballers.com` (Fly app `reel-ballers-api-staging`, CNAME DNS-only). Same site, so the `rb_session` cookie is first-party and Safari keeps it; the old pages.dev/fly.dev pair was cross-site and Safari dropped the cookie (T15450's `SECURE_COOKIES` only fixed Chrome). The project/app NAMES are identifiers and stay; never put the old pages.dev/fly.dev hosts back in code (`tests/test_t16370_staging_own_domain.py` greps the repo, `docs/plans` + dated `docs/testing/staging-verification-*` excluded as history). Edge functions map `app.reelballers.com` -> prod, every other host -> the staging API.
 
 ## Deploy + build-number lockstep (T6220)
 Follow-up from T6210 (which made a server-ahead-of-bundle update-gate loop *structurally impossible*

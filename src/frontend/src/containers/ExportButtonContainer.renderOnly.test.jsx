@@ -72,7 +72,6 @@ const baseProps = {
   projectName: 'My Reel',
   includeAudio: true,
   onIncludeAudioChange: vi.fn(),
-  saveCurrentClipState: vi.fn().mockResolvedValue(),
   onExportComplete: vi.fn(),
 };
 

@@ -129,7 +129,7 @@ async def test_missing_game_source_reexport_fails_loud_not_silent(db):
         "crop_data": None, "game_id": 7, "raw_filename": None,
         "clip_name": "Brilliant Dribble",
         "raw_start_time": 3560.0, "raw_end_time": 3566.0, "raw_duration": 6.0,
-        "game_blake3_hash": "deadbeefdeadbeefdeadbeefdeadbeef", "video_sequence": 1,
+        "game_blake3_hash": "deadbeefdeadbeefdeadbeefdeadbeef", "video_sequence": 1, "fps": 30.0,
     }
 
     # ffmpeg is handed a presigned URL for an object that no longer exists, so the

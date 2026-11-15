@@ -114,7 +114,6 @@ export const useVideoStore = create((set, get) => ({
 
   // Computed values
   hasVideo: () => get().videoUrl !== null,
-  getFramerate: () => get().metadata?.framerate || 30,
 }));
 
 export default useVideoStore;

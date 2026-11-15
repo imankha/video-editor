@@ -8,7 +8,7 @@ Spotlight is the step that draws a circle that follows the parent's athlete thro
 **Filed:** 2026-11-12
 **Started:** not started
 **Impact:** 9 **Complexity:** 7 **Priority:** 1.3
-**Placement:** runs after the Referral programme (owner, 2026-11-13; it was first placed before Mark plays with AI on 2026-11-12).
+**Placement:** runs after the Referral programme (owner, 2026-11-13; it was first placed before AI Coach on 2026-11-12).
 **Design:** the Spotlight screen changes (T16240, T16250) need a design review before they are built.
 
 ## Goal
@@ -20,7 +20,7 @@ A parent taps their athlete once in Spotlight and gets a circle that stays on th
 1. **One tap is the goal.** After the parent taps their athlete's box on the first frame, they should not need another tap.
 2. **Prove it outside the app first.** Done: the prototype project and its results are described below.
 3. **The model is SAM 2.1 base+.** The owner picked it from the prototype table. It is free to use commercially (Apache 2 licence).
-4. **This runs after the Referral programme.** (Moved by the owner on 2026-11-13; it was first placed before Mark plays with AI.)
+4. **This runs after the Referral programme.** (Moved by the owner on 2026-11-13; it was first placed before AI Coach.)
 5. **A new spotlight stays two seconds long.** Following covers those two seconds, and continues for as long as the parent stretches the spotlight (T16260).
 
 ## What the prototype measured
@@ -50,7 +50,7 @@ The prototype lives outside this repo at `C:/Users/imank/projects/player-trackin
 - **The result becomes ordinary spotlight points.** The path is thinned to a handful of points the parent can drag, exactly like the ones their taps make today. Export, saving and re-editing do not change.
 - **No new charge.** Following is part of Spotlight. Its cost is measured in T16220 and watched afterwards (T16270); if it is not small, the owner decides before the screens ship.
 - **Failure is quiet.** If the follower cannot run, is switched off, or takes too long, the parent sees today's four taps with one plain line of explanation. Nothing is lost and nothing is charged.
-- **Safety switches.** A kill switch and a daily spend cap, like the ones planned for Mark plays with AI.
+- **Safety switches.** A kill switch and a daily spend cap, like the ones planned for AI Coach.
 - **Frame is not in this epic.** Frame is the step where the parent crops around their athlete. Following there happens on the raw game video, where athletes are far smaller; that stays a separate, unproven task (T15860, T15870).
 
 ## Tasks (dependency order)

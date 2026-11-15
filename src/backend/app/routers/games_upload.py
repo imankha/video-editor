@@ -31,6 +31,7 @@ from app.middleware.db_sync import acquire_write_lock, durable_sync
 from app.services.credit_ledger import get_credit_balance
 from app.services.storage_credits import calculate_storage_cost, calculate_upload_cost
 from app.services.upload_failures import record_upload_failure, record_upload_failure_from_payload
+from app.services.upload_index_check import check_and_record
 from app.storage import (
     R2_ENABLED,
     generate_multipart_urls,
@@ -877,6 +878,21 @@ async def finalize_upload(
             "blake3_hash": blake3_hash,
             SPORT_PROFILE_ID_CONTEXT_KEY: get_current_profile_id(),
         })
+
+    # T2580: record whether the landed file can start playing before it has fully
+    # downloaded (moov ahead of mdat) -- one ranged read of its head, once per
+    # released row. A failed check is logged, never a failed upload: the bytes
+    # are already durable.
+    if released_here:
+        try:
+            await asyncio.to_thread(
+                check_and_record, r2_key=r2_key, user_id=user_id, kind=kind, blake3_hash=blake3_hash
+            )
+        except Exception as e:
+            logger.error(
+                f"[UPLOAD_INDEX] check FAILED user={user_id} kind={kind} hash={blake3_hash} "
+                f"error={type(e).__name__}: {e}"
+            )
 
     # Game creation is handled separately by POST /api/games
     return {

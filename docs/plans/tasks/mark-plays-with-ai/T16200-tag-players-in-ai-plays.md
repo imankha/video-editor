@@ -11,7 +11,7 @@ After the import, a parent has a few dozen plays (marked moments) in the Team la
 **Created:** 2026-11-12
 **Updated:** 2026-11-12
 
-Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 7 of 7.
+Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 8 of 10.
 
 ## Problem
 

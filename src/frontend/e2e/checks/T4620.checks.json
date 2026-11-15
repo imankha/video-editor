@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T4620:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python -m pytest tests/test_t4620_tied_version_same_clip.py -q -p no:cacheprovider -k test_list_and_clip_endpoint_pick_the_higher_id_on_a_tie"
+    },
+    "T4620:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python -m pytest tests/test_t4620_tied_version_same_clip.py -q -p no:cacheprovider -k test_projects_router_has_no_private_latest_clip_query"
+    }
+  }
+}

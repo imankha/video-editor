@@ -41,7 +41,7 @@ A slow rollout to a share of parents was considered. With the small number of sp
 ## For the implementer
 
 ### Design notes
-- Follow the kill switch, daily spend cap and admin read-out being built for Mark plays with AI (T16150, T16160); share the mechanism if it has landed, otherwise build the minimal version here and note it for reuse.
+- Follow the kill switch, daily spend cap and admin read-out being built for AI Coach (T16150, T16160); share the mechanism if it has landed, otherwise build the minimal version here and note it for reuse.
 - Milestone events follow the existing analytics pattern (see the Journey and funnel tasks T3470, T15800 for names); write them from the gesture that completes a spotlight, not reactively.
 - GPU seconds come back with the T16220 job result.
 

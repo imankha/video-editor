@@ -8,7 +8,7 @@ A highlight is a finished short clip. Frame is the step where the parent crops a
 **Filed:** 2026-11-14
 **Started:** not started
 **Impact:** 9 **Complexity:** 6 **Priority:** 1.5
-**Placement:** runs before Mark plays with AI (owner, 2026-11-14).
+**Placement:** runs before AI Coach (owner, 2026-11-14).
 **Evidence:** [finish-step-evidence-2026-11-14.md](../../bi/finish-step-evidence-2026-11-14.md)
 **Design:** the server-side finish (T16520) needs an architecture review and the Finished screen changes (T16530) need a design review before they are built.
 
@@ -19,7 +19,7 @@ Every highlight a parent pays to sharpen reaches the Highlights tab without a fu
 ## Owner decisions (2026-11-14)
 
 1. **The holding place can go.** The owner said the step between exported and finished was only ever meant as a temporary stop for a redo, and that skipping it entirely was acceptable depending on how many parents redo from it.
-2. **This runs before Mark plays with AI.**
+2. **This runs before AI Coach.**
 
 ## What the evidence says
 

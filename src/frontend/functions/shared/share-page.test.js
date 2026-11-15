@@ -10,9 +10,9 @@ describe('apiBase', () => {
   });
 
   it('defaults everything else (staging/preview) to the staging API', () => {
-    expect(apiBase('reel-ballers-staging.pages.dev')).toBe('https://reel-ballers-api-staging.fly.dev');
-    expect(apiBase('localhost')).toBe('https://reel-ballers-api-staging.fly.dev');
-    expect(apiBase('some-preview.pages.dev')).toBe('https://reel-ballers-api-staging.fly.dev');
+    expect(apiBase('staging.reelballers.com')).toBe('https://api-staging.reelballers.com');
+    expect(apiBase('localhost')).toBe('https://api-staging.reelballers.com');
+    expect(apiBase('some-preview.pages.dev')).toBe('https://api-staging.reelballers.com');
   });
 });
 
@@ -54,14 +54,14 @@ describe('appHomeFor (T13070)', () => {
     expect(appHomeFor('app.reelballers.com')).toBe('https://app.reelballers.com/');
   });
   it('staging host opens the staging app, not prod', () => {
-    expect(appHomeFor('reel-ballers-staging.pages.dev')).toBe('https://reel-ballers-staging.pages.dev/');
+    expect(appHomeFor('staging.reelballers.com')).toBe('https://staging.reelballers.com/');
   });
 });
 
 describe('renderSharePage app link (T13070)', () => {
   it('Open ReelBallers uses the supplied app home', () => {
-    const html = renderSharePage({ video_url: 'https://r2.example.com/x.mp4', is_public: true }, 'https://reel-ballers-staging.pages.dev/');
-    expect(html).toContain('class="cta" href="https://reel-ballers-staging.pages.dev/"');
+    const html = renderSharePage({ video_url: 'https://r2.example.com/x.mp4', is_public: true }, 'https://staging.reelballers.com/');
+    expect(html).toContain('class="cta" href="https://staging.reelballers.com/"');
     expect(html).not.toContain('app.reelballers.com');
   });
 });

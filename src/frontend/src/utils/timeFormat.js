@@ -280,7 +280,8 @@ export function parseTimeInput(text) {
 
 /**
  * UI_STEP_FPS is a chosen UI STEP GRANULARITY, not a measured source frame
- * rate. (We do not detect fps -- videoUtils.getFramerate is a hardcoded 30.)
+ * rate. (A <video> element cannot report its fps; Frame steps by the clip's
+ * stored fps instead, T4540.)
  * It is the grid that TYPED ENTRY and the STEP BUTTONS both snap to (via
  * `snapToStep`), so those two produce values from the SAME set -- a typed
  * tenth lands exactly on the grid (0.1s is exactly 3 steps at 30fps), and

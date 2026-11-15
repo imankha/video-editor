@@ -526,4 +526,4 @@ cd src/backend && .venv/Scripts/python.exe ../../scripts/purge_old_bug_reports.p
 cd src/backend && .venv/Scripts/python.exe ../../scripts/purge_old_bug_reports.py --env prod --days 30 --status done,duplicate --execute
 ```
 
-Requires a Fly proxy to prod Postgres (`fly proxy 15433:5432 --app reel-ballers-db-prod`) and `.env.prod` at the project root. A row still referenced by a newer report's `duplicate_of` is automatically excluded from the run (reported, not deleted) rather than silently mutated.
+Requires a Fly proxy to prod Postgres (`fly proxy 15433:5432 --app reel-ballers-db-prod-lax`) and `.env.prod` at the project root. A row still referenced by a newer report's `duplicate_of` is automatically excluded from the run (reported, not deleted) rather than silently mutated.

@@ -11,7 +11,7 @@ A highlight is a finished short clip of an athlete, made from a play (a marked m
 **Created:** 2026-11-13
 **Updated:** 2026-11-13
 
-Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 8 of 8. It serves the [AI reel builder](../ai-reel-builder/EPIC.md).
+Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 10 of 10. It serves the [AI reel builder](../ai-reel-builder/EPIC.md).
 
 ## Problem
 

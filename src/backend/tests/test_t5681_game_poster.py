@@ -91,6 +91,7 @@ def test_get_game_poster_serves_jpeg_when_present():
     with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_game_source_poster", return_value=False), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
          patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
@@ -116,6 +117,7 @@ def test_get_game_poster_ensure_recap_poster_gets_env_prefixed_keys():
     with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_game_source_poster", return_value=False), \
          patch.object(poster, "ensure_recap_poster", return_value=True) as ensure, \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
          patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
@@ -180,9 +182,10 @@ def test_get_game_poster_source_frame_served_when_no_recap():
     recap_gen.assert_not_called()
 
 
-def test_get_game_poster_recap_wins_over_source_frame():
-    """Recap-derived poster wins whenever a recap exists: the source-frame path is
-    NEVER invoked for a game that has a recap (T5681 item 3)."""
+def test_get_game_poster_source_frame_wins_over_recap_while_video_live():
+    """T10540 rule 8 (reverses T5681 item 3): the top-rated play's frame from the
+    live game video wins even when a recap exists; the recap poster is used only
+    when the source poster has nothing to serve."""
     from app.services import poster
 
     game_row = {"id": GAME_ID, "recap_video_url": "https://example.com/recap.mp4"}
@@ -190,13 +193,13 @@ def test_get_game_poster_recap_wins_over_source_frame():
     with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
-         patch.object(poster, "ensure_recap_poster", return_value=True), \
-         patch.object(poster, "ensure_game_source_poster") as source_gen, \
+         patch.object(poster, "ensure_recap_poster", return_value=True) as recap_gen, \
+         patch.object(poster, "ensure_game_source_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
          patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
         asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
 
-    source_gen.assert_not_called()
+    recap_gen.assert_not_called()
 
 
 def test_get_game_poster_404_when_ensure_recap_poster_fails():
@@ -208,6 +211,7 @@ def test_get_game_poster_404_when_ensure_recap_poster_fails():
     with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_game_source_poster", return_value=False), \
          patch.object(poster, "ensure_recap_poster", return_value=False):
         resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
     # T5682: negative cache on 404s
@@ -224,6 +228,7 @@ def test_get_game_poster_404_when_presign_fails():
     with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_game_source_poster", return_value=False), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value=None):
         resp = asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
@@ -241,6 +246,7 @@ def test_get_game_poster_502_when_r2_fails():
     with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_game_source_poster", return_value=False), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
          patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client(status_code=502)), \
@@ -259,6 +265,7 @@ def test_get_game_poster_session_auth_uses_current_profile():
     with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_game_source_poster", return_value=False), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
          patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1") as presign, \
          patch("app.storage.get_poster_r2_client", return_value=_fake_poster_r2_client()):
@@ -383,10 +390,14 @@ def _extract_capture(captured):
 
 def test_ensure_game_source_poster_cache_hit():
     """Poster already in R2 -> True with NO ffmpeg extraction (cache hit)."""
+    from app import database, storage
     from app.services import poster
-    from app import storage
 
-    with patch.object(storage, "r2_head_object_global", return_value={"ContentLength": 1}), \
+    # T10540: a hit means the card was made from the CURRENT choice.
+    head = {"ContentLength": 1, "Metadata": {"source_hash": "ghash", "source_ts": "87.500"}}
+    with patch.object(storage, "r2_head_object_global", return_value=head), \
+         patch.object(database, "get_db_connection", _fake_db_with_row(None)), \
+         patch.object(poster, "_choose_game_poster_frame", return_value=("ghash", 87.5)), \
          patch.object(poster, "extract_first_frame_jpeg") as extract:
         assert ensure_game_source_poster(USER_ID, PROFILE_ID, GAME_ID) is True
     extract.assert_not_called()

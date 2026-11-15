@@ -734,26 +734,13 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   the speed buttons below still CHANGE it. Before T9610 the current speed only appeared (centered) for
   non-1x segments, so a novice read the action buttons as the current state. Coverage:
   `SegmentLayer.test.jsx`.
-- **Registering the mounted `saveCurrentClipState` MUST be stable, never keyed on the handler
-  identity (T6190, 2026-07-31 regression fix).** `FocusScreen` subscribes to the WHOLE
-  `focusStore` (selector-less `useFocusStore()`, FocusScreen.jsx:59-66). The effect that
-  exposes `saveCurrentClipState` to `updateFlush.js` used to `set()` the store keyed on
-  `[framingSaveCurrentClipState]` — but that handler's identity churns nearly every render (a
-  `useCrop` keyframe dispatch regenerates `getKeyframesForExport` while clips/metadata settle on
-  the annotate→framing entry). So each write re-rendered the whole-store subscriber, which
-  re-created the handler, which re-fired the effect: an unbounded setState loop ("Maximum update
-  depth exceeded"), crash stack `clearSaveCurrentClipState`→`forceStoreRerender`→
-  `checkForNestedUpdates`. `activeSaveCurrentClipState` is read ONLY imperatively
-  (`useFocusStore.getState()` in updateFlush.js), never subscribed, so registration has no
-  reason to be reactive. **Fix:** `focusStore.useRegisterActiveSaveHandler(fn)` holds the latest
-  handler in a ref and registers a STABLE wrapper once per mount (empty-deps effect). The
-  loop-HAZARD (whole-store sub + reactive registration) predates T6190 and is byte-identical on
-  master; T6190's `invalidateClips` firing during the transition (settling clips/metadata
-  mid-mount) was the TRIGGER that first activated it. Pinned by
-  `stores/focusStore.registration.test.jsx` (the pre-fix reactive pattern throws Maximum-update-
-  depth; the stable hook does not) + the console-error guard in the T6190 QA spec criterion 4.
-  Do NOT re-key this registration on the handler identity, and prefer selector-scoped focusStore
-  reads on this screen.
+- **The Frame screen registers no full-state save handler (T4400, 2026-11-15).** T6190 had made
+  the registration of the mounted full-state save handler stable (a whole-store `focusStore`
+  subscriber plus a registration keyed on the churning handler identity looped into "Maximum
+  update depth exceeded"). T4400 deleted the full-state save, its focusStore registration hook and
+  that hook's test: every Frame gesture now persists through its own surgical action and the render
+  reads the server's framing. If a store-registered handler is ever reintroduced, register a
+  STABLE wrapper once per mount, never keyed on the handler identity.
 - **Focus does NOT fetch games or clips on mount (T6190, 2026-07-30) — do not re-add a
   "just to be safe" mount refetch.** `FocusScreen` used to fire, on mount, an unconditional
   `fetchGames()` and a `fetchClips(projectId)` (with a WRONG comment claiming the latter deduped

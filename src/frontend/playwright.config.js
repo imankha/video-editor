@@ -30,8 +30,8 @@ const FRONTEND_PORT = 5173;
 
 // Target override: run against a deployed environment (e.g. staging) instead of
 // local dev servers by setting E2E_BASE_URL + E2E_API_BASE. Defaults stay local.
-//   E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
-//   E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
+//   E2E_BASE_URL=https://staging.reelballers.com \
+//   E2E_API_BASE=https://api-staging.reelballers.com/api \
 //   npm run test:e2e
 const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${FRONTEND_PORT}`;
 const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;

@@ -28,14 +28,15 @@ import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/vide
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
-import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
+import MissingFramerateNotice from '../modes/focus/MissingFramerateNotice';
+import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipFramerate, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore, useRegisterActiveSaveHandler } from '../stores';
+import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useProject } from '../contexts/ProjectContext';
-import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
+import { shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
 import { loadAndOfferFocusCompletion } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
@@ -89,7 +90,6 @@ export function FocusScreen({
   const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
   const fetchClips = useProjectDataStore(state => state.fetchClips);
-  const saveFramingEdits = useProjectDataStore(state => state.saveFramingEdits);
   const updateClipMetadata = useProjectDataStore(state => state.updateClipMetadata);
   const changeAspectRatioAction = useProjectDataStore(state => state.changeAspectRatio);
 
@@ -217,6 +217,7 @@ export function FocusScreen({
     removeBoundary: removeSegmentBoundary,
     setSegmentSpeed,
     toggleTrimSegment,
+    restoreTrim,
     getSegmentAtTime,
     getExportData: getSegmentExportData,
     isTimeVisible,
@@ -266,7 +267,7 @@ export function FocusScreen({
       duration: meta.duration,
       sourceWidth: meta.width,
       sourceHeight: meta.height,
-      framerate: meta.framerate || 30,
+      framerate: meta.framerate,
       metadata: meta.metadata,
     };
   }, [clipMetadataCache]);
@@ -343,12 +344,6 @@ export function FocusScreen({
     [timelineZoomIn, timelineZoomOut, resetTimelineZoom],
   );
 
-  // Wrap saveFramingEdits to bind projectId
-  const boundSaveFramingEdits = useCallback((clipId, data) => {
-    if (projectId) return saveFramingEdits(projectId, clipId, data);
-    return Promise.resolve({ success: false });
-  }, [projectId, saveFramingEdits]);
-
   // FocusContainer
   const framing = FocusContainer({
     videoRef,
@@ -401,6 +396,7 @@ export function FocusScreen({
     removeSegmentBoundary,
     setSegmentSpeed,
     toggleTrimSegment,
+    restoreTrim,
     getSegmentAtTime,
     getSegmentExportData,
     isTimeVisible,
@@ -417,7 +413,6 @@ export function FocusScreen({
     hasClips,
     globalAspectRatio,
     updateClipData,
-    saveFramingEdits: boundSaveFramingEdits,
     onCropChange: setDragCrop,
     setFramingChangedSinceExport,
     clipMetadataCache,
@@ -442,16 +437,7 @@ export function FocusScreen({
     handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
     handleSetRotation: framingHandleSetRotation,
     handleUndoFraming: framingHandleUndoFraming,
-    saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
-
-  // T5070: expose this mounted screen's saveCurrentClipState to the update-gate's
-  // step-3 flush (updateFlush.js), which runs outside the framing component tree.
-  // Registration only -- no persistence happens here; the flush calls the
-  // function itself, gesture-triggered by the "Update now" click.
-  // T6190: registered via a STABLE ref-wrapper (not keyed on the handler identity) --
-  // a reactive registration fed an unbounded setState loop here. See focusStore.js.
-  useRegisterActiveSaveHandler(framingSaveCurrentClipState);
 
   // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);
@@ -677,8 +663,11 @@ export function FocusScreen({
         restoreSegmentState(parsedSegments, clipDuration);
       }
 
-      if (parsedCropKfs && parsedCropKfs.length > 0) {
-        const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
+      // T4540: keyframes are frame numbers at the clip's stored rate; without
+      // one (Frame shows the missing-frame-rate error) there is nothing to restore.
+      const firstClipFramerate = clipFramerate(firstClip);
+      if (parsedCropKfs && parsedCropKfs.length > 0 && firstClipFramerate) {
+        const endFrame = Math.round(clipDuration * firstClipFramerate);
         if (endFrame > 0) {
           restoreCropState(parsedCropKfs, endFrame);
         }
@@ -991,21 +980,10 @@ export function FocusScreen({
       return;
     }
 
-    // T4020: The export -> overlay transition is NOT a user gesture. By now the
-    // rendered working video's metadata has superseded the source clip's, so
-    // useCrop/useSegments have re-initialized to defaults (empty crop + default
-    // segments). A full-state save here would write that empty/default state as
-    // a new MAX(version), shadowing the real exported version. The user's edits
-    // were already persisted by the pre-render full-state save in
-    // ExportButtonContainer (and surgically per gesture). The gate is centralized
-    // and unit-tested to stay closed; see focusOverlayTransition.js.
-    if (shouldPersistFocusForOverlayTransition()) {
-      try {
-        await framingSaveCurrentClipState();
-      } catch (err) {
-        console.warn('[FocusScreen] Failed to save clip state (continuing):', err);
-      }
-    }
+    // T4020: The export -> overlay transition is NOT a user gesture and must
+    // never persist full framing state (the reset hooks would write an empty
+    // shadow version). T4400 removed the full-state save entirely: every edit
+    // was already persisted by its own gesture, so there is nothing to save here.
 
     let workingVideoSet = false;
 
@@ -1059,7 +1037,7 @@ export function FocusScreen({
       // T9285: setWorkingVideo(null) above stays as-is so OverlayScreen's real loader
       // (OverlayScreen.jsx:487) runs on entry; the preview opens via focusCompletionStore.
       // The sync-prefix guarantee (no frame between isExporting=false and this) holds
-      // only while shouldPersistFocusForOverlayTransition() stays false.
+      // because no save is awaited before it (T4020/T4400).
       setOpeningHighlight(true);
       try {
         const opened = await loadAndOfferFocusCompletion({
@@ -1123,7 +1101,7 @@ export function FocusScreen({
     if (!workingVideoSet) {
       console.error('[FocusScreen] Cannot offer overlay — working video not set');
     }
-  }, [framingSaveCurrentClipState, onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo, openPreview, fetchProjectClips]);
+  }, [onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo, openPreview, fetchProjectClips]);
 
   // T9790: acknowledge the completed framing job on the decision gesture. The
   // live completion path (offerFocusCompletionPreview) deliberately does NOT
@@ -1422,6 +1400,7 @@ export function FocusScreen({
     <div className="flex h-full">
       {/* Main content */}
       <div className="flex-1 min-w-0">
+        <MissingFramerateNotice clip={projectClip} />
         <FocusModeView
       projectId={projectId}
       guideNeedsCredits={guideNeedsCredits}
@@ -1520,7 +1499,6 @@ export function FocusScreen({
       onIncludeAudioChange={setIncludeAudio}
       onProceedToOverlay={handleProceedToOverlayInternal}
       onExportComplete={onExportComplete}
-      saveCurrentClipState={framingSaveCurrentClipState}
       framingCtaMode={framingCtaState.mode}
       showBackToPreview={framingCtaState.showBackToPreview}
       onBackToPreview={handleBackToPreview}

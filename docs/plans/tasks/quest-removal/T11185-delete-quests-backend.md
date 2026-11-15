@@ -1,6 +1,6 @@
 # T11185: Remove quests from the server
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 4
 **Created:** 2026-09-24

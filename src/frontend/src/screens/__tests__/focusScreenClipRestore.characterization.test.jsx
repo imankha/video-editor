@@ -65,7 +65,6 @@ vi.mock('../../containers', () => ({
     handleSegmentSpeedChange: vi.fn(),
     handleSetRotation: vi.fn(),
     handleUndoFraming: vi.fn(),
-    saveCurrentClipState: vi.fn().mockResolvedValue(),
   }),
 }));
 
@@ -254,7 +253,6 @@ vi.mock('../../stores', () => {
     setWorkingVideo: vi.fn(),
     setClipMetadata: vi.fn(),
     fetchClips: vi.fn().mockResolvedValue([]),
-    saveFramingEdits: vi.fn(),
     updateClipMetadata: vi.fn(),
     changeAspectRatio: vi.fn(),
   };
@@ -284,7 +282,6 @@ vi.mock('../../stores', () => {
     useOverlayStore,
     useProjectsStore,
     useVideoStore: () => ({}),
-    useRegisterActiveSaveHandler: vi.fn(),
   };
 });
 
@@ -303,6 +300,8 @@ function makeClip({ id, projectId = PROJECT_ID }) {
     end_time: 10,
     video_duration: 10,
     video_size: 1000,
+    // T4540: GET /clips carries the stored rate; without it the crop never restores.
+    fps: 30,
     crop_data: [{ time: 0, x: 0, y: 0, width: 100, height: 100 }],
     segments_data: { boundaries: [0, 10], userSplits: [], trimRange: null, segmentSpeeds: {} },
   };

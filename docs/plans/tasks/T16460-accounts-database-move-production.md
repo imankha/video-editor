@@ -1,10 +1,10 @@
 # T16460: Move the production accounts database to Los Angeles
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-13
-**Updated:** 2026-11-13
+**Updated:** 2026-11-15
 
 ## In plain words
 
@@ -60,6 +60,6 @@ Differences from T16410's plan: the database name (step 0), stopping writes with
 
 ## Acceptance Criteria
 
-- [ ] C1: Production's accounts database runs in Los Angeles; every table's row count and the `schema_migrations` ledger match the old one at the switch.
+- [x] C1: Production's accounts database runs in Los Angeles; every table's row count and the `schema_migrations` ledger match the old one at the switch.
 - [ ] C2: Sign-in, a shared link and the admin dashboard work after the switch; the session check takes under 20 ms on a single request.
 - [ ] C3: After a week, a final dump of each old database is in R2, both old database apps are destroyed, and no doc or script names them.

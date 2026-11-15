@@ -7,7 +7,7 @@ import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
 // T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
-import { clipSourceDuration } from '../utils/clipSelectors';
+import { clipFramerate, clipSourceDuration } from '../utils/clipSelectors';
 import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
 import { seedClipVersion } from '../api/focusActions';
 import { EDITOR_MODES } from '../stores/editorStore';
@@ -180,7 +180,10 @@ export function useProjectLoader() {
       }
 
       // T1500: dims (width/height/fps) live on working_clips. Probe fallback
-      // only when dims are missing — a backfill gap should not brick the UI.
+      // only when width/height are missing — a backfill gap should not brick
+      // the UI. T4540: fps is NEVER probed (the probe cannot read it and used
+      // to hand back a guessed 30); a clip without one keeps framerate null and
+      // Frame shows the missing-frame-rate error.
       const metadataCache = {};
       for (const clip of clipsData) {
         const hasUrl = (clip.game_video_url && clip.start_time != null && clip.end_time != null)
@@ -189,19 +192,18 @@ export function useProjectLoader() {
 
         let width = clip.width;
         let height = clip.height;
-        let framerate = clip.fps;
+        const framerate = clipFramerate(clip);
 
-        if (!width || !height || !framerate) {
+        if (!width || !height) {
           console.warn(
             `[useProjectLoader] T1500 gap: clip id=${clip.id} missing dims ` +
-            `(width=${clip.width} height=${clip.height} fps=${clip.fps}). ` +
+            `(width=${clip.width} height=${clip.height}). ` +
             `Probing URL as fallback. Run scripts/backfill_clip_dimensions.py to fix permanently.`
           );
           try {
             const probed = await extractVideoMetadataFromUrl(clip.game_video_url, `clip_${clip.id}.mp4`);
             width = width || probed.width;
             height = height || probed.height;
-            framerate = framerate || probed.framerate;
           } catch (err) {
             console.error(`[useProjectLoader] Probe fallback failed for clip id=${clip.id}:`, err);
           }

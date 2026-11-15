@@ -136,7 +136,8 @@ async def render_project(request: RenderRequest, http_request: Request):
                 rc.game_id, rc.video_sequence, rc.source,
                 rc.start_time as raw_start_time, rc.end_time as raw_end_time,
                 (rc.end_time - rc.start_time) as raw_duration,
-                COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash
+                COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash,
+                COALESCE(wc.fps, gv.fps) as fps
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             LEFT JOIN games g ON rc.game_id = g.id
@@ -177,6 +178,17 @@ async def render_project(request: RenderRequest, http_request: Request):
             status_code=400,
             detail={"error": "no_source_video", "message": "We couldn't find the video for this play."}
         )
+    # T4540: crop keyframes are stored by frame number at the clip's stored rate
+    # (the same COALESCE(wc.fps, gv.fps) GET /clips hands the editor). Without it
+    # the render could only guess, and a guessed 30 on a 60 fps clip runs the crop
+    # path at double speed, so refuse loudly instead.
+    if not clip['fps']:
+        from app.services.export_helpers import fail_export_job
+        message = "We couldn't read this play's frame rate, so we can't make this highlight."
+        logger.error(f"[Render] clip {clip['id']} has no stored fps (working_clips.fps and game_videos.fps are NULL); refusing render")
+        fail_export_job(export_id, "missing_framerate")
+        export_progress.pop(export_id, None)
+        raise HTTPException(status_code=400, detail={"error": "missing_framerate", "message": message})
     if clip['crop_data']:
         try:
             decode_data(clip['crop_data'])
@@ -305,17 +317,18 @@ async def _run_render_background(
         from ...services.export_helpers import resolve_clip_source
         source_url, source_in, source_out, source_flexible = resolve_clip_source(clip)
 
-        # ffprobe for actual fps (framing uses real fps, not default 30)
-        framerate = 30.0
+        # T4540: the clip's stored rate, the one the editor keyed the crop frames
+        # by (render_project refuses a clip without one). The probe below only
+        # supplies dimensions for the default crop.
+        framerate = clip['fps']
         source_info = {}
         try:
             if source_url:
                 _t0 = time_module.monotonic()
                 source_info = await asyncio.to_thread(get_video_info, source_url)
-                logger.info(f"[Render] get_video_info took {time_module.monotonic() - _t0:.2f}s, fps={source_info.get('fps')}")
-                framerate = source_info.get('fps', 30.0)
+                logger.info(f"[Render] get_video_info took {time_module.monotonic() - _t0:.2f}s, probed fps={source_info.get('fps')} stored fps={framerate}")
         except Exception as e:
-            logger.warning(f"[Render] Failed to probe fps, using default 30: {e}")
+            logger.warning(f"[Render] Failed to probe source dimensions: {e}")
 
         # T3700 P0: no crop set -> apply the named centered default so a zero-effort
         # export still produces a valid framing job (matches the editor's visible default).

@@ -305,7 +305,7 @@ Invariants 11-13); 2026-09-03 (T8510 FOCUS EXPORT GUARD + PROGRESS HONESTY, fron
 - `src/backend/app/services/export_helpers.py`, `export_worker.py`, `auto_export.py`, `transitions/`
 - `src/backend/app/routers/downloads.py` — publish ("Move to My Reels") / restore-for-edit
 - `src/backend/app/middleware/db_sync.py` — durable-sync machinery; `src/backend/app/websocket.py` — progress channel
-- DB tables (per-user profile SQLite): `export_jobs`, `working_videos`, `final_videos`, `working_clips`, `projects`. Readers use `MAX(version)` via `app/queries.py` (`latest_working_clips_subquery`, `latest_final_videos_subquery`)
+- DB tables (per-user profile SQLite): `export_jobs`, `working_videos`, `final_videos`, `working_clips`, `projects`. Readers use `MAX(version)` via `app/queries.py` (`latest_working_clips_subquery`, `latest_final_videos_subquery`); a working-clip version tie goes to the higher id (T4620), so never hand-write a private latest-clip ROW_NUMBER
 
 ## Entry points
 | Route | Handler | What it does |

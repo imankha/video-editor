@@ -15,7 +15,7 @@ Usage
 Requires a Fly proxy tunnel to prod Postgres (per scripts/fix_storage_refs.py /
 scripts/copy_user_between_envs.py's existing convention):
 
-    fly proxy 15433:5432 --app reel-ballers-db-prod
+    fly proxy 15433:5432 --app reel-ballers-db-prod-lax
 
 then, from a shell where FLY_ACCESS_TOKEN/`fly auth login` is already set up:
 
