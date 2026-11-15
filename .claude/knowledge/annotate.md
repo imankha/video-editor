@@ -2904,7 +2904,7 @@ The full checklist for an 11th→Nth sport:
   (`annotation_completed`) and daily_col (`annotations_completed`) are UNCHANGED — they are stored
   history in `user_actions`/`daily_counters`; a rename would sever the time series.** Every admin
   surface that renders this label had to follow, because two of them derive/hardcode it:
-  - `admin.py` builds funnel keys + `last_step` at READ time via `label.lower().replace(" ", "_")`, so
+  - `routers/admin/` builds funnel keys + `last_step` at READ time via `label.lower().replace(" ", "_")`, so
     the funnel step key moved `annotation_done` -> `watched_annotate_video`
     (`FunnelChart.jsx` STAGES key updated) and the `last_step` badge string moved "Annotation Done" ->
     "Watched Annotate Video" (`UserTable.jsx` STEP_STYLES map key updated to keep the cyan style).
