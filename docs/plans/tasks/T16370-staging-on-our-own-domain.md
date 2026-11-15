@@ -37,6 +37,11 @@ After merge, run the WebKit check (C1, C2): `cd src/frontend && npx playwright i
 
 No redirect from the old hosts is kept: `reel-ballers-staging.pages.dev` still serves the build, but the API's CORS only allows the new host, so sign-in works only on `staging.reelballers.com`.
 
+## After the re-land (2026-11-15 UTC)
+
+- PR #770 merged at 05:3x UTC, build 7743 on both hosts. The first load was blocked by CORS: a Fly secret `CORS_ORIGINS` on `reel-ballers-api-staging` overrides the `[env]` value in `src/backend/fly.staging.toml` (secrets win) and still held only the old host. Fixed by `fly secrets set CORS_ORIGINS=https://staging.reelballers.com,https://reel-ballers-staging.pages.dev` (the old host kept so cached tabs still sign in in Chrome). Any later change to staging's allowed origins must change that secret, not only the toml.
+- Checks after the fix: the T16370 WebKit (iPhone 14) spec passed both criteria in `mcr.microsoft.com/playwright:v1.57.0-noble` (Linux). On Windows, Playwright's WebKit cannot decode H.264, so C2 shows "Video format not supported" there; run it on Linux. A Chromium export of a draft play (Frame editor, Sharpen my highlight) finished in 356 s against the new hosts.
+
 ## Acceptance Criteria
 
 - [ ] A WebKit (iPhone 14) browser check against staging signs in, stays signed in after a reload and after a new browser context with the saved cookies, and runs in CI or the /dotask staging check.
