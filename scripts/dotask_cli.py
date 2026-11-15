@@ -255,6 +255,12 @@ PROCESS_START_RETRIES = 3
 def run_cmd(*args, **kwargs):
     """subprocess.run, retrying a process that failed to START (never one that ran and failed)."""
     check = kwargs.pop("check", False)
+    if kwargs.get("text") or kwargs.get("universal_newlines"):
+        # Windows' default code page cannot decode the UTF-8 that tests, logs and containers print; the reader
+        # thread then dies and stdout comes back None. PR #739 fixed one call (2026-11-10); g-t11180-4's loop
+        # crashed on another in container_run (2026-11-15). Every text call decodes UTF-8 now.
+        kwargs.setdefault("encoding", "utf-8")
+        kwargs.setdefault("errors", "replace")
     for attempt in range(PROCESS_START_RETRIES + 1):
         result = subprocess.run(*args, **kwargs)
         if result.returncode not in PROCESS_START_FAILURES or attempt == PROCESS_START_RETRIES:
@@ -1714,7 +1720,7 @@ def container_run(slug, command, timeout, env=None, keep=2000):
         return None, f"timed out after {timeout:.0f}s"
     except OSError as exc:
         return 1, str(exc)
-    output = result.stdout + result.stderr
+    output = (result.stdout or "") + (result.stderr or "")
     return result.returncode, output[-keep:] if keep else output
 
 
