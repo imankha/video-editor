@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T4610:C1": {"kind": "code", "command": "! grep -rn '_require_admin()' src/backend/app"},
+    "T4610:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t4610_admin_router_guard.py -q -p no:cacheprovider -k 'router_level_guard or attached_to_the_router or added_to_the_admin_router or rejects_a_non_admin'"},
+    "T4610:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t4610_admin_router_guard.py -q -p no:cacheprovider -k 'admin_still_reaches or open_routes_stay_open'"}
+  }
+}

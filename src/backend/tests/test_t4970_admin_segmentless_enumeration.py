@@ -52,8 +52,7 @@ def test_list_users_endpoint_includes_segmentless_with_null_fields(pg_conn):
 
     from app.routers import admin
 
-    with patch.object(admin, "_require_admin", return_value=None), \
-         patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
+    with patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
         # Pass explicit args: calling the handler directly bypasses FastAPI's
         # Query() default resolution, so the filter params must be real None.
         # T8020: list_users is now a plain sync def — call it directly, no asyncio.run.

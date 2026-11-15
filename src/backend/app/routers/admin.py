@@ -1,8 +1,10 @@
 """
 Admin Router — Admin panel endpoints.
 
-All /api/admin/* endpoints require the requesting user to be in the admin_users table.
-GET /api/admin/me is the only exception — it returns {is_admin: bool} safely for any user.
+All /api/admin/* endpoints require the requesting user to be in the admin_users table,
+enforced once by `router`'s `require_admin` dependency (T4610). The exceptions live on
+`open_router`: GET /api/admin/me returns {is_admin: bool} safely for any user, and
+POST /api/admin/impersonate/stop is authorised by the session's impersonator id.
 
 T3020/T3450: Stats from user_segments + user_actions. No more R2 profile
 downloads or SQLite counting.
@@ -14,7 +16,7 @@ import math
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
@@ -46,7 +48,25 @@ from ..version import APP_BUILD, APP_VERSION
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+
+def require_admin():
+    """Raise 403 if the current user is not an admin.
+
+    T4610: attached once as a router-level dependency, never called per handler.
+    Sync def -> threadpool: is_admin() makes blocking psycopg2 round-trips.
+    """
+    user_id = get_current_user_id()
+    if not is_admin(user_id):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
+# T4610: every route on `router` is admin-only via this dependency, including ones
+# added later. `open_router` holds the only two routes that are open by design;
+# main.py includes it BEFORE `router`, or POST /impersonate/stop would match the
+# guarded /impersonate/{target_user_id} first. test_t4610_admin_router_guard.py
+# asserts every /api/admin route outside that pair carries the guard.
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
+open_router = APIRouter(prefix="/admin", tags=["admin"])
 
 # T8170: upload_success_rate pulse-card alarm thresholds. The T8160 outage sat
 # at 29% for ~2 days undetected -- below this rate, with a meaningful sample,
@@ -88,17 +108,6 @@ def _append_sport(where_parts: list, params: list, sport: str | None) -> None:
     elif sport:
         where_parts.append("s.utm_content = %s")
         params.append(sport)
-
-
-# ---------------------------------------------------------------------------
-# Admin gate dependency
-# ---------------------------------------------------------------------------
-
-def _require_admin():
-    """Raise 403 if the current user is not an admin."""
-    user_id = get_current_user_id()
-    if not is_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin access required")
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +404,7 @@ def _rank_to_label(rank) -> str:
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/me")
+@open_router.get("/me")
 # T9130: sync def -> anyio threadpool, off the event loop. is_admin() makes two
 # blocking psycopg2 round-trips (auth_db.py); no await in the body. Same flip class
 # as T8020's admin_dashboard. See backend-services.md concurrency model.
@@ -442,7 +451,6 @@ def list_users(
     counts there, under the same filters: `origin`, `build`, `acquired_from/to` and
     `exclude_test` here are the map's `origin`, `build`, `from/to` and `exclude_test`.
     """
-    _require_admin()
     if journey_stage and not journey_outcome:
         raise HTTPException(status_code=422, detail="journey_stage needs journey_outcome")
     if journey_stage and filter:
@@ -796,7 +804,6 @@ async def admin_bulk_grant_credits(request: BulkGrantCreditsRequest):
     and recorded, not fatal. Credits now live in Postgres, so there is no
     per-user R2 sync step and no `synced` field to report anymore.
     """
-    _require_admin()
 
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
@@ -848,7 +855,6 @@ async def admin_bulk_email(request: BulkEmailRequest):
     test=true, user_ids is ignored and one email goes to the calling admin's own
     address so they can confirm rendering before any bulk send.
     """
-    _require_admin()
 
     subject = request.subject.strip()
     body = request.body
@@ -918,7 +924,6 @@ async def admin_grant_credits(user_id: str, request: GrantCreditsRequest):
     nothing (structurally impossible to double-grant, T5840 AC), so unlike the
     old SQLite path this can safely 503 on a durability failure and be retried.
     """
-    _require_admin()
 
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
@@ -956,7 +961,6 @@ def admin_mark_test_account(user_id: str, request: TestAccountRequest):
     exclude internal accounts. Survives reload (a DB column, not view state), so
     a new test account is flagged from the UI without a migration.
     """
-    _require_admin()
     admin_id = get_current_user_id()
     with get_pg() as conn:
         cur = conn.cursor()
@@ -987,7 +991,6 @@ async def admin_reset_test_account_data(user_id: str):
     own in-flight requests; a background worker (export_worker, etc.) is a
     known, accepted gap documented in the service module.
     """
-    _require_admin()
     admin_id = get_current_user_id()
 
     with get_pg() as conn:
@@ -1032,7 +1035,6 @@ class SetCreditsRequest(BaseModel):
 @router.post("/users/{user_id}/set-credits")
 async def admin_set_credits(user_id: str, request: SetCreditsRequest):
     """Set a user's credit balance to an exact value. Admin only."""
-    _require_admin()
 
     if request.amount < 0:
         raise HTTPException(status_code=400, detail="Amount cannot be negative")
@@ -1225,7 +1227,6 @@ async def revenue_reconciliation(exclude_test: bool = True):
     T8640: honours the SAME test-account filter the rest of the admin panel uses
     (`exclude_test`, default ON like `list_users`), applied symmetrically to both the
     local and the Stripe side."""
-    _require_admin()
     _require_stripe_configured()
 
     from ..services.revenue_reconciliation import GO_LIVE_DATE
@@ -1275,7 +1276,6 @@ async def heal_revenue_reconciliation(request: RevenueHealRequest):
     ``healed: True`` for a write that changed nothing is exactly the lie this
     endpoint exists to stop telling.
     """
-    _require_admin()
     _require_stripe_configured()
 
     from ..analytics import set_total_spent
@@ -1342,7 +1342,7 @@ def _clear_machine_pin_cookie(response: Response) -> None:
     _delete_cookie_raw(response, "fly_machine_id")
 
 
-@router.post("/impersonate/stop")
+@open_router.post("/impersonate/stop")
 async def stop_impersonation(request: Request, response: Response):
     """Stop impersonating and restore the admin's own session."""
     session_id = request.cookies.get("rb_session")
@@ -1372,7 +1372,6 @@ async def impersonate(target_user_id: str, request: Request, response: Response)
     Target user_id comes from the path param only — never from a client store.
     Admin cannot impersonate another admin (privilege laundering).
     """
-    _require_admin()
     admin_id = get_current_user_id()
 
     if admin_id == target_user_id:
@@ -1428,7 +1427,6 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
     filters to sessions older than N hours (default 0 = all). Scoped to one named
     user by design — this is the incident-response tool for a specific account, not
     an all-users sweep (log tag `[UPLOAD_LIFECYCLE]` covers the fleet-wide view)."""
-    _require_admin()
 
     from ..routers.games_upload import _pending_kind, upload_object_key
     from ..services.materialization import open_profile_db_readonly
@@ -1534,7 +1532,6 @@ def r2_usage():
     """Per-source daily R2 Class A/B merged across every writer's analytics shard,
     plus the billing cycle vs the free tier. Admin only, on-demand; sync def -> threadpool
     (blocking R2 LIST/GET). Logic lives in services/r2_usage_report.py."""
-    _require_admin()
     from ..services.r2_usage_report import build_r2_usage_report
     return build_r2_usage_report()
 
@@ -1571,7 +1568,6 @@ def list_upload_failures(
     excluding impersonated rows regardless of `include_impersonated` (that
     flag only controls whether admin reproductions show up in the LIST).
     """
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -1715,7 +1711,6 @@ def list_upload_failures(
 @router.post("/cleanup-shares")
 async def cleanup_shares():
     """Run share table retention cleanup. Admin only."""
-    _require_admin()
 
     from ..services.sharing_db import (
         cleanup_old_shares,
@@ -1748,7 +1743,6 @@ async def run_postgres_migration():
     no bulk-sweep counterpart anymore. Postgres remains the one track that is
     deploy/admin-triggered by design (never JIT, since it is a shared DB with
     no per-user seam to hang the migration off of)."""
-    _require_admin()
     return await asyncio.to_thread(_run_migrate_postgres)
 
 
@@ -1764,7 +1758,6 @@ async def migration_status(user_id: str | None = Query(default=None)):
     user's registered profiles, so an operator can ask "is this env at head?" without
     running the mutating full-R2-walk migrate. Side-effect-free (temp download + read
     + delete; no R2 write)."""
-    _require_admin()
     from ..migrations import get_migration_status, get_migration_status_for_user
 
     if user_id is None:
@@ -1798,7 +1791,6 @@ async def backfill_hiq_recaps(limit: int = Query(25, ge=1, le=500),
     same path to poll `running`/`last_result` (a repeat POST while idle would
     start ANOTHER run).
     """
-    _require_admin()
     from ..services.auto_export import backfill_hiq_recaps as _backfill
 
     if dry_run:
@@ -1828,7 +1820,6 @@ async def backfill_hiq_recaps(limit: int = Query(25, ge=1, le=500),
 @router.get("/backfill-hiq-recaps")
 async def backfill_hiq_recaps_status():
     """Read-only status of the recap backfill (see POST above)."""
-    _require_admin()
     return {"running": _BACKFILL_STATE["running"],
             "last_result": _BACKFILL_STATE["last_result"]}
 
@@ -1864,7 +1855,6 @@ async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
     manual cover choice is never clobbered by a sweep. See `backfill_posters` for
     the full per-row contract.
     """
-    _require_admin()
     from ..services.poster import backfill_posters as _backfill
 
     if dry_run:
@@ -1893,7 +1883,6 @@ async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
 @router.get("/backfill-share-posters")
 async def backfill_share_posters_status():
     """Read-only status of the share-poster backfill (see POST above)."""
-    _require_admin()
     return {"running": _POSTER_BACKFILL_STATE["running"],
             "last_result": _POSTER_BACKFILL_STATE["last_result"]}
 
@@ -1921,7 +1910,6 @@ def analytics_funnel(
     exclude_test: bool = True,
     country: CountryFilter = None,
 ):
-    _require_admin()
     # T8250: default window compares against s.acquired_at (UTC timestamptz) -- match with
     # datetime.now(UTC).date(), not local date.today().
     d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
@@ -2020,7 +2008,6 @@ def analytics_journey_map(
     country: CountryFilter = None,
     sport: SportFilter = None,
 ):
-    _require_admin()
     from ..services.analytics_journey import build_journey
 
     # No `from` = every signup, matching the users list under the same (empty) global filter.
@@ -2052,7 +2039,6 @@ def analytics_journey_step(
     country: CountryFilter = None,
     sport: SportFilter = None,
 ):
-    _require_admin()
     d_from = date.fromisoformat(date_from) if date_from else None
     d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
     if stage == "visited":
@@ -2094,7 +2080,6 @@ def analytics_journey_step(
 # user in-process through the JIT seam and writes one aggregate run to this writer's
 # analytics.sqlite shard. Returns the run summary.
 def analytics_journey_rollup():
-    _require_admin()
     from ..services import analytics_journey_rollup as rollup
     from ..services.analytics_store import current_store
 
@@ -2111,7 +2096,6 @@ def analytics_journey_rollup():
 # every non-test user in-process through the JIT seam and writes one full-rebuild
 # action-weekly/engagement-monthly run to this writer's analytics.sqlite shard.
 def analytics_action_rollup():
-    _require_admin()
     from ..services import analytics_rollup as rollup
     from ..services.analytics_store import current_store
 
@@ -2126,7 +2110,6 @@ def analytics_action_rollup():
 @router.get("/analytics/rollup")
 # T7400: freshness/status read -- the newest run's meta across shards, no row data.
 def analytics_action_rollup_status():
-    _require_admin()
     from ..services.analytics_rollup import load_newest_action_rollup
 
     rollup, partial = load_newest_action_rollup()
@@ -2137,7 +2120,6 @@ def analytics_action_rollup_status():
 # T14950: "By sport" admin table source -- one read of the existing rollup's
 # rollup_action_by_sport table (no per-user DB access at read, no new sweep trigger).
 def analytics_by_sport():
-    _require_admin()
     from ..services.analytics_rollup import load_newest_action_rollup
 
     rollup, partial = load_newest_action_rollup(tables=("rollup_action_by_sport",))
@@ -2157,7 +2139,6 @@ def analytics_by_sport():
 def analytics_spend_readiness(exclude_test: bool = True, sport: SportFilter = None):
     # T14930: `sport` is accepted (and validated) so the admin's global Sport pill never 422s
     # here; the gate payload itself has no segment filters of any kind yet (not just sport).
-    _require_admin()
     from ..services.analytics_spend_readiness import build_spend_readiness
 
     with get_pg() as conn:
@@ -2167,7 +2148,6 @@ def analytics_spend_readiness(exclude_test: bool = True, sport: SportFilter = No
 @router.get("/analytics/spend-readiness/gate/{key}")
 # T14910: one gate's Diagnose drawer (weekly, by build, by platform, by country), read on open.
 def analytics_spend_readiness_gate(key: str, exclude_test: bool = True, sport: SportFilter = None):
-    _require_admin()
     from ..services.analytics_spend_readiness import build_gate_diagnosis, has_diagnosis
 
     # Validate the key here; nothing below is caught, so a KeyError inside the builder is a
@@ -2189,7 +2169,6 @@ def analytics_pack_mix(exclude_test: bool = True):
     """Purchases by pack from the payments ledger (kind='purchase' only: refunds
     are not packs sold). Same test-account predicate as the ledger revenue total,
     so a deleted test payer stays excluded."""
-    _require_admin()
     excl = _test_exclusion(exclude_test)
     excl_and = f" AND {excl}" if excl else ""
     windows: dict[str, list[dict]] = {}
@@ -2306,7 +2285,6 @@ def list_campaigns(exclude_test: bool = True):
     """Every campaign, newest first, with its signup count (honoring the same
     test-account exclusion as the channels view). The T15200 spend fields read NULL
     (logged) before v044 runs, same guard as `_campaign_name_join`."""
-    _require_admin()
     excl = _test_exclusion(exclude_test)
     excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
     excl_where = f" WHERE {excl}" if excl else ""
@@ -2333,7 +2311,6 @@ def list_campaigns(exclude_test: bool = True):
 
 @router.post("/campaigns")
 def create_campaign(body: CampaignNameRequest):
-    _require_admin()
     import psycopg2
 
     from ..analytics import generate_campaign_id
@@ -2375,7 +2352,6 @@ def update_campaign(campaign_id: str, body: CampaignUpdateRequest):
     landing_views/platform_conversions -- CampaignsModal's separate Save gesture for that
     row). Each group updates only when its gesture sent it; never reactive. The spend group
     requires v044 -- before it runs this 503s loudly rather than silently drop the input."""
-    _require_admin()
     import psycopg2
 
     spend_touched = any(getattr(body, f) is not None for f in _SPEND_FIELDS)
@@ -2487,7 +2463,6 @@ def analytics_channels(
     campaign name (T13980) where the value can be a registry id, carrying the same KPI
     columns as the Cohorts and Builds tables (T13990). Each row keys its value under the
     dimension's own name, so the default view's rows keep `origin` (T15120)."""
-    _require_admin()
     where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, "all", exclude_test, country)
 
     with get_pg() as conn:
@@ -2547,7 +2522,6 @@ def analytics_share_funnel(limit: int = Query(25, ge=1, le=100)):
       - claims:    distinct claimers in share_claims (T5730)
       - activated: claimers who then recorded an `export_completed` milestone
     Analytics stays OFF any user path -- this is a normal admin query (T4840)."""
-    _require_admin()
     from ..analytics import share_view_counts
 
     with get_pg() as conn:
@@ -2805,7 +2779,6 @@ def analytics_cohorts(
     exclude_test: bool = True,
     country: CountryFilter = None,
 ):
-    _require_admin()
     trunc = "week" if granularity == "week" else "month"
     where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, origin, exclude_test, country)
 
@@ -2848,7 +2821,6 @@ def analytics_activation(
     from ..analytics import segment_has_signup_build
     from ..services.analytics_activation import SIGNUP_MONTH_EXPR, compute_activation_report
 
-    _require_admin()
     excl = _test_exclusion(exclude_test)
     with get_pg() as conn:
         cur = conn.cursor()
@@ -2918,7 +2890,6 @@ def analytics_retention_chart(
         detect_low_volume_weeks,
     )
 
-    _require_admin()
     excl = _test_exclusion(exclude_test)
     today = datetime.now(UTC).date()
     with get_pg() as conn:
@@ -3004,7 +2975,6 @@ def analytics_builds(
     the summed signups equal the cohort grid's for the same window and filters."""
     from ..analytics import segment_has_signup_build
 
-    _require_admin()
     where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, origin, exclude_test, country)
 
     with get_pg() as conn:
@@ -3052,7 +3022,6 @@ def analytics_countries(
     page, so unlike the country filter it probes for the column before v043 has run."""
     from ..analytics import segment_has_country
 
-    _require_admin()
     where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, "all", exclude_test)
     with get_pg() as conn:
         cur = conn.cursor()
@@ -3136,7 +3105,6 @@ def _rollup_failures(action_rows: list[dict]) -> dict[str, dict]:
 @router.get("/analytics/journey/{user_id}")
 # T8010: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_journey(user_id: str):
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -3312,7 +3280,6 @@ async def analytics_user_clip_phases(user_id: str):
     R2 sync (each profile.sqlite is opened mode=ro through the shared connection
     path). A multi-clip reel is one final_videos row, so it counts as 1 published.
     """
-    _require_admin()
 
     from ..services.clip_phases import compute_user_clip_phases
 
@@ -3335,7 +3302,6 @@ def analytics_user_actions(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
-    _require_admin()
 
     from ..services.pg import get_pg
     with get_pg() as conn:
@@ -3453,7 +3419,6 @@ def analytics_pulse(
     exclude_test: bool = True,
     country: CountryFilter = None,
 ):
-    _require_admin()
     # T7990: "today" is the UTC calendar day. This is DELIBERATE, not an accident: the
     # daily_counters and user_actions rows this endpoint reads are stamped CURRENT_DATE in
     # Postgres (UTC, analytics.py), so the tile boundary MUST match the data's boundary. For
@@ -3817,7 +3782,6 @@ def analytics_pulse(
 @router.get("/referrals/leaderboard")
 async def referral_leaderboard():
     """Referral counts per user, ordered descending."""
-    _require_admin()
     from ..services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
@@ -3834,7 +3798,6 @@ async def referral_leaderboard():
 @router.get("/referrals/by-channel")
 async def referrals_by_channel():
     """Referral counts broken down by channel."""
-    _require_admin()
     from ..services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
@@ -3850,7 +3813,6 @@ async def referrals_by_channel():
 @router.get("/referrals/user/{user_id}")
 async def referrals_for_user(user_id: str):
     """Direct referrals for a single user."""
-    _require_admin()
     from ..services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
@@ -3867,7 +3829,6 @@ async def referrals_for_user(user_id: str):
 @router.get("/referrals/tree/{user_id}")
 async def referral_tree(user_id: str):
     """Recursive referral tree size (depth <= 5)."""
-    _require_admin()
     from ..services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
@@ -3900,7 +3861,6 @@ def analytics_platforms(
     exclude_test: bool = True,
 ):
     """Platform breakdown: % of users and actions on mobile/desktop/pwa."""
-    _require_admin()
     from ..services.pg import get_pg
 
     # T8110: this is a real population aggregate ("% of users/actions on
@@ -4023,7 +3983,6 @@ def get_admin_dashboard(build: int | None = None, exclude_test: bool = True, cou
     Partial failure follows the /api/bootstrap precedent: NO per-section try/except, NO
     partial-data response -- if any callee raises, it propagates to a full 500.
     """
-    _require_admin()
     # T8110: thread exclude_test through every callee explicitly (Query-sentinel
     # discipline). Default ON -> the combined dashboard opens on real users.
     # T14000: `build` narrows the population sections (users, pulse, platforms); the
@@ -4062,7 +4021,6 @@ async def list_bugs(
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List bug reports, optionally filtered by status. Paginated. Admin only."""
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -4114,7 +4072,6 @@ async def list_bugs(
 @router.get("/bugs/{bug_id}")
 async def get_bug(bug_id: int):
     """Get full bug detail including all JSONB fields and presigned screenshot URL. Admin only."""
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -4147,7 +4104,6 @@ async def get_bug(bug_id: int):
 @router.get("/bugs/{bug_id}/correlated")
 async def get_correlated_bugs(bug_id: int):
     """Get all bugs in a duplicate cluster with metadata for delta analysis."""
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -4238,7 +4194,6 @@ class BugUpdateRequest(BaseModel):
 @router.patch("/bugs/{bug_id}")
 async def update_bug(bug_id: int, body: BugUpdateRequest):
     """Update bug status, notes, or duplicate_of. Admin only."""
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -4289,7 +4244,6 @@ async def update_bug(bug_id: int, body: BugUpdateRequest):
 @router.delete("/bugs/purge")
 async def purge_old_bugs(days: int = Query(14, ge=1, le=365)):
     """Delete resolved bugs older than N days. Admin only."""
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -4322,7 +4276,6 @@ async def purge_old_bugs(days: int = Query(14, ge=1, le=365)):
 @router.delete("/bugs/{bug_id}")
 async def delete_bug(bug_id: int):
     """Delete a bug report and its R2 assets. Admin only."""
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -4348,7 +4301,6 @@ async def delete_bug(bug_id: int):
 @router.get("/bugs/{bug_id}/screenshot")
 async def get_bug_screenshot(bug_id: int):
     """Redirect to presigned R2 URL for the bug's screenshot. Admin only."""
-    _require_admin()
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -4396,7 +4348,6 @@ async def credits_backfill_report(
     so an unbounded scan can run minutes past a proxy timeout once the user
     base is nontrivial). A COMPLETE unchunked run is saved as the stored
     report POST /credits/open-gate consumes."""
-    _require_admin()
     from ..services.credit_backfill import reconcile_against_stripe, run_backfill
 
     ids = [u.strip() for u in user_ids.split(",") if u.strip()] if user_ids else None
@@ -4414,7 +4365,6 @@ async def credits_backfill_apply(request: BackfillRequest):
     """Apply -- inserts missing ledger rows and re-derives balances. Safe to
     re-run (idempotent); `user_ids` targets a re-run for specific accounts;
     `limit`/`offset` chunk a full-population apply run (M7)."""
-    _require_admin()
     from ..services.credit_backfill import run_backfill
 
     return run_backfill(user_ids=request.user_ids, apply=True, limit=request.limit, offset=request.offset)
@@ -4462,7 +4412,6 @@ async def credits_open_gate(request: OpenGateRequest = OpenGateRequest()):
     anomalies, so the gate can only open on a verified-clean (or explicitly
     human-reviewed) state. `no_user_db` never blocks -- it is the expected
     state for purged/guest accounts, not drift."""
-    _require_admin()
     from datetime import UTC, datetime
 
     from ..services.credit_backfill import load_last_report

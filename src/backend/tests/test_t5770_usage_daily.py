@@ -76,8 +76,7 @@ def _call_list_users():
     from unittest.mock import patch
 
     from app.routers import admin
-    with patch.object(admin, "_require_admin", return_value=None), \
-         patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
+    with patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
         # T8020: list_users is now a plain sync def (off the event loop via the FastAPI
         # threadpool), so call it directly — no asyncio.run.
         return admin.list_users(
@@ -323,7 +322,6 @@ class TestBoundedQueries:
                 yield _CountingConn(conn, counter)
 
         with patch.object(admin, "get_pg", counting_get_pg), \
-             patch.object(admin, "_require_admin", return_value=None), \
              patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
             # T8020: list_users is now a plain sync def — call it directly.
             admin.list_users(

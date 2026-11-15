@@ -22,6 +22,7 @@ import httpx
 import pytest
 
 from app.main import app
+from app.routers import admin
 from app.session_init import _init_cache
 
 # X-User-ID admin auth needs an owned 8-hex profile so the middleware skips the
@@ -105,7 +106,7 @@ def test_slow_admin_analytics_does_not_serialize_concurrent_requests(monkeypatch
     """
     # Bypass the admin gate (its own get_pg check is not what we're measuring) and make
     # the handler's `from ..services.pg import get_pg` resolve to the blocking stub.
-    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg)
     _seed_owned_profile(monkeypatch)
 
@@ -159,7 +160,7 @@ def _run_concurrency_probe(url, monkeypatch):
     it and let the test hit a REAL Postgres connection. Patching
     `app.routers.admin.get_pg` too covers that binding regardless of which style the
     specific handler under test uses."""
-    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg)
     monkeypatch.setattr("app.routers.admin.get_pg", _blocking_get_pg)
     _seed_owned_profile(monkeypatch)
@@ -272,7 +273,7 @@ def test_list_users_does_not_serialize_concurrent_requests(monkeypatch):
     actually redirects it; we patch app.services.pg.get_pg too for symmetry. Verified
     counterfactually: reverting list_users to `async def` makes the burst ~N*t1 and fails.
     """
-    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg_listusers)
     monkeypatch.setattr("app.routers.admin.get_pg", _blocking_get_pg_listusers)
     _seed_owned_profile(monkeypatch)
@@ -310,7 +311,7 @@ def test_list_users_does_not_serialize_concurrent_requests(monkeypatch):
 def test_single_slow_request_actually_pays_the_delay(monkeypatch):
     """Sanity: a single request pays ~DELAY, so the overlap guard is measuring a
     real per-request cost (guards against the stub silently becoming a no-op)."""
-    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg)
     _seed_owned_profile(monkeypatch)
 

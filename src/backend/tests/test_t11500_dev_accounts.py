@@ -274,7 +274,7 @@ def test_dev_picker_account_is_an_admin_on_a_dev_stack(dev_client, monkeypatch, 
     assert resp.status_code == 200, resp.text
     uid = resp.json()["user_id"]
     register_test_user_ids(uid)
-    assert auth_db.is_admin(uid) is True  # the gate every /api/admin route uses (_require_admin)
+    assert auth_db.is_admin(uid) is True  # the gate every /api/admin route uses (require_admin, T4610)
 
 
 @pytest.mark.parametrize("app_env", ["staging", "production", "prod"])

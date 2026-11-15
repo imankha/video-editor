@@ -224,7 +224,6 @@ class TestActionRetention:
         import app.routers.admin as admin
         import app.services.analytics_rollup as rollup
 
-        monkeypatch.setattr(admin, "_require_admin", lambda: None)
         rows = [
             ("2026-06-01", "basketball", "collection_viewed", 0, 6),
             ("2026-06-01", "soccer", "collection_viewed", 0, 4),
@@ -329,7 +328,6 @@ class TestMonthlyCohortBin:
     def test_monthly_bin_groups_signups_by_month(self, pg_conn, monkeypatch):
         import app.routers.admin as admin
 
-        monkeypatch.setattr(admin, "_require_admin", lambda: None)
         register_test_user_ids("t7430-m1", "t7430-m2")
         _seed_user("t7430-m1", date(2025, 3, 3))
         _seed_user("t7430-m2", date(2025, 3, 24))  # different week, same month

@@ -43,7 +43,6 @@ TARGET_ID = "target-user-id"
 def admin_stub(monkeypatch):
     from app.routers import admin as m
 
-    monkeypatch.setattr(m, "_require_admin", lambda: None)
     monkeypatch.setattr(m, "get_current_user_id", lambda: ADMIN_ID)
     return m
 

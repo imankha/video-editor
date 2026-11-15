@@ -95,8 +95,7 @@ def _pay(user_id, pack, cents, obj, days_ago, kind="purchase"):
 
 
 def _mix(**kw):
-    with patch.object(admin, "_require_admin", return_value=None):
-        return admin.analytics_pack_mix(**kw)
+    return admin.analytics_pack_mix(**kw)
 
 
 class TestPackMix:
