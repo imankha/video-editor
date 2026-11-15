@@ -6,7 +6,7 @@
     },
     "T16500:C2": {
       "kind": "code",
-      "command": "cd src/backend && test ! -e tests/test_video_processor.py && test ! -e tests/test_progress_reporter.py && test ! -e tests/test_ffmpeg_errors.py && test ! -e app/services/video_processor.py && python3 -c 'from app.main import app; assert app.routes'"
+      "command": "cd src/backend && python3 -m pytest tests/test_t16500_dead_server_code.py -q -p no:cacheprovider --noconftest -k test_changes && python3 tests/t16500_backend_suite_check.py"
     },
     "T16500:C3": {
       "kind": "code",
