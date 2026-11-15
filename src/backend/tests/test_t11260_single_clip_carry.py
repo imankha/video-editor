@@ -3,7 +3,9 @@ are removed; single-clip carry is unchanged.
 
 - C1 characterization: a single-clip Framing re-export carries highlights through
   the real finalize seam (`upsert_working_video`) to EXACTLY the regions/notes the
-  pre-T11260 code produced (GOLDEN was captured on the base revision).
+  pre-T11260 code produced (GOLDEN was captured on the base revision; T4420
+  re-captured the crop/untrim_and_crop mid-keyframe x/y when Spotlight mapping
+  moved from linear to the renderers' Catmull-Rom curve).
 - C2 a legacy multi-clip draft (several working clips, one concatenated working
   video) still opens in Spotlight: /overlay-data serves its highlights, and no
   longer computes per-clip `clip_boundaries`.

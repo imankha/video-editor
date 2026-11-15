@@ -46,6 +46,7 @@ CROSS_TREE_READS = {
     'src/landing/src/data/useCases.ts': {'frontend'},
     'src/frontend/src/utils/introCardGeometry.js': {'backend'},  # intro_card_geometry.py reads it at runtime
     'src/frontend/src/modes/focus/hooks/useCrop.js': {'backend'},  # test_default_crop parity
+    'src/frontend/src/modes/focus/defaultCropSizes.js': {'backend'},  # test_default_crop parity (T16480 moved the sizes here)
     'src/frontend/src/components/AccountSettings.jsx': {'backend'},  # test_t8630_deletion_audit
     'src/frontend/src/components/PrivacyPolicy.jsx': {'backend'},
     'src/frontend/src/utils/mp4Faststart.js': {'shrink'},  # shrink-tool imports it
