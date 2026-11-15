@@ -26,6 +26,12 @@ from typing import Annotated
 from fastapi import HTTPException, Query
 
 from ...analytics import ARRIVAL_SPORT_KEYS
+from ...services.analytics import (  # noqa: F401 -- re-exported to the sub-modules
+    _LEDGER_REVENUE_BY_USER,
+    COUNTRY_UNKNOWN,
+    _append_country,
+    _test_exclusion,
+)
 from ...services.auth_db import is_admin
 from ...services.pg import get_pg
 from ...user_context import get_current_user_id
@@ -55,18 +61,7 @@ DEFAULT_PAGE_SIZE = 10
 
 # T15100: a two-letter code, or the Channels "unknown" row. Annotated so direct callers
 # (get_admin_dashboard) get a plain None default.
-COUNTRY_UNKNOWN = "unknown"
 CountryFilter = Annotated[str | None, Query(pattern="^([A-Z]{2}|unknown)$")]
-
-
-def _append_country(where_parts: list, params: list, country: str | None) -> None:
-    """The segment condition for a CountryFilter value, on alias `s`. `unknown` is the NULLs,
-    which is what the Channels "unknown" row counts."""
-    if country == COUNTRY_UNKNOWN:
-        where_parts.append("s.country IS NULL")
-    elif country:
-        where_parts.append("s.country = %s")
-        params.append(country)
 
 
 # T14930: "arrival sport (landing page)" -- a predicate on user_segments.utm_content
@@ -106,26 +101,6 @@ def _compute_last_step(actions: set[str]) -> str:
 # ---------------------------------------------------------------------------
 # T8110: test-account exclusion + whitelisted global sort for list_users
 # ---------------------------------------------------------------------------
-
-def _test_exclusion(exclude_test: bool, seg: str = "s") -> str:
-    """WHERE fragment excluding internal/test accounts, or '' when off.
-
-    The SINGLE place the test-exclusion predicate lives (DRY). Returns a static,
-    param-free string so it composes into any where_parts list by append. It is
-    INDEPENDENT of _build_segment_filter's single-value userFilter -- the "Real"
-    pill never joins the exclusive segment set, so Real + Paying = real paying
-    users.
-
-    T8630 r5: prefer the LIVE `users.is_test_account`, but fall back to the
-    per-row `{seg}.was_test_account` snapshot for a DELETED account (whose `users`
-    row is gone but whose de-identified `user_segments` row is kept for revenue
-    attribution), else treat as not-test. So a deleted payer keeps the exact
-    exclusion status it had while live instead of dropping out of every
-    `exclude_test=true` view and leaking into Unattributed revenue. Every consumer
-    must LEFT JOIN `users u` (so a deleted account's segment row survives the join)
-    AND expose the `{seg}` (user_segments) alias that carries was_test_account.
-    """
-    return f"NOT COALESCE(u.is_test_account, {seg}.was_test_account, false)" if exclude_test else ""
 
 
 # ---------------------------------------------------------------------------
@@ -168,16 +143,6 @@ def _ledger_revenue_total(cur, exclude_test: bool) -> int:
     else:
         cur.execute("SELECT COALESCE(SUM(amount_cents), 0) AS total FROM payments")
     return cur.fetchone()["total"]
-
-
-# Per-user ledger revenue, pre-aggregated to ONE row per user so it LEFT JOINs a
-# grouped segment query without fanning out the other per-user subqueries (the
-# same one-row-per-user discipline the exports/purchases subqueries already use;
-# see the T7980 cartesian-fanout note in analytics_channels). GROUP BY user_id is
-# served by idx_payments_user (user_id is its leading column).
-_LEDGER_REVENUE_BY_USER = (
-    "(SELECT user_id, SUM(amount_cents) AS revenue_cents FROM payments GROUP BY user_id)"
-)
 
 
 _LIVE_USERS = (
