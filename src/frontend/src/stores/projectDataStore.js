@@ -73,9 +73,12 @@ export const useProjectDataStore = create((set, get) => ({
 
   // ========== Clip CRUD Operations ==========
 
+  // `data` is a patch, or a function computing the patch from the clip as it is
+  // at write time (T4470: a gesture's mirror must not overwrite one that landed
+  // while its save was in flight).
   updateClip: (clipId, data) => set((state) => ({
     clips: state.clips.map((clip) =>
-      clip.id === clipId ? { ...clip, ...data } : clip
+      clip.id === clipId ? { ...clip, ...(typeof data === 'function' ? data(clip) : data) } : clip
     ),
   })),
 
