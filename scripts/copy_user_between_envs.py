@@ -7,8 +7,8 @@ Copies:
 
 Requirements:
   - Fly proxy running for BOTH source and destination Postgres:
-      fly proxy 15432:5432 --app reel-ballers-db-staging
-      fly proxy 15433:5432 --app reel-ballers-db-prod
+      fly proxy 15432:5432 --app reel-ballers-db-staging-lax
+      fly proxy 15433:5432 --app reel-ballers-db-prod-lax
   - .env files at project root (.env, .env.staging, .env.prod)
 
 Usage:

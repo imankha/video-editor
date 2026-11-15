@@ -426,6 +426,16 @@ export function useSegments() {
   }, []);
 
   /**
+   * Put the trim range and its history back as they were (T4470: rollback of a
+   * trim/detrim whose save failed). Splits and speeds are untouched, so a split
+   * made while that save was in flight survives.
+   */
+  const restoreTrim = useCallback((range, history) => {
+    setTrimRange(range);
+    setTrimHistory(history);
+  }, []);
+
+  /**
    * De-trim (undo last trim operation from start)
    * Pops from history and restores previous trim range
    *
@@ -840,6 +850,7 @@ export function useSegments() {
     trimStart,           // Explicit trim from start (pushes to history)
     trimEnd,             // Explicit trim from end (pushes to history)
     clearTrim,           // Clear all trim state and history
+    restoreTrim,         // Put trim range + history back (failed-save rollback)
     detrimStart,         // NEW: Undo last start trim (pop from history)
     detrimEnd,           // NEW: Undo last end trim (pop from history)
 

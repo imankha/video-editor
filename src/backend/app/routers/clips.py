@@ -278,10 +278,10 @@ class WorkingClipResponse(BaseModel):
 
 
 class WorkingClipUpdate(BaseModel):
+    # T4400: no crop_data / timing_data / segments_data. Framing is written only by
+    # the gesture actions below; a full-state copy from a stale tab used to
+    # overwrite newer edits here. An older bundle still sending them is ignored.
     sort_order: int | None = None
-    crop_data: Any | None = None
-    timing_data: Any | None = None
-    segments_data: Any | None = None
     rotation: float | None = None  # T5640: per-clip horizon-straighten angle (degrees)
 
 
@@ -420,9 +420,8 @@ def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
     Save framing data from gesture actions (always update in-place).
 
     Gesture actions carry partial state (e.g., only trimRange or only one keyframe),
-    so they must NOT create new versions of exported clips. Version creation is
-    handled exclusively by the PUT endpoint which receives full state from the
-    frontend's saveCurrentClipState.
+    so they must NOT create new versions of exported clips. T4400: these actions
+    are the only writers of crop_data/segments_data; the PUT no longer takes them.
 
     Bumps framing_version in the same UPDATE when the column is present
     (framing_version is not None); the response only includes new_version
@@ -2951,13 +2950,14 @@ async def update_working_clip(
     clip_id: int,
     update: WorkingClipUpdate
 ):
-    """Update a working clip's sort order or framing edits.
+    """Update a working clip's sort order or rotation.
 
     Version creation logic:
-    - If the clip was previously exported (exported_at IS NOT NULL) AND this update contains
-      framing changes (crop_data, timing_data, or segments_data), a NEW version
-      is created instead of updating the existing clip.
+    - If the clip was previously exported (exported_at IS NOT NULL) AND this update
+      changes rotation, a NEW version is created instead of updating the existing clip.
     - Otherwise, the existing clip is updated in place.
+
+    T4400: crop and segment data are not accepted here; the gesture actions own them.
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -2982,12 +2982,7 @@ async def update_working_clip(
         # Check if this is a framing change on an exported clip.
         # T5640: a rotation-only change is a framing change too — a rotation edit
         # on an already-exported clip versions it on the next PUT (design #6).
-        is_framing_change = (
-            update.crop_data is not None or
-            update.timing_data is not None or
-            update.segments_data is not None or
-            update.rotation is not None
-        )
+        is_framing_change = update.rotation is not None
         was_exported = current_clip['exported_at'] is not None
 
         # Current rotation (column may read None on a below-head DB before v029)
@@ -2997,17 +2992,7 @@ async def update_working_clip(
             current_rotation = 0.0
 
         # Check if data actually changed (avoid creating new versions for no-op saves)
-        # Compare by decoding DB bytes and normalizing incoming data to match
-        data_actually_changed = False
-        if is_framing_change:
-            if update.crop_data is not None and decode_data(normalize_and_encode(update.crop_data)) != decode_data(current_clip['crop_data']):
-                data_actually_changed = True
-            if update.timing_data is not None and decode_data(normalize_and_encode(update.timing_data)) != decode_data(current_clip['timing_data']):
-                data_actually_changed = True
-            if update.segments_data is not None and decode_data(normalize_and_encode(update.segments_data)) != decode_data(current_clip['segments_data']):
-                data_actually_changed = True
-            if update.rotation is not None and float(update.rotation) != float(current_rotation):
-                data_actually_changed = True
+        data_actually_changed = is_framing_change and float(update.rotation) != float(current_rotation)
 
         if is_framing_change and was_exported and data_actually_changed:
             # Create a NEW version of this clip instead of updating
@@ -3027,9 +3012,9 @@ async def update_working_clip(
                 current_clip['uploaded_filename'],
                 current_clip['sort_order'],
                 new_version,
-                normalize_and_encode(update.crop_data if update.crop_data is not None else current_clip['crop_data']),
-                normalize_and_encode(update.timing_data if update.timing_data is not None else current_clip['timing_data']),
-                normalize_and_encode(update.segments_data if update.segments_data is not None else current_clip['segments_data']),
+                normalize_and_encode(current_clip['crop_data']),
+                normalize_and_encode(current_clip['timing_data']),
+                normalize_and_encode(current_clip['segments_data']),
                 raw_clip_version,
                 # T1500: carry dims forward; otherwise every new version starts NULL
                 # and re-triggers the probe-fallback path.
@@ -3071,15 +3056,6 @@ async def update_working_clip(
         if update.sort_order is not None:
             updates.append("sort_order = ?")
             params.append(update.sort_order)
-        if update.crop_data is not None:
-            updates.append("crop_data = ?")
-            params.append(normalize_and_encode(update.crop_data))
-        if update.timing_data is not None:
-            updates.append("timing_data = ?")
-            params.append(normalize_and_encode(update.timing_data))
-        if update.segments_data is not None:
-            updates.append("segments_data = ?")
-            params.append(normalize_and_encode(update.segments_data))
         if update.rotation is not None and _has_rot:
             updates.append("rotation = ?")
             params.append(float(update.rotation))
@@ -3091,7 +3067,6 @@ async def update_working_clip(
             """, params)
             conn.commit()
 
-        # No refresh needed - client already has the data they just sent
         return {"success": True, "refresh_required": False}
 
 

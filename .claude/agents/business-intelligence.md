@@ -99,7 +99,7 @@ user and 0 purchases (unusable denominator).
 1. **Admin UI first** for anything it already shows (Journey tab, pulse, users). The owner can
    read it too; cite the panel.
 2. **Read-only prod aggregate pull** when the UI lacks the cut. Procedure that worked on
-   2026-11-03: `fly proxy 15433:5432 --app reel-ballers-db-prod` in a background shell; a
+   2026-11-03: `fly proxy 15433:5432 --app reel-ballers-db-prod-lax` in a background shell; a
    `.env.prod` DATABASE_URL rewritten to `localhost:15433`; psycopg2 with
    `SET TRANSACTION READ ONLY`; `is_test_account = false`; aggregates only, no row dumps, no
    emails in output; write JSON to the session scratchpad. The permission classifier may deny

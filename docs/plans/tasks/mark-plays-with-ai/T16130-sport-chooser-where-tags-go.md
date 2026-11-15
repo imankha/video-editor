@@ -11,7 +11,7 @@ Today a new account has no sport set, and tags (the labels on a play, such as Go
 **Created:** 2026-11-12
 **Updated:** 2026-11-12
 
-Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 1 of 7. No dependency; can ship on its own.
+Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 1 of 10. No dependency; can ship on its own.
 
 ## Problem
 
@@ -41,7 +41,7 @@ Asking for the sport at sign-up was ruled out earlier (new profiles deliberately
 - Picking a sport is the gesture; it calls the existing optimistic `updateProfile(currentProfileId, {sport})`. No new write path.
 - The form must re-render in place (no remount): an in-progress range, rating and name survive. T7922's e2e spec proves this for the upright form; extend it to landscape.
 - The chooser sheet in landscape must render above the full-screen overlay (`z-[100]`); the "Other" option stays out of this chooser as today.
-- Export the chooser so T16170 and T16180 can mount it in the upload dialog and the start sheet.
+- Export the chooser so T16170 and T16180 can mount it in the AI Coach offer dialog.
 
 ### Related Tasks
 - Follows: T7850, T7922. Blocks: T16170, T16180 (they reuse the chooser).

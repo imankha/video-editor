@@ -25,9 +25,22 @@
 - DNS for `reelballers.com` and Cloudflare Pages custom domains are owner-account actions: list the exact records for the owner to add.
 - Knowledge doc: `.claude/knowledge/backend-services.md`.
 
-## Reverted (2026-11-14)
+## Reverted, then landed again (2026-11-14)
 
-PR #760 merged before the owner had created `staging.reelballers.com` and `api-staging.reelballers.com`. The staging build then called an API host with no DNS record, so staging sat on "Still connecting" and the frontend deploy's lockstep check failed on `staging.reelballers.com/build.json`. Reverted in #765. Before landing again: the owner adds the Cloudflare Pages custom domain, runs `fly certs add api-staging.reelballers.com -a reel-ballers-api-staging` with a DNS-only CNAME to `reel-ballers-api-staging.fly.dev`, runs `configure_r2_cors.py`, adds the Google OAuth origin, and both new hosts answer `curl`.
+PR #760 merged before `staging.reelballers.com` and `api-staging.reelballers.com` existed, so staging sat on "Still connecting" and was reverted in #765. Before this re-land:
+
+- The owner added the Cloudflare Pages custom domain `staging.reelballers.com`, the DNS-only CNAME `api-staging` -> `reel-ballers-api-staging.fly.dev`, and the Google OAuth JavaScript origin `https://staging.reelballers.com`.
+- `fly certs add api-staging.reelballers.com -a reel-ballers-api-staging`: issued (Let's Encrypt). The R2 bucket's CORS rule gained `https://staging.reelballers.com`, added next to the existing origins (production shares the bucket), not by re-running `configure_r2_cors.py`.
+- Both hosts answered before the merge: `https://staging.reelballers.com/build.json` and `https://api-staging.reelballers.com/api/health` gave 200.
+
+After merge, run the WebKit check (C1, C2): `cd src/frontend && npx playwright install --with-deps webkit && E2E_BASE_URL=https://staging.reelballers.com E2E_API_BASE=https://api-staging.reelballers.com/api npx playwright test e2e/checks/T16370.check.spec.js --reporter=line`.
+
+No redirect from the old hosts is kept: `reel-ballers-staging.pages.dev` still serves the build, but the API's CORS only allows the new host, so sign-in works only on `staging.reelballers.com`.
+
+## After the re-land (2026-11-15 UTC)
+
+- PR #770 merged at 05:3x UTC, build 7743 on both hosts. The first load was blocked by CORS: a Fly secret `CORS_ORIGINS` on `reel-ballers-api-staging` overrides the `[env]` value in `src/backend/fly.staging.toml` (secrets win) and still held only the old host. Fixed by `fly secrets set CORS_ORIGINS=https://staging.reelballers.com,https://reel-ballers-staging.pages.dev` (the old host kept so cached tabs still sign in in Chrome). Any later change to staging's allowed origins must change that secret, not only the toml.
+- Checks after the fix: the T16370 WebKit (iPhone 14) spec passed both criteria in `mcr.microsoft.com/playwright:v1.57.0-noble` (Linux). On Windows, Playwright's WebKit cannot decode H.264, so C2 shows "Video format not supported" there; run it on Linux. A Chromium export of a draft play (Frame editor, Sharpen my highlight) finished in 356 s against the new hosts.
 
 ## Acceptance Criteria
 

@@ -28,7 +28,7 @@ for any change, edit, re-test, and ask again.
    on its own; no "Saved" wording. Do not add tutorial/social/unsubscribe
    links: the template has them.
 2. **Preview:** make sure the prod Postgres proxy is up
-   (`fly proxy 15433:5432 -a reel-ballers-db-prod`, run in background), then
+   (`fly proxy 15433:5432 -a reel-ballers-db-prod-lax`, run in background), then
    `--preview --env prod`. Note the recipient count N.
 3. **Test-send:** `--test --env prod` (to imankh@gmail.com).
 4. **Stop and ask.** Show the subject, the body as written, and N, and say the

@@ -5,8 +5,7 @@
  * Each user action (add keyframe, set speed, etc.) is sent as an atomic operation.
  *
  * Gesture actions always update in-place (never create new versions).
- * Version creation for exported clips is handled by the PUT endpoint
- * (saveCurrentClipState), which sends complete state.
+ * T4400: these are the ONLY framing writes; the render reads what they stored.
  */
 
 import { API_BASE } from '../config';

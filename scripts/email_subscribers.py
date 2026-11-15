@@ -28,8 +28,8 @@ sent_at. A crashed or partial send is safe to re-run within 24h: every send
 carries a Resend Idempotency-Key of <campaign>/<user_id>.
 
 Remote envs need the Postgres proxy running (DATABASE_URL in .env.<env>):
-    fly proxy 15433:5432 -a reel-ballers-db-prod
-    fly proxy 15432:5432 -a reel-ballers-db-staging
+    fly proxy 15433:5432 -a reel-ballers-db-prod-lax
+    fly proxy 15432:5432 -a reel-ballers-db-staging-lax
 """
 
 import argparse
@@ -188,8 +188,8 @@ def _connect() -> None:
     except RuntimeError as e:
         sys.exit(
             f"ERROR: cannot reach Postgres ({e}).\n"
-            "  prod:    fly proxy 15433:5432 -a reel-ballers-db-prod\n"
-            "  staging: fly proxy 15432:5432 -a reel-ballers-db-staging"
+            "  prod:    fly proxy 15433:5432 -a reel-ballers-db-prod-lax\n"
+            "  staging: fly proxy 15432:5432 -a reel-ballers-db-staging-lax"
         )
 
 

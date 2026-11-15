@@ -158,6 +158,7 @@ def _mock_pg_startup():
          patch("app.services.credit_ledger.get_pg", _stub_get_pg), \
          patch("app.services.credit_backfill.get_pg", _stub_get_pg), \
          patch("app.services.upload_failures.get_pg", _stub_get_pg), \
+         patch("app.services.upload_index_check.get_pg", _stub_get_pg), \
          patch("app.services.cleanup.start_cleanup_loop", new_callable=AsyncMock), \
          patch("app.services.cleanup.stop_cleanup_loop", new_callable=AsyncMock):
         yield
@@ -403,7 +404,7 @@ def pg_conn(monkeypatch):
     # (below) and never reused, so the escape hatch cannot leak into any
     # production code path.
     cur.execute("SET reelballers.allow_payments_purge = 'on'")
-    cur.execute("TRUNCATE otp_codes, ip_rate_events, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters, upload_failures, payments")
+    cur.execute("TRUNCATE otp_codes, ip_rate_events, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters, upload_failures, upload_index_checks, payments")
     cur.execute(_SEED_SQL)
     # T5840: open the credits_ready gate by default so the general test suite
     # (which predates the gate) doesn't 503 on every grant/debit. Tests that
@@ -439,6 +440,7 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.services.credit_ledger.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.credit_backfill.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.upload_failures.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.services.upload_index_check.get_pg", mock_get_pg)
     monkeypatch.setattr("app.routers.payments.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.ip_rate_limit.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.resume_points.get_pg", mock_get_pg)

@@ -14,8 +14,8 @@ import { waitForAppReady } from './helpers/appReady.js';
  * (never a silent green pass) when the fixture lacks the required data.
  *
  * Run:
- *   E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
- *   E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
+ *   E2E_BASE_URL=https://staging.reelballers.com \
+ *   E2E_API_BASE=https://api-staging.reelballers.com/api \
  *   E2E_REAL_EMAIL=imankh@gmail.com E2E_REAL_PROFILE=9fa7378c \
  *   npx playwright test e2e/derisk-staging-endcard-copylink.qa.spec.js
  */

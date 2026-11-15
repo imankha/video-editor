@@ -148,7 +148,7 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    `is_test_account`. Step 7 is different: targeted notes to the specific users a fix or feature
    affected. Never skip this step on your own: even when little is user-visible, draft and
    test-send the email anyway. Only the owner can skip a release email, at the approval gate.
-   Requires the prod Postgres proxy: `fly proxy 15433:5432 -a reel-ballers-db-prod`.
+   Requires the prod Postgres proxy: `fly proxy 15433:5432 -a reel-ballers-db-prod-lax`.
 
 ## Pending One-Time Steps
 
@@ -269,7 +269,7 @@ When a task is ambiguous, read its task file's Acceptance Criteria — the same 
 
 **BUG-FIX / DROP-OFF-FIX:** find the users who actually encountered it, not everyone:
 - Per-user event-grain data lives in each user's own `user_action_log` SQLite (not the shared aggregate stores) — query it for the specific action/error the task's acceptance criteria describe.
-- Cross-reference Postgres `user_segments`/`user_actions`/`user_usage_daily` for funnel position and last-active date, same query pattern as the win-back campaign (`fly postgres connect -a reel-ballers-db-prod -d reel_ballers_api`, read-only).
+- Cross-reference Postgres `user_segments`/`user_actions`/`user_usage_daily` for funnel position and last-active date, same query pattern as the win-back campaign (`fly postgres connect -a reel-ballers-db-prod-lax -d reel_ballers_api`, read-only).
 - For per-profile specifics (which game/clip/step), use the `fly ssh console` + `app.database.get_db_connection()` pattern with `user_context`/`profile_context` set, as in the win-back send.
 - **Dedup** against anyone already notified for this exact issue (check the task file / prior outreach notes — e.g. T7610's cohort tracking) so retest asks don't repeat.
 

@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T16490:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16490_sign_in_signs_out_old_device.py -k c1 -q -p no:cacheprovider"
+    },
+    "T16490:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16490_sign_in_signs_out_old_device.py -k c2 -q -p no:cacheprovider"
+    }
+  }
+}

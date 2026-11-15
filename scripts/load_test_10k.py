@@ -9,7 +9,7 @@ docs/plans/T14190-load-test-results.md for the full procedure and recorded resul
 Usage (from src/backend; dev or staging ONLY -- prod is refused):
     python ../../scripts/load_test_10k.py seed --env staging --count 10000
     python ../../scripts/load_test_10k.py run --env staging \\
-        --base https://reel-ballers-api-staging.fly.dev --vus 100 --duration 120 \\
+        --base https://api-staging.reelballers.com --vus 100 --duration 120 \\
         --out /tmp/t14190-run.json
     python ../../scripts/delete_user.py --env staging --email-suffix @loadtest.invalid --yes
 

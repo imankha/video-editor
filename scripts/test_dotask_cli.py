@@ -1835,7 +1835,8 @@ class AutolandTest(AutolandBase):
 
     def test_a_spent_budget_lands_what_is_left_unverified(self):
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
-        group["verify_spent_s"] = dotask_cli.VERIFY_BUDGET_MINUTES * 60
+        group["verify_spent_s"] = 2 * dotask_cli.VERIFY_MINUTES_PER_CRITERION * 60  # T1 has 2 criteria
+        group["verify_budget_round"] = 1  # spent in this round; a new round renews it
         (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
         self.assertEqual(self._run(), 0)
         self.assertEqual(self.dispatches, [])  # no checks, no reviewer
@@ -1852,7 +1853,9 @@ class AutolandTest(AutolandBase):
             caps.append(cap_minutes)
             return self._dispatch(slug, group, phase, instruction)
         group = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
-        group["verify_spent_s"] = (dotask_cli.VERIFY_BUDGET_MINUTES - 6) * 60
+        group["verify_budget_min"], group["verify_budget_source"] = 30, "env"  # room for the 6 left below
+        group["verify_spent_s"] = (30 - 6) * 60
+        group["verify_budget_round"] = 1
         (self.checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
         self.verdicts = [self._verdict()]
         with patch.object(dotask_cli, "dispatch", dispatch):
@@ -1860,7 +1863,7 @@ class AutolandTest(AutolandBase):
         self.assertLessEqual(caps[0], 6)
         self.assertGreater(caps[0], 5)
         spent = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())["verify_spent_s"]
-        self.assertGreater(spent, (dotask_cli.VERIFY_BUDGET_MINUTES - 6) * 60)
+        self.assertGreater(spent, (30 - 6) * 60)
 
     def test_a_fix_round_that_runs_out_of_turns_is_restarted_with_a_handoff(self):
         (self.checkout / ".dotask-profile").mkdir()
@@ -2578,6 +2581,21 @@ class CiFailureReportTest(unittest.TestCase):
             report = dotask_cli.ci_failure_report("feature/x", "abc")
         self.assertIn("Run 7, failed jobs: frontend-shard (3)", report)
 
+    def test_the_assertion_of_an_early_job_survives_a_long_aggregator_tail(self):
+        # g-t16470-4, 2026-11-15: the combined tail showed only `ci-ready`, never the GameTile assertion.
+        log = "\n".join(
+            [f"frontend-shard (1)\tRun tests\tok line {i}" for i in range(500)]
+            + ["frontend-shard (1)\tRun tests\t FAIL  src/GameTile.posterUrl.test.jsx > builds the poster src",
+               "frontend-shard (1)\tRun tests\tExpected: \"/poster.jpg?profile_id=p1\"",
+               "frontend-shard (1)\tRun tests\tReceived: \"/poster.jpg?profile_id=p1&v=undefined\""]
+            + [f"frontend-shard (1)\tRun tests\tsummary {i}" for i in range(50)]
+            + [f"ci-ready\tGate\tjob status line {i}" for i in range(300)])
+        excerpt = dotask_cli.failure_excerpt(log)
+        self.assertIn("v=undefined", excerpt)
+        self.assertIn("--- frontend-shard (1): failing lines ---", excerpt)
+        self.assertIn("--- ci-ready: last 30 lines ---", excerpt)
+        self.assertNotIn("ok line 100", excerpt)
+
 
 class StagingCheckTest(AutolandBase):
     def setUp(self):
@@ -2631,6 +2649,40 @@ class StagingCheckTest(AutolandBase):
     def test_a_group_without_browser_checks_is_freed_at_once(self):
         (self.checkout / dotask_cli.CHECKS_DIR / "T1.checks.json").unlink()
         self.assertEqual(dotask_cli.on_merge("g-t1-1", "731"), "freed")
+
+
+class VerifyBudgetPerCriterionTest(AutolandBase):
+    """Owner rule 2026-11-15: the verify budget is 3 minutes per acceptance criterion."""
+
+    def _group(self):
+        return json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())
+
+    def test_autoland_sets_three_minutes_per_criterion(self):
+        self.verdicts = [self._verdict()]
+        with patch.dict(os.environ, {}):
+            os.environ.pop("DOTASK_VERIFY_BUDGET_MIN", None)
+            self.assertEqual(self._run(no_land=True), 0)
+        group = self._group()
+        self.assertEqual(group["verify_budget_min"], 6.0)  # T1 has 2 criteria
+        self.assertEqual(group["verify_budget_source"], "criteria")
+
+    def test_the_environment_override_wins_and_a_later_run_keeps_it(self):
+        self.verdicts = [self._verdict()]
+        with patch.dict(os.environ, {"DOTASK_VERIFY_BUDGET_MIN": "50"}):
+            self.assertEqual(self._run(no_land=True), 0)
+        with patch.dict(os.environ, {}):
+            os.environ.pop("DOTASK_VERIFY_BUDGET_MIN", None)
+            self.assertEqual(dotask_cli.group_budget_minutes(self.checkout, self._group()), (50.0, "env"))
+
+    def test_the_budget_renews_at_each_round_but_not_on_a_restart_of_the_same_round(self):
+        # Owner rule 2026-11-15: g-t16470-4's round 2 had 0 minutes left and reviewed none of 17 criteria.
+        group = {**self._group(), "verify_spent_s": 1900, "verify_budget_round": 1}
+        dotask_cli.renew_round_budget(self.checkout, group, 2)
+        self.assertEqual((group["verify_spent_s"], group["verify_budget_round"]), (0, 2))
+        group["verify_spent_s"] = 120
+        dotask_cli.renew_round_budget(self.checkout, group, 2)
+        self.assertEqual(self._group()["verify_spent_s"], 0)  # saved at the renewal
+        self.assertEqual(group["verify_spent_s"], 120)  # the restart kept this round's spend
 
 
 if __name__ == "__main__":

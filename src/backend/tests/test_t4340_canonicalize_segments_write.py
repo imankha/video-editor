@@ -142,13 +142,6 @@ def _read_raw_stored_boundaries(clip_id):
         return seg
 
 
-def _put_clip(project_id, clip_id, segments_data):
-    return client.put(
-        f"/api/clips/projects/{project_id}/clips/{clip_id}",
-        json={"segments_data": segments_data},
-    )
-
-
 # ---------------------------------------------------------------------------
 # Test 1 -- gesture split_segment writes full-list boundaries to the DB
 # ---------------------------------------------------------------------------
@@ -256,30 +249,8 @@ def test_set_segment_speed_after_split_lands_on_correct_interval(clip_with_raw_d
     )
 
 
-# ---------------------------------------------------------------------------
-# Test 4 -- PUT (update_working_clip) characterization: already full-list,
-# UNCHANGED by this branch (design Sec 2.3). Should PASS today and after.
-# ---------------------------------------------------------------------------
-
-def test_put_update_working_clip_still_writes_full_list_unchanged(clip_with_raw_duration):
-    """Characterization guard, not new behavior: the PUT path already writes
-    whatever boundaries the frontend sends (full-list from saveCurrentClipState).
-    Design Sec 2.3 says PUT needs NO code change. This must be true BEFORE and
-    AFTER Stage 4 -- if it starts failing post-implementation, PUT was touched
-    when it shouldn't have been."""
-    project_id, clip_id, _raw_id = clip_with_raw_duration
-
-    full_list_payload = {
-        "boundaries": [0.0, 4.0, 10.0],
-        "segmentSpeeds": {"0": 1.0, "1": 0.5},
-        "trimRange": {"start": 0.0, "end": 10.0},
-    }
-    resp = _put_clip(project_id, clip_id, full_list_payload)
-    assert resp.status_code == 200, resp.text
-
-    stored = _read_raw_stored_boundaries(clip_id)
-    assert stored["boundaries"] == [0.0, 4.0, 10.0]
-    assert stored["segmentSpeeds"] == {"0": 1.0, "1": 0.5}
+# Test 4 (PUT characterization) removed by T4400: the PUT no longer accepts
+# segments_data; gesture actions are the only writer.
 
 
 # ---------------------------------------------------------------------------
