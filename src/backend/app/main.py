@@ -105,6 +105,7 @@ from app.routers import (
     admin_referrals_router,
     admin_revenue_router,
     admin_router,
+    admin_session_router,
     admin_users_router,
     auth_router,
     bootstrap_router,
@@ -314,6 +315,7 @@ app.include_router(admin_revenue_router, prefix="/api")
 app.include_router(admin_ops_router, prefix="/api")
 app.include_router(admin_credits_router, prefix="/api")
 app.include_router(admin_users_router, prefix="/api")
+app.include_router(admin_session_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 app.include_router(gallery_shares_router)
 app.include_router(shared_router)

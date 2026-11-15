@@ -13,8 +13,9 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app.routers import admin
+from app.routers.admin import session as admin_session
 
-# The only admin routes meant to be open to every user (see admin.py docstring).
+# The only admin routes meant to be open to every user (see admin/session.py).
 OPEN_ADMIN_ROUTES = {
     ("GET", "/api/admin/me"),
     ("POST", "/api/admin/impersonate/stop"),
@@ -43,15 +44,15 @@ def test_every_admin_route_carries_the_router_level_guard():
 
 
 def test_the_guard_is_attached_to_the_router_not_per_handler():
-    assert any(dep.dependency is admin.require_admin for dep in admin.router.dependencies)
-    assert not any(dep.dependency is admin.require_admin for dep in admin.open_router.dependencies)
+    assert any(dep.dependency is admin.require_admin for dep in admin_session.router.dependencies)
+    assert not any(dep.dependency is admin.require_admin for dep in admin_session.open_router.dependencies)
 
 
 def test_a_route_added_to_the_admin_router_is_guarded_without_naming_the_check():
-    """The [DEP] payoff: a new handler on `admin.router` that never mentions the check."""
+    """The [DEP] payoff: a new handler on an admin router that never mentions the check."""
     from fastapi import APIRouter, FastAPI
 
-    probe = APIRouter(prefix="/admin", dependencies=admin.router.dependencies)
+    probe = APIRouter(prefix="/admin", dependencies=admin_session.router.dependencies)
 
     @probe.get("/t4610-probe")
     def _probe():

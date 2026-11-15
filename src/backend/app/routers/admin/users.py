@@ -657,6 +657,3 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
             })
 
     return {"user_id": user_id, "older_than_hours": older_than_hours, "stuck_uploads": results}
-
-
-# ---------------------------------------------------------------------------
