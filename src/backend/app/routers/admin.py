@@ -1661,6 +1661,21 @@ def list_upload_failures(
         fail = cur.fetchone()
         game_failed, clip_failed = fail["game_failed"], fail["clip_failed"]
 
+        # T2580: of the uploads finalized in the same window, how many have
+        # their index (moov) at the end -- cannot start playing until fully
+        # downloaded. null (not 0) when the table isn't migrated yet.
+        cur.execute("SELECT to_regclass('public.upload_index_checks') IS NOT NULL AS ok")
+        index_checks = None
+        if cur.fetchone()["ok"]:
+            cur.execute(
+                "SELECT COUNT(*) AS checked, "
+                "COUNT(*) FILTER (WHERE NOT index_at_front) AS not_at_front "
+                "FROM upload_index_checks WHERE checked_at::date BETWEEN %s AND %s",
+                (since_date, until_date),
+            )
+            row = cur.fetchone()
+            index_checks = {"checked": row["checked"], "not_at_front": row["not_at_front"]}
+
     def _rate(succeeded, failed):
         attempts = succeeded + failed
         return {
@@ -1689,6 +1704,7 @@ def list_upload_failures(
         "rows": rows,
         "total": total,
         "rates": {"game": game_rate, "clip": clip_rate},
+        "index_checks": index_checks,
     }
 
 

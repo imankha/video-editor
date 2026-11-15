@@ -788,6 +788,20 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   NUF reset test accounts are `is_new` on every login, so they get it every time.
   Guard tests: `tests/test_t12610_welcome_email.py`.
 
+## Upload index-at-front check (T2580)
+
+`finalize_upload` (games_upload.py), once per released pending row, calls
+`services/upload_index_check.check_and_record` via `asyncio.to_thread`: ONE ranged GET
+(`bytes=0-65535`) of the landed object, a top-level box walk (moov before mdat/moof = True;
+mdat/moof first, non-MP4, or no moov in the bytes read = False, with the walked boxes stored
+so an admin can tell them apart), and one row in Postgres `upload_index_checks` (v048; no FK,
+purged with the user in `_purge_user_data`). A failed check logs `[UPLOAD_INDEX] check FAILED`
+and never fails the upload (the bytes are already durable). Read by `GET
+/api/admin/upload-failures` as `index_checks: {checked, not_at_front}` over the panel's date
+window (null when the table is missing) and shown as the "Cannot start at once" card in
+`UploadFailuresPanel.jsx`. Tests patch `app.services.upload_index_check.get_r2_client`;
+`pg_conn` patches its `get_pg`. Guard: `tests/test_t2580_upload_index_check.py`.
+
 ## Upload-failure observability (T10270)
 
 Diagnostic enrichment (2026-09-30): pre-prepare client failures now
