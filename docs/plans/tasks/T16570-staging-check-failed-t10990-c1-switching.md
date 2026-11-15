@@ -1,6 +1,6 @@
 # T16570: Staging check failed: T10990:C1 Switching portrait and landscape sends exactly one request.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-15

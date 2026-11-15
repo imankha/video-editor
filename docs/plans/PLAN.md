@@ -63,6 +63,7 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T4640 | [One share flow for games](tasks/T4640-games-services-extraction.md) | 6 | 4 | 1.5 | WIP | [ ] | Sharing a game with another parent and sharing a game's playback are two copies, about 240 lines each, of the same steps on the server. One sync bug has already had to be fixed in both. Merge them into one flow with the two real differences passed in. Nothing a parent sees changes. Worked when both share buttons behave as before under the existing tests and a new test runs the same cases through both. |
 | T4660 | [One game name builder](tasks/T4660-sqlite-factory-game-display.md) | 5 | 2 | 2.5 | STAGING | [ ] | The name shown for a game, such as the opponent and the date, is built by three separate pieces of server code, and two of them have already drifted in how they write the date. Keep one and use it everywhere. Worked when the same game reads the same on Home, in downloads and in collections, checked by one test over all three. |
 | T16560 | [Staging check failed: T10540:C10 In the browser, on a fresh upload: mark and rate](tasks/T16560-staging-check-failed-t10540-c10-in.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T16570 | [Staging check failed: T10990:C1 Switching portrait and landscape sends exactly one request.](tasks/T16570-staging-check-failed-t10990-c1-switching.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 
 ### Bugs found by /dotask verify
 
@@ -71,7 +72,6 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T16570 | [Staging check failed: T10990:C1 Switching portrait and landscape sends exactly one request.](tasks/T16570-staging-check-failed-t10990-c1-switching.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
