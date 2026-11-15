@@ -4,7 +4,7 @@ import { Trash2, Copy } from 'lucide-react';
 /**
  * Reusable keyframe marker for timeline layers.
  * Supports different color schemes for each layer type (crop, highlight, etc.)
- * Used by CropLayer (blue/yellow) and HighlightLayer (orange).
+ * Used by CropLayer (blue/yellow).
  */
 export function KeyframeMarker({
   position,              // 0-100 percentage position on timeline

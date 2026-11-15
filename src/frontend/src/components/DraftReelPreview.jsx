@@ -122,8 +122,8 @@ function DraftReelPreviewInner({ payload }) {
   const copiedTimer = useRef(null);
   useEffect(() => () => clearTimeout(copiedTimer.current), []);
 
-  // T8535 (moved from DraftTile, T6840 origin): quest_4 "Watch Your Preview"
-  // fires after ~1s of preview playback, mirroring watched_gallery_video_1s so
+  // T8535 (moved from DraftTile, T6840 origin): the previewed_draft_reel_1s
+  // funnel event fires after ~1s of preview playback, mirroring watched_gallery_video_1s so
   // opening and instantly closing (or scrubbing past) doesn't count. This
   // component remounts fresh per open (keyed on finalVideoId by the parent), so
   // a mount-scoped timer is a correct one-shot-per-open watch timer; unmounting

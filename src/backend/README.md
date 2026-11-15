@@ -147,10 +147,6 @@ API documentation available at: `http://localhost:8000/docs`
 - `GET /api/hello` - Test endpoint
 
 ### Video Processing
-- `POST /api/export/crop` - Export video with crop applied
-  - Form data: `video` (file), `keyframes_json` (string)
-  - Returns: Cropped video file
-
 - `POST /api/export/upscale` - Export video with AI upscaling and de-zoom
   - Form data: `video` (file), `keyframes_json` (string), `target_fps` (int, default: 30)
   - Uses Real-ESRGAN AI model for high-quality upscaling
@@ -254,11 +250,6 @@ If port 8000 is already in use:
 ```bash
 # Use a different port
 python -m uvicorn app.main:app --reload --port 8001
-```
-
-Then update the frontend API URL in `src/frontend/src/components/ExportButton.jsx`:
-```javascript
-'http://localhost:8001/api/export/crop'
 ```
 
 ## Development

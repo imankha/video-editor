@@ -43,7 +43,7 @@ vi.mock('../../containers', () => ({
 vi.mock('../../modes/overlay', () => ({
   useHighlightRegions: () => ({
     boundaries: [], regions: [], keyframes: [], framerate: 30,
-    initializeWithDuration: vi.fn(), initializeFromClipMetadata: vi.fn(),
+    initializeWithDuration: vi.fn(),
     addRegion: vi.fn(), deleteRegionByIndex: vi.fn(), moveRegionStart: vi.fn(), moveRegionEnd: vi.fn(),
     toggleRegionEnabled: vi.fn(), addOrUpdateKeyframe: vi.fn(), removeKeyframe: vi.fn(),
     isTimeInEnabledRegion: vi.fn(), getRegionAtTime: vi.fn(), getHighlightAtTime: vi.fn(),
@@ -150,14 +150,8 @@ vi.mock('../../stores/projectDataStore', () => ({
     clips: [], clipMetadataCache: {}, getClipFileUrl: vi.fn(),
   }),
 }));
-vi.mock('../../stores/focusStore', () => ({
-  useFocusStore: (selector) => selector({ hasChangedSinceExport: false }),
-}));
 vi.mock('../../stores/exportStore', () => ({
   useExportStore: (selector) => selector({ exportingProject: null, dismissExportCompleteToast: vi.fn() }),
-}));
-vi.mock('../../stores/questStore', () => ({
-  useQuestStore: { getState: () => ({ recordAchievement: vi.fn() }) },
 }));
 
 const projectsState = vi.hoisted(() => ({ projects: [] }));

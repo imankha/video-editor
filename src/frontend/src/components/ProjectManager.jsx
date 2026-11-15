@@ -2132,8 +2132,8 @@ export function ProjectManager({
               // T9440: the guide is DERIVED FROM PERSISTED PROGRESS, not the game
               // count. A lone game that already has saved plays (clip_count > 0 --
               // Andrew's two rated/tagged plays) has done this step, so re-offering
-              // "Cut your first play" contradicts that game card's "N annotations"
-              // and the quest panel. Gate it on clip_count === 0 so it only coaches
+              // "Cut your first play" contradicts that game card's "N annotations".
+              // Gate it on clip_count === 0 so it only coaches
               // an account that has NOT yet cut a play.
               const showGamesPartialGuide =
                 games.length === 1 && !games[0].is_reference

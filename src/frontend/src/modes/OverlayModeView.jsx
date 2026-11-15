@@ -604,10 +604,9 @@ export function OverlayModeView({
     };
   }, [effectiveOverlayVideoUrl, isFullscreen, mobileFs]);
 
-  // Per-marker picked/unpicked flags for the guide's progress dots — the SAME
-  // ordering/derivation the quest store's detectionAssignProgress uses
-  // (OverlayContainer), recomputed here (pure, cheap) rather than threading yet
-  // another store subscription into this already-prop-driven view.
+  // Per-marker picked/unpicked flags for the guide's progress dots, derived
+  // here (pure, cheap) rather than threading a store subscription into this
+  // already-prop-driven view.
   const pickGuideProgress = useMemo(
     () => detectionAssignmentStates(highlightRegions),
     [highlightRegions]

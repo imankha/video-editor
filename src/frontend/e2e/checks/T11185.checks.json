@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T11185:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t11185_quest_removal.py -q -p no:cacheprovider -k 'quest_endpoints_return_404 or no_quest_symbols'"
+    },
+    "T11185:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t11185_quest_removal.py -q -p no:cacheprovider -k 'v004_user_db_migrates_to_head or fresh_user_db_schema or profile_db_migration_drops'"
+    },
+    "T11185:C3": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t11185_quest_removal.py -q -p no:cacheprovider -k session_init_runs_no_quest_backfill"
+    }
+  }
+}

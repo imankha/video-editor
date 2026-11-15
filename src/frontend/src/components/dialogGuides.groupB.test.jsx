@@ -1,4 +1,4 @@
-// T12790: dialog guide sentences (group B): share dialogs, shared-video viewer, tutorial video.
+// T12790: dialog guide sentences (group B): share dialogs, shared-video viewer.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -9,7 +9,6 @@ import { CollectionShareModal } from './CollectionShareModal';
 import { ShareWithTeammatesModal } from './ShareWithTeammatesModal';
 import { SharePlaybackDialog } from './SharePlaybackDialog';
 import { SharedVideoOverlay } from './SharedVideoOverlay';
-import { TutorialVideoModal } from './TutorialVideoModal';
 
 vi.mock('./shared/Toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
@@ -127,10 +126,5 @@ describe('dialog guides, group B', () => {
     render(<SharedVideoOverlay shareToken="t" onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText(/This link no longer works/)).toBeTruthy());
     expect(screen.queryByTestId('modal-guide')).toBeNull();
-  });
-
-  it('tutorial-video: sentence below the caption strip', () => {
-    render(<TutorialVideoModal questId="quest_1" assets={{ videoUrl: 'v', vttUrl: 'v', chaptersUrl: 'c' }} onClose={() => {}} />);
-    expect(guideText()).toBe(GUIDE.modal.tutorialVideo);
   });
 });

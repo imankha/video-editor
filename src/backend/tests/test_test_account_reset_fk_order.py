@@ -35,7 +35,7 @@ from app.user_context import set_current_user_id
 # to this shape.
 _NAIVE_BUGGY_ORDER = [
     "raw_clips", "projects", "working_clips", "working_videos",
-    "final_videos", "export_jobs", "achievements",
+    "final_videos", "export_jobs",
     "before_after_tracks", "pending_uploads",
 ]
 
@@ -101,7 +101,6 @@ def _seed_full_graph(cursor):
         "INSERT INTO export_jobs (id, project_id, type, status, input_data) VALUES (?, ?, 'framing', 'complete', '{}')",
         (f"job_{uuid.uuid4().hex[:8]}", project_id),
     )
-    cursor.execute("INSERT INTO achievements (key) VALUES (?)", ("first_clip",))
     cursor.execute(
         "INSERT INTO pending_uploads (id, blake3_hash, file_size, original_filename, r2_upload_id) "
         "VALUES (?, ?, 1, 'raw.mp4', 'upload-1')",

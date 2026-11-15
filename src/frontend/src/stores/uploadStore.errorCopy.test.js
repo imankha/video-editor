@@ -7,9 +7,6 @@ vi.mock('../services/uploadManager', async (importOriginal) => {
 vi.mock('../components/shared', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
-vi.mock('./questStore', () => ({
-  useQuestStore: { getState: () => ({ fetchProgress: vi.fn() }) },
-}));
 vi.mock('./creditStore', () => ({
   useCreditStore: { getState: () => ({ fetchCredits: vi.fn() }) },
 }));

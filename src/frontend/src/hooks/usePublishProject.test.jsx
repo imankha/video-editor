@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // apiFetch + store fns are referenced inside hoisted vi.mock factories.
 const {
   apiFetchMock, fetchProjectsMock, fetchCountMock, notifyMock, openMock,
-  recordAchievementMock, toastErrorMock, setJustPublishedMock, projectsStoreState,
+  toastErrorMock, setJustPublishedMock, projectsStoreState,
 } = vi.hoisted(() => {
   const fetchProjects = vi.fn();
   return {
@@ -13,7 +13,6 @@ const {
     fetchCountMock: vi.fn(),
     notifyMock: vi.fn(),
     openMock: vi.fn(),
-    recordAchievementMock: vi.fn(),
     toastErrorMock: vi.fn(),
     setJustPublishedMock: vi.fn(),
     // T11580: gameId/aspectRatio come from the PUBLISH RESPONSE itself now
@@ -41,12 +40,6 @@ vi.mock('../stores/galleryStore', () => {
   useGalleryStore.getState = () => api;
   return { useGalleryStore };
 });
-vi.mock('../stores/questStore', () => {
-  const api = { recordAchievement: recordAchievementMock };
-  const useQuestStore = () => api;
-  useQuestStore.getState = () => api;
-  return { useQuestStore };
-});
 vi.mock('../components/shared/Toast', () => ({
   toast: { error: (...a) => toastErrorMock(...a), success: vi.fn() },
 }));
@@ -68,7 +61,6 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
     fetchCountMock.mockReset();
     notifyMock.mockReset();
     openMock.mockReset();
-    recordAchievementMock.mockReset();
     toastErrorMock.mockReset();
     setJustPublishedMock.mockReset();
   });
@@ -91,8 +83,6 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
     expect(fetchCountMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
     expect(notifyMock).toHaveBeenCalledWith('publish');
     expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
-    // T11175: the quest-only moved_to_my_reels trigger is gone (server emits move_succeeded).
-    expect(recordAchievementMock).not.toHaveBeenCalled();
     // openGallery:false -> the gallery drawer is NOT opened.
     expect(openMock).not.toHaveBeenCalled();
     // Card removal is driven by the refetch, never an optimistic local removal:
@@ -122,7 +112,6 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
     expect(result.current.publishRetry).toEqual({ openGallery: false });
     // The durable-sync guard: NO refetch, so the card is never optimistically removed.
     expect(fetchProjectsMock).not.toHaveBeenCalled();
-    expect(recordAchievementMock).not.toHaveBeenCalled();
     // 503 is not a generic error -> no error toast.
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
@@ -172,7 +161,6 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     fetchCountMock.mockReset();
     notifyMock.mockReset();
     openMock.mockReset();
-    recordAchievementMock.mockReset();
     toastErrorMock.mockReset();
     setJustPublishedMock.mockReset();
   });
@@ -253,7 +241,5 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     expect(fetchCountMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
     expect(notifyMock).toHaveBeenCalledWith('publish');
     expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
-    // T11175: the quest-only moved_to_my_reels trigger is gone (server emits move_succeeded).
-    expect(recordAchievementMock).not.toHaveBeenCalled();
   });
 });

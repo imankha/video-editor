@@ -9,9 +9,6 @@ vi.mock('../../utils/apiFetch', () => ({ default: vi.fn() }));
 vi.mock('../../components/shared/Toast', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
-vi.mock('../../stores/questStore', () => ({
-  useQuestStore: { getState: () => ({ fetchProgress: vi.fn() }) },
-}));
 
 import apiFetch from '../../utils/apiFetch';
 import { toast } from '../../components/shared/Toast';

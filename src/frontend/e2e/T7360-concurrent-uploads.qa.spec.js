@@ -25,16 +25,14 @@ skipOnDeployedTarget(test, 'in-page import() of /src/stores/{uploadStore,authSto
 // already resolved unauthenticated by the time we override). It goes through the
 // separate "auth transition" subscription instead, which fires the INDIVIDUAL
 // per-store fetches (fetchProfiles/fetchProjects/fetchGames/fetchProgress/...), not
-// /api/bootstrap. Most of those guard a missing field with `|| []`/`|| 0`, but three
+// /api/bootstrap. Most of those guard a missing field with `|| []`/`|| 0`, but two
 // don't and crash the render on a blanket `{}` (uncaught, no error boundary, so it
 // unmounts the WHOLE tree incl. UploadProgressIndicator):
 //   - /api/profiles       -> profileStore does `data.profiles.find(...)`
 //   - /api/projects       -> projectsStore stores the body AS the array, needs `[]`
-//   - /api/quests/progress -> questStore does `for (const quest of data.quests)`
 const ENDPOINT_SHAPES = {
   '/api/profiles': { profiles: [] },
   '/api/projects': [],
-  '/api/quests/progress': { quests: [] },
 };
 
 // Neutralise the backend so the app shell mounts without a real session/games fetch.

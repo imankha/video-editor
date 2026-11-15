@@ -13,7 +13,6 @@ SCANNERS = ['src/frontend/src/components/instructions/guidePulse.guard.test.js']
 
 READERS = {
     'pricing.json': ['src/frontend/src/config/pricing.js', 'src/frontend/src/config/pricing.test.js'],
-    'quest_config.py': ['src/frontend/src/utils/questDefinitions.test.jsx'],
     'report-problem.png': ['src/frontend/src/components/ReportProblemButton.icon.test.jsx'],
 }
 
@@ -69,7 +68,6 @@ class SelectionTests(unittest.TestCase):
                          {'mode': 'related', 'full_because': [],
                           'files': ['src/components/instructions/guidePulse.guard.test.js',
                                     'src/config/pricing.js', 'src/config/pricing.test.js']})
-        self.assertIn('src/utils/questDefinitions.test.jsx', select(['src/backend/app/quest_config.py'])['files'])
 
     def test_cross_tree_data_file_nobody_reads_selects_nothing(self):
         READERS_BACKUP = dict(READERS)

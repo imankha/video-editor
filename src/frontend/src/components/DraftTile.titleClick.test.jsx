@@ -38,12 +38,6 @@ vi.mock('../stores/galleryStore', () => {
   useGalleryStore.getState = () => api;
   return { useGalleryStore };
 });
-vi.mock('../stores/questStore', () => {
-  const api = { recordAchievement: vi.fn() };
-  const useQuestStore = () => api;
-  useQuestStore.getState = () => api;
-  return { useQuestStore };
-});
 vi.mock('../stores/profileStore', () => ({ useCurrentProfile: () => ({ id: 'p1', sport: 'soccer' }) }));
 const { downloadsApi } = vi.hoisted(() => ({
   downloadsApi: { downloadFile: vi.fn().mockResolvedValue(undefined), downloadingId: null },

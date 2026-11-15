@@ -361,28 +361,21 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
     except Exception as e:
         logger.error(f"Failed to recover orphaned reservations: {e}")
 
-    # 6. T970: Backfill completed_quests from credit_transactions
-    try:
-        from .services.user_db import backfill_completed_quests
-        backfill_completed_quests(user_id)
-    except Exception as e:
-        logger.error(f"T970: Failed to backfill completed quests: {e}")
-
-    # 7. T985: Backfill preferences from profile DB to user.sqlite
+    # 6. T985: Backfill preferences from profile DB to user.sqlite
     try:
         from .services.user_db import backfill_preferences_from_profile
         backfill_preferences_from_profile(user_id)
     except Exception as e:
         logger.error(f"T985: Failed to backfill preferences: {e}")
 
-    # 8. T3080: Backfill user activity from Postgres to user.sqlite
+    # 7. T3080: Backfill user activity from Postgres to user.sqlite
     try:
         from .services.user_db import backfill_user_activity
         backfill_user_activity(user_id)
     except Exception as e:
         logger.error(f"T3080: Failed to backfill user activity: {e}")
 
-    # 9. Cleanup tasks (moved from ensure_database lines 922-938)
+    # 8. Cleanup tasks (moved from ensure_database lines 922-938)
     try:
         from .services.project_archive import archive_completed_projects
         archived_count = archive_completed_projects(user_id)

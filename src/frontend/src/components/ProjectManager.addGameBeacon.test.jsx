@@ -66,12 +66,6 @@ vi.mock('../utils/funnelEvents', async (orig) => ({
   ...(await orig()),
   recordFunnelEvent: (...args) => recordFunnelEventSpy(...args),
 }));
-vi.mock('../stores/questStore', () => {
-  const state = { setAddGameOpener: vi.fn(), recordAchievement: vi.fn() };
-  const useQuestStore = (sel) => (sel ? sel(state) : state);
-  useQuestStore.getState = () => state;
-  return { useQuestStore };
-});
 
 // Header chrome + tiles — irrelevant to the gesture, stub to avoid store leakage.
 vi.mock('./Logo', () => ({ LogoWithText: () => <div />, Logo: () => <div />, default: () => <div /> }));

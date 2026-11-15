@@ -8,9 +8,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ensureVideoInR2 } from './uploadManager';
 
-vi.mock('../stores/questStore', () => ({
-  useQuestStore: { getState: () => ({ fetchProgress: vi.fn() }) },
-}));
 vi.mock('../stores/gamesDataStore', () => ({
   useGamesDataStore: { getState: () => ({ invalidateGames: vi.fn() }) },
 }));

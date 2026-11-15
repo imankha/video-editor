@@ -16,16 +16,10 @@ Covers:
 """
 
 import sqlite3
-import sys
-import types
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-
-# Prevent cv2 import failure when app.services.__init__ loads image_extractor
-if "cv2" not in sys.modules:
-    sys.modules["cv2"] = types.ModuleType("cv2")
 
 from app.migrations.postgres.v025_clear_stale_game_storage_refs import (
     V025ClearStaleGameStorageRefs,

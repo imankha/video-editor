@@ -724,14 +724,10 @@ describe('RecapPlayerModal - per-layer recaps (T5710)', () => {
     expect(screen.queryByRole('button', { name: 'Team plays' })).toBeNull();
   });
 
-  it('renders above QuestPanel\'s floating nudge (z-[100] > QuestPanel\'s z-50), so the Team Recap tab is always clickable', async () => {
-    // Regression for the T5710 QA finding: the tab bar is now ALWAYS present
-    // once a game has clips on either layer (pre-T5710 it only rendered with
-    // Highlights), so this collision became reachable on a core interaction
-    // for exactly the new-user cohort this epic targets (active onboarding
-    // quest = incomplete Annotate/Extract flow). QuestPanel's floating nudge
-    // is `fixed z-40` (T8120 lowered it below Z.MODAL); this modal (z-[100])
-    // out-ranks it.
+  it('renders on the top-of-stack z-[100] tier, so the Team Recap tab is always clickable', async () => {
+    // Regression for the T5710 QA finding: the tab bar is ALWAYS present once
+    // a game has clips on either layer, so any floating chrome must sit below
+    // this modal (z-[100]).
     globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_WITH_CLIPS);
     const { container } = render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
     await waitFor(() => screen.getByTestId('playback-controls'));

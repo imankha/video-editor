@@ -111,7 +111,6 @@ def test_query_profile_never_chooses_where_a_write_lands(client):
 
 @pytest.mark.parametrize("path", [
     f"/api/games/{GAME_ID}/video",
-    f"/api/games/{GAME_ID}/stream",
     "/api/downloads/1/stream",
     "/api/projects/1/working_video/stream",
     "/api/clips/projects/1/clips/1/stream",

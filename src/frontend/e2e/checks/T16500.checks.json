@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T16500:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16500_dead_server_code.py -q -p no:cacheprovider --noconftest -k 'dead_file or no_caller'"
+    },
+    "T16500:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16500_dead_server_code.py -q -p no:cacheprovider --noconftest -k test_changes && python3 tests/t16500_backend_suite_check.py"
+    },
+    "T16500:C3": {
+      "kind": "code",
+      "command": "cd src/backend && python3 -m pytest tests/test_t16500_dead_server_code.py -q -p no:cacheprovider --noconftest -k route_table"
+    }
+  }
+}

@@ -32,12 +32,6 @@ vi.mock('../stores/galleryStore', () => {
   useGalleryStore.getState = () => api;
   return { useGalleryStore };
 });
-vi.mock('../stores/questStore', () => {
-  const api = { recordAchievement: vi.fn() };
-  const useQuestStore = () => api;
-  useQuestStore.getState = () => api;
-  return { useQuestStore };
-});
 vi.mock('./shared/Toast', () => ({
   toast: { success: (...a) => toastSuccessMock(...a), error: (...a) => toastErrorMock(...a) },
 }));

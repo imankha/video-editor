@@ -12,17 +12,12 @@ game_storage_refs instead of walking every user's R2 profile listing.
 
 import logging
 import sqlite3
-import sys
-import types
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 from psycopg2.extras import execute_values
-
-if "cv2" not in sys.modules:
-    sys.modules["cv2"] = types.ModuleType("cv2")
 
 M = "app.services.sweep_scheduler"
 N_USERS = 10_000

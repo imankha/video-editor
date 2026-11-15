@@ -14,11 +14,6 @@ from app.analytics import (
     create_user_segment,
     record_milestone,
 )
-from app.routers.quests import (
-    _STEP_ACHIEVEMENT_KEYS,
-    ACHIEVEMENT_TO_MILESTONE,
-    KNOWN_ACHIEVEMENT_KEYS,
-)
 from app.services.auth_db import create_user
 
 BEACONS = ("add_game_opened", "upload_file_selected")
@@ -69,17 +64,6 @@ class TestPreUploadBeaconRegistration:
         # None label would crash the funnel dashboard for every step.
         for event in BEACONS:
             assert FLOW_EVENTS[event]["label"], f"{event} needs a non-None label"
-
-    def test_bridged_from_frontend_achievement(self, pg_conn):
-        # The only frontend->milestone transport is the achievement POST bridge.
-        for event in BEACONS:
-            assert event in KNOWN_ACHIEVEMENT_KEYS
-            assert ACHIEVEMENT_TO_MILESTONE[event] == event
-
-    def test_not_quest_steps(self, pg_conn):
-        # Analytics-only: they must NOT ride the quest-step batched query.
-        for event in BEACONS:
-            assert event not in _STEP_ACHIEVEMENT_KEYS
 
 
 class TestPreUploadBeaconRecording:

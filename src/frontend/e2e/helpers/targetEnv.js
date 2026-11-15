@@ -404,15 +404,9 @@ export const LOCAL_ONLY_SPECS = [
   },
   {
     file: 'new-user-flow.spec.js',
-    category: 'vite-module',
-    depends: ['/src/stores/questStore.js', 'local test-data video', 'execSync'],
-    reason: 'EMPTY new-user flow: seeds quest state via an in-page /src/stores import and uploads a local test video / shells out; the /src paths 404 on a deployed BUILD.',
-  },
-  {
-    file: 'T4780-tutorial-quest-steps.spec.js',
-    category: 'vite-module',
-    depends: ['/src/stores/questStore.js', '/src/config/questDefinitions.jsx', '/src/config/tutorialVideos.js'],
-    reason: 'asserts quest-step definitions via in-page /src imports on an EMPTY test-login session; the /src paths 404 on a deployed BUILD.',
+    category: 'local-fixture',
+    depends: ['local test-data video', 'execSync'],
+    reason: 'EMPTY new-user flow: uploads a local test video and shells out to ffmpeg; neither exists against a deployed BUILD.',
   },
   {
     file: 'T4860-admin-bulk-actions.spec.js',

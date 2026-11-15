@@ -36,7 +36,6 @@ TABLES_TO_CLEAR = [
     "working_videos",
     "final_videos",
     "export_jobs",
-    "achievements",
     "before_after_tracks",
     "pending_uploads",
 ]
