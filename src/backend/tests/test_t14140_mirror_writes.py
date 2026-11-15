@@ -10,17 +10,12 @@ PG-driven sweep can never miss a profile that still holds a live ref.
 
 import importlib.util
 import sqlite3
-import sys
-import types
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-
-if "cv2" not in sys.modules:
-    sys.modules["cv2"] = types.ModuleType("cv2")
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 

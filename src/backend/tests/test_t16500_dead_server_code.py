@@ -133,7 +133,13 @@ DELETED_NAMES = [
     "{GAME_ID}/stream",
     "list_recent_exports",
     *(Path(p).name for p in DELETED_TESTS),
+    # The cv2 stubs only existed for image_extractor (test_no_test_stubs_cv2),
+    # and their `import sys` / `import types` go with them.
+    'sys.modules["cv2"]',
+    '"cv2" not in sys.modules',
+    "Prevent cv2 import failure",
 ]
+STUB_IMPORTS = {"import sys", "import types"}
 
 
 def _git(*args):
@@ -172,7 +178,8 @@ def test_t16500_test_changes_are_only_the_deletions():
             diff = _git("show", "--format=", "-U0", commit, "--", path).splitlines()
             removed = [d[1:] for d in diff if d.startswith("-") and not d.startswith("---") and d[1:].strip()]
             added = [d[1:] for d in diff if d.startswith("+") and not d.startswith("+++") and d[1:].strip()]
-            unforced = [r for r in removed if not any(name in r for name in DELETED_NAMES)]
+            unforced = [r for r in removed
+                        if r not in STUB_IMPORTS and not any(name in r for name in DELETED_NAMES)]
             if unforced:
                 problems.append(f"{commit[:9]} {path} removed lines that name no deleted code: {unforced}")
             if len(added) > len(removed):
@@ -184,3 +191,18 @@ def test_t16500_test_changes_are_only_the_deletions():
                     problems.append(f"{commit[:9]} {path} test functions changed: {sorted(set(before) ^ set(after))}")
     assert deleted == DELETED_TESTS, f"deleted tests: {sorted(deleted)}"
     assert problems == [], "\n".join(problems)
+
+
+def test_no_test_stubs_cv2():
+    # The tests stubbed cv2 only because app.services' __init__ imported the
+    # deleted image_extractor (which imports cv2). Without that, a stub installed
+    # at collection is the first cv2 in the process, so every cv2 test collected
+    # after it in the same pytest run gets an empty module (CI shard 3).
+    result = subprocess.run(
+        ["git", "grep", "-n", "-F", "-e", 'sys.modules["cv2"] =', "--", "src/backend/tests",
+         ":!src/backend/tests/test_t16500_dead_server_code.py"],
+        cwd=REPO, capture_output=True, text=True, timeout=300,
+    )
+    assert result.returncode in (0, 1), result.stderr
+    hits = result.stdout.splitlines()
+    assert hits == [], "tests that stub cv2:\n" + "\n".join(hits)
