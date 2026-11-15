@@ -664,8 +664,31 @@ def ci_failure_report(branch, head, log_lines=120):
                              check=False).stdout or ""
     except (OSError, subprocess.SubprocessError, ValueError, StopIteration, KeyError) as exc:
         return f"Could not fetch the Branch CI run for {head[:9]} ({exc}); run `gh run list --branch {branch}`."
-    tail = "\n".join(log.splitlines()[-log_lines:])
-    return f"Run {run_id}, failed jobs: {', '.join(failed) or 'unknown'}.\nLast {log_lines} failed-step log lines:\n{tail}"
+    return f"Run {run_id}, failed jobs: {', '.join(failed) or 'unknown'}.\n" + failure_excerpt(log, log_lines)
+
+
+# Lines that name what failed, across pytest, vitest, playwright, unittest and shell steps.
+FAILURE_LINE = re.compile(r"FAIL|Error|assert|Expected|Received|Traceback|^E\s|##\[error\]|failed|❯ \S+:\d+",
+                          re.IGNORECASE)
+
+
+def failure_excerpt(log, log_lines=120):
+    """The failing lines of each failed job, then each job's tail. One tail of the combined log showed only the
+    last job, often the `ci-ready` aggregator, so a fix worker never saw the assertion: g-t16470-4's fix round
+    committed nothing twice on a GameTile test whose Expected/Received never reached it (2026-11-15)."""
+    jobs = {}
+    for line in log.splitlines():
+        job, _, rest = line.partition("\t")
+        jobs.setdefault(job, []).append(re.sub(r"\x1b\[[0-9;]*m", "", rest))
+    per_job = max(20, log_lines // max(1, len(jobs)))
+    parts = []
+    for job, lines in jobs.items():
+        hits = [i for i, text in enumerate(lines) if FAILURE_LINE.search(text)]
+        keep = sorted({j for i in hits for j in range(max(0, i - 2), min(len(lines), i + 6))})[:per_job * 2]
+        tail = lines[-min(per_job, 30):]
+        parts.append(f"--- {job}: failing lines ---\n" + "\n".join(lines[i] for i in keep)
+                     + f"\n--- {job}: last {len(tail)} lines ---\n" + "\n".join(tail))
+    return "\n".join(parts) or "No failed-step log came back from `gh run view --log-failed`."
 
 
 def ingest_transcripts(slug, group):
@@ -1836,6 +1859,16 @@ def budget_left_minutes(group):
     return group.get("verify_budget_min", VERIFY_BUDGET_MINUTES) - group.get("verify_spent_s", 0) / 60
 
 
+def renew_round_budget(checkout, group, round_number):
+    """Owner rule 2026-11-15: the verify budget renews at each round. A shared budget left a fix round's
+    re-check 0 minutes, so g-t16470-4's round 2 skipped the review of all 17 criteria. A restarted loop that
+    resumes the same round keeps what that round already spent."""
+    if group.get("verify_budget_round") != round_number:
+        group["verify_budget_round"] = round_number
+        group["verify_spent_s"] = 0
+        save_group(checkout, group)
+
+
 def spend_budget(group, checkout, seconds):
     group["verify_spent_s"] = group.get("verify_spent_s", 0) + seconds
     save_group(checkout, group)
@@ -2191,6 +2224,7 @@ def autoland(args):
             write_lf(checkout / VERIFY_FILE, json.dumps({"head": head, "criteria": [], "bugs": [
                 {"scope": "group", "title": "pre-land check failed", "actual": check.stdout + check.stderr}]}, indent=2) + "\n")
         else:
+            renew_round_budget(checkout, group, round_number)
             try:
                 # `approve` re-enters here: the clean verdict on this exact HEAD stands, nothing is re-checked.
                 verdict = (approved_verdict(checkout, group, head) or owner_changes_verdict(checkout, group, head)
