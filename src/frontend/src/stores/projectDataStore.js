@@ -203,66 +203,6 @@ export const useProjectDataStore = create((set, get) => ({
     }
   },
 
-  saveFramingEdits: async (projectId, clipId, framingData) => {
-    if (!projectId) return { success: false };
-
-    try {
-      const updatePayload = {};
-
-      if (framingData.cropKeyframes !== undefined) {
-        updatePayload.crop_data = framingData.cropKeyframes;
-      }
-      if (framingData.segments !== undefined) {
-        updatePayload.segments_data = framingData.segments;
-      }
-      // T280: timing_data is redundant with segments_data.trimRange — stop writing it
-
-      if (Object.keys(updatePayload).length === 0) {
-        return { success: true };
-      }
-
-      const response = await apiFetch(
-        `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatePayload)
-        }
-      );
-      if (!response.ok) throw new Error('Failed to save framing edits');
-
-      const result = await response.json();
-
-      if (result.refresh_required) {
-        await get().fetchClips(projectId);
-        return {
-          success: true,
-          newClipId: result.new_clip_id,
-          newVersion: result.new_version
-        };
-      } else {
-        // Update local clip with parsed objects (not JSON strings)
-        const localUpdate = {};
-        if (framingData.cropKeyframes !== undefined) {
-          localUpdate.crop_data = framingData.cropKeyframes;
-        }
-        if (framingData.segments !== undefined) {
-          localUpdate.segments_data = framingData.segments;
-        }
-        set((state) => ({
-          clips: state.clips.map(c =>
-            c.id === clipId ? { ...c, ...localUpdate } : c
-          ),
-        }));
-      }
-
-      return { success: true };
-    } catch (err) {
-      console.error('[projectDataStore] saveFramingEdits error:', err);
-      return { success: false };
-    }
-  },
-
   getClipFileUrl: (clipId, projectId) => {
     const clip = get().clips.find(c => c.id === clipId);
     if (clip?.file_url) return clip.file_url;

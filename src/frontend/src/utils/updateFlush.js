@@ -8,13 +8,9 @@
  *      a retry is already in flight (triggered elsewhere), wait for it
  *      instead of racing a second one / misreading its early-return guard as
  *      a failure.
- *   2. Framing fallback: only if a Framing editor is mounted with an
- *      uncommitted full-state save registered AND the store's own dirty flag
- *      (framingChangedSinceExport) says something actually changed -- a
- *      clean or mid-restore editor must NOT trigger a full-state save (that
- *      is exactly the T4020 shadow-save class of bug: a redundant save on
- *      unchanged/half-loaded state can write an empty version).
- *   3. Barrier: POST /api/sync/flush-verify and AWAIT confirmation that
+ *   (T4400: Framing has no full-state save to flush; each gesture already
+ *   wrote its own change, so the old Framing fallback step is gone.)
+ *   2. Barrier: POST /api/sync/flush-verify and AWAIT confirmation that
  *      whatever is dirty landed in R2. A 401 means there is no session (no
  *      per-user state could possibly be dirty) -- that is not a flush
  *      failure, so it resolves rather than throwing. Any other non-ok
@@ -33,7 +29,6 @@
 
 import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
-import { useFocusStore } from '../stores/focusStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
 import { SPOTLIGHT_COPY } from '../config/displayNames';
 
@@ -67,11 +62,6 @@ async function drainOverlayQueue() {
 
 export async function flushDurableState() {
   await drainOverlayQueue();
-
-  const { activeSaveCurrentClipState, framingChangedSinceExport } = useFocusStore.getState();
-  if (activeSaveCurrentClipState && framingChangedSinceExport) {
-    await activeSaveCurrentClipState();
-  }
 
   const response = await apiFetch(`${API_BASE}/api/sync/flush-verify`, { method: 'POST' });
   if (response.status === 401) {

@@ -110,7 +110,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   clips,
   globalAspectRatio,
   onExportComplete,
-  saveCurrentClipState,
   // T10650: Focus "Back to Preview" — derived + owned by FocusScreen, threaded
   // straight to the presentational ExportButtonView (ExportButtonContainer is
   // untouched: this is not an export).
@@ -136,7 +135,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
     clips,
     globalAspectRatio,
     onExportComplete,
-    saveCurrentClipState,
   });
 
   // View: pure presentation.
@@ -332,7 +330,6 @@ export function FocusModeView({
   onIncludeAudioChange,
   onProceedToOverlay,
   onExportComplete,
-  saveCurrentClipState,  // For backend-authoritative export
 
   // T10650: Focus "Back to Preview" CTA state (derived in FocusScreen)
   framingCtaMode,
@@ -805,7 +802,6 @@ export function FocusModeView({
         clipsWithCurrentState={clipsWithCurrentState}
         onProceedToOverlay={onProceedToOverlay}
         onExportComplete={onExportComplete}
-        saveCurrentClipState={saveCurrentClipState}
         exportButtonRef={exportButtonRef}
       />
     );
@@ -1299,7 +1295,6 @@ export function FocusModeView({
             clips={hasClips ? clipsWithCurrentState : null}
             globalAspectRatio={globalAspectRatio}
             onExportComplete={onExportComplete}
-            saveCurrentClipState={saveCurrentClipState}
             framingCtaMode={framingCtaMode}
             showBackToPreview={showBackToPreview}
             onBackToPreview={onBackToPreview}

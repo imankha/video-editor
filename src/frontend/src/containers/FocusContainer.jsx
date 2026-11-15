@@ -123,9 +123,6 @@ export function FocusContainer({
   // Video metadata cache (keyed by clip ID)
   clipMetadataCache = {},
 
-  // Project clips hook (for backend persistence)
-  saveFramingEdits,
-
   // Callbacks
   onCropChange,
   onUserEdit,
@@ -291,48 +288,6 @@ export function FocusContainer({
   }, [duration, projectClipId, segmentBoundaries, segmentSpeeds, trimRange]);
 
   /**
-   * Save current clip's framing state to backend
-   */
-  const saveCurrentClipState = useCallback(async () => {
-    if (!projectClipId || !selectedProjectId) return;
-
-    const currentClip = clips.find(c => c.id === projectClipId);
-    if (!currentClip?.id) return;
-
-    const segmentState = {
-      boundaries: segmentBoundaries,
-      segmentSpeeds: segmentSpeeds,
-      trimRange: trimRange,
-    };
-
-    try {
-      // Save to local clip manager state
-      // T280: No timing_data — trimRange lives in segments_data only
-      updateClipData(projectClipId, {
-        segments_data: segmentState,
-        crop_data: keyframes,
-      });
-
-      // Save to backend (use frame-based keyframes for storage - FFmpeg conversion happens at export)
-      if (saveFramingEdits) {
-        const result = await saveFramingEdits(currentClip.id, {
-          cropKeyframes: keyframes,  // Frame-based - NOT time-based
-          segments: segmentState,    // Internal format preserves segment indices
-          trimRange: trimRange
-        });
-
-        // If backend created a new version, update local clip's id
-        if (result?.newClipId) {
-          updateClipData(projectClipId, { id: result.newClipId });
-        }
-      }
-
-    } catch (e) {
-      console.error('[FocusContainer] Failed to save framing state:', e);
-    }
-  }, [projectClipId, selectedProjectId, clips, keyframes, segmentBoundaries, segmentSpeeds, trimRange, updateClipData, saveFramingEdits, getKeyframesForExport]);
-
-  /**
    * Handle crop changes during drag/resize (live preview)
    */
   const handleCropChange = useCallback((newCrop) => {
@@ -436,8 +391,7 @@ export function FocusContainer({
         data: { x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin },
         actions: cropPersistActions(selectedProjectId, clipId),
         // Optimistically update clip store so sidebar framing indicator reflects the
-        // change immediately. (crop_data in the store is otherwise only written on
-        // export via saveCurrentClipState.) Store rollback is keyed by clip id — always safe.
+        // change immediately. Store rollback is keyed by clip id — always safe.
         optimistic: callerClipId && {
           apply: (frame, d) => updateClipData(callerClipId, {
             crop_data: [...previousStoreKfs.filter(kf => kf.frame !== frame), { frame, ...d }],
@@ -1141,8 +1095,8 @@ export function FocusContainer({
     clipHasUserEditsRef.current = false;
   }, [projectClipId]);
 
-  // NOTE: Auto-save effect removed - gesture-based actions save immediately on each user action
-  // saveCurrentClipState is still available for explicit saves (export only)
+  // T4400: every edit is saved by its own gesture handler above. There is no
+  // full-state save: the render reads what those gestures wrote.
 
   return {
     // Derived state
@@ -1174,8 +1128,6 @@ export function FocusContainer({
     handleSetRotation,
     handleUndoFraming,
 
-    // Persistence
-    saveCurrentClipState,
     clipHasUserEditsRef,
   };
 }
