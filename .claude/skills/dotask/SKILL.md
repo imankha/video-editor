@@ -177,7 +177,7 @@ runs on the dev stack and on staging), `code` (one command: a grep or one target
    become a `group` bug for a fix round, then the re-check and a new `READY_TO_TEST` for the new HEAD (PRs #720,
    #722, #723 waited on a person for this, 2026-11-08). It counts against `MAX_FIX_ROUNDS`.
 
-**One verify budget per group: 30 minutes** (owner rule 2026-11-09; `DOTASK_VERIFY_BUDGET_MIN` overrides),
+**One verify budget per group: 3 minutes per acceptance criterion** (owner rule 2026-11-15, was a flat 30 minutes; `DOTASK_VERIFY_BUDGET_MIN` overrides),
 shared by every round's stack start, checks and review (`verify_spent_s` in the group file, so a restart keeps
 it). The reviewer gets what is left, at most 15 minutes. When the budget is spent, nothing more is checked:
 what is left is recorded `skipped` (`VERIFY_SKIPPED` status line), never a pass or a fail, and the PR opens
