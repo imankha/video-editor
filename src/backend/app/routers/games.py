@@ -4023,11 +4023,17 @@ async def get_game_poster(
     # to serve does a game with a recap fall to the recap-derived card.
     # ensure_recap_poster operates on GLOBAL (env-prefixed) keys, same scheme as
     # the share-unfurl path (_recap_r2_key/_recap_poster_r2_key in shares.py).
-    if ensure_game_source_poster(user_id, profile_id, game_id):
+    # T16560: both makers block (R2 HEAD/presign + an ffmpeg frame seek), so they run
+    # in a thread; on the event loop, the first Home visit after T10540 remade every
+    # card one tile at a time and stalled every other request meanwhile.
+    # asyncio.to_thread copies the request's user/profile ContextVars.
+    if await asyncio.to_thread(ensure_game_source_poster, user_id, profile_id, game_id):
         pass
     elif row["recap_video_url"]:
         recap_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
-        if not ensure_recap_poster(recap_key, card_poster_key, resize_width=480, jpeg_quality=3):
+        if not await asyncio.to_thread(
+            ensure_recap_poster, recap_key, card_poster_key, resize_width=480, jpeg_quality=3
+        ):
             log_video_resolution(
                 logger, kind="game_poster", outcome=VideoServeOutcome.MISSING,
                 key=card_poster_key, entity_id=game_id, user_id=user_id,
