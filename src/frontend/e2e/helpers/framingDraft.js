@@ -46,9 +46,10 @@ export async function openFramingDraft(
   page,
   { waitFor = DEFAULT_CROP_READY, titleRe = FRAMING_CHIP_TITLE_RE, chipTimeout = 30000, readyTimeout = 90000 } = {},
 ) {
-  await page.goto('/');
+  await page.goto('/home');
+  // '/home', not '/': '/' resumes the account's last editor (resume_point).
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Clips' }).click();
+  await page.getByTestId('home-tab-clips').click();
   const chip = page.getByTitle(titleRe).first();
   await chip.waitFor({ timeout: chipTimeout });
   await chip.click();

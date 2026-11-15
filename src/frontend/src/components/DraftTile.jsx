@@ -515,7 +515,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </button>
       )}
       {isComplete && (
-        <button onClick={(e) => { e.stopPropagation(); handleOverlayClick(); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
+        <button data-testid="draft-menu-edit-spotlight" onClick={(e) => { e.stopPropagation(); handleOverlayClick(); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
           <Layers size={18} className="text-gray-300 flex-shrink-0" />
           <span className="text-gray-200">{HOME_TILE.EDIT_SPOTLIGHT}</span>
         </button>
@@ -785,7 +785,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title={HOME_TILE.EDIT_HIGHLIGHT} className={actionBtnClass} />
           )}
           {isComplete && (
-            <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title={HOME_TILE.EDIT_SPOTLIGHT} className={actionBtnClass} />
+            <Button data-testid="draft-edit-spotlight" variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title={HOME_TILE.EDIT_SPOTLIGHT} className={actionBtnClass} />
           )}
           {isComplete && !isReadyToPublish && (
             <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={HOME_TILE.moveToHighlightsHint()} className={actionBtnClass} />

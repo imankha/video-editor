@@ -17,8 +17,8 @@
  *   1. Probe every In-Overlay draft's working video the way T6100 did — playback-url, then a
  *      Range GET on the presigned R2 URL — to find one that streams (206), classifying the
  *      rest as dangling.
- *   2. Open that specific draft deterministically (its DraftTile carries the project id in its
- *      poster `src`, so we target the card directly — no dependence on list order or on the
+ *   2. Open that specific draft deterministically (its DraftTile carries `data-project-id`, so we
+ *      target the card directly — no dependence on list order or on the
  *      `.first()` gamble), then gate on `waitForRealVideoReady` (the one readiness contract).
  *   3. If NO draft streams, return a loud verdict NAMING the dangling refs so the spec skips
  *      honestly (never a vacuous pass, never a domain assertion against a placeholder).
@@ -92,73 +92,79 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3, exclud
     };
   }
 
-  await page.goto('/');
-  await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: 'Clips' }).click();
-  // The Clips tab used to carry an "In Spotlight (n)" filter chip; the current tab lists every draft
-  // unfiltered. Narrow with the chip when it exists; otherwise the poster-src lookup below still finds the card.
-  const overlayFilter = page.getByText(/^In Spotlight \(\d+\)$/);
-  await page.locator('[data-testid="project-card"]').first().waitFor({ timeout: 30000 }).catch(() => {});
-  if ((await overlayFilter.count()) > 0) await overlayFilter.first().click();
+  const openPlaysTab = async () => {
+    // '/home', not '/': '/' resumes the account's last editor (resume_point), so an account whose
+    // last stop was a Spotlight draft never shows the Plays list there.
+    await page.goto('/home');
+    await page.waitForLoadState('domcontentloaded');
+    // T11905: located by test id. The tab was renamed Clips -> Plays and the helper
+    // silently stopped opening anything; a copy change must not do that again.
+    await page.getByTestId('home-tab-clips').click();
+    await page.locator('[data-testid="project-card"]').first().waitFor({ timeout: 30000 }).catch(() => {});
+  };
+  await openPlaysTab();
 
-  // T7750: a streamable working video is NECESSARY but not SUFFICIENT. The resolved tile can be
-  // in a UI state (e.g. mid-publish) exposing NEITHER the hover-rail "Open in Spotlight" button NOR
-  // the kebab entry, so a fixed loadable[0] used to hang on a card that could never be opened.
-  // Walk the loadable candidates and open the FIRST whose "Open in Spotlight" affordance actually
-  // exists; if opening or hydration fails, record why and fall through to the next candidate.
+  // T7750: a streamable working video is NECESSARY but not SUFFICIENT. Walk the loadable
+  // candidates and open the FIRST one that opens and hydrates; record why each other one failed.
+  // How a tile opens Spotlight (T11905, test ids so a copy change cannot silently skip specs):
+  //   - a finished draft: the hover-rail `draft-edit-spotlight` button, or on a ready-to-publish
+  //     tile (no hover rail, T6180) the kebab's `draft-menu-edit-spotlight` entry;
+  //   - an unfinished draft with a working video has no Spotlight button: its card body opens
+  //     the furthest stage reached, which is Spotlight (DraftTile handleCardClick).
   const skipped = [];
   for (const targetId of loadable) {
-    // Open the LOADABLE draft deterministically: its DraftTile poster src carries the project
-    // id, so we target the card directly (no `.first()` gamble on list order).
-    const card = page
-      .locator('[data-testid="project-card"]')
-      .filter({ has: page.locator(`img[src*="/projects/${targetId}/poster"]`) })
-      .first();
-    if ((await card.count()) === 0) {
-      skipped.push(`project ${targetId}: no card in the In-Overlay list`);
+    // Open the LOADABLE draft deterministically by its card's data-project-id (no `.first()`
+    // gamble on list order; the poster img it used to match is removed when the poster 404s).
+    const card = page.locator(`[data-testid="project-card"][data-project-id="${targetId}"]`).first();
+    // The Plays list re-renders while it loads, so wait for THIS card (not just any card) and let
+    // hover() scroll it into view: it re-resolves the card if a re-render detaches it.
+    const cardShown = await card.waitFor({ timeout: 30000 }).then(() => true, () => false);
+    if (!cardShown) {
+      skipped.push(`project ${targetId}: no card in the Plays tab`);
       continue;
     }
-    await card.scrollIntoViewIfNeeded();
     await card.hover(); // flips the hover-gated tile actions to pointer-events:auto
 
-    // Prefer the hover-rail icon button; fall back to the T6180 ready-to-publish kebab menu.
-    // If NEITHER action exists on this tile, it's an unopenable state — skip to the next.
-    const hoverBtn = card.getByRole('button', { name: 'Open in Spotlight' });
+    const hoverBtn = card.getByTestId('draft-edit-spotlight');
+    const kebab = card.getByRole('button', { name: 'More actions' });
     if ((await hoverBtn.count()) > 0) {
       await hoverBtn.first().click();
+    } else if (await kebabHasSpotlight(page, kebab)) {
+      await page.getByTestId('draft-menu-edit-spotlight').first().click();
     } else {
-      const kebab = card.getByRole('button', { name: 'More actions' });
-      if ((await kebab.count()) === 0) {
-        skipped.push(`project ${targetId}: no hover-rail "Open in Spotlight" and no kebab (unopenable tile state)`);
-        continue;
-      }
-      await kebab.click();
-      const menuItem = page.getByRole('button', { name: 'Open in Spotlight' });
-      if ((await menuItem.count()) === 0) {
-        await page.keyboard.press('Escape'); // dismiss the menu before the next candidate
-        skipped.push(`project ${targetId}: kebab has no "Open in Spotlight" entry`);
-        continue;
-      }
-      await menuItem.first().click();
+      await card.click();
     }
 
     const stage = page.getByTestId('overlay-video-stage').first();
-    await stage.waitFor({ timeout: 60000 });
+    const stageShown = await stage.waitFor({ timeout: 60000 }).then(() => true, () => false);
+    if (!stageShown) {
+      skipped.push(`project ${targetId}: opening its tile did not reach the Spotlight stage (url ${page.url()})`);
+      await openPlaysTab();
+      continue;
+    }
     const verdict = await waitForRealVideoReady(page, { requireAspectRatio: true, minReadyState });
     if (verdict.ready) return { ok: true, projectId: targetId };
 
     // Streamable yet the stage never hydrated in-app — reset and try the next candidate.
     skipped.push(`project ${targetId}: probed streamable (R2 206) yet overlay never hydrated: ${verdict.reason}`);
-    await page.goto('/');
-    await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: 'Clips' }).click();
-    if ((await overlayFilter.count()) > 0) await overlayFilter.first().click();
+    await openPlaysTab();
   }
 
   return {
     ok: false,
     reason:
       `No streamable In-Overlay draft [${loadable.join(', ')}] could be opened in Overlay ` +
-      `(none exposed an "Open in Spotlight" affordance / hydrated):\n  ${skipped.join('\n  ')}`,
+      `(none reached a hydrated Spotlight stage):\n  ${skipped.join('\n  ')}`,
   };
+}
+
+/** Open the tile's kebab; true when it carries the Edit spotlight entry, else close it again. */
+async function kebabHasSpotlight(page, kebab) {
+  if ((await kebab.count()) === 0) return false;
+  await kebab.first().click();
+  if ((await page.getByTestId('draft-menu-edit-spotlight').count()) > 0) return true;
+  // The menu has no Escape handler; a second press on the kebab point toggles it shut (on a touch
+  // sheet that point is the sheet's backdrop, which also closes it).
+  await kebab.first().click({ force: true });
+  return false;
 }

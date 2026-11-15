@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T11905:C1": {"kind": "browser"},
+    "T11905:C2": {"kind": "browser"},
+    "T11905:C3": {"kind": "code", "command": "! grep -rnE \"Open in Spotlight|Create Reel\" src/frontend/e2e/helpers src/frontend/e2e/manifests"}
+  }
+}

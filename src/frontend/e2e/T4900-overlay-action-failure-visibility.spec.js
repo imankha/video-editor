@@ -158,14 +158,14 @@ test.describe('T4900 overlay action failure visibility', () => {
     // The export button tooltip/title should warn about unsaved edits.
     // ExportButtonContainer computes buttonTitle as "Some edits haven't saved..."
     // when hasUnsavedOverlayFailures is true.
-    const createReelBtn = page.getByRole('button', { name: /create reel/i });
+    const createReelBtn = page.locator('[data-testid="primary-cta"]:visible').first();
     if (await createReelBtn.isVisible()) {
       const title = await createReelBtn.getAttribute('title');
       expect(title).toMatch(/haven't saved|unsaved/i);
       await saveEvidence(page, 'T4900-D-export-gate-button-warned');
       console.log('[T4900] D PASS: export button title warns about unsaved edits');
 
-      // Clicking Create Reel should NOT fire a render POST when failures exist
+      // Clicking the primary CTA should NOT fire a render POST when failures exist
       const renderCallsBefore = networkCalls.filter(n => n.url.includes('render-overlay')).length;
       await createReelBtn.click();
       await page.waitForTimeout(500);
@@ -174,7 +174,7 @@ test.describe('T4900 overlay action failure visibility', () => {
       await saveEvidence(page, 'T4900-D-export-gate-no-render-fired');
       console.log('[T4900] D PASS: export gate blocked render POST while edits unsaved');
     } else {
-      console.log('[T4900] D: Create Reel button not visible — skipping export gate click test');
+      console.log('[T4900] D: overlay primary CTA not visible — skipping export gate click test');
     }
 
     // ------------------------------------------------------------------ E: retry-success
