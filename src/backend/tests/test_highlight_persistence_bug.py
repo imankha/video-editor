@@ -378,10 +378,14 @@ class TestLowLevelTransformFunctions:
 
         print(f"Crop at frame 22: {crop}")
 
-        # Should be interpolated between frame 0 and frame 44
-        # Frame 22 is 50% between 0 and 44
-        expected_x = (814.893 + 700.9) / 2
-        assert abs(crop['x'] - expected_x) < 1, f"Expected x ~{expected_x}, got {crop['x']}"
+        # Frame 22 is 50% between 0 and 44: on the renderers' Catmull-Rom curve
+        # (T4420), not the straight-line midpoint (757.8965)
+        p0 = p1 = 814.893
+        p2, p3 = 700.9, 814.893
+        expected_x = 0.5 * (2 * p1 + (-p0 + p2) * 0.5
+                            + (2 * p0 - 5 * p1 + 4 * p2 - p3) * 0.25
+                            + (-p0 + 3 * p1 - 3 * p2 + p3) * 0.125)
+        assert crop['x'] == pytest.approx(expected_x), f"Expected x ~{expected_x}, got {crop['x']}"
 
     def test_raw_coords_visibility_check(self):
         """

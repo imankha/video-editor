@@ -1717,9 +1717,9 @@ keyframed** — camera tilt is constant for a recording.
   frame / overlay moves to clicked frame) get decided there.
 - **Backend crop geometry fallback** (clips.py:401-408): `x or 0, width or 640...` fabricates
   geometry into the DB — flagged by audit A10 → T4280 sweep. Don't imitate.
-- **Backend interpolation divergence**: `interpolation.interpolate_crop` is Catmull-Rom
-  (interpolation.py:51-87) but `generate_crop_filter` builds a LINEAR FFmpeg expression (L188-195).
-  Plus 4 Catmull-Rom copies across local/Modal paths → T4420.
+- **Backend interpolation**: Spotlight mapping (`highlight_transform.interpolate_crop_at_frame`) uses the renderers'
+  Catmull-Rom curve via `KeyframeInterpolator.interpolate_crop` (was linear until T4420: ~56 px off at a mid frame with
+  3 keyframes). `interpolation.generate_crop_filter` (LINEAR FFmpeg expr) only serves dead `POST /api/export/crop` (T16500).
 - **fps `|| 30` fallback landscape**: FocusScreen.jsx:219/541/623, useClipManager.js:46,
   projectDataStore.js:402, FocusContainer.jsx:238, overlay chain OverlayContainer.jsx:162/196/250;
   `videoUtils.timeToFrame/frameToTime` default 30. One canonical source is T4540 (audit C7).

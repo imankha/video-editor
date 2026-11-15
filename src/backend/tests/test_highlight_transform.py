@@ -326,11 +326,11 @@ class TestInterpolateCropAtFrame:
         assert crop['x'] == 100
 
     def test_interpolation(self, animated_crop_keyframes):
-        """Values are interpolated between keyframes"""
-        # At frame 75 (halfway between 0 and 150)
+        """Values follow the renderers' Catmull-Rom curve between keyframes (T4420)"""
+        # At frame 75 (halfway between 0 and 150); a straight line would give 125 / 65
         crop = interpolate_crop_at_frame(animated_crop_keyframes, 75)
-        assert crop['x'] == pytest.approx(125)  # Halfway between 100 and 150
-        assert crop['y'] == pytest.approx(65)   # Halfway between 50 and 80
+        assert crop['x'] == pytest.approx(128.125)
+        assert crop['y'] == pytest.approx(66.875)
 
 
 class TestWorkingCoordsToRawCoords:
