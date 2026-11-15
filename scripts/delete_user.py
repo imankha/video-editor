@@ -59,6 +59,13 @@ FLY_APPS = {
     "prod": "reel-ballers-api",
 }
 
+# Warm-up targets. Staging's API is served from api-staging.reelballers.com (T16370);
+# the Fly app name above is an identifier for the fly CLI, not a host.
+API_HOSTS = {
+    "staging": "https://api-staging.reelballers.com",
+    "prod": "https://reel-ballers-api.fly.dev",
+}
+
 
 def load_env(env_name: str) -> dict:
     env_file = PROJECT_ROOT / (".env" if env_name == "dev" else f".env.{env_name}")
@@ -184,7 +191,7 @@ def restart_fly(env_name: str) -> None:
             print(f"  {'restarted' if rr.returncode == 0 else 'FAILED'} {m['id']}")
         import urllib.request
         try:
-            urllib.request.urlopen(f"https://{app}.fly.dev/api/health", timeout=30)
+            urllib.request.urlopen(f"{API_HOSTS[env_name]}/api/health", timeout=30)
             print("  Server warmed")
         except Exception as e:
             print(f"  WARN: warmup failed: {e}")
