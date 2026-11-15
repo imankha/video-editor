@@ -442,6 +442,7 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.routers.admin.revenue.get_pg", mock_get_pg)
     monkeypatch.setattr("app.routers.admin.ops.get_pg", mock_get_pg)
     monkeypatch.setattr("app.routers.admin.credits.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.routers.admin.users.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.credit_ledger.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.credit_backfill.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.upload_failures.get_pg", mock_get_pg)

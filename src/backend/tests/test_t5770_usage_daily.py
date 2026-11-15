@@ -75,7 +75,7 @@ def _add_daily(user_id: str, days_ago: int, seconds: int):
 def _call_list_users():
     from unittest.mock import patch
 
-    from app.routers import admin
+    from app.routers.admin import users as admin
     with patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
         # T8020: list_users is now a plain sync def (off the event loop via the FastAPI
         # threadpool), so call it directly — no asyncio.run.
@@ -306,7 +306,7 @@ class TestBoundedQueries:
     def _measure(self, prefix, n):
         from unittest.mock import patch
 
-        from app.routers import admin
+        from app.routers.admin import users as admin
         for i in range(n):
             uid = f"{prefix}{i}"
             create_user(uid, email=f"{uid}@test.local")

@@ -50,7 +50,7 @@ def test_list_users_endpoint_includes_segmentless_with_null_fields(pg_conn):
     """GET /api/admin/users lists the segmentless user with NULL segment fields."""
     _seed_users()
 
-    from app.routers import admin
+    from app.routers.admin import users as admin
 
     with patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
         # Pass explicit args: calling the handler directly bypasses FastAPI's

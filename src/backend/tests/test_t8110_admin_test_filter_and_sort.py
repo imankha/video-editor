@@ -22,6 +22,7 @@ from fastapi import HTTPException
 
 from app.analytics import create_user_segment
 from app.routers import admin
+from app.routers.admin import users as admin_users
 from app.services import pg as pg_service
 from app.services.auth_db import create_user
 
@@ -57,8 +58,8 @@ def _list(**kwargs):
         sort_dir="desc", exclude_test=True,
     )
     params.update(kwargs)
-    with patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
-        return admin.list_users(**params)
+    with patch.object(admin_users.credit_ledger, "stats_for_admin", return_value={}):
+        return admin_users.list_users(**params)
 
 
 def _all_ids(**kwargs):
@@ -219,21 +220,21 @@ def test_mark_and_unmark_test_account_endpoint(pg_conn):
     create_user("user-a", email="a@test.local")
     create_user_segment("user-a", origin="organic", referrer_id=None, signup_method="google")
 
-    with patch.object(admin, "get_current_user_id", return_value="admin-user"):
-        res = admin.admin_mark_test_account("user-a", admin.TestAccountRequest(is_test=True))
+    with patch.object(admin_users, "get_current_user_id", return_value="admin-user"):
+        res = admin_users.admin_mark_test_account("user-a", admin_users.TestAccountRequest(is_test=True))
         assert res == {"user_id": "user-a", "is_test_account": True}
 
     # Flag persisted -> excluded from the Real view.
     assert "user-a" not in {u["user_id"] for u in _list(exclude_test=True, page_size=50)["users"]}
 
-    with patch.object(admin, "get_current_user_id", return_value="admin-user"):
-        admin.admin_mark_test_account("user-a", admin.TestAccountRequest(is_test=False))
+    with patch.object(admin_users, "get_current_user_id", return_value="admin-user"):
+        admin_users.admin_mark_test_account("user-a", admin_users.TestAccountRequest(is_test=False))
 
     assert "user-a" in {u["user_id"] for u in _list(exclude_test=True, page_size=50)["users"]}
 
 
 def test_mark_test_account_unknown_user_is_404(pg_conn):
-    with patch.object(admin, "get_current_user_id", return_value="admin-user"), \
+    with patch.object(admin_users, "get_current_user_id", return_value="admin-user"), \
          pytest.raises(HTTPException) as ei:
-        admin.admin_mark_test_account("user-c", admin.TestAccountRequest(is_test=True))
+        admin_users.admin_mark_test_account("user-c", admin_users.TestAccountRequest(is_test=True))
     assert ei.value.status_code == 404

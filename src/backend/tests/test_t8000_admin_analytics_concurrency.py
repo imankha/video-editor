@@ -269,13 +269,13 @@ def test_list_users_does_not_serialize_concurrent_requests(monkeypatch):
     threadpooled) not SERIALIZE (~N*DELAY, on the loop).
 
     list_users binds `get_pg` at MODULE import time (top-of-file `from ..services.pg import
-    get_pg`, used at the `with get_pg()` inside its body), so patching admin.get_pg is what
+    get_pg`, used at the `with get_pg()` inside its body), so patching admin.users.get_pg is what
     actually redirects it; we patch app.services.pg.get_pg too for symmetry. Verified
     counterfactually: reverting list_users to `async def` makes the burst ~N*t1 and fails.
     """
     monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg_listusers)
-    monkeypatch.setattr("app.routers.admin.get_pg", _blocking_get_pg_listusers)
+    monkeypatch.setattr("app.routers.admin.users.get_pg", _blocking_get_pg_listusers)
     _seed_owned_profile(monkeypatch)
 
     async def go():
@@ -336,6 +336,7 @@ def test_all_nine_admin_dashboard_handlers_are_sync_def():
     new get_admin_dashboard composer (which calls all of these inline, so it too must be
     sync all the way down)."""
     from app.routers import admin
+    from app.routers.admin import users as admin_users
     for name in (
         "analytics_funnel",
         "analytics_channels",
@@ -348,7 +349,7 @@ def test_all_nine_admin_dashboard_handlers_are_sync_def():
         "list_users",
         "get_admin_dashboard",
     ):
-        fn = getattr(admin, name)
+        fn = getattr(admin_users if name == "list_users" else admin, name)
         assert not inspect.iscoroutinefunction(fn), (
             f"{name} is async def — it must be a plain def so FastAPI runs its "
             f"blocking DB body in the threadpool, off the event loop (T8000/T8010/T8020)."
