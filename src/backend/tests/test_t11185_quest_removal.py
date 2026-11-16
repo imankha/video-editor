@@ -145,9 +145,11 @@ def test_profile_db_migration_drops_achievements(tmp_path):
     conn.execute(
         "CREATE TABLE achievements (key TEXT PRIMARY KEY, achieved_at TEXT DEFAULT (datetime('now')))"
     )
-    conn.execute(f"PRAGMA user_version = {RUNNER.latest_version - 1}")
-    pending = [m for m in RUNNER.migrations if m.version == RUNNER.latest_version]
-    assert pending, "no head profile_db migration"
+    # v062 drops the table; select it by version, not by head, so later
+    # migrations do not move this test onto a different migration.
+    conn.execute("PRAGMA user_version = 61")
+    pending = [m for m in RUNNER.migrations if m.version == 62]
+    assert pending, "no v062 profile_db migration"
     pending[0].up(conn)
     assert "achievements" not in _tables(conn)
     # Idempotent: a second run on a DB without the table is a no-op.
