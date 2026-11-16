@@ -32,7 +32,7 @@ below.
 | `/dotask T1 T2 ... --allow-overlap` | `bash scripts/dotask.sh start --allow-overlap T1 T2 ...` | Same as a normal start, but files shared with another live group are a warning, not a refusal; the kickoff tells the worker to rebase on master before PUSHREADY. |
 | `/dotask T1 T2 ... --capture` | `bash scripts/dotask.sh start --capture T1 T2 ...` | Same, plus: this group's `land` will run captured review/proof automatically. |
 | `/dotask autoland <slug>` | `bash scripts/dotask.sh autoland <slug>` | Runs the [verify loop](#automatic-landing-headless-default) by hand: a `--window` group, or a headless run that stopped. `--no-land` stops after a clean verdict. Relay the last status line. |
-| `/dotask resume <slug>` | `bash scripts/dotask.sh resume <slug>` | Continue a headless group that stopped (a BLOCKED question answered, a CONFLICT ruled, a crash, a reboot): the build loop for every task without a commit line, then autoland, which itself resumes a fix round's focused re-check. The first headless launch runs this same command. Stop a loop still running for the group first. Relay the `eta:` line. |
+| `/dotask resume <slug>` | `bash scripts/dotask.sh resume <slug> [--answer "<text>"]` | Continue a headless group that stopped (a BLOCKED question answered, a CONFLICT ruled, a crash, a reboot). A group whose last line is a worker's `NEEDS_USER` question needs `--answer`: the answer goes into the conversation that asked (`claude --resume`), then the loop carries on; `--answer` without a waiting question is refused. Otherwise: the build loop for every task without a commit line, then autoland, which itself resumes a fix round's focused re-check. The first headless launch runs this same command. Stop a loop still running for the group first. Relay the `eta:` line. |
 | `/dotask approve <slug>` | `bash scripts/dotask.sh approve <slug>` | The owner tested a `READY_TO_TEST` stack and it works: push that exact HEAD, open the PR, wait for CI (red CI goes to a fix round and back to a test). Relay the PR URL. |
 | `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Step 1 of 2. First runs `scripts/dotask_preland_check.sh` on the checkout (whitespace, non-evidence files under `qa/`, ruff/eslint growth, `ci_policy` routing) and refuses, naming the paths, while it fails. Then restarts the group's app stack and returns only once the frontend + backend `/api/health` answer. Relay the URL (`http://localhost:<5173+offset>`) WITH a test guide (see [Test guide](#test-guide-required-with-every-localhost-link)) and STOP: the human tests the app. Nothing is pushed and no PR exists yet. Records the tested HEAD. On a timeout it exits non-zero with the log paths; relay them. |
 | `/dotask land <slug> --after-test` | `bash scripts/dotask.sh land <slug> --after-test` | Step 2, only after the user says the test passed. Refuses if HEAD moved since step 1 (re-run step 1). Pushes, opens the PR, waits for CI, builds evidence scoped to the group's tasks (another group's `qa/proof.json` entries never block it), marks committed tasks completed in the wave profile. Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
@@ -226,6 +226,18 @@ such stops were restarted by hand on g-t15220-10 (2026-11-07), one after an over
 the other tasks' criteria before committing and finds its change makes one literally false to append
 `CONFLICT <task> <other>:C<n> "<why>"` and stop without committing. The build loop stops there; the
 user rules (fix the change, or amend the criterion), then `/dotask resume <slug>`.
+
+**A worker can ask (T12600).** A headless worker that needs the owner appends
+`NEEDS_USER <kind> "<question>"` (kinds: `ruling`, `clarification`, `access`, `human_check`) and stops.
+`status` prints `question (<kind>): ...` with the answer command; relay the question verbatim. The owner's
+`/dotask resume <slug> --answer "<text>"` writes `ANSWERED <kind> "<text>"` and resumes the asking
+conversation by its recorded session id, so the worker keeps everything it had read.
+
+**Stops are classified.** Each dispatch record's `outcome_class` tells a person-needed stop from a passing
+one: `blocked:quota` (out of usage), `blocked:transient` (a network or API fault), `blocked:hang` (no stream
+event for `DOTASK_HANG_MINUTES`, default 25; the profiler kills the worker), `needs_user`, `auth_failed`,
+`budget_stop`, `error`, `success`. `status` ends with `outcomes over the last N run(s): ...`, the counts over
+the newest 30 dispatches of every group.
 
 ## Landing
 
