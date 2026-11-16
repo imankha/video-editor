@@ -45,3 +45,18 @@ test('T16660:C1 T16660:C2 a normal account on /admin sees no admin screen and ma
   await expect(page.getByTestId('admin-not-available')).toHaveCount(0);
   await expect.poll(() => new URL(page.url()).pathname, { timeout: 60000 }).not.toBe('/admin');
 });
+
+test('T16660:C3 an admin account on /admin still sees the Admin Panel', async ({ page }) => {
+  // No stub: a dev-picker account is an admin on a dev stack (T16430), so the real
+  // GET /api/admin/me answers is_admin:true and the real AdminScreen mounts through App.jsx.
+  await loginForCheck(page);
+  const adminMe = page.waitForResponse((res) => new URL(res.url()).pathname.endsWith('/api/admin/me'), { timeout: 60000 });
+  await page.goto('/admin');
+  const meBody = await (await adminMe).json();
+  expect(meBody.is_admin).toBe(true);
+
+  await expect(page.getByRole('heading', { name: 'Admin Panel' })).toBeVisible({ timeout: 60000 });
+  await expect(page.getByRole('button', { name: 'Manage Campaigns' })).toBeVisible();
+  await expect(page.getByText(/\d+ steps, \d+ tasks/)).toBeVisible({ timeout: 60000 });
+  await expect(page.getByTestId('admin-not-available')).toHaveCount(0);
+});
