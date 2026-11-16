@@ -1,0 +1,10 @@
+<!doctype html>
+<!--
+  T4560 DEV-ONLY harness: renders one of the six DialogShell dialogs (?d=<name>) over
+  page content, for e2e/checks/T4560.check.spec.js's before/after screenshot check.
+  NOT a production page: not in vite build rollupOptions.input, so it never ships.
+-->
+<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>html, body { margin: 0; padding: 0; background: #111827; }</style></head>
+<body><div id="root"><p style="color:#fff;padding:40px;font:16px sans-serif">Page content behind the dialog. Lorem ipsum dolor sit amet.</p></div><div id="dlg"></div>
+<script>window.__d = new URLSearchParams(location.search).get("d");</script><script type="module" src="/src/t4560diag/main.jsx"></script></body></html>

@@ -9,8 +9,7 @@
       "command": "cd src/frontend && npx vitest run src/components/shared/__tests__/dialogShellAdoption.test.jsx -t \"a backdrop click closes nothing|Escape\""
     },
     "T4560:C3": {
-      "kind": "code",
-      "command": "cd src/frontend && npx vitest run src/components/shared/__tests__/dialogShellAdoption.test.jsx -t \"keeps its pre-move look\""
+      "kind": "browser"
     }
   }
 }
