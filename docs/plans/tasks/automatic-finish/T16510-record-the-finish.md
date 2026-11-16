@@ -4,7 +4,7 @@
 
 A highlight (a finished short clip) only reaches the Highlights tab when the parent taps Finish, and today nothing is recorded when they do. The admin Journey guesses instead: it counts a highlight as finished when a spotlight is rendered. On 2026-11-14 that guess was hiding the largest loss in the product: 42 of 72 exported highlights were never finished, and the Journey showed the step as healthy. We will record the real moment a highlight is finished, and have the Journey's Finished stage count that. It comes first in the epic so the loss is on the chart before the fix ships. Done when the Journey's Finished count for a test account matches the number of highlights in its Highlights tab.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-11-14
