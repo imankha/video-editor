@@ -246,6 +246,7 @@
   "tests/test_t4220_remove_split_speeds.py": 0.09,
   "tests/test_t4230_project_write_path.py": 0.08,
   "tests/test_t4240_export_recovery.py": 0.01,
+  "tests/test_t4410_dead_export_pipelines.py": 0.2,
   "tests/test_t4260_duration_source.py": 0.07,
   "tests/test_t4270_orphaned_writers.py": 0.06,
   "tests/test_t4280_silent_fallbacks.py": 0.15,
