@@ -1,6 +1,6 @@
 # T4560: One shared dialog shell
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-07-03

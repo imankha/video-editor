@@ -1,6 +1,6 @@
 # T13730: Landing page checks in CI
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-10-27
