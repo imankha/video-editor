@@ -1,6 +1,6 @@
 # T16620: copy-link staging gate test fails in strict mode: the 'Copy link' locator matches 9 buttons
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-16

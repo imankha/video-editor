@@ -1,6 +1,6 @@
 # T16610: The /dotask loop crashed with a TypeError and left no traceback
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-15
