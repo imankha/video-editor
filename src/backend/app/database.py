@@ -1425,6 +1425,7 @@ def _create_profile_schema(user_id: str, db_path: Path) -> None:
                 poster_frame_time REAL,
                 poster_source TEXT,
                 intro_card_id INTEGER,
+                source_working_video_id INTEGER,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)

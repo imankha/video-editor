@@ -59,3 +59,11 @@ Finishing depends on a tap that reads as optional, on a panel whose headline alr
 - Tier L: the finish moves from a browser gesture to a server lifecycle operation. Architect design gate required; state how the server write obeys restore-if-newer.
 - Publish archives the project and deletes working data today. T16530 needs the crop and spotlight to be editable afterwards; settle in design whether archive waits or re-edit restores (the re-edit path exists: `useReEditReel.js`).
 - Sport-neutral strings; any sport wording goes in the per-sport strings.
+
+## Ruling
+
+Owner approved the design in T16520-design.md (owner, 2026-11-16):
+1. Archive stays deferred to the next-sign-in sweep; the server finish does not archive.
+2. Schema change approved: final_videos source working-video link column (with migration) and a new 'finishing' export stage so an interrupted finish is retried.
+3. highlight_finished is counted once per highlight; re-sharpening adds no second event.
+4. Split. This task (T16520) is the server-side finish only (backend). The frontend half (new messages to the parent, removing the Finish tap) is filed as a new task T16525 (TODO, depends on T16520). Do not build the frontend half here.

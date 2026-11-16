@@ -45,6 +45,7 @@ from ...profile_context import get_current_profile_id
 from ...schemas import TextSpec
 from ...services import export_job_repository
 from ...services.ffmpeg_service import get_encoding_command_parts
+from ...services.finish_highlight import mark_published, record_finish
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
 from ...services.poster import (
     first_slowmo_section,
@@ -88,7 +89,7 @@ def _finalize_overlay_export(
     modal_function: str | None = None,
     profile_id: str | None = None,
 ) -> tuple[int, tuple[float, float] | None, float, float | None]:
-    """Save final_videos record, update project, update export_jobs, archive.
+    """Save final_videos record (published, T16520), update project, update export_jobs.
 
     Shared by all overlay export completion paths (no-keyframes copy, local,
     Modal GPU, test mode). Returns
@@ -106,9 +107,10 @@ def _finalize_overlay_export(
     """
     with get_db_connection() as conn:
         _row = conn.cursor().execute(
-            "SELECT aspect_ratio FROM projects WHERE id = ?", (project_id,)
+            "SELECT aspect_ratio, working_video_id FROM projects WHERE id = ?", (project_id,)
         ).fetchone()
         project_aspect_ratio = _row["aspect_ratio"] if _row else None
+        source_working_video_id = _row["working_video_id"] if _row else None
 
     aspect_ratio = resolve_output_aspect_ratio(
         project_aspect_ratio=project_aspect_ratio,
@@ -127,10 +129,16 @@ def _finalize_overlay_export(
             export_job_id=export_id,
             gpu_seconds=gpu_seconds,
             modal_function=modal_function,
+            source_working_video_id=source_working_video_id,
         )
+        # T16520: the render finishes the highlight itself (no Finish tap). A render
+        # replacing an already-finished version is not a new finish.
+        newly_published = mark_published(cursor, result["final_video_id"], project_id)
         conn.commit()
 
     log_state("export-finalize", project_id)
+    if newly_published and not result["prior_published"]:
+        record_finish(user_id, profile_id, result["final_video_id"])
 
     # T4010: only after the swap is committed, best-effort delete the prior object.
     if not result["keep_prior"]:

@@ -180,6 +180,7 @@ def publish_final_video(
     export_job_id: str | None = None,
     gpu_seconds: float | None = None,
     modal_function: str | None = None,
+    source_working_video_id: int | None = None,
 ) -> dict:
     """The ONE final_videos INSERT (T4390). Caller owns the connection/commit
     (same convention as export_job_repository) so a caller that also needs
@@ -200,16 +201,22 @@ def publish_final_video(
 
     Returns a dict: `final_video_id`, `filename`, `version`, `source_type`,
     `slowmo_section`, `duration`, `poster_marker_time`, `prior_filename`,
-    `keep_prior`. Callers use `prior_filename`/`keep_prior` to run
+    `keep_prior`, `prior_published`. Callers use `prior_filename`/`keep_prior` to run
     `delete_prior_final_object` AFTER commit (best-effort R2 cleanup, same as
     before), and `slowmo_section`/`duration`/`poster_marker_time` to call
     `generate_poster_at_export` AFTER commit (T5410 ordering, unchanged).
+
+    T16520: `source_working_video_id` links the row to the working video it was
+    made from (the server finish's retry key). `prior_published` says whether the
+    row this one replaces was already in Highlights: a replacement of a finished
+    highlight is not a new finish (highlight_finished counts once per highlight).
     """
     # T5215/T6030: one PRAGMA covers both deploy->migrate-window-guarded
     # columns instead of two independent column_exists() probes.
     final_videos_cols = {row[1] for row in cursor.execute("PRAGMA table_info(final_videos)").fetchall()}
     has_intro = "intro_card_id" in final_videos_cols
     has_slowmo = "slowmo_section_start" in final_videos_cols
+    has_source_wv = "source_working_video_id" in final_videos_cols
     intro_select = ", fv.intro_card_id" if has_intro else ""
 
     # T4010: capture the PRIOR final the project currently points at so we can
@@ -218,13 +225,14 @@ def publish_final_video(
     # forward across this re-export's new version row. Read BEFORE any DELETE
     # of this prior row.
     cursor.execute(f"""
-        SELECT fv.id, fv.filename{intro_select}
+        SELECT fv.id, fv.filename, fv.published_at{intro_select}
         FROM projects p JOIN final_videos fv ON fv.id = p.final_video_id
         WHERE p.id = ?
     """, (project_id,))
     prior = cursor.fetchone()
     prior_final_id = prior['id'] if prior else None
     prior_filename = prior['filename'] if prior else None
+    prior_published = bool(prior and prior['published_at'] is not None)
     prior_intro_card_id = prior['intro_card_id'] if (prior and has_intro) else None
     # An active share still serves the old object straight from R2 -> keep both
     # its row and its object; otherwise the re-export replaces it in place.
@@ -290,17 +298,20 @@ def publish_final_video(
     intro_cols = ", intro_card_id" if has_intro else ""
     intro_placeholders = ", ?" if has_intro else ""
     intro_values = (prior_intro_card_id,) if has_intro else ()
+    source_wv_cols = ", source_working_video_id" if has_source_wv else ""
+    source_wv_placeholders = ", ?" if has_source_wv else ""
+    source_wv_values = (source_working_video_id,) if has_source_wv else ()
 
     cursor.execute(f"""
         INSERT INTO final_videos (project_id, filename, version, source_type, name,
             duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
             rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
-            poster_filename{slowmo_cols}{intro_cols})
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?{slowmo_placeholders}{intro_placeholders})
+            poster_filename{slowmo_cols}{intro_cols}{source_wv_cols})
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?{slowmo_placeholders}{intro_placeholders}{source_wv_placeholders})
     """, (project_id, output_filename, next_version, source_type, fv_name,
           duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
           rating, rd, source_clip_id, clip_start_time, clip_game_start_time, None,
-          *slowmo_values, *intro_values))
+          *slowmo_values, *intro_values, *source_wv_values))
     final_video_id = cursor.lastrowid
 
     cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
@@ -367,4 +378,5 @@ def publish_final_video(
         "poster_marker_time": poster_marker_time,
         "prior_filename": prior_filename,
         "keep_prior": keep_prior,
+        "prior_published": prior_published,
     }

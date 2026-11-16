@@ -59,6 +59,7 @@ from .v059_play_suggestions import V059PlaySuggestions
 from .v060_pending_uploads_last_part_at import V060PendingUploadsLastPartAt
 from .v061_delete_orphan_archived_projects import V061DeleteOrphanArchivedProjects
 from .v062_drop_achievements import V062DropAchievements
+from .v063_final_videos_source_working_video import V063FinalVideosSourceWorkingVideo
 
 MIGRATIONS = [
     V001Baseline(),
@@ -121,6 +122,7 @@ MIGRATIONS = [
     V060PendingUploadsLastPartAt(),
     V061DeleteOrphanArchivedProjects(),
     V062DropAchievements(),
+    V063FinalVideosSourceWorkingVideo(),
 ]
 
 # T5089: floor=0 is INERT (gate never fires). When the cross-env floor sweep

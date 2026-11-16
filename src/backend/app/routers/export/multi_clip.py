@@ -1735,8 +1735,17 @@ async def _export_clips(
                 return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
 
             # T5630: local exports have no resume path, but keep `stage` truthful.
-            from ...services.export_finalize import _set_export_stage
-            _set_export_stage(export_id, ExportStage.COMPLETE.value)
+            # T16520: the server finish runs here too (no concurrent finalizer on the
+            # local path, so the claim is on whatever stage the job holds).
+            from ...services.export_finalize import _set_export_stage, finish_after_persist
+            if working_video_id:
+                _set_export_stage(export_id, ExportStage.PERSISTING.value)
+                await finish_after_persist(
+                    export_id, ExportStage.PERSISTING.value, user_id, profile_id,
+                    project_id, working_video_id,
+                )
+            else:
+                _set_export_stage(export_id, ExportStage.COMPLETE.value)
 
         _record_framing_export_completed(user_id, export_id, project_id, profile_id)
 
