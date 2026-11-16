@@ -81,6 +81,9 @@ export const useAuthStore = create((set, get) => ({
   // State
   isAuthenticated: false,
   isAdmin: false,
+  // T16660: true once GET /api/admin/me has answered (or failed) for this session, so /admin
+  // can tell "not an admin" from "not checked yet" and never mount the panel for a non-admin.
+  adminChecked: false,
   adminEnvironment: null,
   email: null,
   pictureUrl: null,  // T430: Google profile picture URL
@@ -112,6 +115,7 @@ export const useAuthStore = create((set, get) => ({
       } catch (err) {
         console.warn('[Auth] checkAdmin failed:', err.message || err);
       } finally {
+        set({ adminChecked: true });
         _checkAdminPromise = null;
       }
     })();
@@ -256,6 +260,7 @@ export const useAuthStore = create((set, get) => ({
     set({
       isAuthenticated: false,
       isAdmin: false,
+      adminChecked: false,
       adminEnvironment: null,
       email: null,
       pictureUrl: null,

@@ -1708,8 +1708,9 @@ export function ProjectManager({
         <ProfileDropdown />
       </div>
 
-      {/* Header — pt-10 clears the fixed top-right controls on mobile */}
-      <div className="text-center pt-10 coarse-pointer:pt-12 lg:pt-0 mb-4">
+      {/* Header — pt-14 clears the fixed top-right controls (44px tall at top-4) on
+          phones and tablets; T16680: pt-10 let the Guidance switch cover the logo. */}
+      <div className="text-center pt-14 lg:pt-0 mb-4">
         <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
         <p className="text-gray-400 text-sm">Transform game film into high-quality highlights using AI upscaling</p>
       </div>

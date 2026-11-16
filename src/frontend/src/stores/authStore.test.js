@@ -224,3 +224,27 @@ describe('authStore.getImpersonationLandingPoint (T14990)', () => {
     expect(getImpersonationLandingPoint()).toBeNull();
   });
 });
+
+describe('authStore.checkAdmin — adminChecked (T16660)', () => {
+  let useAuthStore;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    mockFetch.mockReset();
+    ({ useAuthStore } = await import('./authStore'));
+  });
+
+  it('is false until /api/admin/me answers, then true for a non-admin', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ is_admin: false, environment: 'staging' }) });
+    expect(useAuthStore.getState().adminChecked).toBe(false);
+    await useAuthStore.getState().checkAdmin();
+    expect(useAuthStore.getState().adminChecked).toBe(true);
+    expect(useAuthStore.getState().isAdmin).toBe(false);
+  });
+
+  it('is true after a failed check too, so /admin does not stay blank', async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+    await useAuthStore.getState().checkAdmin();
+    expect(useAuthStore.getState().adminChecked).toBe(true);
+  });
+});
