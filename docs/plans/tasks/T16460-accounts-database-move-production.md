@@ -58,6 +58,16 @@ Every command names its app with `-a`. Run them from one shell that has flyctl, 
 
 Differences from T16410's plan: the database name (step 0), stopping writes with cordon instead of `fly scale count 0` (step 3), the operator password (step 4a), the prompts (step 5a), staged secrets plus `fly secrets deploy` (steps 5 and 7), and the local `.env` passwords (step 9). The order was step 4 dump, then 5 detach/attach, then restore: attach must exist before the restore so the restore runs as the app's user.
 
+## Progress
+
+**2026-11-15 (day after the switch).** The owner allowed removal of the old databases once the new ones are fully hooked up and confirmed working. Checked so far:
+- Both servers point at the new databases (production at `reel-ballers-db-prod-lax`, staging at `reel-ballers-db-staging-lax`).
+- The owner's local `.env.prod` already connected to the new production database. `.env.staging` still held the old password; it now holds the new one and connects.
+- Sign-in works: 5 real sign-ins since the switch (one by an admin) and 4 new accounts.
+- Real signed-in requests check the session in 3 to 11 ms (it was about 180 ms before the move).
+- The 4 newest public shared video links open (HTTP 200).
+- Not yet checked: the admin dashboard loading for a signed-in admin, and that nothing still connects to the old databases. Both checks were blocked by the session's permission rules. The old databases stay until both pass.
+
 ## Acceptance Criteria
 
 - [x] C1: Production's accounts database runs in Los Angeles; every table's row count and the `schema_migrations` ledger match the old one at the switch.
