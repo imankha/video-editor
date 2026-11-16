@@ -2905,7 +2905,7 @@ The full checklist for an 11th→Nth sport:
   surface that renders this label had to follow, because two of them derive/hardcode it:
   - `admin.py` builds funnel keys + `last_step` at READ time via `label.lower().replace(" ", "_")`, so
     the funnel step key moved `annotation_done` -> `watched_annotate_video`
-    (`FunnelChart.jsx` STAGES key updated) and the `last_step` badge string moved "Annotation Done" ->
+    (`FunnelChart.jsx` STAGES key updated; that chart was later deleted as unused, T15910) and the `last_step` badge string moved "Annotation Done" ->
     "Watched Annotate Video" (`UserTable.jsx` STEP_STYLES map key updated to keep the cyan style).
   - `PlatformBreakdown.jsx` ACTION_LABELS is keyed by the event action (`annotation_completed`), not the
     label, so it was a pure text swap ('Annotations' -> 'Watched Annotate Video').
