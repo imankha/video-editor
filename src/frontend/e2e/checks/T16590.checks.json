@@ -1,0 +1,5 @@
+{"criteria": {
+  "T16590:C1": {"kind": "code", "command": "cd src/frontend && npx playwright test e2e/T16590-guidance-helper-wait.spec.js --project=chromium --reporter=line -g 'T16590:C1'"},
+  "T16590:C2": {"kind": "code", "command": "cd src/frontend && npx playwright test e2e/T16590-guidance-helper-wait.spec.js --project=chromium --reporter=line -g 'T16590:C2'"},
+  "T16590:C3": {"kind": "browser"}
+}}
