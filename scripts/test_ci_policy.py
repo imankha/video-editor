@@ -286,6 +286,20 @@ class WorkflowWiringTests(unittest.TestCase):
                 self.assertNotIn('if:', jobs_block('master-ci.yml', job).split('steps:')[0])
 
 
+class LandingJobTests(unittest.TestCase):
+    """T13730: both landing jobs type-check the site and gate its SEO invariants on the built output."""
+
+    def test_branch_and_master_landing_jobs_run_check_build_and_seo_in_order(self):
+        for workflow in ['branch-ci.yml', 'master-ci.yml']:
+            with self.subTest(workflow=workflow):
+                block = jobs_block(workflow, 'landing')
+                steps = [s for s in ['run: npx astro check', 'run: npm run build', 'run: node scripts/verify-seo.mjs']
+                         if s in block]
+                self.assertEqual(steps, ['run: npx astro check', 'run: npm run build', 'run: node scripts/verify-seo.mjs'])
+                # verify-seo reads dist/, so it must come after the build
+                self.assertLess(block.index('run: npm run build'), block.index('run: node scripts/verify-seo.mjs'))
+
+
 class AggregateTests(unittest.TestCase):
     def test_aggregate_rejects_missing_cancelled_failed_and_skipped_required_job(self):
         for result in [None, 'cancelled', 'failure', 'skipped']:

@@ -87,7 +87,11 @@ jobs:
           cache: npm
           cache-dependency-path: src/landing/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Type check (astro check)
+        run: npx astro check
       - run: npm run build
+      - name: SEO invariants on the built pages (titles, meta descriptions, canonicals)
+        run: node scripts/verify-seo.mjs
 
   shrink:
     runs-on: ubuntu-latest

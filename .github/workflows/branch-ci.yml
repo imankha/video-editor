@@ -162,8 +162,12 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Unit test (attribution.ts; node --test, no browser/Playwright)
         run: npm test
+      - name: Type check (astro check)
+        run: npx astro check
       - name: Build (the command deploy-landing.yml ships; pulls @editor modules from src/frontend)
         run: npm run build
+      - name: SEO invariants on the built pages (titles, meta descriptions, canonicals)
+        run: node scripts/verify-seo.mjs
 
   shrink:
     needs: changes
