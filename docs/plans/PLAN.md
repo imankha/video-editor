@@ -79,7 +79,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T16580 | [The Spotlight helper check skips itself on staging](tasks/T16580-t11905-check-skips-on-staging.md) | 3 | 1 | 3.0 | TODO | [ ] | After #773 merged, the staging check timed out on T11905:C1 and looked like a bug. That check starts twelve Spotlight test runs, several of which sign in with a dev-only account or only run on the dev stack, so on staging it can only fail or time out. Make it skip itself with a clear reason on a deployed site, as other dev-only checks do. Worked when the check reports skipped on staging in seconds and still runs on the dev stack. |
+| T16580 | [The Spotlight helper check skips itself on staging](tasks/T16580-t11905-check-skips-on-staging.md) | 3 | 1 | 3.0 | WIP | [ ] | After #773 merged, the staging check timed out on T11905:C1 and looked like a bug. That check starts twelve Spotlight test runs, several of which sign in with a dev-only account or only run on the dev stack, so on staging it can only fail or time out. Make it skip itself with a clear reason on a deployed site, as other dev-only checks do. Worked when the check reports skipped on staging in seconds and still runs on the dev stack. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
