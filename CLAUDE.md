@@ -312,7 +312,11 @@ Process rules for structural refactors (catalog: [code-smells.md](.claude/refere
    those. T11210 (2026-09-25) shipped a "zero callers, grep-proven" deletion of a bare `POST
    /api/projects` route that four e2e specs and `test_api.sh` still called; CI stayed green and the
    gap surfaced only in independent review. A dead-code deletion's grep evidence must cover `src/`,
-   `e2e/`, and `scripts/` before the PR claims zero callers.
+   `e2e/`, and `scripts/` before the PR claims zero callers. The proof of zero callers is
+   `python scripts/check_dead_code.py` passing (knip over the frontend with the e2e specs as entry
+   points, vulture plus a tests-blind import graph over the backend; T15910), plus that grep. The
+   check is a ratchet: `scripts/dead_code_baseline.json` lists only findings a named task owns, a new
+   finding fails CI, and a baseline entry that disappears must be removed.
 
 ## Migration System
 

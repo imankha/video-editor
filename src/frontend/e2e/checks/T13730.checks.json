@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T13730:C1": {
+      "kind": "code",
+      "command": "cd src/landing && npm ci --no-audit --no-fund >/dev/null 2>&1 && npx astro check && npm run build >/dev/null && node scripts/verify-seo.mjs"
+    },
+    "T13730:C2": {
+      "kind": "code",
+      "command": "python -m pytest scripts/test_ci_policy.py -k LandingJobTests -q"
+    }
+  }
+}

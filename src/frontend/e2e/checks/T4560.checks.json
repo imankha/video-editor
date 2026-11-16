@@ -1,0 +1,15 @@
+{
+  "criteria": {
+    "T4560:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/shared/__tests__/DialogShell.test.jsx src/components/shared/__tests__/dialogShellAdoption.test.jsx -t \"DialogShell|Spinner|renders through the shared shell\""
+    },
+    "T4560:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/shared/__tests__/dialogShellAdoption.test.jsx -t \"a backdrop click closes nothing|Escape\""
+    },
+    "T4560:C3": {
+      "kind": "browser"
+    }
+  }
+}

@@ -4,6 +4,8 @@ export { Breadcrumb } from './Breadcrumb';
 export { Button, IconButton, ButtonGroup, Toggle } from './Button';
 export { CollapsibleGroup } from './CollapsibleGroup';
 export { ConfirmationDialog } from './ConfirmationDialog';
+export { DialogShell } from './DialogShell';
+export { Spinner } from './Spinner';
 export { CreditCostRow } from './CreditCostRow';
 export { InlineSportSelect } from './InlineSportSelect';
 export { ModeSwitcher } from './ModeSwitcher';
@@ -19,4 +21,3 @@ export { FileUpload } from '../FileUpload';
 
 // Future re-exports (uncomment as needed):
 // export { ZoomControls } from '../ZoomControls';
-// export { ThreePositionToggle } from '../ThreePositionToggle';

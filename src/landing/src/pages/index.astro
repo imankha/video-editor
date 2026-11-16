@@ -25,6 +25,9 @@ import {
   approxHighlights,
 } from '@editor/config/pricing'
 import { calculateUploadCost } from '@editor/utils/storageCost'
+
+// pricing.js is untyped JS; this is the shape of one entry of pricing.json's credit_packs.
+type CreditPack = { key: string; name: string; credits: number; price_cents: number }
 import { faqPage, softwareApplication, webSite, webPage, type FaqItem } from '../lib/schema'
 
 // Worked pricing example: a 90-minute game (~6 GB) stored 30 days, three 15-second highlights.
@@ -409,7 +412,7 @@ const steps = [
 
     <div class="grid gap-6 sm:grid-cols-3 max-w-4xl mx-auto mb-10">
       {
-        CREDIT_PACKS.map((pack) => (
+        CREDIT_PACKS.map((pack: CreditPack) => (
           <div
             class:list={[
               'relative border rounded-2xl p-6 text-center',

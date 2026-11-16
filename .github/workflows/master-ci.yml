@@ -33,8 +33,18 @@ jobs:
       - run: python scripts/test_check_doc_drift.py
       - run: python scripts/test_split_pytest.py
       - run: python scripts/test_export_roadmap.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the dead-code scanners (knip from the frontend lockfile, vulture pinned)
+        run: |
+          npm ci --prefix src/frontend --no-audit --no-fund
+          pip install vulture==2.16
+      - run: python scripts/test_check_dead_code.py
       - name: Doc drift ratchet (dead references must not exceed the baseline)
         run: python scripts/check_doc_drift.py
+      - name: Dead-code ratchet (findings must match the baseline, which only shrinks)
+        run: python scripts/check_dead_code.py
 
   instructions:
     runs-on: ubuntu-latest
@@ -87,7 +97,11 @@ jobs:
           cache: npm
           cache-dependency-path: src/landing/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Type check (astro check)
+        run: npx astro check
       - run: npm run build
+      - name: SEO invariants on the built pages (titles, meta descriptions, canonicals)
+        run: node scripts/verify-seo.mjs
 
   shrink:
     runs-on: ubuntu-latest

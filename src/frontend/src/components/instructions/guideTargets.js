@@ -53,7 +53,6 @@ export const GUIDE_PULSE = {
   SHARE_PLAYBACK_SUBMIT: 'share-playback-submit',
   CREDITS_PAY: 'buy-credits-pay',
   INSUFFICIENT_BUY: 'insufficient-credits-buy',
-  PAYMENT_RESULT_OK: 'payment-result-ok',
   STORAGE_EXTEND: 'storage-extend-submit',
   EXPORT_TOO_LARGE_OK: 'export-too-large-dismiss',
   PROFILE_ADD: 'manage-profiles-add',

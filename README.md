@@ -162,11 +162,8 @@ video-editor/
 │           │   ├── useVideo.js
 │           │   ├── useGames.js
 │           │   ├── useProjectLoader.js   # Project loading logic
-│           │   ├── useStorageUrl.js      # R2 presigned URL handling
 │           │   ├── useKeyframeController.js
 │           │   ├── useDownloads.js       # Gallery downloads management
-│           │   ├── useRawClips.js        # Raw clips library access
-│           │   ├── useExportManager.js   # Export job management
 │           │   ├── useExportRecovery.js  # Resume interrupted exports
 │           │   ├── useKeyboardShortcuts.js # Keyboard shortcuts
 │           │   └── useTimelineZoom.js    # Timeline zoom controls

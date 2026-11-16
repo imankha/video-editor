@@ -73,8 +73,6 @@ const TODAYS_TARGETS = {
   'modal.share-playback': P.SHARE_PLAYBACK_SUBMIT,
   'modal.buy-credits.pay': P.CREDITS_PAY,
   'modal.insufficient-credits': P.INSUFFICIENT_BUY,
-  'modal.payment-result.success': P.PAYMENT_RESULT_OK,
-  'modal.payment-result.failed': P.PAYMENT_RESULT_OK,
   'modal.storage-extension': P.STORAGE_EXTEND,
   'modal.export-too-large': P.EXPORT_TOO_LARGE_OK,
   'modal.profiles.add': P.PROFILE_SUBMIT,

@@ -50,7 +50,6 @@ const RETIRED = {
   'components/CreditHistoryModal.jsx': ['Usage history', 'Admin grant', 'Balance adjustment', 'Video generation', 'Generation refund', 'Signup bonus', 'Welcome credits', 'Footage added', 'Clip upload'],
   'components/CreditBalance.jsx': ['click to buy'],
   'components/InsufficientCreditsModal.jsx': ['Insufficient Credits', 'Buy Credits', 'This generation requires'],
-  'components/PaymentResultModal.jsx': ['Credits Added!', 'Payment Issue', 'Something went wrong'],
   'components/StorageExtensionModal.jsx': ['Extend Storage', 'Extend by:'],
   'components/StorageExpiryBanner.jsx': ['generated everything', 'annotations'],
   'components/SourceExpiredPanel.jsx': ['Source video expired', 'source video', 'original footage', 'generated this highlight'],

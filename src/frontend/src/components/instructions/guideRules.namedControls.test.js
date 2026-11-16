@@ -43,7 +43,6 @@ const CONTROL_PHRASES = [
   { name: 'Save Changes', re: /\btap Save Changes\b/, pulse: [P.EDIT_GAME_SAVE] },
   { name: 'Pay', re: /\btap Pay\b/, pulse: [P.CREDITS_PAY] },
   { name: 'Buy credits', re: /\bTap Buy credits\b/, pulse: [P.INSUFFICIENT_BUY] },
-  { name: 'OK', re: /\bTap OK\b/, pulse: [P.PAYMENT_RESULT_OK] },
   { name: 'Extend storage', re: /\bTap Extend storage\b/, pulse: [P.STORAGE_EXTEND] },
   { name: 'Create/Save', re: /\btap (Create|Save)\b(?! Changes)/, pulse: [P.PROFILE_SUBMIT] },
   { name: 'Move', re: /\bTap Move\b/, pulse: [P.MOVE_PROFILE_CONFIRM] },

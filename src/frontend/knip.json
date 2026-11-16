@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/main.jsx!",
+    "src/*diag*/main.jsx!",
+    "src/utils/veoHighlights/durationWorker.js!",
+    "functions/**/*.{js,ts}!",
+    "e2e/**/*.{js,mjs,ts}!",
+    "src/components/shared/VideoControls.jsx!",
+    "src/config/pricing.js!",
+    "src/hooks/useStandaloneVideo.js!",
+    "src/utils/storageCost.js!",
+    "src/utils/timeFormat.js!",
+    "src/utils/mp4Faststart.js!",
+    "src/utils/shrinkCapability.js!"
+  ],
+  "project": [
+    "src/**/*.{js,jsx,ts,tsx}!",
+    "functions/**/*.{js,ts}!"
+  ],
+  "include": [
+    "files"
+  ],
+  "ignore": [
+    "**/__fixtures__/**"
+  ]
+}

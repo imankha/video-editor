@@ -40,7 +40,6 @@ import { GUIDE } from '../config/displayNames';
 import { BuyCreditsModal } from './BuyCreditsModal';
 import { InsufficientCreditsModal } from './InsufficientCreditsModal';
 import { CreditHistoryModal } from './CreditHistoryModal';
-import { PaymentResultModal } from './PaymentResultModal';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { ManageProfilesModal } from './ManageProfilesModal';
 import { MoveToProfileModal } from './MoveToProfileModal';
@@ -85,16 +84,6 @@ describe('group C dialog guides (T12790)', () => {
   it('credit-history', async () => {
     render(<CreditHistoryModal onClose={vi.fn()} />);
     expect(guideText()).toBe(M.creditHistory);
-  });
-
-  it('payment-result success and failure', () => {
-    const { unmount } = render(<PaymentResultModal result={{ status: 'success', credits: 5, balance: 9 }} onClose={vi.fn()} />);
-    expect(guideText()).toBe(M.paymentSuccess);
-    pulsing('payment-result-ok');
-    unmount();
-    render(<PaymentResultModal result={{ status: 'failed' }} onClose={vi.fn()} />);
-    expect(guideText()).toBe(M.paymentFailed);
-    pulsing('payment-result-ok');
   });
 
   it('storage-extension', () => {
