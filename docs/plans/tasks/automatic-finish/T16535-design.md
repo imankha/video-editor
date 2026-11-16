@@ -1,6 +1,6 @@
 # T16535 design: archiving a finished project keeps its clips
 
-**Status:** waiting for owner approval (one question below)
+**Status:** approved with option A (owner, 2026-11-16): leave the game video to its own paid 30-day expiry; no early delete, no new UI, no refund rule.
 **Expert review:** Opus expert, 2026-11-16 (verdict: design sound; C2 needs an owner ruling)
 
 ## In plain words
@@ -43,9 +43,9 @@ restore-project:      old_archive = archived_at set AND working_video_id IS NULL
 | Account DB rows (crop + spotlight JSON) | 0 | a few KB (latest version only) |
 | R2 msgpack backup | a few KB | none (old ones stay for C3) |
 | R2 working video | unchanged (kept) | unchanged (kept) |
-| R2 game video | its paid expiry | **depends on the ruling below** |
+| R2 game video | its paid expiry | its paid expiry (option A) |
 
-Net: this task makes no meaningful storage difference unless option B is chosen.
+Net: no meaningful storage difference.
 
 ## The question for the owner (C2)
 

@@ -81,7 +81,8 @@ def env(tmp_path):
         db_path = get_database_path()
 
         with patch("app.services.project_archive.R2_ENABLED", True), \
-             patch("app.services.project_archive.upload_bytes_to_r2", _fake_upload), \
+             patch("app.services.project_archive.upload_bytes_to_r2", _fake_upload, create=True), \
+             patch("app.storage.upload_bytes_to_r2", _fake_upload), \
              patch("app.services.project_archive.get_r2_client",
                    lambda: _FakeR2Client(store)), \
              patch("app.storage.file_exists_in_r2", _fake_exists), \
@@ -210,14 +211,15 @@ async def test_publish_restore_roundtrip_is_idempotent(env):
     project_id, final_video_id = _seed_published_reel(db_path)
 
     # Bring the seed to the canonical "in My Reels" state: published + archived
-    # (this is how a published reel actually sits — working data lives only in R2).
+    # (this is how a published reel actually sits).
     await publish_to_my_reels(project_id)
 
     original_published = _published_snapshot(db_path, project_id, store)
     assert original_published["all_published"], "seed reel should be published"
     assert original_published["archived"], "published reel should be archived"
-    assert original_published["working_clips_count"] == 0, "archive should delete working_clips from DB"
-    assert original_published["working_videos_count"] == 0, "archive should delete working_videos from DB"
+    # T16535: archive keeps the working data in the DB (no msgpack upload).
+    assert original_published["working_clips_count"] == 1, "archive must keep working_clips in DB"
+    assert original_published["working_videos_count"] == 1, "archive must keep working_videos in DB"
 
     original_restored = None
     divergences = []

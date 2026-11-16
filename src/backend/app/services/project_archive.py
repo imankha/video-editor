@@ -1,15 +1,15 @@
 """
 Project Archive Service for Video Editor.
 
-Archives completed projects to R2 as msgpack files to reduce active database size.
-Projects are archived when the user clicks "Move to My Reels" (publish) and
-can be restored when the user clicks "Open Reel as Draft" from the gallery.
+Marks completed projects archived when the user clicks "Move to My Reels"
+(publish) and at the sign-in sweep. Since T16535 the archive keeps the working
+data in the database; "Open Reel as Draft" just clears archived_at.
 
-Archive location: {user_id}/archive/{project_id}.msgpack
+Projects archived before T16535 had their working data moved to R2 as msgpack
+({user_id}/archive/{project_id}.msgpack); restore_project brings it back.
 """
 
 import logging
-from datetime import datetime
 from typing import Any
 
 import msgpack
@@ -26,14 +26,10 @@ from app.storage import (
     delete_from_r2,
     get_r2_client,
     r2_key,
-    upload_bytes_to_r2,
 )
 from app.user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
-
-ARCHIVE_VERSION = 2
-
 
 def _get_archive_r2_key(project_id: int) -> str:
     """Get the R2 key for a project's archive."""
@@ -47,18 +43,21 @@ def _row_to_dict(row) -> dict[str, Any]:
 
 def archive_project(project_id: int, user_id: str | None = None) -> bool:
     """
-    Archive a completed project to R2 as msgpack.
+    Mark a finished project archived (hidden from drafts).
 
-    Serializes project, working_clips, and working_videos to msgpack,
-    uploads to R2, then deletes from the database.
-    The final_videos row is kept in DB for gallery listing.
+    T16535 (owner ruling 2026-11-16): archive keeps the working clips (crop and
+    spotlight data) and the working video in the database, so a redo opens the
+    project straight away with no restore. It writes no R2 archive and touches
+    no game video; the game video leaves on its own paid storage expiry.
+    Projects archived before T16535 (working rows deleted, msgpack in R2) still
+    reopen through restore_project.
 
     Args:
         project_id: ID of the project to archive
         user_id: User ID (defaults to current user from context)
 
     Returns:
-        True if archive succeeded, False otherwise
+        True if the project was marked archived, False otherwise
     """
     if user_id is None:
         user_id = get_current_user_id()
@@ -66,78 +65,15 @@ def archive_project(project_id: int, user_id: str | None = None) -> bool:
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-
-            # 1. Get project data
-            cursor.execute("SELECT * FROM projects WHERE id = ?", (project_id,))
-            project_row = cursor.fetchone()
-            if not project_row:
+            cursor.execute(
+                "UPDATE projects SET archived_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (project_id,),
+            )
+            if cursor.rowcount == 0:
                 logger.warning(f"Project {project_id} not found for archiving")
                 return False
-
-            if R2_ENABLED:
-                project_data = _row_to_dict(project_row)
-
-                # 2. Get all working_clips for this project (all versions)
-                cursor.execute("""
-                    SELECT * FROM working_clips WHERE project_id = ?
-                    ORDER BY version, sort_order
-                """, (project_id,))
-                working_clips_data = [_row_to_dict(row) for row in cursor.fetchall()]
-
-                # 3. Get all working_videos for this project (all versions)
-                cursor.execute("""
-                    SELECT * FROM working_videos WHERE project_id = ?
-                    ORDER BY version
-                """, (project_id,))
-                working_videos_data = [_row_to_dict(row) for row in cursor.fetchall()]
-
-                # 4. Build archive
-                archive = {
-                    "version": ARCHIVE_VERSION,
-                    "archived_at": datetime.utcnow().isoformat() + "Z",
-                    "project": project_data,
-                    "working_clips": working_clips_data,
-                    "working_videos": working_videos_data,
-                }
-
-                # 5. Serialize to msgpack
-                archive_bytes = msgpack.packb(archive, use_bin_type=True, default=str)
-
-                # 6. Upload to R2
-                r2_path = _get_archive_r2_key(project_id)
-                if not upload_bytes_to_r2(user_id, r2_path, archive_bytes, fast=True):
-                    logger.error(
-                        f"Failed to upload archive to R2 for project {project_id}: "
-                        f"user={user_id} key={r2_path} size={len(archive_bytes)} bytes "
-                        f"({len(working_clips_data)} clips, {len(working_videos_data)} videos)"
-                    )
-                    return False
-
-                logger.info(f"Uploaded archive to R2: {user_id}/{r2_path} ({len(archive_bytes)} bytes)")
-
-                # 7. Clear FK, delete working data, mark archived
-                cursor.execute(
-                    "UPDATE projects SET working_video_id = NULL, archived_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (project_id,),
-                )
-                cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
-                clips_deleted = cursor.rowcount
-                cursor.execute("DELETE FROM working_videos WHERE project_id = ?", (project_id,))
-                videos_deleted = cursor.rowcount
-
-                conn.commit()
-
-                logger.info(
-                    f"Archived project {project_id}: deleted {clips_deleted} working_clips, "
-                    f"{videos_deleted} working_videos from DB"
-                )
-            else:
-                cursor.execute(
-                    "UPDATE projects SET archived_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (project_id,),
-                )
-                conn.commit()
-                logger.info(f"Marked project {project_id} as archived (R2 disabled, working data kept)")
+            conn.commit()
+            logger.info(f"Archived project {project_id} (working data kept)")
             return True
 
     except Exception as e:
@@ -146,6 +82,25 @@ def archive_project(project_id: int, user_id: str | None = None) -> bool:
             f"{type(e).__name__}: {e}", exc_info=True,
         )
         return False
+
+
+def is_old_style_archive(cursor, project_id: int) -> bool:
+    """True when the project's working data lives only in its R2 msgpack.
+
+    That is the shape archive_project left before T16535: archived_at set,
+    working_video_id cleared and every working_clips row deleted. A project
+    archived since T16535 keeps its rows and needs no restore.
+    """
+    cursor.execute(
+        "SELECT archived_at, working_video_id FROM projects WHERE id = ?", (project_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        return True
+    if not row["archived_at"] or row["working_video_id"] is not None:
+        return False
+    cursor.execute("SELECT 1 FROM working_clips WHERE project_id = ? LIMIT 1", (project_id,))
+    return cursor.fetchone() is None
 
 
 def delete_archived_project(cursor, project_id: int, user_id: str | None = None) -> bool:
