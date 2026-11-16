@@ -180,6 +180,57 @@ async def test_c2_archive_stores_nothing_and_leaves_game_to_its_expiry(env):
     assert after == before, "archive changed the game's paid storage row"
 
 
+@pytest.mark.asyncio
+async def test_c2_expiry_sweep_removes_archived_projects_game_video(env):
+    """T16535:C2 (option A) - once the game's paid storage runs out, the
+    existing expiry sweep deletes the game video of an archived project: its
+    kept clips and working video do not hold the game video in storage, and
+    archive did not extend the paid expiry."""
+    db_path, _store, _reads = env
+    from app.routers.downloads import publish_to_my_reels
+    from app.services.auto_export import ArtifactVerdict
+    from app.services.sweep_scheduler import do_sweep
+
+    project_id, _, _ = _seed_published_reel(db_path)
+    conn = _connect(db_path)
+    conn.execute("INSERT INTO games (id, name, blake3_hash, auto_export_status) "
+                 "VALUES (7, 'Game', ?, 'complete')", (GAME_HASH,))
+    conn.commit()
+    conn.close()
+    await publish_to_my_reels(project_id)
+
+    # The 20 paid days run out (time moves; the stored expiry stays as archive left it).
+    conn = _connect(db_path)
+    conn.execute("UPDATE game_storage SET storage_expires_at = datetime(storage_expires_at, '-21 days')")
+    conn.commit()
+    conn.close()
+
+    grace = []  # hashes the sweep queued for R2 deletion
+    sweep = "app.services.sweep_scheduler"
+    with patch(f"{sweep}.get_expiring_ref_profiles", return_value=[(USER_ID, PROFILE_ID)]), \
+         patch("app.services.auth_db.get_pg"), \
+         patch(f"{sweep}.has_remaining_refs", return_value=False), \
+         patch(f"{sweep}.insert_grace_deletion", lambda h, *a: grace.append(h)), \
+         patch(f"{sweep}.get_expired_grace_deletions", lambda: list(grace)), \
+         patch(f"{sweep}.get_grace_queued_by", return_value=(USER_ID, PROFILE_ID)), \
+         patch(f"{sweep}.get_ref_holders", return_value=[]), \
+         patch(f"{sweep}.delete_grace_deletion"), \
+         patch(f"{sweep}.auto_export_game") as auto_export, \
+         patch(f"{sweep}.recap_artifacts_present", return_value=ArtifactVerdict.PRESENT), \
+         patch("app.storage.APP_ENV", "production"), \
+         patch(f"{sweep}.r2_delete_object_global") as r2_delete:
+        do_sweep()
+
+    auto_export.assert_not_called()
+    r2_delete.assert_called_once_with(f"games/{GAME_HASH}.mp4")
+    conn = _connect(db_path)
+    left = conn.execute("SELECT COUNT(*) c FROM game_storage WHERE blake3_hash = ?", (GAME_HASH,)).fetchone()["c"]
+    conn.close()
+    assert left == 0, "the archived project's game is still stored after its expiry"
+    wc, wv, proj = _counts(db_path, project_id)
+    assert proj["archived_at"] is not None and (wc, wv) == (1, 1)
+
+
 def _archive_old_style(db_path, store, project_id):
     """Reproduce what archive_project did before T16535: msgpack the rows to R2,
     then delete them and clear working_video_id."""
@@ -218,20 +269,63 @@ async def test_c3_old_archive_still_restores(env):
     assert proj["archived_at"] is None
 
 
-@pytest.mark.asyncio
-async def test_c4_archived_highlight_stays_published(env):
-    """T16535:C4 - archiving leaves the finished highlight published, with the
-    same final video row (its file and id, which share links point at)."""
-    db_path, _store, _reads = env
-    from app.routers.downloads import publish_to_my_reels
+SHARER_ID = "sharer-user"  # in conftest._TEST_USER_IDS: pg_conn cleans it up
 
+
+@pytest.fixture()
+def gallery_client(pg_conn, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from app.services.auth_db import create_user
+    from app.session_init import _init_cache
+
+    create_user(SHARER_ID, email="sharer@example.com")
+    _init_cache[SHARER_ID] = {"profile_id": PROFILE_ID, "is_new_user": False}
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db._initialized_user_dbs", set()), \
+         patch("app.routers.auth.mark_user_archived", lambda *a, **k: None):
+        from app.main import app
+        yield TestClient(app, raise_server_exceptions=True)
+
+
+def test_c4_archived_highlight_keeps_playing_and_its_share_link(gallery_client):
+    """T16535:C4 - after publish archives the project, the finished highlight
+    still plays from My Reels (the gallery list serves its video URL) and a
+    share link to it still resolves to the same video, through the real routes."""
+    from app.database import get_database_path
+    from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
+
+    headers = {"X-User-ID": SHARER_ID}
+    gallery_client.get("/api/downloads", headers=headers)  # creates the profile DB
+    set_current_user_id(SHARER_ID)
+    set_current_profile_id(PROFILE_ID)
+    db_path = get_database_path()
     project_id, final_video_id, _ = _seed_published_reel(db_path)
-    await publish_to_my_reels(project_id)
 
-    conn = _connect(db_path)
-    fv = conn.execute("SELECT * FROM final_videos WHERE id = ?", (final_video_id,)).fetchone()
-    proj = conn.execute("SELECT final_video_id FROM projects WHERE id = ?", (project_id,)).fetchone()
-    conn.close()
-    assert fv is not None and fv["published_at"] is not None
-    assert fv["filename"] == "final.mp4"
-    assert proj["final_video_id"] == final_video_id
+    resp = gallery_client.post(f"/api/downloads/publish/{project_id}", headers=headers)
+    assert resp.status_code == 200, resp.text
+    _, _, proj = _counts(db_path, project_id)
+    assert proj["archived_at"] is not None, "publish must archive the project"
+
+    def presign(user_id, relative_path, **_kw):
+        return f"https://r2.test/{user_id}/{relative_path}"
+
+    with patch("app.routers.downloads.R2_ENABLED", True), \
+         patch("app.routers.downloads.generate_presigned_url", presign):
+        resp = gallery_client.get("/api/downloads", headers=headers)
+    assert resp.status_code == 200, resp.text
+    reels = {d["id"]: d for d in resp.json()["downloads"]}
+    assert final_video_id in reels, f"archived project's highlight left My Reels: {sorted(reels)}"
+    assert reels[final_video_id]["file_url"] == f"https://r2.test/{SHARER_ID}/final_videos/final.mp4"
+
+    resp = gallery_client.post(f"/api/gallery/{final_video_id}/share",
+                               json={"recipient_emails": [], "is_public": True}, headers=headers)
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["shares"][0]["share_token"]
+    with patch("app.routers.shares.generate_presigned_url_global", lambda key, **_kw: f"https://r2.test/{key}"):
+        resp = gallery_client.get(f"/api/shared/{token}")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["video_url"].endswith(
+        f"/users/{SHARER_ID}/profiles/{PROFILE_ID}/final_videos/final.mp4"), resp.json()["video_url"]
