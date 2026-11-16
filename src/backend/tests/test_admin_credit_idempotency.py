@@ -76,7 +76,7 @@ class TestSingleGrantIdempotency:
         committed (e.g. the connection drops before the response is sent).
         This is the AC that was structurally impossible before T5840: admin_grant
         can now safely 503 because the retry is idempotent on request_id."""
-        from app.routers import admin as admin_router
+        from app.routers.admin import credits as admin_router
         from app.services import credit_ledger
 
         real_grant = credit_ledger.grant

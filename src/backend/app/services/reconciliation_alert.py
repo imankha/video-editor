@@ -9,7 +9,7 @@ rather than waiting to be noticed (EPIC.md research).
 This is a thin background caller around the SAME computation the admin panel uses.
 It does not reimplement the query or the classifier:
 
-- it runs ``_compute_reconciliation`` (routers/admin.py) with the panel's default
+- it runs ``_compute_reconciliation`` (routers/admin/revenue.py) with the panel's default
   filter (test accounts excluded), and
 - alerts ONLY on drift that is genuinely unexplained: any row classified
   ``unknown`` (after T8640, ``aligned``/``test_mode_era``/``account_deleted``/
@@ -345,7 +345,7 @@ def _compute_rows() -> list:
     Postgres query or the classifier call site, and keeps ``revenue_reconciliation``
     a pure module. A lazy import (never at module load) avoids any import cycle.
     """
-    from ..routers.admin import _compute_reconciliation
+    from ..routers.admin.revenue import _compute_reconciliation
     rows, _ = _compute_reconciliation(exclude_test=True)
     return rows
 

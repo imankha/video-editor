@@ -22,6 +22,7 @@ import httpx
 import pytest
 
 from app.main import app
+from app.routers import admin
 from app.session_init import _init_cache
 
 # X-User-ID admin auth needs an owned 8-hex profile so the middleware skips the
@@ -105,7 +106,7 @@ def test_slow_admin_analytics_does_not_serialize_concurrent_requests(monkeypatch
     """
     # Bypass the admin gate (its own get_pg check is not what we're measuring) and make
     # the handler's `from ..services.pg import get_pg` resolve to the blocking stub.
-    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg)
     _seed_owned_profile(monkeypatch)
 
@@ -157,11 +158,11 @@ def _run_concurrency_probe(url, monkeypatch):
     `get_pg` name bound at MODULE IMPORT TIME (`from ..services.pg import get_pg` at the
     top of admin.py, line ~32) — patching only the source attribute would silently miss
     it and let the test hit a REAL Postgres connection. Patching
-    `app.routers.admin.get_pg` too covers that binding regardless of which style the
+    `app.routers.admin.analytics.get_pg` too covers that binding regardless of which style the
     specific handler under test uses."""
-    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg)
-    monkeypatch.setattr("app.routers.admin.get_pg", _blocking_get_pg)
+    monkeypatch.setattr("app.routers.admin.analytics.get_pg", _blocking_get_pg)
     _seed_owned_profile(monkeypatch)
 
     async def go():
@@ -268,13 +269,13 @@ def test_list_users_does_not_serialize_concurrent_requests(monkeypatch):
     threadpooled) not SERIALIZE (~N*DELAY, on the loop).
 
     list_users binds `get_pg` at MODULE import time (top-of-file `from ..services.pg import
-    get_pg`, used at the `with get_pg()` inside its body), so patching admin.get_pg is what
+    get_pg`, used at the `with get_pg()` inside its body), so patching admin.users.get_pg is what
     actually redirects it; we patch app.services.pg.get_pg too for symmetry. Verified
     counterfactually: reverting list_users to `async def` makes the burst ~N*t1 and fails.
     """
-    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg_listusers)
-    monkeypatch.setattr("app.routers.admin.get_pg", _blocking_get_pg_listusers)
+    monkeypatch.setattr("app.routers.admin.users.get_pg", _blocking_get_pg_listusers)
     _seed_owned_profile(monkeypatch)
 
     async def go():
@@ -310,7 +311,7 @@ def test_list_users_does_not_serialize_concurrent_requests(monkeypatch):
 def test_single_slow_request_actually_pays_the_delay(monkeypatch):
     """Sanity: a single request pays ~DELAY, so the overlap guard is measuring a
     real per-request cost (guards against the stub silently becoming a no-op)."""
-    monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+    monkeypatch.setitem(app.dependency_overrides, admin.require_admin, lambda: None)
     monkeypatch.setattr("app.services.pg.get_pg", _blocking_get_pg)
     _seed_owned_profile(monkeypatch)
 
@@ -334,7 +335,8 @@ def test_all_nine_admin_dashboard_handlers_are_sync_def():
     which shared the same async-def-blocking bug, missed by both prior sweeps) and the
     new get_admin_dashboard composer (which calls all of these inline, so it too must be
     sync all the way down)."""
-    from app.routers import admin
+    from app.routers.admin import analytics as admin_analytics
+    from app.routers.admin import users as admin_users
     for name in (
         "analytics_funnel",
         "analytics_channels",
@@ -347,7 +349,7 @@ def test_all_nine_admin_dashboard_handlers_are_sync_def():
         "list_users",
         "get_admin_dashboard",
     ):
-        fn = getattr(admin, name)
+        fn = getattr(admin_users if name == "list_users" else admin_analytics, name)
         assert not inspect.iscoroutinefunction(fn), (
             f"{name} is async def — it must be a plain def so FastAPI runs its "
             f"blocking DB body in the threadpool, off the event loop (T8000/T8010/T8020)."

@@ -312,7 +312,7 @@ class TestGroupedViewsUnattributed:
 class TestPerformance:
     @contextmanager
     def _count_admin_statements(self, monkeypatch):
-        from app.routers import admin as admin_mod
+        from app.routers.admin import analytics as admin_mod
         real_get_pg = admin_mod.get_pg
         stmts: list[str] = []
 

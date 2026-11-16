@@ -46,7 +46,7 @@ def test_multi_clip_connection_lost_message_has_no_refresh():
 def test_no_server_string_asks_the_user_to_refresh_or_reload():
     offenders = []
     for path in APP.rglob("*.py"):
-        if "admin" in path.name or "migrations" in path.parts:
+        if "admin" in path.name or "admin" in path.parts or "migrations" in path.parts:
             continue
         for node in _shown_strings(path):
             if ASKS_TO_REFRESH.search(node.value) and not NOT_COPY.search(node.value):

@@ -10,8 +10,8 @@ Covers the four behaviours the task calls out plus the mark endpoint:
   - POST /users/{id}/test-account marks/unmarks and the exclusion reflects it.
 
 Direct sync-call convention (T8020): list_users / analytics_* are plain `def`,
-called directly with every param explicit. `_require_admin` and
-`credit_ledger.stats_for_admin` are patched; the mark endpoint's admin-id log
+called directly with every param explicit, so the router-level admin guard (T4610)
+never runs. `credit_ledger.stats_for_admin` is patched; the mark endpoint's admin-id log
 needs `get_current_user_id` patched too.
 """
 
@@ -21,7 +21,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.analytics import create_user_segment
-from app.routers import admin
+from app.routers.admin import analytics as admin_analytics
+from app.routers.admin import users as admin_users
 from app.services import pg as pg_service
 from app.services.auth_db import create_user
 
@@ -57,9 +58,8 @@ def _list(**kwargs):
         sort_dir="desc", exclude_test=True,
     )
     params.update(kwargs)
-    with patch.object(admin, "_require_admin", return_value=None), \
-         patch.object(admin.credit_ledger, "stats_for_admin", return_value={}):
-        return admin.list_users(**params)
+    with patch.object(admin_users.credit_ledger, "stats_for_admin", return_value={}):
+        return admin_users.list_users(**params)
 
 
 def _all_ids(**kwargs):
@@ -198,9 +198,8 @@ def test_exclude_test_applies_to_platforms_aggregate(pg_conn):
     _add_action("user-b", "export_completed", 7, platform="web")
     _mark_test("user-b", True)
 
-    with patch.object(admin, "_require_admin", return_value=None):
-        excluded = admin.analytics_platforms(action="export_completed", exclude_test=True)
-        included = admin.analytics_platforms(action="export_completed", exclude_test=False)
+    excluded = admin_analytics.analytics_platforms(action="export_completed", exclude_test=True)
+    included = admin_analytics.analytics_platforms(action="export_completed", exclude_test=False)
 
     def _web_users(resp):
         return next((p["users"] for p in resp["platforms"] if p["platform"] == "web"), 0)
@@ -221,24 +220,21 @@ def test_mark_and_unmark_test_account_endpoint(pg_conn):
     create_user("user-a", email="a@test.local")
     create_user_segment("user-a", origin="organic", referrer_id=None, signup_method="google")
 
-    with patch.object(admin, "_require_admin", return_value=None), \
-         patch.object(admin, "get_current_user_id", return_value="admin-user"):
-        res = admin.admin_mark_test_account("user-a", admin.TestAccountRequest(is_test=True))
+    with patch.object(admin_users, "get_current_user_id", return_value="admin-user"):
+        res = admin_users.admin_mark_test_account("user-a", admin_users.TestAccountRequest(is_test=True))
         assert res == {"user_id": "user-a", "is_test_account": True}
 
     # Flag persisted -> excluded from the Real view.
     assert "user-a" not in {u["user_id"] for u in _list(exclude_test=True, page_size=50)["users"]}
 
-    with patch.object(admin, "_require_admin", return_value=None), \
-         patch.object(admin, "get_current_user_id", return_value="admin-user"):
-        admin.admin_mark_test_account("user-a", admin.TestAccountRequest(is_test=False))
+    with patch.object(admin_users, "get_current_user_id", return_value="admin-user"):
+        admin_users.admin_mark_test_account("user-a", admin_users.TestAccountRequest(is_test=False))
 
     assert "user-a" in {u["user_id"] for u in _list(exclude_test=True, page_size=50)["users"]}
 
 
 def test_mark_test_account_unknown_user_is_404(pg_conn):
-    with patch.object(admin, "_require_admin", return_value=None), \
-         patch.object(admin, "get_current_user_id", return_value="admin-user"), \
+    with patch.object(admin_users, "get_current_user_id", return_value="admin-user"), \
          pytest.raises(HTTPException) as ei:
-        admin.admin_mark_test_account("user-c", admin.TestAccountRequest(is_test=True))
+        admin_users.admin_mark_test_account("user-c", admin_users.TestAccountRequest(is_test=True))
     assert ei.value.status_code == 404

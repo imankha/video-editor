@@ -22,7 +22,7 @@
   },
   "T16340:C6": {
    "kind": "code",
-   "command": "f=docs/plans/tasks/T16340-upload-success-over-100-percent.md && grep -q '^## Findings' $f && sed -n '/^## Findings/,$p' $f | grep -q 'prepare_upload' && sed -n '/^## Findings/,$p' $f | grep -q 'finalize_upload' && test \"$(grep -rlE 'record_milestone\\([^)]*\"game_upload_(attempted|succeeded)\"|\"game_upload_attempted\"' src/backend/app --include=*.py | grep -v -e analytics.py -e routers/admin.py | sort -u)\" = src/backend/app/routers/games_upload.py"
+   "command": "f=docs/plans/tasks/T16340-upload-success-over-100-percent.md && grep -q '^## Findings' $f && sed -n '/^## Findings/,$p' $f | grep -q 'prepare_upload' && sed -n '/^## Findings/,$p' $f | grep -q 'finalize_upload' && test \"$(grep -rlE 'record_milestone\\([^)]*\"game_upload_(attempted|succeeded)\"|\"game_upload_attempted\"' src/backend/app --include=*.py | grep -v -e analytics.py -e routers/admin/ | sort -u)\" = src/backend/app/routers/games_upload.py"
   }
  }
 }

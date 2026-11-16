@@ -208,7 +208,9 @@ class TestAdminPanelCount:
         _finalize(monkeypatch, MOOV_AT_END_HEAD, "game")
         _finalize(monkeypatch, MOOV_AT_END_HEAD, "clip")
 
-        monkeypatch.setattr("app.routers.admin._require_admin", lambda: None)
+        from app.main import app
+        from app.routers.admin import require_admin
+        monkeypatch.setitem(app.dependency_overrides, require_admin, lambda: None)
         with _client() as client:
             resp = client.get("/api/admin/upload-failures")
         assert resp.status_code == 200, resp.text

@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T5940:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t5940_admin_route_snapshot.py -q -p no:cacheprovider"},
+    "T5940:C2": {"kind": "code", "command": "bash src/frontend/e2e/checks/T5940.moves.sh c2"},
+    "T5940:C3": {"kind": "code", "command": "bash src/frontend/e2e/checks/T5940.moves.sh c3"},
+    "T5940:C4": {"kind": "code", "command": "! grep -nE 'routers\\.admin|_refresh_target_user_db\\(' src/backend/tests/test_persistence_risk_coverage.py"},
+    "T5940:C5": {"kind": "code", "command": "grep -q '^def _segment_group_rows' src/backend/app/services/analytics.py && ! grep -qE '^def (_segment_group_rows|_segment_window_where|_rollup_failures|_retry_bursts_for_stopped|_test_exclusion)' src/backend/app/routers/admin/analytics.py src/backend/app/routers/admin/__init__.py"},
+    "T5940:C6": {"kind": "code", "command": "test $(grep -c '^app.include_router(admin_' src/backend/app/main.py) -eq 10 && ! grep -nE '^\\s*for .* in .*(router|admin)' src/backend/app/main.py"},
+    "T5940:C7": {"kind": "code", "command": "grep -q 'admin/` package (`/api/admin`, T5940 split' .claude/knowledge/backend-services.md && grep -q 'services/analytics.py' .claude/knowledge/backend-services.md"},
+    "T5940:C8": {"kind": "human", "why": "Needs the full backend suite at each of the 13 T5940 commits; worker policy forbids full-suite runs and Branch CI sweeps only the branch head. The shared dev Postgres also fails a known set of tests on the base revision (listed in the PR evidence), so a per-commit sweep needs a clean database."}
+  }
+}

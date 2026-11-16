@@ -394,7 +394,7 @@ def test_sweep_reads_users_concurrently_under_the_request_user(user_dbs, tmp_pat
 def test_step_retry_burst_sample_reads_users_concurrently():
     from contextlib import contextmanager
 
-    from app.routers.admin import _retry_bursts_for_stopped
+    from app.routers.admin.analytics import _retry_bursts_for_stopped
 
     state, enter = _peak_tracker()
 

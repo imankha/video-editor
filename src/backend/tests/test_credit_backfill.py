@@ -495,7 +495,7 @@ class TestForceDownloadDistinguishesTransientFromAbsent:
             "a download that never happened must not masquerade as 'no account'"
         )
 
-        from app.routers.admin import _gate_blocking_rows
+        from app.routers.admin.credits import _gate_blocking_rows
         assert _gate_blocking_rows([row], set()) == [row], (
             "a transient R2 failure must BLOCK the gate -- opening it here zeroes "
             "any real balance that simply failed to download"
@@ -514,7 +514,7 @@ class TestForceDownloadDistinguishesTransientFromAbsent:
         assert row["status"] == "no_user_db"
         assert "unreadable_copy" not in row["flags"]
 
-        from app.routers.admin import _gate_blocking_rows
+        from app.routers.admin.credits import _gate_blocking_rows
         assert _gate_blocking_rows([row], set()) == [], "a genuine ghost must not block the gate"
 
 

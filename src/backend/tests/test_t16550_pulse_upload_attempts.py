@@ -140,7 +140,7 @@ def test_before_the_migration_there_is_no_rate_but_the_alarm_still_works(client,
     for _ in range(8):
         record_milestone(USER, "game_upload_failed", reason="r2_rejected")
     _counter_buffer.flush()
-    with patch("app.routers.admin.usage_daily_has_upload_attempts", return_value=False):
+    with patch("app.routers.admin.analytics.usage_daily_has_upload_attempts", return_value=False):
         card = _pulse(client, query)
     assert card["today"] is None
     assert card["attempts"] is None

@@ -80,7 +80,7 @@ anonymous counts), weekly cohort rollups (T7430), by-sport rollups (T14950).
 
 Write-side vocabulary: `FLOW_EVENTS`, `record_milestone(user_id, event, context, reason)`,
 `record_impression`, `record_session_exit` in `src/backend/app/analytics.py`. Read side:
-`src/backend/app/routers/admin.py` (journey map `analytics_journey_map`, step inspector
+`src/backend/app/routers/admin/` (journey map `analytics_journey_map`, step inspector
 `by=platform|origin|build|cohort_month`, pulse, pack mix, users table), services
 `analytics_journey.py`, `analytics_store.py`. Frontend admin: `src/frontend/src/components/admin/`
 (JourneyTab, JourneyFlowChart, StepInspector, UserDetailPanel, UserTable).

@@ -1,0 +1,6 @@
+{
+  "criteria": {
+    "T4640:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t4640_share_flow.py -q -p no:cacheprovider -k TestOneSharedFlow"},
+    "T4640:C2": {"kind": "code", "command": "bash src/frontend/e2e/checks/T4640.characterization.sh"}
+  }
+}
