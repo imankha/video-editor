@@ -92,7 +92,7 @@ The owner sat on the loading screen on production on 2026-11-13. Measured the sa
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T16460 | [Production accounts database to Los Angeles](tasks/T16460-accounts-database-move-production.md) | 6 | 3 | 2.0 | WAITING ON USER | [ ] | Owner ruling 2026-11-13 on T16410. Production's accounts database sits in Chicago while its server runs in Los Angeles. After T16410 rehearses the move on staging, repeat it on production in a quiet hour the owner picks; about five minutes without sign-in. |
+| T16460 | [Production accounts database to Los Angeles](tasks/T16460-accounts-database-move-production.md) | 6 | 3 | 2.0 | STAGING | [ ] | Production's accounts database moved from Chicago to Los Angeles, next to its server, on 2026-11-14 with 55 seconds of downtime. The sign-in check fell from about 180 ms to 3-11 ms. The old Chicago databases (production and staging) were backed up to R2 and removed on 2026-11-16, after the owner confirmed sign-in, shared links and the admin dashboard. |
 
 ### Code health: bugs (code review 2026-11-13, BUGS FIRST)
 

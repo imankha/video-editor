@@ -1,10 +1,10 @@
 # T16460: Move the production accounts database to Los Angeles
 
-**Status:** WAITING ON USER
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-13
-**Updated:** 2026-11-15
+**Updated:** 2026-11-16
 
 ## In plain words
 
@@ -18,7 +18,7 @@
 
 ## Ruling needed
 
-- [ ] human: the owner picks the production window and confirms the removal of the old databases after a week.
+- [x] human: the owner picks the production window and confirms the removal of the old databases. (2026-11-15: the owner allowed removal once the new databases were fully hooked up and confirmed working, without waiting the week.)
 
 ## Runbook
 
@@ -70,8 +70,10 @@ Differences from T16410's plan: the database name (step 0), stopping writes with
 - Final backups of both old databases are in R2, in the bucket `reel-ballers-users`: `db-backups/T16460/reel-ballers-db-prod-final-2026-11-16.dump` (418 KB) and `db-backups/T16460/reel-ballers-db-staging-final-2026-11-16.dump` (129 KB). Each was restored into a scratch Postgres 17 and matched its live database exactly (31 tables, 47 migration entries). The copies read back from R2 match byte for byte. No R2 cleanup job lists outside the `{env}/users/` folders, so `db-backups/` is safe.
 - Not yet checked: the admin dashboard loading for a signed-in admin. The saved admin session that `/bug` uses is gone: every sign-in deletes that user's older sessions (`_issue_session_cookie`), and the owner signed in as admin after the switch. Using the owner's live session from the database was blocked, rightly. The old databases stay until the owner confirms the dashboard loads.
 
+**2026-11-16.** The owner confirmed the admin dashboard loads on production. With everything confirmed, `reel-ballers-db-prod` and `reel-ballers-db-staging` were destroyed with `fly apps destroy`. Afterwards both APIs answered `/api/health` with 200. The knowledge doc now points at the R2 dumps. T16410's staging check c1 can no longer compare against the old database, so it now compares against `scripts/t16410_staging_frozen.txt`, the old staging database's tables and migration rows read just before it was destroyed. It also requires the old app to be gone. It passes on staging, and fails when the snapshot names a table the new database lacks. Older task files and dated notes that name the old databases (T4820, T9680, the 2026-08-12 handoff, the 2026-11-09 funnel note, this runbook and T16410's) are records of what happened and stay as written.
+
 ## Acceptance Criteria
 
 - [x] C1: Production's accounts database runs in Los Angeles; every table's row count and the `schema_migrations` ledger match the old one at the switch.
-- [ ] C2: Sign-in, a shared link and the admin dashboard work after the switch; the session check takes under 20 ms on a single request.
-- [ ] C3: After a week, a final dump of each old database is in R2, both old database apps are destroyed, and no doc or script names them.
+- [x] C2: Sign-in, a shared link and the admin dashboard work after the switch; the session check takes under 20 ms on a single request.
+- [x] C3: After a week, a final dump of each old database is in R2, both old database apps are destroyed, and no doc or script names them.
