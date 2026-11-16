@@ -42,3 +42,7 @@ Archiving deletes data a redo needs. A redo after the sweep has to restore it fr
 ### Notes
 - Tier L-ish: it changes what the archive deletes. Architect design gate. State how it obeys restore-if-newer.
 - Sport-neutral strings.
+
+## Ruling
+
+Owner approved the design in T16535-design.md with option A (owner, 2026-11-16): archive keeps the clips and the working video and only marks the project archived. The game video is left to its own paid 30-day expiry; after that Edit zoom says it is unavailable. No early delete, no new UI, no refund rule.
