@@ -1,6 +1,6 @@
 # T16580: The Spotlight helper check skips itself on staging
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-11-15
