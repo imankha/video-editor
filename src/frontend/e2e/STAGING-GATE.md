@@ -181,6 +181,10 @@ the dev-harness specs then RUN instead of skipping).
   the output, never a green pass. A real regression and a missing fixture never look alike.
 - **First-login retry is centralized.** `loginAsRealUser` retries a 5xx `dev-login` (staging PG
   stale-pool blip) up to 3× — specs don't re-implement it.
+- **Home tabs by URL and test id, never `/` and a label (T16600).** A bare `/` reopens the
+  account's last editor (T14980 resume point), and tab labels follow the copy glossary (Clips
+  became Plays in T14640). Go to `/home/reels` or `/home/published` and select
+  `home-tab-clips` / `home-tab-published`.
 
 ---
 

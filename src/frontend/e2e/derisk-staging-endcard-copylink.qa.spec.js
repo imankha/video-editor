@@ -161,9 +161,12 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
     }
   });
 
-  await page.goto('/');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Highlights/ }) });
-  await page.getByRole('button', { name: /^Highlights/ }).first().click({ timeout: 30000 });
+  // T16600: a bare `/` reopens the account's last editor (T14980 resume point), where
+  // there is no Highlights tab; the tab's own URL never resumes.
+  await page.goto('/home/published');
+  const publishedTab = page.getByTestId('home-tab-published');
+  await waitForAppReady(page, { ready: publishedTab });
+  await publishedTab.click({ timeout: 30000 });
   // Expand the DISCOVERED game group so its reel cards render. There are TWO buttons
   // whose name contains the game name (the Games-tab group + the Published group); the
   // Published CollapsibleGroup header is the LAST one, and its reel cards load LAZILY on
@@ -184,6 +187,7 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
     if (await reelCard.waitFor({ state: 'visible', timeout: 12000 }).then(() => true).catch(() => false)) break;
   }
   await reelCard.waitFor({ state: 'visible', timeout: 15000 });
+  console.log('[derisk] reel card visible'); // T16600: the Highlights route got this far
   // T6300: Copy link moved from a direct hover-revealed chip into the kebab menu,
   // and each menu item click also calls setMenuOpen(false) — a naive "click 5
   // times" loop would only land the FIRST click on a mounted button (the menu

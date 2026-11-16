@@ -8,7 +8,7 @@ import { waitForAppReady } from './helpers/appReady.js';
  * Drives the REAL app as the SEEDED FIXTURE account (imankh@gmail.com / profile
  * 9fa7378c, per e2e/FIXTURE-CONTRACT.md — env-overridable via E2E_REAL_EMAIL /
  * E2E_REAL_PROFILE):
- *   login -> Clips -> open a DISCOVERED draft -> Export -> wait for the
+ *   login -> Plays tab -> open a DISCOVERED draft -> Export -> wait for the
  *   pipeline (framing render -> overlay render -> final video) -> publish
  *   ("Publish clip"/"Publish reel", T9530) -> the Published tab lists the reel.
  *
@@ -98,11 +98,22 @@ async function probeWorkingVideo(context, projectId) {
   };
 }
 
-/** Open the Clips tab, then open a draft card by its (discovered) name. */
+/**
+ * Go Home and open the drafts tab (T16600). Two changes stopped the gate at this step:
+ * T14640 renamed the tab "Clips" -> "Plays" (select it by its stable test id, not its
+ * copy), and T14980 made a bare `/` reopen the account's last editor (its resume point),
+ * so go to the tab's own URL, /home/reels, which never resumes.
+ */
+async function openPlaysTab(page) {
+  await page.goto('/home/reels');
+  const tab = page.getByTestId('home-tab-clips');
+  await waitForAppReady(page, { ready: tab });
+  await tab.click({ timeout: 30000 });
+}
+
+/** Open the Plays tab, then open a draft card by its (discovered) name. */
 async function openDraftCard(page, name) {
-  await page.goto('/');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Clips' }) });
-  await page.getByRole('button', { name: 'Clips' }).first().click({ timeout: 30000 });
+  await openPlaysTab(page);
   const card = page.locator('[data-testid="project-card"]').filter({ hasText: name }).first();
   await card.waitFor({ timeout: 30000 });
   await card.click();
@@ -116,7 +127,8 @@ async function openDraftCard(page, name) {
 // handler, different label). "Add Spotlight" is now only the action-bar label (T9590).
 // T9860 (2026-09-14): the mode noun itself was renamed off the render engine to "Framing".
 const FRAMING_EXPORT_BTN = /^Sharpen my highlight$/;
-const OVERLAY_EXPORT_BTN = /^Export clip with effects$/;
+// T16600: T14620 renamed the overlay render action to EXPORT_JOBS.overlay.action.
+const OVERLAY_EXPORT_BTN = /^Add spotlight to highlight$/;
 
 test('staging export pipeline + publish (smoke + durability) @staging-gate @gate-a', async ({ context, page }) => {
   test.setTimeout(900_000);
@@ -271,9 +283,7 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate @gate
   expect(proj?.has_final_video, 'pipeline produced a final video').toBeTruthy();
 
   // --- PUBLISH: the ready-to-publish card shows "Publish clip"/"Publish reel" (T9530) ---
-  await page.goto('/');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Clips' }) });
-  await page.getByRole('button', { name: 'Clips' }).first().click({ timeout: 30000 });
+  await openPlaysTab(page);
   const moveBtn = page.getByRole('button', { name: /Finish highlight/i }).first();
   await moveBtn.waitFor({ timeout: 60000 });
   await page.screenshot({ path: `${EVID}/05-ready-to-publish.png` });
