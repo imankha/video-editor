@@ -4,7 +4,7 @@
 
 Frame is the step where the parent crops around their athlete and pays to sharpen the result. Today the sharpened highlight (a finished short clip) waits on a "Your highlight is ready" panel, and it only reaches the Highlights tab, where it can be downloaded and shared, if the parent taps Finish while the browser is open. Of 72 exported highlights, 42 never got there: 12 parents left during the 3.5 minute wait, at least 12 saw the panel and none tapped Finish without spotlight, and nobody who came back later finished. We will have the server finish the highlight the moment sharpening ends, so it is in Highlights whether or not the parent is still there, and tell them so. Done when a highlight sharpened on staging with the browser closed is in Highlights on the next visit.
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-11-14
