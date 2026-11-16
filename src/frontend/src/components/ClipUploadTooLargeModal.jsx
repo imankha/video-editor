@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './shared/Button';
+import { DialogShell } from './shared/DialogShell';
 import { CLIP_UPLOAD } from '../config/displayNames';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
@@ -25,46 +26,42 @@ export function ClipUploadTooLargeModal({ isOpen, names = [], maxBytes, onDismis
 
   return (
     <GuideScope guides={[guide]}>
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onDismiss} />
-
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="clip-upload-too-large-title"
-        data-testid="clip-upload-too-large-modal"
-        className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700"
-      >
-        <div className="flex items-start gap-3 p-5 border-b border-gray-700">
-          <div className="p-2 bg-yellow-600/20 rounded-lg shrink-0">
-            <AlertTriangle size={20} className="text-yellow-400" />
-          </div>
-          <h2 id="clip-upload-too-large-title" className="text-lg font-semibold text-white mt-1">
-            {CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_TITLE}
-          </h2>
+    <DialogShell
+      role="alertdialog"
+      labelledBy="clip-upload-too-large-title"
+      panelTestId="clip-upload-too-large-modal"
+      backdropClassName="bg-black/70 backdrop-blur-sm"
+      panelClassName="bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700"
+    >
+      <div className="flex items-start gap-3 p-5 border-b border-gray-700">
+        <div className="p-2 bg-yellow-600/20 rounded-lg shrink-0">
+          <AlertTriangle size={20} className="text-yellow-400" />
         </div>
-
-        <div className="p-5 space-y-3">
-          <Guide guide={guide} inline testId="modal-guide" />
-          <p className="text-sm text-gray-300 leading-relaxed" data-testid="clip-upload-too-large-body">
-            {mb ? CLIP_UPLOAD.postUploadTooLargeBody(mb) : CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_TITLE}
-          </p>
-          {names.length > 0 && (
-            <ul className="text-xs text-gray-400 space-y-1">
-              {names.map((name) => (
-                <li key={name} className="truncate">{name}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-gray-700 flex justify-end">
-          <Button variant="secondary" size="md" onClick={onDismiss} data-testid={GUIDE_PULSE.CLIP_TOO_LARGE_OK} guideTarget={GUIDE_PULSE.CLIP_TOO_LARGE_OK}>
-            {CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_DISMISS}
-          </Button>
-        </div>
+        <h2 id="clip-upload-too-large-title" className="text-lg font-semibold text-white mt-1">
+          {CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_TITLE}
+        </h2>
       </div>
-    </div>
+
+      <div className="p-5 space-y-3">
+        <Guide guide={guide} inline testId="modal-guide" />
+        <p className="text-sm text-gray-300 leading-relaxed" data-testid="clip-upload-too-large-body">
+          {mb ? CLIP_UPLOAD.postUploadTooLargeBody(mb) : CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_TITLE}
+        </p>
+        {names.length > 0 && (
+          <ul className="text-xs text-gray-400 space-y-1">
+            {names.map((name) => (
+              <li key={name} className="truncate">{name}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="p-4 border-t border-gray-700 flex justify-end">
+        <Button variant="secondary" size="md" onClick={onDismiss} data-testid={GUIDE_PULSE.CLIP_TOO_LARGE_OK} guideTarget={GUIDE_PULSE.CLIP_TOO_LARGE_OK}>
+          {CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_DISMISS}
+        </Button>
+      </div>
+    </DialogShell>
     </GuideScope>
   );
 }

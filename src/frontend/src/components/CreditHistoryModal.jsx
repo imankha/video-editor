@@ -8,6 +8,8 @@ import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { ERROR_COPY, CREDIT_COPY, CREDIT_HISTORY_LABELS } from '../config/displayNames';
 import { userErrorMessage } from '../utils/userError';
+import { DialogShell } from './shared/DialogShell';
+import { Z } from '../constants/zLayers';
 
 /**
  * CreditHistoryModal - Minimal usage history (T4940)
@@ -95,73 +97,76 @@ export function CreditHistoryModal({ onClose }) {
 
   return (
     <GuideScope guides={[guide]}>
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
-      <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10 max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Coins size={20} className="text-yellow-400" />
-            {CREDIT_COPY.HISTORY_TITLE}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <Guide guide={guide} inline testId="modal-guide" />
-
-        {!txns && !error && (
-          <div className="py-8 flex justify-center">
-            <Loader2 size={24} className="text-purple-400 animate-spin" />
-          </div>
-        )}
-
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-
-        {txns && txns.length === 0 && (
-          <p className="text-gray-400 text-sm py-6 text-center">
-            {CREDIT_COPY.NO_HISTORY}
-          </p>
-        )}
-
-        {rows.length > 0 && (
-          <div className="overflow-y-auto scrollbar-thin -mx-2">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-gray-500 text-xs">
-                  <th className="text-left font-medium px-2 pb-2">Activity</th>
-                  <th className="text-right font-medium px-2 pb-2">Amount</th>
-                  <th className="text-right font-medium px-2 pb-2">Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((tx) => (
-                  <tr key={tx.id} className="border-t border-white/5">
-                    <td className="px-2 py-2">
-                      <div className="text-gray-200">{labelFor(tx.source)}</div>
-                      <div className="text-gray-500 text-xs">
-                        {tx.pending ? <span className="text-yellow-400 font-medium">Pending</span> : formatDate(tx.created_at)}
-                        {tx.video_seconds ? ` · ${Math.round(tx.video_seconds)}s` : ''}
-                      </div>
-                    </td>
-                    <td className={`px-2 py-2 text-right font-medium ${tx.amount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {tx.amount >= 0 ? '+' : ''}{tx.amount}
-                    </td>
-                    <td className="px-2 py-2 text-right text-gray-300">{tx.balanceAfter}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <p className="mt-4 text-gray-500 text-xs text-center">
-          {CREDIT_COPY.HISTORY_FOOTER}
-        </p>
+    <DialogShell
+      zLayer={Z.OVERLAY_BACKDROP}
+      labelledBy="credit-history-title"
+      backdropClassName="bg-black/60"
+      panelClassName="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10 max-h-[85vh] flex flex-col"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 id="credit-history-title" className="text-lg font-semibold text-white flex items-center gap-2">
+          <Coins size={20} className="text-yellow-400" />
+          {CREDIT_COPY.HISTORY_TITLE}
+        </h3>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
+          <X size={20} />
+        </button>
       </div>
-    </div>
+
+      <Guide guide={guide} inline testId="modal-guide" />
+
+      {!txns && !error && (
+        <div className="py-8 flex justify-center">
+          <Loader2 size={24} className="text-purple-400 animate-spin" />
+        </div>
+      )}
+
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+
+      {txns && txns.length === 0 && (
+        <p className="text-gray-400 text-sm py-6 text-center">
+          {CREDIT_COPY.NO_HISTORY}
+        </p>
+      )}
+
+      {rows.length > 0 && (
+        <div className="overflow-y-auto scrollbar-thin -mx-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-gray-500 text-xs">
+                <th className="text-left font-medium px-2 pb-2">Activity</th>
+                <th className="text-right font-medium px-2 pb-2">Amount</th>
+                <th className="text-right font-medium px-2 pb-2">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((tx) => (
+                <tr key={tx.id} className="border-t border-white/5">
+                  <td className="px-2 py-2">
+                    <div className="text-gray-200">{labelFor(tx.source)}</div>
+                    <div className="text-gray-500 text-xs">
+                      {tx.pending ? <span className="text-yellow-400 font-medium">Pending</span> : formatDate(tx.created_at)}
+                      {tx.video_seconds ? ` · ${Math.round(tx.video_seconds)}s` : ''}
+                    </div>
+                  </td>
+                  <td className={`px-2 py-2 text-right font-medium ${tx.amount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {tx.amount >= 0 ? '+' : ''}{tx.amount}
+                  </td>
+                  <td className="px-2 py-2 text-right text-gray-300">{tx.balanceAfter}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="mt-4 text-gray-500 text-xs text-center">
+        {CREDIT_COPY.HISTORY_FOOTER}
+      </p>
+    </DialogShell>
     </GuideScope>
   );
 }
