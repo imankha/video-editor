@@ -20,6 +20,8 @@ TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py'
 # T14920: the roadmap export is imported by test_export_roadmap (tooling) and executed by the frontend
 # build at deploy time (npm run roadmap); Branch CI never builds the frontend, so tooling is its job.
 TOOLING_TOOLS = TOOLING_TOOLS | {'scripts/export_roadmap.py'}
+# T15910: the dead-code ratchet scans src/frontend and src/backend from the tooling job.
+TOOLING_TOOLS = TOOLING_TOOLS | {'scripts/check_dead_code.py', 'scripts/dead_code_baseline.json'}
 # The /dotask + landing harness: referenced by instructions and run by the harness job's tests.
 HARNESS = {'scripts/task.sh', 'scripts/task.bat', 'scripts/task-manager.py',
            'scripts/landing_gate.py', 'scripts/test_landing_gate.py',
@@ -85,6 +87,7 @@ SCRIPT_TESTS = {
     'scripts/test_check_doc_drift.py': 'tooling',
     'scripts/test_split_pytest.py': 'tooling',
     'scripts/test_export_roadmap.py': 'tooling',  # T14920
+    'scripts/test_check_dead_code.py': 'tooling',  # T15910
     'scripts/test_audit_agent_instructions.py': 'instructions',
     'scripts/test_validate_agent_instructions.py': 'instructions',
     'scripts/test_dotask_cli.py': 'harness',

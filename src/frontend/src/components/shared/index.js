@@ -21,4 +21,3 @@ export { FileUpload } from '../FileUpload';
 
 // Future re-exports (uncomment as needed):
 // export { ZoomControls } from '../ZoomControls';
-// export { ThreePositionToggle } from '../ThreePositionToggle';

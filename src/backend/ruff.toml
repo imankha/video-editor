@@ -38,6 +38,8 @@ exclude = [
 [lint.per-file-ignores]
 # Tests can use assert, magic values, etc.
 "tests/**/*.py" = ["B011", "S101"]
+# Vulture whitelist (T15910): bare names the scanner counts as used; never imported or run.
+"vulture_whitelist.py" = ["B018", "F821"]
 # Modal functions have different patterns
 "app/modal_functions/**/*.py" = ["E402"]
 # main.py intentionally orders imports after logging config + conditional/deferred

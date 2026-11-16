@@ -1,0 +1,24 @@
+{
+  "criteria": {
+    "T15910:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && timeout 60 npm run deadcode; [ $? -le 1 ] && cd ../backend && timeout 60 python3 scripts/deadcode.py"
+    },
+    "T15910:C2": {
+      "kind": "code",
+      "command": "cd scripts && python3 test_check_dead_code.py CompareTests FrontendTests BackendTests && python3 check_dead_code.py"
+    },
+    "T15910:C3": {
+      "kind": "code",
+      "command": "cd scripts && python3 test_ci_policy.py DeadCodeRatchetTests"
+    },
+    "T15910:C4": {
+      "kind": "code",
+      "command": "cd scripts && python3 test_check_dead_code.py CommittedBaselineTests"
+    },
+    "T15910:C5": {
+      "kind": "code",
+      "command": "grep -A12 'Zero callers' CLAUDE.md | grep -q 'scripts/check_dead_code.py'"
+    }
+  }
+}

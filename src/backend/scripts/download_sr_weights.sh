@@ -74,7 +74,7 @@ echo "  3. Place in $WEIGHTS_DIR/"
 echo ""
 echo "You also need to add the HAT architecture:"
 echo "  1. Clone: git clone https://github.com/XPixelGroup/HAT"
-echo "  2. Copy: HAT/hat/archs/hat_arch.py to src/backend/app/archs/"
+echo "  2. Compare with src/backend/app/ai_upscaler/models/hat_arch.py (already vendored)"
 echo ""
 
 echo "==========================================="

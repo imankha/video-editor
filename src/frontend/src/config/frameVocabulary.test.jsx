@@ -110,7 +110,7 @@ describe('T14620 Frame and paid-step copy', () => {
     const files = [
       'modes/FocusModeView.jsx', 'modes/focus/FocusTimeline.jsx', 'modes/focus/layers/SegmentLayer.jsx',
       'modes/focus/layers/CropLayer.jsx', 'modes/focus/overlays/CropOverlay.jsx', 'modes/focus/cockpit/FocusCockpit.jsx',
-      'components/ExportButtonView.jsx', 'components/shared/SegmentedProgressStrip.jsx', 'components/CropControls.jsx',
+      'components/ExportButtonView.jsx', 'components/shared/SegmentedProgressStrip.jsx',
       'components/settings/FocusSettingsPanel.jsx', 'components/DraftTile.jsx', 'containers/ExportButtonContainer.jsx',
       'services/ExportWebSocketManager.js', 'stores/exportStore.js', 'modes/annotate/clipStage.js',
     ];

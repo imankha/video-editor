@@ -100,6 +100,14 @@ jobs:
       - run: python scripts/test_check_doc_drift.py
       - run: python scripts/test_split_pytest.py
       - run: python scripts/test_export_roadmap.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the dead-code scanners (knip from the frontend lockfile, vulture pinned)
+        run: |
+          npm ci --prefix src/frontend --no-audit --no-fund
+          pip install vulture==2.16
+      - run: python scripts/test_check_dead_code.py
       - name: Check patch whitespace
         env:
           BASE_SHA: ${{ needs.changes.outputs.base }}
@@ -110,6 +118,11 @@ jobs:
           BASE_SHA: ${{ needs.changes.outputs.base }}
           HEAD_SHA: ${{ needs.changes.outputs.head }}
         run: python scripts/check_doc_drift.py --base "$BASE_SHA" --head "$HEAD_SHA"
+      - name: Dead-code ratchet (no new unused module or backend definition)
+        env:
+          BASE_SHA: ${{ needs.changes.outputs.base }}
+          HEAD_SHA: ${{ needs.changes.outputs.head }}
+        run: python scripts/check_dead_code.py --base "$BASE_SHA" --head "$HEAD_SHA"
 
   harness:
     needs: changes

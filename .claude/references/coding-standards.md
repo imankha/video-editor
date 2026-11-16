@@ -224,7 +224,7 @@ if (editorMode.canExport) ...  // Behavior attached to type
 
 | Type | Location |
 |------|----------|
-| Editor modes | `src/frontend/src/constants/editorModes.js` |
+| Editor modes | `EDITOR_MODES` in `src/frontend/src/stores/editorStore.js` |
 | Export status | `src/frontend/src/constants/exportStatus.js` |
 | Segment status | `src/frontend/src/constants/segmentStatus.js` |
 | Keyframe origins | `src/frontend/src/constants/keyframes.js` |
@@ -320,6 +320,17 @@ function useToggle(initial = false) {
   return [enabled, toggle];
 }
 ```
+
+### Dead Code: Prove Zero Callers
+
+Unused modules and helpers are false leads that agents read and copy. Before deleting code as
+dead, and before adding a module, run `python scripts/check_dead_code.py` (T15910): knip reports
+frontend files nothing reaches from the app, the diag harnesses, the e2e specs or the landing
+site; vulture and a tests-blind import graph report backend code nothing reaches from `app.main`
+or the Modal entry points. The zero-callers proof is that check passing plus a grep over `src/`,
+`e2e/` and `scripts/` (CLAUDE.md Refactoring Rules, rule 7). A finding stays in
+`scripts/dead_code_baseline.json` only when a named task owns it; a framework-called false
+positive goes in `src/backend/vulture_whitelist.py` with its reason.
 
 ### Single Code Path
 

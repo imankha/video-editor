@@ -855,7 +855,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   fire-and-forget (persistKeyframeEdit `awaited` flag).
 - **Min spacing**: 10 frames (frontend `MIN_KEYFRAME_SPACING`, backend clips.py:315). Backend
   rejects too-close new keyframes (clips.py:392-399).
-- **`'permanent'` origin still exists as a constant** (`src/frontend/src/constants/keyframeOrigins.js:8-12`)
+- **`'permanent'` origin is a string literal now** (the unused `constants/keyframeOrigins.js` was deleted, T15910)
   and CropLayer still reads it (L137/L142), but new crop keyframes are always `'user'`;
   `RESTORE_KEYFRAMES` normalizes origins to `'trim'|'user'` (controller L213-216). Treat
   `'permanent'` as legacy residue, not a live rule.

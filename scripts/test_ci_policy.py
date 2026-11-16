@@ -300,6 +300,29 @@ class LandingJobTests(unittest.TestCase):
                 self.assertLess(block.index('run: npm run build'), block.index('run: node scripts/verify-seo.mjs'))
 
 
+class DeadCodeRatchetTests(unittest.TestCase):
+    """T15910: the tooling job runs the dead-code ratchet, and every path it scans routes to tooling."""
+
+    def test_frontend_backend_and_the_check_itself_route_to_tooling(self):
+        for path in ['src/frontend/src/App.jsx', 'src/frontend/knip.json', 'src/backend/app/main.py',
+                     'src/backend/vulture_whitelist.py', 'scripts/check_dead_code.py',
+                     'scripts/dead_code_baseline.json', 'scripts/test_check_dead_code.py']:
+            with self.subTest(path=path):
+                self.assertIn('tooling', ci_policy.required_jobs([path]))
+        self.assertEqual(ci_policy.SCRIPT_TESTS.get('scripts/test_check_dead_code.py'), 'tooling')
+        self.assertEqual(ci_policy.required_jobs(['scripts/check_dead_code.py']), {'tooling'})
+        self.assertEqual(ci_policy.required_jobs(['scripts/dead_code_baseline.json']), {'tooling'})
+
+    def test_both_tooling_jobs_install_the_scanners_and_run_the_ratchet(self):
+        for workflow, command in [('branch-ci.yml', 'python scripts/check_dead_code.py --base "$BASE_SHA" --head "$HEAD_SHA"'),
+                                  ('master-ci.yml', 'python scripts/check_dead_code.py')]:
+            with self.subTest(workflow=workflow):
+                block = jobs_block(workflow, 'tooling')
+                for needed in ['actions/setup-node@v4', 'npm ci', 'pip install vulture==', command]:
+                    self.assertIn(needed, block)
+                self.assertLess(block.index('npm ci'), block.index(command))
+
+
 class AggregateTests(unittest.TestCase):
     def test_aggregate_rejects_missing_cancelled_failed_and_skipped_required_job(self):
         for result in [None, 'cancelled', 'failure', 'skipped']:
