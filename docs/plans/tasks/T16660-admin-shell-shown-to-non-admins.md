@@ -1,6 +1,6 @@
 # T16660: A parent who opens the admin page sees the admin screen and a stuck loader
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-16

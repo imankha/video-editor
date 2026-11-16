@@ -1,6 +1,6 @@
 # T16630: Frame and Spotlight screens open already scrolled down
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-16

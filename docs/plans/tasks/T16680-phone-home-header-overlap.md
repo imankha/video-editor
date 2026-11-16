@@ -1,6 +1,6 @@
 # T16680: On a phone the profile photo and the Guidance switch cover the logo on Home
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-16
