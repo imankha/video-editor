@@ -52,15 +52,20 @@ import { useExportJobStatus } from '../components/instructions/exportJob';
 // floor below nor the T15650 width floor ever took effect in the browser; the un-floored `lg:`
 // formula silently won every time (confirmed via DOM/CSSOM inspection against the live dev
 // stack, not just reasoning about the string).
-const SHORT_DESKTOP_BOX_HEIGHT_CLASS = '[@media(min-width:1024px)]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]';
-// The 320px floor above is a HEIGHT-proxy, multiplied by `--preview-ar` to get WIDTH -- for a
+// T16640: the reservation is MEASURED at 1280x800, not estimated: the stage starts ~289px
+// down (header, clip strip, card padding, one-row shape chooser) and the crop track ends
+// ~178px below it (controls hanging under the stage, zoom row, video + crop tracks) = 30rem.
+// The old 22rem + 320px floor put the play controls and crop track under the band on a
+// 1280x800 laptop. The floor is 200px so 1280x768 still fits; shorter screens scroll.
+const SHORT_DESKTOP_BOX_HEIGHT_CLASS = '[@media(min-width:1024px)]:!h-[max(200px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-30rem)))]';
+// The 200px floor above is a HEIGHT-proxy, multiplied by `--preview-ar` to get WIDTH -- for a
 // portrait (9:16, ratio 0.5625) output that only floors width at 180px, far below a usable
 // size, once a taller ActionBand (T15400/T15470) shrinks the available-height term enough to
 // hit that floor. Add an explicit WIDTH floor (half the column) so a narrow output aspect
 // can't collapse the preview below a usable size; height still follows via the element's
 // `aspect-ratio` style; any resulting overflow is reached by scrolling, same as any other tall
 // stage box (T16630: the screen opens at the top, nothing scrolls it on load).
-const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar))))]';
+const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(200px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-30rem)))*var(--preview-ar))))]';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -877,17 +882,16 @@ export function FocusModeView({
               matching OverlayModeView's stageBoxStyle for the identical case.
               T12020: the 70vh cap also leaves room for the sticky ActionBand
               (--cta-bar-h, set by useCtaBarHeight) so the video's bottom edge and
-              its controls never sit under the bar. The 22rem term (T12440; 12rem under-reserved) is the estimated
-              header + stage-controls height, not measured: verify it in the
-              cta-consistency Focus row before trusting it. */}
+              its controls never sit under the bar. The 30rem term (T16640, measured; T12440's
+              22rem estimate under-reserved) is the header + controls + crop-track height. */}
           <div
             data-testid="focus-video-stage"
             className={`relative bg-gray-900 ${
               (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
-                  ? `rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`
-                  : `rounded-lg h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
+                  ? `rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-30rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`
+                  : `rounded-lg h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-30rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
             }`}
             style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}
             onClick={mobileFs ? togglePlay : undefined}

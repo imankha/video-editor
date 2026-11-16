@@ -105,7 +105,7 @@ export default function CropLayer({
   };
 
   return (
-    <div className={`relative bg-gray-800/95 border-t border-gray-700/50 h-8 lg:h-12 rounded-r-lg transition-all ${
+    <div data-testid="crop-track" className={`relative bg-gray-800/95 border-t border-gray-700/50 h-8 lg:h-12 rounded-r-lg transition-all ${
       isLayerSelected ? 'ring-2 ring-yellow-400 ring-opacity-75' : ''
     }`}>
       {/* Keyframes track */}
