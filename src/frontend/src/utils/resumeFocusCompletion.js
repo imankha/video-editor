@@ -103,7 +103,10 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
       // finished highlight itself instead (same OVERLAY mode T15490 made
       // safe to open for a published project) and just acknowledge the
       // stale job — there is no decision left for the user to make here.
-      if (refreshedProject?.has_final_video) {
+      // T16525: a project the SERVER finished from this sharpen (is_finished) reopens
+      // the ready panel instead: it now says "in your Highlights" and has no Finish
+      // card, so the T15420 hazard is gone, and the parent sees the same message.
+      if (refreshedProject?.has_final_video && !refreshedProject.is_finished) {
         setEditorMode(EDITOR_MODES.OVERLAY);
         await loadProject(refreshedProject, { mode: EDITOR_MODES.OVERLAY });
         await acknowledgeJob(jobId);
@@ -124,7 +127,7 @@ export async function resumeFocusCompletion({ jobId, projectId }, {
 
     // T15420: same staleness check as the alreadyInFocus branch above, for
     // the cold-recovery path (no live editor to have already acted on this).
-    if (project.has_final_video) {
+    if (project.has_final_video && !project.is_finished) {
       setEditorMode(EDITOR_MODES.OVERLAY);
       await loadProject(project, { mode: EDITOR_MODES.OVERLAY });
       await acknowledgeJob(jobId);

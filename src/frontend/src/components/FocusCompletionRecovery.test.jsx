@@ -249,4 +249,20 @@ describe('FocusCompletionRecovery (T9285)', () => {
       vi.useRealTimers();
     }
   });
+
+  it('T16525: a highlight the server finished while the parent was away says it is in Highlights', () => {
+    act(() => {
+      useFocusCompletionStore.getState().noteRecovered({ jobId: 'j-away', projectId: 9, projectName: 'Reel', finished: true });
+    });
+    render(<FocusCompletionRecovery />);
+    expect(screen.getByTestId('focus-completion-recovery').textContent).toContain('Your highlight is in Highlights');
+  });
+
+  it('T16525: a sharpen whose automatic finish failed keeps the ready wording', () => {
+    noteRecovered('j-failed', 9);
+    render(<FocusCompletionRecovery />);
+    const text = screen.getByTestId('focus-completion-recovery').textContent;
+    expect(text).toContain('Your highlight is ready');
+    expect(text).not.toContain('in Highlights');
+  });
 });

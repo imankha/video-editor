@@ -52,6 +52,7 @@ const TODAYS_TARGETS = {
   'home.finished.many': P.FIRST_FINISHED,
   'focus.failed': P.EXPORT,
   'focus.ready': P.FOCUS_ADD_SPOTLIGHT,
+  'focus.ready.finished': P.FOCUS_ADD_SPOTLIGHT,
   'overlay.failed': P.EXPORT,
   'overlay.ready': P.OVERLAY_FINISH,
   'overlay.pick.done': P.EXPORT,

@@ -1,6 +1,6 @@
 import { useGalleryStore } from '../stores/galleryStore';
 import { EDITOR_MODES } from '../stores/editorStore';
-import { FOCUS_PUBLISH_LATER_TOAST } from '../config/displayNames';
+import { FOCUS_PUBLISH_LATER_TOAST, FINISHED_TOAST } from '../config/displayNames';
 import { peekAnnotateOrigin, clearAnnotateOrigin, setPendingGame } from './pendingNavigation';
 
 /**
@@ -11,9 +11,24 @@ import { peekAnnotateOrigin, clearAnnotateOrigin, setPendingGame } from './pendi
  *   and arm the consume-once "is framed" banner (galleryStore.justFramed).
  * - Otherwise (e.g. an uploaded clip with no game): toast, then land on Clips with the
  *   new draft scrolled into view and ringed once (clipsRingTarget).
+ * - T16525 `finished` (the server already put it in Highlights, T16520): the toast says
+ *   so, Annotate gets no "is framed, finish it any time" banner, and the fallback
+ *   landing is the Highlights tab.
  */
-export function leaveFocusForLater(projectId, { setEditorMode, goToProjectManager, toastSuccess }) {
+export function leaveFocusForLater(projectId, { setEditorMode, goToProjectManager, toastSuccess, finished = false }) {
   const origin = peekAnnotateOrigin(projectId);
+  if (finished) {
+    toastSuccess(FINISHED_TOAST.title, { message: FINISHED_TOAST.message, duration: 10000 });
+    if (origin) {
+      clearAnnotateOrigin();
+      setPendingGame(origin.gameId, null, origin.sourceClipId);
+      setEditorMode(EDITOR_MODES.ANNOTATE);
+      return;
+    }
+    sessionStorage.setItem('projectManagerTab', 'published');
+    goToProjectManager();
+    return;
+  }
   if (origin) {
     clearAnnotateOrigin();
     setPendingGame(origin.gameId, null, origin.sourceClipId);
