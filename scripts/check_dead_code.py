@@ -161,17 +161,24 @@ def _extract_backend(root, revision, folder):
     return Path(folder) / 'src/backend'
 
 
+def branch_added_definitions(root, base, head):
+    # Judge the branch against where it forked, not the base tip: master moving or renaming a
+    # file after the fork would otherwise make its old dead code look branch-added.
+    fork = subprocess.run(['git', '-C', str(root), 'merge-base', base, head],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    with tempfile.TemporaryDirectory() as folder:
+        return new_unused_definitions(_extract_backend(root, fork, folder), Path(root) / 'src/backend')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--base', help='base revision: also refuse unused definitions the branch adds')
-    parser.add_argument('--head', help='head revision (informational; the working tree is checked)')
+    parser.add_argument('--head', help='head revision: with --base, sets the fork point (the working tree is checked)')
     args = parser.parse_args(argv)
     errors = compare(all_findings(), load_baseline())
     if args.base:
-        with tempfile.TemporaryDirectory() as folder:
-            base_backend = _extract_backend(ROOT, args.base, folder)
-            errors += [f'new unused definition: {f} (delete it, or whitelist a false positive with a reason)'
-                       for f in sorted(new_unused_definitions(base_backend, ROOT / 'src/backend'))]
+        errors += [f'new unused definition: {f} (delete it, or whitelist a false positive with a reason)'
+                   for f in sorted(branch_added_definitions(ROOT, args.base, args.head or 'HEAD'))]
     for error in errors:
         print(error)
     print(f'dead-code ratchet: {"FAIL" if errors else "ok"} ({len(errors)} problem(s))')

@@ -1050,8 +1050,6 @@ export const GUIDE = {
     buyCreditsPay: 'Enter your card, then tap Pay.',
     insufficientCredits: 'You need more credits for this. Tap Buy credits.',
     creditHistory: 'Every credit you added or spent is listed here.',
-    paymentSuccess: 'Your credits are added. Tap OK.',
-    paymentFailed: 'The payment didn’t go through. Tap OK, then try again.',
     storageExtension: 'Tap Extend storage to keep this game longer.',
     exportTooLarge: 'This highlight is too big to sharpen. Tap Got it, then use a tighter box or shorten it.',
     profilesList: 'Tap a profile to switch to it, or tap + Add profile for another athlete.',

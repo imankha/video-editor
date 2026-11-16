@@ -1,6 +1,7 @@
 """Acceptance tests for the dead-code ratchet (T15910)."""
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 import unittest
 
@@ -93,6 +94,28 @@ class BackendTests(unittest.TestCase):
             added = dead.new_unused_definitions(tree(b, base), tree(h, head))
         self.assertEqual(len(added), 1)
         self.assertRegex(next(iter(added)), r"app/svc\.py: unused function 'never_called'")
+
+    def test_a_dead_function_master_only_moved_is_not_branch_added(self):
+        # CI passes the master tip as --base; master moving a file must not blame the branch.
+        def git(repo, *args):
+            subprocess.run(['git', '-C', str(repo), *args], check=True, capture_output=True)
+
+        dead_fn = 'def used():\n    return 1\n\n\ndef long_dead():\n    return 2\n'
+        with tempfile.TemporaryDirectory() as folder:
+            repo = tree(folder, {'src/backend/app/__init__.py': '', 'src/backend/app/main.py':
+                                 'from app.svc import used\nused()\n', 'src/backend/app/svc.py': dead_fn})
+            git(repo, 'init', '-q', '-b', 'master')
+            git(repo, 'add', '-A')
+            git(repo, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'base')
+            git(repo, 'checkout', '-qb', 'feature')
+            (repo / 'src/backend/app/main.py').write_text('from app.svc import used\nused()\nused()\n')
+            git(repo, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qam', 'branch work')
+            git(repo, 'checkout', '-q', 'master')
+            git(repo, 'mv', 'src/backend/app/svc.py', 'src/backend/app/moved.py')
+            (repo / 'src/backend/app/main.py').write_text('from app.moved import used\nused()\n')
+            git(repo, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qam', 'master moves svc')
+            git(repo, 'checkout', '-q', 'feature')
+            self.assertEqual(dead.branch_added_definitions(repo, 'master', 'HEAD'), set())
 
     def test_vulture_findings_carry_no_line_numbers_so_edits_above_do_not_churn_the_baseline(self):
         with tempfile.TemporaryDirectory() as folder:
