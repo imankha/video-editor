@@ -470,6 +470,63 @@ async def finalize_export(
             "output_filename": output_filename,
         }
 
+    finish = await finish_after_persist(
+        job_id, ExportStage.PERSISTING.value, user_id, profile_id, project_id, wv_id,
+    )
+    logger.info(f"[Finalize] Job {job_id} finalized: working_video_id={wv_id} finish={finish}")
+    return {"finalized": True, "working_video_id": wv_id, "output_filename": output_filename,
+            "finish": finish}
+
+
+async def finish_after_persist(
+    job_id: str, expected_stage, user_id: str, profile_id, project_id: int, working_video_id: int,
+) -> dict | None:
+    """T16520: the server finish, run under the claimed `finishing` stage.
+
+    The CAS claim (persisting -> finishing) keeps a concurrent in-band request and
+    recovery poll from both finishing. A crash while `finishing` leaves the stage
+    there, and the next session's `resume_interrupted_finishes` picks it up. The
+    stage moves to `complete` after the finish whether or not it succeeded: a
+    logged failure leaves the highlight on the manual Finish path (owner ruling).
+    Returns finish_highlight's result, or None when another caller owns the finish.
+    """
+    from app.services import finish_highlight as fh
+
+    if not _claim_stage_for_finalize(job_id, expected_stage, ExportStage.FINISHING.value):
+        logger.info(f"[Finalize] Job {job_id} finish is owned elsewhere - skipping")
+        return None
+    finish = await fh.finish_highlight(user_id, profile_id, project_id, working_video_id)
     _set_export_stage(job_id, ExportStage.COMPLETE.value)
-    logger.info(f"[Finalize] Job {job_id} finalized: working_video_id={wv_id}")
-    return {"finalized": True, "working_video_id": wv_id, "output_filename": output_filename}
+    return finish
+
+
+async def resume_interrupted_finishes() -> int:
+    """Finish every job of the CURRENT user/profile left at stage `finishing` by a crash.
+
+    Runs from the session's startup recovery (session_init._run_startup_recovery),
+    inside the owner's own context. Such a job is already status 'complete' (the
+    persist transaction completes it), so /modal-status never sees it again; this is
+    its only retry. finish_highlight is idempotent on the source_working_video_id link.
+    """
+    from app.profile_context import get_current_profile_id
+    from app.services import finish_highlight as fh
+    from app.user_context import get_current_user_id
+
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    with get_db_connection() as conn:
+        rows = conn.cursor().execute(
+            "SELECT id, project_id, output_video_id FROM export_jobs WHERE stage = ?",
+            (ExportStage.FINISHING.value,),
+        ).fetchall()
+
+    for row in rows:
+        if not row["output_video_id"]:
+            logger.error(f"[Finalize] Job {row['id']} is finishing with no working video - "
+                         f"marking complete, highlight stays on the Finish button")
+        else:
+            logger.info(f"[Finalize] Resuming interrupted finish for job {row['id']} "
+                        f"project={row['project_id']}")
+            await fh.finish_highlight(user_id, profile_id, row["project_id"], row["output_video_id"])
+        _set_export_stage(row["id"], ExportStage.COMPLETE.value)
+    return len(rows)

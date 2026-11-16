@@ -909,6 +909,31 @@ graph LR
   to Row only around the primitive and restore it in a finally (v017 crashed on the tuple factory for 4
   prod users). Precedent gating style: v012/v018/v019 account/data-shape heals.
 
+## Server-side finish (T16520, 2026-11-16)
+
+A sharpened highlight is finished by the SERVER, not a Finish tap. `services/finish_highlight.py`:
+`finish_highlight(user, profile, project, working_video_id)` copies `working_videos/X` to the
+deterministic `final_videos/final_{pid}_wv{wvid}.mp4`, then inserts and publishes in ONE `BEGIN IMMEDIATE`
+transaction (`publish_final_video(..., source_working_video_id=)` + `mark_published`), records
+`highlight_finished`, syncs (CAS), and only THEN deletes the replaced object. It never raises:
+it logs `[Finish] FAILED project= step=` and the highlight keeps the old manual Finish path.
+- Hook: `export_finalize.finish_after_persist`, called at the tail of `finalize_export` (Modal in-band
+  + `/modal-status` recovery) and by the local writer in multi_clip. Stage CAS `persisting -> finishing`
+  (`ExportStage.FINISHING`), then `complete` whether the finish succeeded or not.
+- A job left at `finishing` (crash) is already status `complete`, so `/modal-status` never sees it.
+  Its ONLY retry is `resume_interrupted_finishes()` in `session_init._run_startup_recovery`.
+- Idempotency key: `final_videos.source_working_video_id` (profile_db v063). An existing link means
+  reuse the row, never insert a second one.
+- One publish writer: `mark_published` (POST /publish, the server finish, `_finalize_overlay_export`).
+  The spotlight/overlay render now PUBLISHES its own row (no second Finish tap).
+- `highlight_finished` counts once per highlight: recorded only when newly published AND
+  `publish_final_video(...)["prior_published"]` is false, so a re-sharpen or spotlight replacement adds none.
+- No archive at finish: `archive_completed_projects` (session start) archives it on the next session,
+  so Spotlight keeps its working data now. POST /publish still archives.
+- Frontend unchanged until T16525: the panel still offers Finish. A tap re-renders and replaces the
+  already-published version (harmless; no extra event).
+- Follow-up: the overlay and POST /publish paths still delete the prior R2 object before the sync is durable.
+
 ## Invariants & rules
 - **One video probe (T4430).** App code asks a video for its size/frame rate/duration only through `services/video_probe.py::probe_video(path|url|bytes)`, which raises `VideoProbeError` on an unreadable file or an unknown rate (`parse_frame_rate` refuses `0/0`/`N/A`; nothing assumes 30 fps). Callers probing an external dependency (R2 URL) catch it and say so (`probe_r2_video`, `publish_final_video._probe_output_dims`, overlay `_probe_dims`). `ffmpeg_concat.probe_media` builds on it. Only `modal_functions/` keeps its own copy (policy). `test_t4430_video_probe.py` bans other `r_frame_rate`/`CAP_PROP_FPS`/`CAP_PROP_FRAME_WIDTH`/`ffmpeg.probe(` reads and `'30/1'` in `app/`. Duration-only probes (`get_video_duration`, `poster._probe_duration`) are separate.
 1. **Sync-then-announce (T4110 + T4200, DONE 2026-07-11):** the R2 DB sync must succeed BEFORE the export is announced complete. **ALL THREE overlay completion paths gate COMPLETE on `sync_export_db_to_r2`** (T5300 verified): the no-keyframes copy path (`overlay.py:2043`) and the test-mode copy path (`:2110`) run inline and return **503** + a retryable `sync_failed` progress event on failure; the real-render **background** path (`_run_overlay_export_background:1817-1833`, the one that returns **202** and finishes async) gates the same way but — having already returned 202 — emits the retryable `_export_sync_failed_data` event over the WS/`export_progress` dict INSTEAD of a 503 (there is no live HTTP response to fail). Also gated: framing (`framing.py:718-722`) and multi-clip (`multi_clip.py:2298-2301` + COMPLETE sites `:1440-1448/:1737`). DB-save failure is terminal — no phantom export announces success. The `export_sync_failed_data` helper lives in `export_helpers.py:379` (no router→router imports); it sets `code='sync_failed'`, `retryable=True`, `phase='error'`.

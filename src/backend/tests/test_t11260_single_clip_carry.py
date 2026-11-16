@@ -213,7 +213,7 @@ class TestLegacyMulticlipDraftOpensInSpotlight:
 async def test_legacy_multiclip_draft_renders_and_publishes_in_spotlight(env, monkeypatch):  # noqa: F811
     """T11260:C2 publish half: a legacy two-clip draft (seeded directly; no insert
     path can create one any more) runs the Spotlight render's real finalize and
-    then the publish gesture, ending as a published final video."""
+    which publishes it (T16520); the publish gesture afterwards is a no-op."""
     from app.routers.downloads import publish_to_my_reels
     from app.routers.export import overlay as ov
     from app.services.export_helpers import insert_export_job_if_none_active
@@ -267,12 +267,14 @@ async def test_legacy_multiclip_draft_renders_and_publishes_in_spotlight(env, mo
         final_video_id = cur.fetchone()["final_video_id"]
         assert final_video_id is not None
 
-    result = await publish_to_my_reels(project_id)
-    assert result["newly_published"] is True
+    # T16520: the Spotlight render publishes its own row, so the render alone ends
+    # as a published final video and a later Finish tap is a no-op.
     with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT published_at FROM final_videos WHERE id = ?", (final_video_id,))
         assert cur.fetchone()["published_at"] is not None
+    result = await publish_to_my_reels(project_id)
+    assert result["newly_published"] is False
 
 
 REMOVED_SYMBOLS = [

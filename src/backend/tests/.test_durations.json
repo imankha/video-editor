@@ -226,6 +226,8 @@
   "tests/test_t15120_channel_readout.py": 3.15,
   "tests/test_t15140_upload_release.py": 0.45,
   "tests/test_t15150_durable_sync_off_lock.py": 8.34,
+  "tests/test_t16510_record_finish.py": 12.72,
+  "tests/test_t16520_server_finish.py": 10.91,
   "tests/test_t16535_archive_keeps_clips.py": 1.0,
   "tests/test_t1690_stream_proxy_probe.py": 0.1,
   "tests/test_t2650_recap_encode_off_server.py": 13.53,

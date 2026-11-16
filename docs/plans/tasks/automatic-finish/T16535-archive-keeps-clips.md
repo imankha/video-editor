@@ -4,7 +4,7 @@
 
 When a highlight is finished, a cleanup (the archive) later removes the project's working data from the account database to keep it small: the crop and spotlight clips and the working video, saved aside in storage. After that, changing the crop or spotlight of a finished highlight means bringing all of that back first, which is slower and breaks if anything goes wrong. The owner ruled on 2026-11-16 that archiving should not delete the clips; it should remove only the game video, which is the large file. Then a parent can redo the crop or spotlight of a finished highlight straight away (T16530). Done when a finished, archived project still has its clips and crop and spotlight data in the account database, the game video is gone, and the redo screen opens it without a restore step.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-11-16
@@ -42,3 +42,7 @@ Archiving deletes data a redo needs. A redo after the sweep has to restore it fr
 ### Notes
 - Tier L-ish: it changes what the archive deletes. Architect design gate. State how it obeys restore-if-newer.
 - Sport-neutral strings.
+
+## Ruling
+
+Owner approved the design in T16535-design.md with option A (owner, 2026-11-16): archive keeps the clips and the working video and only marks the project archived. The game video is left to its own paid 30-day expiry; after that Edit zoom says it is unavailable. No early delete, no new UI, no refund rule.

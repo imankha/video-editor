@@ -170,6 +170,9 @@ FLOW_EVENTS = {
     "framing_opened":       {"label": "Focus Opened",       "daily_col": None},
     "framing_exported":     {"label": "Focus Exported",     "daily_col": "framing_exports"},
     "overlay_exported":     {"label": "Overlay Exported",   "daily_col": "overlay_exports"},
+    # T16510: the Finish tap (POST /api/downloads/publish) that puts a highlight in the
+    # Highlights tab, once per highlight finished. A rendered spotlight is NOT a finish.
+    "highlight_finished":   {"label": "Highlight Finished", "daily_col": None},
     "gallery_viewed":       {"label": "Gallery Viewed",     "daily_col": None},
     "video_downloaded":     {"label": "Downloaded",         "daily_col": "video_downloads"},
     # Tracking gap events (T3470)
@@ -475,6 +478,7 @@ FUNNEL_STEPS = [
     "framing_opened",
     "framing_exported",
     "overlay_exported",
+    "highlight_finished",
     "export_started",
     "export_completed",
     "gallery_viewed",
@@ -534,7 +538,7 @@ JOURNEY_LADDER = [
     {"key": "spotlight_added", "label": "Spotlight added", "band": "make_highlight",
      "actions": ["overlay_players_assigned"]},
     {"key": "finished", "label": "Finished highlight", "band": "make_highlight", "major": True,
-     "actions": ["overlay_exported"]},
+     "actions": ["highlight_finished"]},
     {"key": "watched", "label": "Watched highlight", "band": "take_it_away",
      "actions": ["result_viewed"], "client_beacon": True},
     {"key": "took_away", "label": "Took it away", "band": "take_it_away", "major": True,
@@ -573,6 +577,8 @@ EVENT_INSTRUMENTED_AT = {
     "overlay_opened": "2026-06-16",
     "overlay_players_assigned": "2026-06-16",
     "overlay_exported": "2026-05-22",
+    # T16510: the Finished stage's own event; older sign-ups are badged, not read as losses.
+    "highlight_finished": "2026-11-16",
     "result_viewed": "2026-09-15",
     "video_downloaded": "2026-05-22",
     "share_completed": "2026-05-20",
@@ -617,6 +623,7 @@ SPORT_TAG_INSTRUMENTED_AT = {
     "export_completed": "2026-11-08",
     "framing_exported": "2026-11-08",
     "overlay_exported": "2026-11-08",
+    "highlight_finished": "2026-11-16",
     "video_downloaded": "2026-11-08",
     "share_completed": "2026-11-08",
     "credit_purchased": "2026-11-08",

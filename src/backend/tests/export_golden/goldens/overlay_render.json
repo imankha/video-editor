@@ -41,7 +41,7 @@
       "poster_frame_time": null,
       "poster_source": null,
       "project_id": 1,
-      "published_at": null,
+      "published_at": "<MASKED>",
       "quality_score": 5.0,
       "rating": 1580.0,
       "rating_counts": null,
@@ -50,6 +50,7 @@
       "slowmo_section_start": null,
       "source_clip_id": 1,
       "source_type": "custom_project",
+      "source_working_video_id": 1,
       "tags": null,
       "version": 1,
       "watched_at": null
