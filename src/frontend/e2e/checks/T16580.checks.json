@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T16580:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && rm -f /tmp/T16580-C1.json && PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/T16580-C1.json E2E_BASE_URL=https://staging.reelballers.com E2E_API_BASE=https://api-staging.reelballers.com/api timeout 90 npx playwright test e2e/checks/T11905.check.spec.js --project=chromium --grep 'T11905:C1' --reporter=json; python3 -c \"import json,sys,os; f='/tmp/T16580-C1.json'; os.path.exists(f) or sys.exit('no report: the run did not finish within 90 s (child spec runs?)'); r=json.load(open(f)); ts=[t for s in r['suites'] for d in s.get('suites',[]) for sp in d['specs'] for t in sp['tests']]; a=[x for t in ts for x in t.get('annotations',[])+[y for res in t['results'] for y in res.get('annotations',[])]]; reason=' '.join(x.get('description','') for x in a if x['type']=='skip'); print('tests:',[t['status'] for t in ts],'skip:',reason); sys.exit(0 if len(ts)==1 and ts[0]['status']=='skipped' and 'dev fixture' in reason and r['stats']['duration']<30000 else 1)\""
+    },
+    "T16580:C2": {
+      "kind": "code",
+      "command": "test \"$(grep -c 'test.skip(' src/frontend/e2e/checks/T11905.check.spec.js)\" = 1 && grep -qE \"^ *test\\.skip\\(!!process\\.env\\.E2E_BASE_URL, '\" src/frontend/e2e/checks/T11905.check.spec.js"
+    }
+  }
+}
