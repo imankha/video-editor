@@ -18,6 +18,13 @@ Whether the video Spotlight plays is loading, ready or failed is tracked in four
 - Design gate: this is a state-shape change across two screens; get the design approved before implementation.
 - Knowledge doc: `.claude/knowledge/keyframes-framing.md`.
 
+## Ruling
+
+Design in `docs/plans/tasks/T4490-design.md` approved (owner, 2026-11-15):
+1. **Yes.** One working-video status slice plus one load action, as designed.
+2. **Yes.** Delete the dead `renderedVideoBlob` branch in `FocusScreen`.
+3. **Keep `useProjectLoader`'s early working-video load** (owner, 2026-11-15: do nothing that makes Spotlight slower). The owner only needs it to work on localhost, so the proxy-URL concern (fails off-localhost per T5642) is not this task's problem; the single load action may be called from the early load as well as from `OverlayScreen`, deduped so it fetches once. Opening Spotlight must not get slower than today.
+
 ## Acceptance Criteria
 
 - [ ] The loading state of the Spotlight video is stored in exactly one place.

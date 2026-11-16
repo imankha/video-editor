@@ -81,7 +81,6 @@ export function OverlayContainer({
   overlayClipMetadata,
   isLoadingWorkingVideo,
   setOverlayClipMetadata,
-  setIsLoadingWorkingVideo,
   dragHighlight,
   setDragHighlight,
   selectedHighlightKeyframeTime,
@@ -605,7 +604,6 @@ export function OverlayContainer({
 
     // State setters (for external use)
     setOverlayClipMetadata,
-    setIsLoadingWorkingVideo,
   };
 }
 

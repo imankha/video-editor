@@ -236,7 +236,6 @@ vi.mock('../../stores', () => {
     isLoading: false,
     loadingStage: null,
     get clipMetadataCache() { return testState.clipMetadataCache; },
-    setWorkingVideo: vi.fn(),
     setClipMetadata: vi.fn(),
     fetchClips: vi.fn().mockResolvedValue([]),
     updateClipMetadata: vi.fn(),
@@ -244,7 +243,7 @@ vi.mock('../../stores', () => {
   };
   const useProjectDataStore = (selector) => selector(projectDataState);
 
-  const overlayState = { reset: vi.fn(), setIsLoadingWorkingVideo: vi.fn() };
+  const overlayState = { reset: vi.fn() };
   const useOverlayStore = (selector) => selector(overlayState);
 
   const projectsState = { selectedProjectId: 42, projects: [] };

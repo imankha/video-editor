@@ -110,11 +110,11 @@ function App() {
   // actually renders from (see useProjectLoader.js and ProjectsScreen.handleSelectProjectWithMode).
   const { loadProject } = useProjectLoader();
 
-  // Working video from project data store (canonical owner)
-  const workingVideo = useProjectDataStore(state => state.workingVideo);
+  // Working video status from project data store (T4490: its one owner)
+  const workingVideoStatus = useProjectDataStore(state => state.workingVideo.status);
+  const isLoadingWorkingVideo = workingVideoStatus === 'loading';
 
-  // Overlay store - for loading state and tracking changes
-  const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
+  // Overlay store - for tracking changes
   const overlayChangedSinceExport = useOverlayStore(state => state.overlayChangedSinceExport);
 
   // Clip data for "Edit in Annotate" button - single source of truth from projectDataStore
@@ -610,7 +610,7 @@ function App() {
   }, [setEditorMode]);
 
   // Computed state for UI
-  const hasOverlayVideo = !!workingVideo?.url;
+  const hasOverlayVideo = workingVideoStatus === 'ready';
 
   // Handler for "Edit in Annotate" button - navigates to Annotate mode with clip's game
   const handleEditInAnnotate = useCallback(() => {

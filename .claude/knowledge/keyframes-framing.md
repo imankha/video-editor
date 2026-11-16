@@ -783,7 +783,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   B → `overlay-data` fetched by two owners (HAR: x3 = A StrictMode-doubled + B once; `outdated-clips`
   x2 is its single owner's StrictMode double, one caller `OverlayScreen.jsx:183`, prod=1). **Fix =
   delete the `setClipMetadata` store seed in `useProjectLoader.js`** (the local `buildClipMetadata`
-  value is kept for the return payload + `onWorkingVideoLoaded`). Now: genuine fresh export → Effect A
+  value is kept for the return payload; its onWorkingVideoLoaded callback was removed in T4490). Now: genuine fresh export → Effect A
   owns (B's `!clipMetadata` guard blocks it); every plain open / Framing→Overlay nav / direct
   Drafts→Overlay → Effect B owns (its `duration` comes from the working video `loadProject` sets before
   OverlayScreen mounts). Same "one owner per entry gesture" rule as T6190's clips fetch. Do NOT collapse

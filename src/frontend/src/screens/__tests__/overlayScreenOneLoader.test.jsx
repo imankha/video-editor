@@ -129,8 +129,8 @@ vi.mock('../../stores/editorStore', () => ({
 }));
 vi.mock('../../stores/overlayStore', () => ({
   useOverlayStore: () => ({
-    effectType: 'spotlight', highlightColor: '#fff', isLoadingWorkingVideo: false,
-    setEffectType: record('effectType'), setHighlightColor: record('highlightColor'), setIsLoadingWorkingVideo: vi.fn(),
+    effectType: 'spotlight', highlightColor: '#fff',
+    setEffectType: record('effectType'), setHighlightColor: record('highlightColor'),
     setOverlayChangedSinceExport: record('changedSinceExport'),
     highlightShape: 'ellipse', strokeWidth: 2, fillEnabled: true, fillOpacity: 0.5, dimStrength: 0.5,
     setHighlightShape: record('highlightShape'), setStrokeWidth: record('strokeWidth'),
@@ -143,7 +143,7 @@ vi.mock('../../stores/overlayStore', () => ({
 }));
 vi.mock('../../stores/projectDataStore', () => ({
   useProjectDataStore: (selector) => selector({
-    workingVideo: null, setWorkingVideo: vi.fn(),
+    workingVideo: { status: 'idle', projectId: null, videoId: null, video: null, error: null }, loadWorkingVideo: vi.fn(),
     // clipMetadata set = the fresh-export loader runs; null = the plain-open loader.
     get clipMetadata() { return testState.clipMetadata; },
     setClipMetadata: (v) => { testState.clipMetadata = v; },

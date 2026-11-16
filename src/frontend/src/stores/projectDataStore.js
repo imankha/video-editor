@@ -4,8 +4,21 @@ import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
 import { useProjectsStore } from './projectsStore';
 import { refitCropKeyframes } from '../utils/refitCropKeyframes';
+import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
+import { userErrorMessage } from '../utils/userError';
+import { ERROR_COPY } from '../config/displayNames';
 
 const API_BASE_URL = `${API_BASE}/api`;
+
+// T4490: the Spotlight video's load status. ONE place: written only by
+// loadWorkingVideo / reset. `video` ({file, url, metadata}) is set only when
+// status is 'ready', so a half-populated record (the T9100 bug class) cannot exist.
+// 'missing' = hard 404, the asset is gone (re-export, no retry); 'error' = retries ran out.
+const IDLE_WORKING_VIDEO = { status: 'idle', projectId: null, videoId: null, video: null, error: null };
+const MAX_WORKING_VIDEO_ATTEMPTS = 2;
+// Bumped by every load and by reset(); a load whose token is no longer current
+// drops its result (project switch, new render, forced retry).
+let workingVideoLoadToken = 0;
 
 /**
  * Project Data Store - Single source of truth for project and clip state
@@ -43,8 +56,8 @@ export const useProjectDataStore = create((set, get) => ({
   clipsFetching: false,
   clipsError: null,
 
-  // Working video (if exported) - { file, url, metadata }
-  workingVideo: null,
+  // Working video (if exported): { status, projectId, videoId, video, error } -- see IDLE_WORKING_VIDEO
+  workingVideo: IDLE_WORKING_VIDEO,
 
   // The reel's aspect ratio is NOT held here (T10980): it is projects.aspect_ratio,
   // read from projectsStore.selectedProject. A second in-memory copy was only
@@ -244,7 +257,57 @@ export const useProjectDataStore = create((set, get) => ({
 
   // ========== Other Actions ==========
 
-  setWorkingVideo: (workingVideo) => set({ workingVideo }),
+  /**
+   * T4490: the ONE load action for the Spotlight video. Deduped on
+   * (projectId, workingVideoId): a second call for the same video does nothing
+   * unless `force` (the Retry gesture). A read (GET + metadata probe), never a write.
+   * Resolves to the slice as it stands when this call finishes.
+   */
+  loadWorkingVideo: async (projectId, workingVideoId, { force = false } = {}) => {
+    const current = get().workingVideo;
+    if (!force && current.status !== 'idle'
+        && current.projectId === projectId && current.videoId === workingVideoId) {
+      return current;
+    }
+    const token = ++workingVideoLoadToken;
+    const isCurrent = () => token === workingVideoLoadToken;
+    const base = { projectId, videoId: workingVideoId };
+    set({ workingVideo: { ...base, status: 'loading', video: null, error: null } });
+
+    const playbackUrl = `${API_BASE_URL}/projects/${projectId}/working_video/playback-url`;
+    for (let attempt = 1; attempt <= MAX_WORKING_VIDEO_ATTEMPTS; attempt++) {
+      try {
+        // T5642: a presigned R2 URL, not the same-origin /working_video/stream
+        // proxy (cross-origin range requests to the proxy carry no cookie -> 401).
+        const response = await apiFetch(playbackUrl);
+        if (!response.ok) {
+          if (response.status === 404) throw new VideoAssetMissingError(playbackUrl, 404);
+          throw new Error(`playback-url fetch returned ${response.status}`);
+        }
+        const { url } = await response.json();
+        if (!url) throw new Error('playback-url response missing url');
+        const metadata = await extractVideoMetadataFromUrl(url, 'working_video.mp4');
+        if (!metadata) throw new Error('working video metadata missing');
+        if (!isCurrent()) return get().workingVideo;
+        set({ workingVideo: { ...base, status: 'ready', video: { file: null, url, metadata }, error: null } });
+        return get().workingVideo;
+      } catch (err) {
+        if (!isCurrent()) return get().workingVideo;
+        // T5440: a hard 404 means the R2 object is gone -- retrying cannot recover it.
+        if (err instanceof VideoAssetMissingError) {
+          console.warn(`[projectDataStore] Working video no longer available (HTTP ${err.status}) - re-export to rebuild.`, base);
+          set({ workingVideo: { ...base, status: 'missing', video: null,
+            error: 'This highlight\u2019s video is no longer available. Re-generate to rebuild it.' } });
+          return get().workingVideo;
+        }
+        console.error(`[projectDataStore] Working video load failed (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, err.message, base);
+        if (attempt === MAX_WORKING_VIDEO_ATTEMPTS) {
+          set({ workingVideo: { ...base, status: 'error', video: null, error: userErrorMessage(err, ERROR_COPY.LOAD_VIDEO) } });
+        }
+      }
+    }
+    return get().workingVideo;
+  },
 
   setClipMetadata: (clipMetadata) => set({ clipMetadata }),
 
@@ -284,17 +347,20 @@ export const useProjectDataStore = create((set, get) => ({
   },
 
   // Clear all project data (called when switching projects)
-  reset: () => set({
-    clips: [],
-    projectClipId: null,
-    clipMetadataCache: {},
-    clipsFetching: false,
-    clipsError: null,
-    workingVideo: null,
-    clipMetadata: null,
-    isLoading: false,
-    loadingStage: null,
-  }),
+  reset: () => {
+    workingVideoLoadToken++;
+    set({
+      clips: [],
+      projectClipId: null,
+      clipMetadataCache: {},
+      clipsFetching: false,
+      clipsError: null,
+      workingVideo: IDLE_WORKING_VIDEO,
+      clipMetadata: null,
+      isLoading: false,
+      loadingStage: null,
+    });
+  },
 }));
 
 // Selector hooks

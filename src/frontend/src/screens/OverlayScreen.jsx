@@ -12,7 +12,6 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
-import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
@@ -39,8 +38,7 @@ import { allowEnterFraming } from '../utils/reelReEditable';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
-import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, ERROR_COPY, SPOTLIGHT_COPY } from '../config/displayNames';
-import { userErrorMessage } from '../utils/userError';
+import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, SPOTLIGHT_COPY } from '../config/displayNames';
 
 // T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Finish card.
 const OVERLAY_READY_GUIDE = resolveGuide({ screen: 'overlay', job: { status: 'ready' }, local: {} });
@@ -87,28 +85,28 @@ const DEFAULT_TEXT_SPEC = {
 };
 
 // Pure, unit-testable derivation of Overlay's effective video source (T9150).
-// A `workingVideo` record is only USABLE when it carries BOTH a url and metadata --
-// pairing one video's url with a different video's metadata (e.g. the reel's URL with
-// the source clip's landscape dimensions) is the T9100 bug class: a banned silent
-// fallback for internal data that poisons the video->screen transform and, via
-// effectiveOverlayMetadata feeding the stage box's aspect ratio, can starve the
-// settings panel to 0px width. Exported for the regression test; not used outside
-// this file.
+// `workingVideo` is projectDataStore's T4490 slice ({status, videoId, video, error}).
+// Only a 'ready' slice for THIS project's working_video_id is usable; its `video`
+// always carries url + metadata together (pairing one video's url with another's
+// metadata is the T9100 bug class). While the project has a working video that is
+// not ready (loading or failed), wait (null source) instead of falling back to the
+// framing clip. Exported for the regression test; not used outside this file.
 export function deriveOverlayVideoSource({
   workingVideo,
-  projectWorkingVideoUrl,
-  isLoadingWorkingVideo,
+  projectWorkingVideoId,
   framingVideoUrl,
   framingMetadata,
 }) {
-  const workingVideoUsable = !!(workingVideo?.url && workingVideo?.metadata);
-  const shouldWait = !workingVideoUsable && !!(projectWorkingVideoUrl || isLoadingWorkingVideo);
+  const forThisVideo = !!projectWorkingVideoId && workingVideo.videoId === projectWorkingVideoId;
+  const workingVideoUsable = forThisVideo && workingVideo.status === 'ready';
+  const shouldWait = !!projectWorkingVideoId && !workingVideoUsable;
+  const video = workingVideoUsable ? workingVideo.video : null;
   return {
     workingVideoUsable,
     shouldWaitForWorkingVideo: shouldWait,
-    effectiveOverlayVideoUrl: workingVideoUsable ? workingVideo.url : (shouldWait ? null : framingVideoUrl),
-    effectiveOverlayMetadata: workingVideoUsable ? workingVideo.metadata : (shouldWait ? null : framingMetadata),
-    effectiveOverlayFile: workingVideoUsable ? workingVideo.file : null,
+    effectiveOverlayVideoUrl: video ? video.url : (shouldWait ? null : framingVideoUrl),
+    effectiveOverlayMetadata: video ? video.metadata : (shouldWait ? null : framingMetadata),
+    effectiveOverlayFile: video ? video.file : null,
   };
 }
 
@@ -126,7 +124,7 @@ export function OverlayScreen({
 
   // Project data store - canonical owner for working video and clip metadata
   const workingVideo = useProjectDataStore(state => state.workingVideo);
-  const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
+  const loadWorkingVideo = useProjectDataStore(state => state.loadWorkingVideo);
   const overlayClipMetadata = useProjectDataStore(state => state.clipMetadata);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
   const clips = useProjectDataStore(state => state.clips);
@@ -137,10 +135,8 @@ export function OverlayScreen({
   const {
     effectType: highlightEffectType,
     highlightColor,
-    isLoadingWorkingVideo,
     setEffectType: setHighlightEffectType,
     setHighlightColor,
-    setIsLoadingWorkingVideo,
     setOverlayChangedSinceExport,
     highlightShape,
     strokeWidth,
@@ -238,7 +234,7 @@ export function OverlayScreen({
   // T740: Check if framing is outdated (boundaries changed since last export)
   const [framingOutdated, setFramingOutdated] = useState(false);
   useEffect(() => {
-    if (!projectId || !workingVideo?.url) return;
+    if (!projectId || !workingVideo.video?.url) return;
     const checkOutdated = async () => {
       try {
         const response = await apiFetch(`${API_BASE}/api/projects/${projectId}/outdated-clips`);
@@ -250,7 +246,7 @@ export function OverlayScreen({
       }
     };
     checkOutdated();
-  }, [projectId, workingVideo?.url]);
+  }, [projectId, workingVideo.video?.url]);
 
   // Local state
   const [selectedLayer, setSelectedLayer] = useState('playhead');
@@ -273,15 +269,6 @@ export function OverlayScreen({
   const { publish: publishProject, isPublishing } = usePublishProject({ id: projectId });
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
-  const workingVideoFetchIdRef = useRef(null); // Track which working_video_id we've started fetching
-  const workingVideoRecoveryAttemptedRef = useRef(false); // Guard against infinite refresh loops
-  const workingVideoAttemptsRef = useRef(0); // Count metadata-load attempts for the current URL
-  const MAX_WORKING_VIDEO_ATTEMPTS = 2;
-  const [workingVideoLoadError, setWorkingVideoLoadError] = useState(null);
-  // T5440: distinguishes a hard 404 (asset genuinely gone — re-export, no retry)
-  // from a transient load error (retry offered). Drives the "video unavailable"
-  // state and suppresses the misleading "Retry Loading Video" button.
-  const [workingVideoMissing, setWorkingVideoMissing] = useState(false);
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -296,50 +283,35 @@ export function OverlayScreen({
   const framingVideoUrl = firstClipId != null ? getClipFileUrl(firstClipId, projectId) : undefined;
   const framingMetadata = firstClipId != null ? clipMetadataCache[firstClipId] : undefined;
 
-  // See deriveOverlayVideoSource (top of file) for why the url/metadata pairing must
-  // be atomic -- a half-populated workingVideo record is the T9100 bug class.
+  // See deriveOverlayVideoSource (top of file): the T4490 slice is the only
+  // working-video state; a 'ready' slice always carries url + metadata together.
   const {
-    workingVideoUsable,
     shouldWaitForWorkingVideo,
     effectiveOverlayVideoUrl,
     effectiveOverlayMetadata,
     effectiveOverlayFile,
   } = deriveOverlayVideoSource({
     workingVideo,
-    projectWorkingVideoUrl: project?.working_video_url,
-    isLoadingWorkingVideo,
+    projectWorkingVideoId: project?.working_video_id,
     framingVideoUrl,
     framingMetadata,
   });
-  // Runs in an effect (not the render body) so a persistent half-record logs once
-  // per occurrence instead of once per render (OverlayScreen re-renders on every
-  // currentTime tick) -- a log, not a persisted write, so an effect is fine here.
-  useEffect(() => {
-    if (workingVideo && !workingVideoUsable) {
-      console.error('[OverlayScreen] Half-populated workingVideo record - refusing it', {
-        hasUrl: !!workingVideo.url,
-        hasMetadata: !!workingVideo.metadata,
-      });
-    }
-  }, [workingVideo, workingVideoUsable]);
 
   // Diagnostic: log video source state on every render where something interesting happens
   useEffect(() => {
     // Gate on project: before project data loads, having no video source is
     // the normal mount state, not an anomaly worth warning about.
-    if (project && !effectiveOverlayVideoUrl && !isLoadingWorkingVideo && !shouldWaitForWorkingVideo) {
+    if (project && !effectiveOverlayVideoUrl && !shouldWaitForWorkingVideo) {
       console.warn('[OverlayScreen] No video source available', {
-        workingVideo: !!workingVideo,
-        workingVideoUrl: workingVideo?.url?.substring(0, 50),
-        projectWorkingVideoUrl: project?.working_video_url?.substring(0, 50),
+        workingVideoStatus: workingVideo.status,
+        workingVideoId: workingVideo.videoId,
         projectWorkingVideoId: project?.working_video_id,
-        isLoadingWorkingVideo,
         shouldWaitForWorkingVideo,
         framingVideoUrl: framingVideoUrl?.substring(0, 50),
         clipsCount: clips?.length,
       });
     }
-  }, [effectiveOverlayVideoUrl, workingVideo, project, isLoadingWorkingVideo, shouldWaitForWorkingVideo, framingVideoUrl, clips?.length]);
+  }, [effectiveOverlayVideoUrl, workingVideo, project, shouldWaitForWorkingVideo, framingVideoUrl, clips?.length]);
 
   // =========================================
   // VIDEO HOOK - Without segment awareness for overlay mode
@@ -403,7 +375,7 @@ export function OverlayScreen({
       } else if (error) {
         needs.video = true;
         trace.failed('video', error);
-      } else if (project && !isLoadingWorkingVideo && !shouldWaitForWorkingVideo) {
+      } else if (project && !shouldWaitForWorkingVideo) {
         needs.video = true;
         trace.empty('video');
       }
@@ -417,7 +389,7 @@ export function OverlayScreen({
     if (needs.video && needs.overlayData) {
       trace.settled();
     }
-  }, [projectId, effectiveOverlayVideoUrl, error, project, isLoadingWorkingVideo, shouldWaitForWorkingVideo, overlayLoadedProjectId, overlaySyncState]);
+  }, [projectId, effectiveOverlayVideoUrl, error, project, shouldWaitForWorkingVideo, overlayLoadedProjectId, overlaySyncState]);
 
   // =========================================
   // HIGHLIGHT REGIONS HOOK - OWNED BY THIS SCREEN
@@ -568,114 +540,14 @@ export function OverlayScreen({
   // INITIALIZATION - Load working video if needed
   // =========================================
 
+  // T4490: projectDataStore.loadWorkingVideo owns the load (dedup on
+  // working_video_id, bounded retry, stale results dropped). A read, not a write.
+  // A new render changes working_video_id (Frame's completion refreshes the
+  // project), which is what triggers a fresh load; nothing is handed over.
+  const projectWorkingVideoId = project?.working_video_id;
   useEffect(() => {
-    // If no working video in store but project has a working video, use the proxy URL (streaming).
-    // T1670: Guard on working_video_id (not URL) because the proxy URL is stable across exports
-    // (/api/projects/{id}/working_video/stream never changes). The ID changes per export,
-    // so a new export triggers a fresh load even though the URL is the same.
-    if (!workingVideoUsable && project?.working_video_url && workingVideoFetchIdRef.current !== project.working_video_id) {
-      workingVideoFetchIdRef.current = project.working_video_id;
-      workingVideoRecoveryAttemptedRef.current = false; // Reset recovery guard
-      workingVideoAttemptsRef.current = 0;
-      setWorkingVideoLoadError(null);
-      setWorkingVideoMissing(false);
-      setIsLoadingWorkingVideo(true);
-
-      const attemptLoad = async () => {
-        workingVideoAttemptsRef.current += 1;
-        const attempt = workingVideoAttemptsRef.current;
-        try {
-          // T5642: load the working video via a presigned R2 URL, NOT the
-          // same-origin `/working_video/stream` proxy. On staging/prod the
-          // frontend is cross-origin to the API (pages.dev -> fly.dev) and the
-          // overlay <video> element carries no crossOrigin attribute, so its
-          // cross-origin range requests to the proxy arrive without the session
-          // cookie -> 401 -> Chrome "Format error". The presigned R2 URL is a
-          // different, anonymous origin (no cookie needed), mirroring how Framing
-          // already loads clips (clips.py get_clip_playback_url).
-          const presignResp = await apiFetch(
-            `${API_BASE}/api/projects/${projectId}/working_video/playback-url`
-          );
-          if (!presignResp.ok) {
-            // A hard 404 means the working video's R2 object / DB ref is gone —
-            // surface the same "re-export" state videoMetadata raises for 404s.
-            if (presignResp.status === 404) {
-              throw new VideoAssetMissingError(
-                `${API_BASE}/api/projects/${projectId}/working_video/playback-url`,
-                404
-              );
-            }
-            throw new Error(`playback-url fetch returned ${presignResp.status}`);
-          }
-          const { url: workingVideoUrl } = await presignResp.json();
-          if (!workingVideoUrl) {
-            throw new Error('playback-url response missing url');
-          }
-          console.log(`[OverlayScreen] Loading working video (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}) via presigned URL:`, workingVideoUrl.substring(0, 80));
-          const meta = await extractVideoMetadataFromUrl(workingVideoUrl, 'working_video.mp4');
-          console.log('[OverlayScreen] Extracted metadata from presigned URL:', meta);
-          setWorkingVideo({ file: null, url: workingVideoUrl, metadata: meta });
-          setIsLoadingWorkingVideo(false);
-        } catch (err) {
-          // T5440: a hard 404 means the working video's R2 object is gone (dangling
-          // DB ref / prune) — retrying cannot recover it. Show a single "re-export"
-          // state, do NOT run the transient retry (no attempt-2, no probe storm).
-          if (err instanceof VideoAssetMissingError) {
-            console.warn(`[OverlayScreen] Working video no longer available (HTTP ${err.status}) — re-export to rebuild.`, {
-              projectId,
-              workingVideoId: project?.working_video_id,
-            });
-            setWorkingVideoMissing(true);
-            setWorkingVideoLoadError('This highlight’s video is no longer available. Re-generate to rebuild it.');
-            setIsLoadingWorkingVideo(false);
-            return;
-          }
-          console.error(`[OverlayScreen] Working video load failed (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, err.message, {
-            projectId,
-            workingVideoId: project?.working_video_id,
-          });
-          if (attempt < MAX_WORKING_VIDEO_ATTEMPTS) {
-            attemptLoad();
-          } else {
-            // Exhausted attempts — surface failure to the user.
-            // Leave workingVideoFetchIdRef set so this effect does not re-fire
-            // for the same working_video_id; user must click retry to clear + re-attempt.
-            setWorkingVideoLoadError(userErrorMessage(err, ERROR_COPY.LOAD_VIDEO));
-            setIsLoadingWorkingVideo(false);
-          }
-        }
-      };
-      attemptLoad();
-    } else if (!workingVideoUsable && !project?.working_video_url && isLoadingWorkingVideo) {
-      // Stuck state: isLoadingWorkingVideo was set externally (by FocusScreen) but
-      // project data doesn't include working_video_url. This happens when React renders
-      // OverlayScreen before the refreshed project data has propagated.
-      // Recovery: refresh project once to get the URL. If still missing, clear the flag.
-      // We handle both outcomes inline because when the project has no working video,
-      // the effect deps (project?.working_video_url, working_video_id) stay null
-      // and the effect would never re-run to reach the else branch.
-      if (!workingVideoRecoveryAttemptedRef.current) {
-        workingVideoRecoveryAttemptedRef.current = true;
-        console.log('[OverlayScreen] isLoadingWorkingVideo=true but no URL — refreshing project to get presigned URL');
-        refreshProject().then((freshProject) => {
-          if (!freshProject?.working_video_url) {
-            console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
-            setIsLoadingWorkingVideo(false);
-          }
-        });
-      } else {
-        console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
-        setIsLoadingWorkingVideo(false);
-      }
-    } else if (project && !workingVideoUsable && !project.working_video_url && !isLoadingWorkingVideo) {
-      // Project loaded but has no working video URL at all — log why.
-      // (Before project data loads, this state is normal — stay quiet.)
-      console.warn('[OverlayScreen] No working video URL in project data', {
-        projectId,
-        workingVideoId: project.working_video_id,
-      });
-    }
-  }, [workingVideo, workingVideoUsable, project, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo, refreshProject]);
+    if (projectId && projectWorkingVideoId) loadWorkingVideo(projectId, projectWorkingVideoId);
+  }, [projectId, projectWorkingVideoId, loadWorkingVideo]);
 
   // Load video into useVideo hook when effectiveOverlayVideoUrl is available
   // Uses a ref to track the source URL to prevent infinite loops (blob URLs are always unique)
@@ -701,15 +573,16 @@ export function OverlayScreen({
 
   // T6630: the video element reaching "has playable data" for the current src
   // is the authoritative signal that loading actually worked right now. If a
-  // working-video load attempt failed earlier (or a fallback URL took a retry
-  // to land) but the player is now showing frames, `workingVideoLoadError`
-  // must not keep the "failed to load" banner up over a working video.
-  useEffect(() => {
-    if (!isVideoElementLoading && videoUrl && (workingVideoLoadError || workingVideoMissing)) {
-      setWorkingVideoLoadError(null);
-      setWorkingVideoMissing(false);
-    }
-  }, [isVideoElementLoading, videoUrl, workingVideoLoadError, workingVideoMissing]);
+  // working-video load failed earlier (or a fallback URL took a retry to land)
+  // but the player is now showing frames, the "failed to load" banner must not
+  // stay up over a working video.
+  // T5440: 'missing' (hard 404, asset gone: re-export, no retry) is distinct from
+  // 'error' (retry offered).
+  const playerShowingFrames = !isVideoElementLoading && !!videoUrl;
+  const workingVideoFailed = !!projectWorkingVideoId && workingVideo.videoId === projectWorkingVideoId
+    && (workingVideo.status === 'error' || workingVideo.status === 'missing') && !playerShowingFrames;
+  const workingVideoLoadError = workingVideoFailed ? workingVideo.error : null;
+  const workingVideoMissing = workingVideoFailed && workingVideo.status === 'missing';
 
   // Initialize highlight regions when duration available
   useEffect(() => {
@@ -1390,9 +1263,8 @@ export function OverlayScreen({
     setSelectedLayer,
     effectiveOverlayVideoUrl,
     overlayClipMetadata,
-    isLoadingWorkingVideo,
+    isLoadingWorkingVideo: shouldWaitForWorkingVideo,
     setOverlayClipMetadata,
-    setIsLoadingWorkingVideo,
     dragHighlight,
     setDragHighlight,
     selectedHighlightKeyframeTime,
@@ -1539,7 +1411,7 @@ export function OverlayScreen({
       // Extract actual filename from current working video URL (format: working_64_abc123.mp4)
       // The URL might be a presigned R2 URL or a local API URL
       let filename = null;
-      const currentUrl = workingVideo?.url || project?.working_video_url;
+      const currentUrl = workingVideo.video?.url || project?.working_video_url;
       if (currentUrl) {
         // Try to extract filename from URL path (before query params)
         const urlPath = currentUrl.split('?')[0];
@@ -1577,16 +1449,11 @@ export function OverlayScreen({
   }, [setOverlaySyncState]);
 
   // Manual retry after working-video load has exhausted automatic attempts.
-  // Refresh the project to get a fresh presigned URL (in case the failure was
-  // due to URL expiry), then clear guards so the load effect re-runs.
+  // The action fetches a fresh presigned URL, so an expired URL recovers too.
   const handleRetryWorkingVideo = useCallback(async () => {
     console.log('[OverlayScreen] Manual retry of working video load');
-    setWorkingVideoLoadError(null);
-    setWorkingVideoMissing(false);
-    workingVideoFetchIdRef.current = null;
-    workingVideoAttemptsRef.current = 0;
-    await refreshProject();
-  }, [refreshProject]);
+    await loadWorkingVideo(projectId, projectWorkingVideoId, { force: true });
+  }, [loadWorkingVideo, projectId, projectWorkingVideoId]);
 
   const handleSwitchToFraming = useCallback(() => {
     // T11220: a legacy multi-clip project cannot re-enter Focus/Framing — the
@@ -1751,7 +1618,7 @@ export function OverlayScreen({
       isPlaying={isPlaying}
       handlers={handlers}
       // Loading state
-      isLoading={!workingVideoLoadError && (isLoading || isLoadingWorkingVideo || shouldWaitForWorkingVideo)}
+      isLoading={!workingVideoLoadError && (isLoading || shouldWaitForWorkingVideo)}
       isVideoElementLoading={isVideoElementLoading}
       loadingProgress={loadingProgress}
       loadingElapsedSeconds={loadingElapsedSeconds}

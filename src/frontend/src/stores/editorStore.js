@@ -597,7 +597,7 @@ async function handlePopState() {
   if (targetMode !== currentMode) {
     if (currentMode === EDITOR_MODES.FRAMING
         && useFocusStore.getState().framingChangedSinceExport
-        && useProjectDataStore.getState().workingVideo?.url) {
+        && useProjectDataStore.getState().workingVideo.status === 'ready') {
       window.history.pushState({ mode: currentMode }, '', canonicalPath(currentMode));
       useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.FRAMING);
       return;
