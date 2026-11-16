@@ -1030,6 +1030,41 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("LOOP_CRASHED AttributeError: no splitlines", (checkout / ".dotask-status").read_text())
         self.assertFalse((checkout / dotask_cli.RUN_LOCK).exists())
 
+    def test_a_crashed_loop_writes_its_full_traceback_to_the_run_log(self):
+        # T16610: g-t11180-4 (2026-11-15) stopped on a one-line LOOP_CRASHED and the traceback was nowhere.
+        checkout = self.tasks_root / "g-x"
+        checkout.mkdir(parents=True, exist_ok=True)
+
+        def main_step(args):
+            return None + None
+
+        with self.assertRaises(TypeError):
+            dotask_cli.locked(main_step)(SimpleNamespace(slug="g-x"))
+        self.assertEqual((checkout / ".dotask-status").read_text().splitlines()[-1].split(" ", 1)[1],
+                         "LOOP_CRASHED TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'")
+        log = (self.tasks_root / "profiles" / "g-x" / "run.log").read_text(encoding="utf-8")
+        self.assertIn("Traceback (most recent call last):", log)
+        self.assertIn("in main_step", log)
+        self.assertIn("return None + None", log)
+        self.assertIn("TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'", log)
+
+    def test_eta_and_verify_budget_read_a_group_file_with_missing_values_as_numbers(self):
+        # T16610: a group file can carry null for the budget fields (a hand edit, an interrupted save).
+        group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\n")
+        group.update({"verify_spent_s": None, "verify_budget_min": None, "verify_budget_round": None})
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        profiles = self.tasks_root / "profiles" / "g-x"
+        (profiles / "r-null.json").write_text(json.dumps(
+            {"schema_version": 2, "phase": "implementation", "outcome_class": "success", "duration_seconds": None}))
+        self.assertEqual(dotask_cli.budget_left_minutes(group), dotask_cli.VERIFY_BUDGET_MINUTES)
+        dotask_cli.spend_budget(group, checkout, 90)
+        self.assertEqual(group["verify_spent_s"], 90)
+        now = dotask_cli.dt.datetime(2026, 11, 7, 10, 0).astimezone()
+        best, _with_fix, basis = dotask_cli.estimate({**group, "verify_spent_s": None}, checkout, now)
+        self.assertIsInstance(best, dotask_cli.dt.datetime)
+        self.assertIn("verify up to", basis)
+
+
     def test_a_merged_groups_running_container_is_freed_by_status_and_start(self):
         # T15350, owner rule 2026-11-08: merged groups kept their stacks up and slowed the live ones.
         group, checkout = self._group_for_eta("t PUSHREADY feature/x abc\n")
@@ -1240,6 +1275,35 @@ class DotaskCliTest(unittest.TestCase):
                                          capture_output=True, text=True, check=True).stdout
         self.assertIn(group["branch"], remote_branches)
         self.assertTrue(profile_path.exists() or True)  # report is best-effort (check=False); existence not required here
+
+    def test_land_retries_a_push_refused_with_no_reason_and_carries_on(self):
+        # T16610: g-t2650-1 (2026-11-15) crashed the loop on a push refused with no reason; a retry worked.
+        slug = "g-t1-pushretry"
+        _checkout, group, _head, gh_runs = self._build_group_checkout(slug, capture=False)
+        real_task_sh, pushes = dotask_cli.task_sh, []
+
+        def flaky_task_sh(*args, check=True, capture_output=False):
+            if args[0] == "push":
+                pushes.append(args)
+                if len(pushes) == 1:
+                    refusal = SimpleNamespace(returncode=1, stdout="", stderr=(
+                        " ! [remote rejected] feature/x -> feature/x (failure)\n"
+                        "error: failed to push some refs\nERROR: push failed (is host git signed in to GitHub?)\n"))
+                    if check:
+                        raise subprocess.CalledProcessError(1, ["task.sh", "push"], refusal.stdout, refusal.stderr)
+                    return refusal
+            return real_task_sh(*args, check=check, capture_output=capture_output)
+
+        with patch.object(dotask_cli, "LANDING_ROOT", self.root / "landing"), \
+                patch.dict(os.environ, {"FAKE_GH_RUNS": str(gh_runs)}), \
+                patch.object(dotask_cli, "task_sh", flaky_task_sh), patch.object(dotask_cli.time, "sleep", lambda s: None), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = dotask_cli.land(SimpleNamespace(slug=slug, after_test=True))
+        self.assertEqual(code, 0)
+        self.assertEqual(len(pushes), 2)
+        remote_branches = subprocess.run(["git", "-C", str(self.origin), "branch", "--list", group["branch"]],
+                                         capture_output=True, text=True, check=True).stdout
+        self.assertIn(group["branch"], remote_branches)
 
     def test_land_after_test_archives_the_group_notes(self):
         # The notes are gitignored and die with the checkout on nuke; keep them with the wave profile.
@@ -2757,6 +2821,42 @@ class VerifyBudgetPerCriterionTest(AutolandBase):
         dotask_cli.renew_round_budget(self.checkout, group, 2)
         self.assertEqual(self._group()["verify_spent_s"], 0)  # saved at the renewal
         self.assertEqual(group["verify_spent_s"], 120)  # the restart kept this round's spend
+
+
+class PushRetryTest(unittest.TestCase):
+    """T16610: g-t2650-1's push was refused with no reason and a retry worked, but the loop had crashed."""
+
+    def _push(self, results):
+        calls = []
+
+        def fake_task_sh(*args, **kwargs):
+            calls.append(args)
+            return results[len(calls) - 1]
+
+        with patch.object(dotask_cli, "task_sh", fake_task_sh), patch.object(dotask_cli.time, "sleep", lambda s: None), \
+                contextlib.redirect_stderr(io.StringIO()):
+            dotask_cli.push_branch("g-x")
+        return calls
+
+    def test_a_push_refused_with_no_reason_is_retried_once_and_the_loop_carries_on(self):
+        refused = SimpleNamespace(returncode=1, stdout="", stderr=(
+            "To github.com:o/r.git\n ! [remote rejected] feature/x -> feature/x (failure)\n"
+            "error: failed to push some refs to 'github.com:o/r.git'\n"
+            "ERROR: push failed (is host git signed in to GitHub?)\n"))
+        pushed = SimpleNamespace(returncode=0, stdout="", stderr="[task] pushed.\n")
+        self.assertEqual(self._push([refused, pushed]), [("push", "g-x"), ("push", "g-x")])
+
+    def test_a_refusal_that_names_its_reason_is_not_retried(self):
+        rejected = SimpleNamespace(returncode=1, stdout="", stderr=(
+            " ! [rejected] feature/x -> feature/x (non-fast-forward)\n"
+            "ERROR: push failed (is host git signed in to GitHub?)\n"))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self._push([rejected, rejected])
+
+    def test_a_second_refusal_stops_the_loop(self):
+        refused = SimpleNamespace(returncode=1, stdout="", stderr="error: failed to push some refs\n")
+        with self.assertRaises(subprocess.CalledProcessError):
+            self._push([refused, refused])
 
 
 if __name__ == "__main__":

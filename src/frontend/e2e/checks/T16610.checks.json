@@ -1,0 +1,5 @@
+{"criteria": {
+  "T16610:C1": {"kind": "code", "command": "cd scripts && timeout 300 python -m unittest test_dotask_cli.DotaskCliTest.test_a_crashed_loop_writes_its_full_traceback_to_the_run_log"},
+  "T16610:C2": {"kind": "code", "command": "cd scripts && timeout 300 python -m unittest test_dotask_cli.DotaskCliTest.test_eta_and_verify_budget_read_a_group_file_with_missing_values_as_numbers"},
+  "T16610:C3": {"kind": "code", "command": "cd scripts && timeout 300 python -m unittest test_dotask_cli.DotaskCliTest.test_land_retries_a_push_refused_with_no_reason_and_carries_on test_dotask_cli.PushRetryTest"}
+}}
