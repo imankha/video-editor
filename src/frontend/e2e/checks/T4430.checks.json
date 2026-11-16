@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T4430:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t4430_video_probe.py -q -p no:cacheprovider -k 'probe_video or frame_rate or no_app_side'"},
+    "T4430:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t4430_video_probe.py -q -p no:cacheprovider -k test_no_eval_in_app"},
+    "T4430:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t4430_video_probe.py -q -p no:cacheprovider -k test_local_spotlight_render_keeps_input_length"}
+  }
+}

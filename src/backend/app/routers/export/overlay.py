@@ -62,6 +62,7 @@ from ...services.publish_final_video import (
 from ...services.spotlight_reveal import compute_spotlight_reveal
 from ...services.state_log import log_state
 from ...services.video_detections import hoist_video_detections, slice_detections
+from ...services.video_probe import VideoProbeError, probe_video
 from ...storage import (
     generate_presigned_url,
     upload_bytes_to_r2,
@@ -1145,14 +1146,15 @@ def _process_frames_to_ffmpeg(
         if first_region.get('keyframes'):
             logger.info(f"[Overlay Export] DEBUG - First keyframe: {first_region['keyframes'][0]}")
 
+    # T4430: rate and size from the one probe (raises on an unreadable file).
+    probe = probe_video(input_path)
+    fps, fps_str = probe['fps'], probe['fps_str']
+    width, height = probe['width'], probe['height']
+
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         raise ValueError("Could not open video file")
-
-    fps = cap.get(cv2.CAP_PROP_FPS)
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     logger.info(f"[Overlay Export] Video: {width}x{height} @ {fps}fps, {frame_count} frames")
     logger.info("[Overlay Export] Piping frames directly to FFmpeg (no disk I/O)")
@@ -1168,7 +1170,7 @@ def _process_frames_to_ffmpeg(
         '-f', 'rawvideo',
         '-pix_fmt', 'bgr24',
         '-s', f'{width}x{height}',
-        '-r', str(fps),
+        '-r', fps_str,
         '-i', 'pipe:0',
         # Audio from original file
         '-i', input_path,
@@ -1179,7 +1181,8 @@ def _process_frames_to_ffmpeg(
     ffmpeg_cmd.extend([
         '-c:a', 'aac',
         '-b:a', '192k',
-        '-shortest',
+        # No -shortest (T4430): the video is the clip; a shorter audio track
+        # must not cut the Spotlight render short.
         output_path
     ])
 
@@ -1710,7 +1713,7 @@ async def export_final(
         # can't be ffprobed (e.g. a test fixture's fake bytes). Threaded (T4390 M3
         # fix): unlike _finalize_overlay_export's 3 call sites (each already run
         # inside asyncio.to_thread), this one sits directly in this async handler --
-        # resolve_output_aspect_ratio's ffprobe_bytes is a blocking subprocess.run
+        # resolve_output_aspect_ratio's probe_video is a blocking subprocess.run
         # on the whole reel (up to a 60s timeout) and must not block the event loop.
         aspect_ratio = await asyncio.to_thread(
             resolve_output_aspect_ratio,
@@ -1888,18 +1891,11 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
     working_video_dims = {'width': 1080, 'height': 1920}
 
     if wv_result:
-        import cv2
-
         from ...database import get_working_videos_path
         wv_path = get_working_videos_path() / wv_result['filename']
         if wv_path.exists():
-            cap = cv2.VideoCapture(str(wv_path))
-            if cap.isOpened():
-                working_video_dims = {
-                    'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                    'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                }
-                cap.release()
+            probe = probe_video(str(wv_path))
+            working_video_dims = {'width': probe['width'], 'height': probe['height']}
 
     all_transformed_regions = []
     processed_raw_clip_ids = set()  # Track processed raw_clips to prevent duplicates
@@ -2286,44 +2282,16 @@ class OverlayRenderRequest(BaseModel):
     effect_type: str = "dark_overlay"
 
 
-def _cv2_probe_local_dims(path) -> tuple[int, int] | None:
-    """cv2 probe of a LOCAL file path. Returns None (never raises) on any
-    failure so the caller can fall through to the R2 probe below."""
-    import cv2
-
-    if not path.exists():
-        return None
-    cap = cv2.VideoCapture(str(path))
+def _probe_dims(source: str) -> tuple[int, int] | None:
+    """(width, height) of a local path or presigned URL (ffprobe reads a URL
+    by HTTP range requests -- no full download). Returns None (never raises)
+    on any failure so `_probe_working_video_dims` can try its next tier."""
     try:
-        if not cap.isOpened():
-            return None
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    finally:
-        cap.release()
-    return (width, height) if width > 0 and height > 0 else None
-
-
-def _ffprobe_remote_dims(url: str) -> tuple[int, int] | None:
-    """ffprobe a video stream's width/height via HTTP range requests -- no
-    full download needed just to read the header. Mirrors the existing
-    `poster.py::_probe_duration` remote-probe pattern. Returns None (never
-    raises) on any failure."""
-    cmd = [
-        "ffprobe", "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=width,height",
-        "-of", "csv=s=x:p=0",
-        url,
-    ]
-    try:
-        out = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
-        width_str, height_str = out.stdout.strip().split("x")
-        width, height = int(width_str), int(height_str)
-        return (width, height) if width > 0 and height > 0 else None
-    except Exception as e:
-        logger.info(f"[Overlay Text] ffprobe remote dims probe failed: {e}")
+        probe = probe_video(source, timeout=30)
+    except VideoProbeError as e:
+        logger.info(f"[Overlay Text] dims probe failed: {e}")
         return None
+    return (probe['width'], probe['height'])
 
 
 def _probe_working_video_dims(user_id: str, working_filename: str) -> tuple[int, int]:
@@ -2332,7 +2300,7 @@ def _probe_working_video_dims(user_id: str, working_filename: str) -> tuple[int,
     Two-tier probe, NEVER a silent wrong default (CLAUDE.md: no silent
     fallback for internal data -- a wrong dims value would burn mis-scaled
     text into a real export):
-      1. Local on-disk copy (`get_working_videos_path()/filename`) via cv2 --
+      1. Local on-disk copy (`get_working_videos_path()/filename`) --
          the fast, common-case path: the SAME pod that just finished framing
          this working video still has it on disk (`storage.upload_to_r2`
          always writes from a local_path before/alongside the R2 upload).
@@ -2340,7 +2308,7 @@ def _probe_working_video_dims(user_id: str, working_filename: str) -> tuple[int,
          request, no full download) when the local copy is absent -- e.g. a
          different or restarted pod serving this Overlay export request in a
          multi-pod/ephemeral-disk deployment. This is the gap the local-only
-         probe missed: the local render loop's OWN cv2 probe is always safe
+         probe missed: the local render loop's OWN probe is always safe
          because it reads a copy it JUST downloaded itself; this producer runs
          BEFORE either render loop's own download, so it cannot assume that.
     Raises only when BOTH tiers fail -- never silently defaults.
@@ -2348,13 +2316,13 @@ def _probe_working_video_dims(user_id: str, working_filename: str) -> tuple[int,
     from ...database import get_working_videos_path
 
     wv_path = get_working_videos_path() / working_filename
-    dims = _cv2_probe_local_dims(wv_path)
+    dims = _probe_dims(str(wv_path)) if wv_path.exists() else None
     if dims:
         return dims
 
     url = generate_presigned_url(user_id, f"working_videos/{working_filename}")
     if url:
-        dims = _ffprobe_remote_dims(url)
+        dims = _probe_dims(url)
         if dims:
             return dims
 

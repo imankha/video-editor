@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 from app.constants import ExportPhase
+from app.services.video_probe import VideoProbeError, probe_video
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +73,11 @@ class MockVideoUpscaler:
         # rather than guessing 1920x1080, which would crop/scale against wrong dimensions
         # and produce corrupt output downstream (a silent fallback for internal data).
         try:
-            probe = ffmpeg_lib.probe(input_path)
-            video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
-            src_w = int(video_info['width'])
-            src_h = int(video_info['height'])
-        except Exception as e:
+            probe = probe_video(input_path)
+        except VideoProbeError as e:
             logger.error(f"[MockUpscaler] Failed to probe source dimensions for {input_path}: {e}")
             raise RuntimeError(f"Cannot process video: ffprobe failed for {input_path}: {e}") from e
+        src_w, src_h = probe['width'], probe['height']
 
         # Use first keyframe for crop
         # Keyframes may be fractional (0-1) or pixel coords — detect and handle both

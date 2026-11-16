@@ -77,7 +77,7 @@ async def _render(clip, probe):
     ffmpeg_mock = MagicMock()
     with patch("app.services.export_helpers.resolve_clip_source",
                return_value=("https://r2/clip.mp4", 0.0, 4.0, True)), \
-         patch.object(framing, "get_video_info", **probe), \
+         patch.object(framing, "probe_video", **probe), \
          patch.object(framing, "ffmpeg", ffmpeg_mock), \
          patch.object(framing, "_export_clips", new=fake_export_clips), \
          patch("builtins.open", MagicMock()), \

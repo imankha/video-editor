@@ -48,7 +48,7 @@ from .collection_metadata import (
     compute_unified_clip_start,
 )
 from .poster import first_slowmo_section, read_clip_segments_for_project
-from .video_probe import ffprobe_bytes, probe_dimensions_via_url
+from .video_probe import VideoProbeError, probe_video
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,16 @@ def derive_aspect_ratio_label(width: int, height: int) -> str | None:
     return None
 
 
+def _probe_output_dims(source: str | bytes, log_context: str) -> dict | None:
+    """Probe the rendered output (bytes or presigned URL). None on failure: the
+    caller's fallback to the project setting covers an external dependency."""
+    try:
+        return probe_video(source, timeout=60)
+    except VideoProbeError as e:
+        logger.warning(f"[Publish] {log_context}: output probe failed: {e}")
+        return None
+
+
 def resolve_output_aspect_ratio(
     *,
     project_aspect_ratio: str | None,
@@ -134,12 +144,12 @@ def resolve_output_aspect_ratio(
     which is exactly where the T4160 incident class lives."""
     dims = None
     if video_bytes is not None:
-        dims = ffprobe_bytes(video_bytes)
+        dims = _probe_output_dims(video_bytes, log_context)
     if dims is None and user_id and r2_relative_path:
         from ..storage import generate_presigned_url
         url = generate_presigned_url(user_id, r2_relative_path, expires_in=300)
         if url:
-            dims = probe_dimensions_via_url(url)
+            dims = _probe_output_dims(url, log_context)
     if dims:
         label = derive_aspect_ratio_label(dims["width"], dims["height"])
         if label:

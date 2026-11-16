@@ -17,7 +17,6 @@ import os
 import subprocess
 import tempfile
 from functools import lru_cache
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -278,49 +277,6 @@ def get_video_duration(video_path: str) -> float:
         # caller already runs inside the export pipeline's try/except, which fails the job.
         logger.error(f"Failed to get duration for {video_path}: {e}")
         raise RuntimeError(f"ffprobe could not read duration for {video_path}: {e}") from e
-
-
-def get_video_info(video_path: str) -> dict[str, Any]:
-    """
-    Get comprehensive video information using FFprobe.
-
-    Returns:
-        Dictionary with width, height, duration, fps, codec
-    """
-    cmd = [
-        'ffprobe', '-v', 'error',
-        '-select_streams', 'v:0',
-        '-show_entries', 'stream=width,height,r_frame_rate,codec_name',
-        '-show_entries', 'format=duration',
-        '-of', 'json',
-        video_path
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        import json
-        data = json.loads(result.stdout)
-
-        stream = data.get('streams', [{}])[0]
-        format_data = data.get('format', {})
-
-        # Parse frame rate (e.g., "30/1" -> 30.0)
-        fps_str = stream.get('r_frame_rate', '30/1')
-        if '/' in fps_str:
-            num, den = fps_str.split('/')
-            fps = float(num) / float(den) if float(den) != 0 else 30.0
-        else:
-            fps = float(fps_str)
-
-        return {
-            'width': stream.get('width', 0),
-            'height': stream.get('height', 0),
-            'duration': float(format_data.get('duration', 0)),
-            'fps': fps,
-            'codec': stream.get('codec_name', 'unknown'),
-        }
-    except Exception as e:
-        logger.error(f"Failed to get video info for {video_path}: {e}")
-        return {'width': 0, 'height': 0, 'duration': 0, 'fps': 30.0, 'codec': 'unknown'}
 
 
 def concatenate_with_cut(

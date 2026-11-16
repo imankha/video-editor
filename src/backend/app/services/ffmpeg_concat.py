@@ -23,11 +23,12 @@ False on total failure, never raises -- this is what lets
 pass (design §4) instead of two sequential 2-segment concats.
 """
 
-import json
 import logging
 import os
 import subprocess
 import tempfile
+
+from app.services.video_probe import probe_video
 
 logger = logging.getLogger(__name__)
 
@@ -60,26 +61,14 @@ def probe_media(path: str) -> dict:
     (has_audio, a_codec, a_rate, a_channels). Raises on a failed probe -- we must
     not guess dimensions for a concat (a mismatch corrupts the join).
     """
-    cmd = [
-        "ffprobe", "-v", "error",
-        "-show_entries",
-        "stream=index,codec_type,codec_name,width,height,r_frame_rate,"
-        "avg_frame_rate,pix_fmt,sample_aspect_ratio,time_base,sample_rate,channels",
-        "-show_entries", "format=duration",
-        "-of", "json", path,
-    ]
-    data = json.loads(run(cmd).stdout)
-    streams = data.get("streams", [])
-    vstream = next((s for s in streams if s.get("codec_type") == "video"), None)
-    astream = next((s for s in streams if s.get("codec_type") == "audio"), None)
-    if not vstream:
-        raise RuntimeError(f"no video stream in {path}")
+    info = probe_video(path)
+    vstream = info["video_stream"]
+    astream = info["audio_stream"]
 
-    # Prefer avg_frame_rate; fall back to r_frame_rate. Keep it as a fraction string
-    # so we pass the exact rate (e.g. 30000/1001) through to the card, not a rounded float.
-    fps_str = vstream.get("avg_frame_rate") or vstream.get("r_frame_rate") or "30/1"
-    if fps_str in ("0/0", "0/1", "N/A", None):
-        fps_str = vstream.get("r_frame_rate") or "30/1"
+    # Prefer the average rate; fall back to the nominal rate (probe_video raises
+    # when that is unknown too). Keep it as a fraction string so we pass the exact rate
+    # (e.g. 30000/1001) through to the card, not a rounded float.
+    fps_str = info["avg_fps_str"] or info["fps_str"]
 
     sar = vstream.get("sample_aspect_ratio") or "1:1"
     if sar in ("0:1", "N/A", None):
@@ -93,13 +82,13 @@ def probe_media(path: str) -> dict:
         timescale = 15360
 
     return {
-        "width": int(vstream["width"]),
-        "height": int(vstream["height"]),
+        "width": info["width"],
+        "height": info["height"],
         "fps_str": fps_str,
         "pix_fmt": vstream.get("pix_fmt") or "yuv420p",
         "sar": sar.replace(":", "/"),
         "timescale": timescale,
-        "duration": float(data.get("format", {}).get("duration") or 0.0),
+        "duration": info["duration"] or 0.0,
         "has_audio": astream is not None,
         "a_codec": (astream or {}).get("codec_name") or "aac",
         "a_rate": int((astream or {}).get("sample_rate") or 48000),

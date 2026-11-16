@@ -187,7 +187,7 @@ class TestFramingRenderPreservesPointers:
 
         with patch("app.services.export_helpers.resolve_clip_source",
                    return_value=("https://r2/raw", 0.0, 5.0, False)), \
-             patch.object(framing, "get_video_info", return_value={"fps": 30.0, "width": 1080, "height": 1920}), \
+             patch.object(framing, "probe_video", return_value={"fps": 30.0, "width": 1080, "height": 1920}), \
              patch.object(framing, "ffmpeg", _ff), \
              patch.object(framing, "_export_clips", side_effect=_fake_export_clips), \
              patch.object(framing.manager, "send_progress", new=AsyncMock()), \

@@ -29,7 +29,7 @@ from ...database import column_exists, get_db_connection
 from ...highlight_transform import canonicalize_segments_data, compute_export_credits, get_output_duration
 from ...profile_context import get_current_profile_id
 from ...queries import latest_working_clips_subquery
-from ...services.ffmpeg_service import get_video_info
+from ...services.video_probe import probe_video
 from ...storage import generate_presigned_url
 from ...user_context import get_current_user_id
 from ...utils.encoding import decode_data
@@ -325,8 +325,8 @@ async def _run_render_background(
         try:
             if source_url:
                 _t0 = time_module.monotonic()
-                source_info = await asyncio.to_thread(get_video_info, source_url)
-                logger.info(f"[Render] get_video_info took {time_module.monotonic() - _t0:.2f}s, probed fps={source_info.get('fps')} stored fps={framerate}")
+                source_info = await asyncio.to_thread(probe_video, source_url)
+                logger.info(f"[Render] probe_video took {time_module.monotonic() - _t0:.2f}s, probed fps={source_info.get('fps')} stored fps={framerate}")
         except Exception as e:
             logger.warning(f"[Render] Failed to probe source dimensions: {e}")
 

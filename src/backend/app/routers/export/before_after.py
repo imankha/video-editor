@@ -30,41 +30,6 @@ OUTPUT_WIDTH = 1080
 OUTPUT_HEIGHT = 1920
 
 
-def get_video_info(video_path: str) -> dict:
-    """Get video dimensions and duration using ffprobe."""
-    try:
-        result = subprocess.run([
-            'ffprobe', '-v', 'quiet',
-            '-print_format', 'json',
-            '-show_streams',
-            '-show_format',
-            video_path
-        ], capture_output=True, text=True)
-
-        import json
-        info = json.loads(result.stdout)
-
-        # Find video stream
-        video_stream = None
-        for stream in info.get('streams', []):
-            if stream.get('codec_type') == 'video':
-                video_stream = stream
-                break
-
-        if not video_stream:
-            return None
-
-        return {
-            'width': int(video_stream.get('width', 0)),
-            'height': int(video_stream.get('height', 0)),
-            'duration': float(info.get('format', {}).get('duration', 0)),
-            'fps': eval(video_stream.get('r_frame_rate', '30/1'))
-        }
-    except Exception as e:
-        logger.error(f"Failed to get video info: {e}")
-        return None
-
-
 def generate_before_clip(source_path: str, start_frame: int, end_frame: int,
                          output_path: str, fps: float = 30.0,
                          overlays: bool = True) -> bool:

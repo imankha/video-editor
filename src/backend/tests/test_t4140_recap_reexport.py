@@ -139,7 +139,7 @@ async def test_create_clip_draft_reexports_from_recap_after_game_deleted(db, cap
     with patch("app.storage.r2_head_object_global", return_value=None), \
          patch("app.storage.download_from_r2", side_effect=_fake_download), \
          patch("app.storage.generate_presigned_url", return_value="RECAP_PRESIGNED_URL"), \
-         patch.object(framing, "get_video_info", return_value={}), \
+         patch.object(framing, "probe_video", return_value={}), \
          patch.object(framing, "ffmpeg", fake_ffmpeg), \
          patch.object(framing, "_export_clips", export_clips_mock), \
          patch.object(framing.manager, "send_progress", new=AsyncMock()), \
