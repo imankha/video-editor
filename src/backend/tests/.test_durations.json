@@ -49,7 +49,6 @@
   "tests/test_export_golden_render.py": 1.22,
   "tests/test_export_golden_single_clip_modal.py": 0.19,
   "tests/test_export_golden_sweep.py": 0.29,
-  "tests/test_export_golden_worker.py": 0.16,
   "tests/test_export_worker_sync.py": 0.01,
   "tests/test_ffmpeg_helpers.py": 0.0,
   "tests/test_fk_cascades.py": 0.22,

@@ -381,22 +381,3 @@ def test_t13300_stream_for_upload_clip_never_serves_game_bytes(game_with_clip):
     assert resp.status_code == 302, resp.text
     assert resp.headers["location"] == "OWN_URL"
     game.assert_not_called()
-
-
-def test_t13300_framing_export_gate_skips_linked_upload_clip(game_with_clip):
-    """T13300 - the pre-export reclaimed-source gate (exports.py) must not consider
-    a linked upload clip's game; it plays its own file. The gate runs before
-    keyframe parsing, so reaching the 400 'No keyframes' proves it passed."""
-    from app.routers.games import GameSourceExpired
-    game_id, project_id, _clip_id = game_with_clip
-    _link_upload(game_id)
-    with patch("app.routers.games.assert_clip_source_available",
-               side_effect=GameSourceExpired(game_id, False)) as gate:
-        resp = client.post(
-            "/api/exports/framing",
-            data={"project_id": project_id, "keyframes_json": "[]"},
-            files={"video": ("v.mp4", b"x", "video/mp4")},
-        )
-    assert resp.status_code == 400, resp.text
-    assert "box position" in resp.text.lower()
-    gate.assert_not_called()

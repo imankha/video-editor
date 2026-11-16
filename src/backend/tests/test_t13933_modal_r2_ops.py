@@ -128,7 +128,7 @@ def test_every_modal_function_reports_and_none_runs_concurrent_inputs():
         if isinstance(node, ast.FunctionDef)
         and any(ast.unparse(d).startswith("app.function(") for d in node.decorator_list)
     }
-    assert len(functions) >= 10
+    assert len(functions) >= 6
     for name, decorators in functions.items():
         assert "_reports_r2_ops" in decorators, name
         assert not any("concurren" in d or "max_inputs" in d for d in decorators), name
@@ -205,30 +205,28 @@ async def test_plain_result_credited_under_modal_function_in_analytics_sqlite(st
 
 
 @pytest.mark.asyncio
-async def test_streamed_result_credits_every_reported_function(store, monkeypatch):
-    """A parallel framing job reports its chunk containers' ops alongside its own."""
+async def test_streamed_result_credited_from_final_yield(store, monkeypatch):
+    """A streamed (remote_gen) job's ops ride on its final status-bearing yield."""
     monkeypatch.setattr(modal_client, "_modal_enabled", True)
     monkeypatch.setattr(modal_client, "_resolve_modal_user_id", lambda uid: uid)
-    monkeypatch.setattr(modal_client, "_get_process_framing_ai_parallel_fn", lambda: _FakeGenFn([
+    monkeypatch.setattr(modal_client, "_get_render_overlay_fn", lambda: _FakeGenFn([
         {"progress": 50, "phase": "processing", "message": "..."},
         {"status": "success", "output_key": "out.mp4", "r2_ops": {
-            "process_framing_ai_parallel": {"PutObject": 1, "GetObject": 2},
-            "process_framing_ai_chunk": {"PutObject": 2},
+            "render_overlay": {"PutObject": 1, "GetObject": 2},
         }},
     ]))
 
-    result = await modal_client.call_modal_framing_ai(
+    result = await modal_client.call_modal_overlay(
         job_id="t13933", user_id=PREFIX, input_key="in.mp4", output_key="out.mp4",
-        keyframes=[], output_width=1080, output_height=1920, fps=30, video_duration=600.0,
-        source_start_time=0.0, source_end_time=600.0,
+        highlight_regions=[], effect_type="dark_overlay", video_duration=6.0,
     )
 
     env = storage.APP_ENV
     assert result["status"] == "success"
+    assert "r2_ops" not in result
     assert _modal_rows(store) == {
-        (env, "modal:process_framing_ai_parallel", "A", "PutObject"): 1,
-        (env, "modal:process_framing_ai_parallel", "B", "GetObject"): 2,
-        (env, "modal:process_framing_ai_chunk", "A", "PutObject"): 2,
+        (env, "modal:render_overlay", "A", "PutObject"): 1,
+        (env, "modal:render_overlay", "B", "GetObject"): 2,
     }
 
 

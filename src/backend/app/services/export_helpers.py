@@ -108,9 +108,9 @@ def refund_failed_export(export_id: str) -> int:
     true status (the job is failed FIRST, deliberately -- leaving a dead job
     active is worse than a delayed refund). But nothing retries this: once the
     job is terminal it is no longer a stale candidate, so a failure here loses
-    the user's credits permanently. Hence CRITICAL, matching the sibling handler
-    in `export_worker.process_export_job`. Recovery is a manual grant under the
-    `refund:{export_id}` key, which is idempotent, so it is safe to hand-run.
+    the user's credits permanently. Hence CRITICAL. Recovery is a manual grant
+    under the `refund:{export_id}` key, which is idempotent, so it is safe to
+    hand-run.
     """
     from app.user_context import get_current_user_id
     try:
@@ -229,7 +229,7 @@ def create_progress_callback(
         progress_callback = create_progress_callback(
             export_id, 'framing', project_id=123, project_name='My Project'
         )
-        result = await call_modal_framing_ai(..., progress_callback=progress_callback)
+        result = await call_modal_clips_ai(..., progress_callback=progress_callback)
     """
     async def callback(progress: float, message: str, phase: str = "processing"):
         # Status and done are derived from phase in make_progress_data

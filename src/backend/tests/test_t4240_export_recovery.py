@@ -1,13 +1,13 @@
 """
 T4240 regression tests for the export-recovery defects (defect #1, the undefined
 `presigned_url` NameError, was already fixed by T4790 -- see
-test_t4790_undefined_name_bugs.py). These cover the remaining three:
+test_t4790_undefined_name_bugs.py). These cover two of the remaining three:
 
 #2 A Modal API error must NOT mark a live job dead: check_modal_job_running returns
    None (unknown) and cleanup_stale_exports skips unknown-status jobs.
 #3 A Modal result with no output_key must fail loudly (mark error), never fabricate
    recovered_{job_id}.mp4 or insert a working_videos row pointing at a missing object.
-#4 export_worker's error handler must not itself raise when config decode fails.
+(#4, export_worker's error handler, went with the worker pipeline in T4410.)
 """
 
 import sqlite3
@@ -124,53 +124,3 @@ def test_cleanup_skips_jobs_with_unknown_modal_status(monkeypatch):
     monkeypatch.setattr(exports, "check_modal_job_running", lambda _id: False)
     exports.cleanup_stale_exports(max_age_minutes=60)
     assert conn.execute("SELECT status FROM export_jobs WHERE id='job-2'").fetchone()["status"] == "error"
-
-
-# --- #4: error handler must not itself raise ---------------------------------
-
-@pytest.mark.asyncio
-async def test_worker_error_handler_survives_config_decode_failure(monkeypatch):
-    """If decode_data(job['input_data']) fails, the except handler reads config/
-    job_type/project_id -- they must already be bound so the handler marks the job
-    error instead of crashing with NameError/UnboundLocalError.
-
-    T4380: export_worker now reads/writes export_jobs via export_job_repository
-    (own connection per call) instead of importing get_export_job/update_job_*
-    from the router -- patch that seam plus a no-op get_db_connection."""
-    import app.services.export_worker as w
-    from app.services import export_job_repository
-
-    job = {"id": "job-4", "project_id": 42, "type": "framing", "status": "pending", "input_data": b"garbage"}
-
-    errors = []
-
-    class _FakeConn:
-        def cursor(self):
-            return None
-
-        def commit(self):
-            pass
-
-    @contextmanager
-    def _fake_conn():
-        yield _FakeConn()  # cursor value is never inspected by the stubbed repo calls below
-
-    monkeypatch.setattr(w, "get_db_connection", _fake_conn)
-    monkeypatch.setattr(export_job_repository, "get", lambda cursor, _id: job)
-    monkeypatch.setattr(export_job_repository, "start", lambda cursor, _id: None)
-    monkeypatch.setattr(export_job_repository, "fail", lambda cursor, jid, msg: errors.append((jid, msg)))
-    monkeypatch.setattr(w, "record_milestone", lambda *a, **k: None)
-    monkeypatch.setattr(w, "_sync_after_export", lambda *a, **k: None)
-
-    async def _no_progress(*a, **k):
-        return None
-    monkeypatch.setattr(w, "send_progress", _no_progress)
-
-    def _boom(_data):
-        raise ValueError("cannot decode input_data")
-    monkeypatch.setattr(w, "decode_data", _boom)
-
-    # Must NOT raise (pre-fix: the handler crashed on config.get(...) with config unbound).
-    await w.process_export_job("job-4")
-
-    assert errors and errors[0][0] == "job-4"  # job was marked error cleanly
