@@ -1,6 +1,6 @@
 # Backend Guidelines
 
-> Full implementation guidelines: [../../.claude/workflows/2-implementation.md](../../.claude/workflows/2-implementation.md)
+> Full implementation guidelines: [../../.claude/workflows/4-implementation.md](../../.claude/workflows/4-implementation.md)
 
 ## Virtual Environment
 
@@ -56,9 +56,9 @@ url = generate_presigned_url(user_id, r2_key)
 
 ### Modal GPU (Unified Interface)
 ```python
-from app.services.modal_client import call_modal_framing_ai
-# Always call unified interface - routes internally
-result = await call_modal_framing_ai(job_id, user_id, ...)
+from app.services.modal_client import call_modal_clips_ai
+# Always call unified interface - routes internally (Modal or local)
+result = await call_modal_clips_ai(job_id, user_id, ...)
 ```
 
 ### Export Helpers

@@ -12,7 +12,6 @@ describe('useKeyboardShortcuts', () => {
   const mockSeek = vi.fn();
   const mockOnCopyCrop = vi.fn();
   const mockOnPasteCrop = vi.fn();
-  const mockSelectAnnotateRegion = vi.fn();
 
   // Default props
   const defaultProps = {
@@ -23,7 +22,6 @@ describe('useKeyboardShortcuts', () => {
     seekForward: mockSeekForward,
     seekBackward: mockSeekBackward,
     seek: mockSeek,
-    editorMode: 'framing',
     selectedLayer: 'playhead',
     copiedCrop: null,
     onCopyCrop: mockOnCopyCrop,
@@ -31,15 +29,6 @@ describe('useKeyboardShortcuts', () => {
     keyframes: [],
     framerate: 30,
     selectedCropKeyframeIndex: null,
-    highlightKeyframes: [],
-    highlightFramerate: 30,
-    selectedHighlightKeyframeIndex: null,
-    isHighlightEnabled: false,
-    annotateVideoUrl: null,
-    annotateSelectedLayer: 'playhead',
-    clipRegions: [],
-    annotateSelectedRegionId: null,
-    selectAnnotateRegion: mockSelectAnnotateRegion,
   };
 
   const simulateKeyDown = (code, options = {}) => {
@@ -143,7 +132,7 @@ describe('useKeyboardShortcuts', () => {
   });
 
   describe('arrow keys (playhead layer)', () => {
-    it('seeks backward on ArrowLeft in playhead layer', () => {
+    it('steps backward one frame on ArrowLeft in playhead layer', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         selectedLayer: 'playhead',
@@ -151,20 +140,20 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowLeft');
 
-      expect(mockSeekBackward).toHaveBeenCalledWith(ARROW_SEEK_SECONDS);
-      expect(mockSeekForward).not.toHaveBeenCalled();
+      expect(mockStepBackward).toHaveBeenCalledTimes(1);
+      expect(mockSeekBackward).not.toHaveBeenCalled();
     });
 
-    it('seeks forward on ArrowRight in playhead layer', () => {
+    it('seeks forward on Shift+ArrowRight in playhead layer', () => {
       renderHook(() => useKeyboardShortcuts({
         ...defaultProps,
         selectedLayer: 'playhead',
       }));
 
-      simulateKeyDown('ArrowRight');
+      simulateKeyDown('ArrowRight', { shiftKey: true });
 
       expect(mockSeekForward).toHaveBeenCalledWith(ARROW_SEEK_SECONDS);
-      expect(mockSeekBackward).not.toHaveBeenCalled();
+      expect(mockStepForward).not.toHaveBeenCalled();
     });
 
     it('does not seek when no video is loaded', () => {
@@ -175,7 +164,7 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight');
 
-      expect(mockSeekForward).not.toHaveBeenCalled();
+      expect(mockStepForward).not.toHaveBeenCalled();
     });
 
     it('ignores arrow keys when Ctrl is pressed', () => {
@@ -183,20 +172,8 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight', { ctrlKey: true });
 
+      expect(mockStepForward).not.toHaveBeenCalled();
       expect(mockSeekForward).not.toHaveBeenCalled();
-    });
-
-    it('falls back to stepForward when seekForward not provided', () => {
-      renderHook(() => useKeyboardShortcuts({
-        ...defaultProps,
-        selectedLayer: 'playhead',
-        seekForward: undefined,
-        seekBackward: undefined,
-      }));
-
-      simulateKeyDown('ArrowRight');
-
-      expect(mockStepForward).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -262,42 +239,6 @@ describe('useKeyboardShortcuts', () => {
     });
   });
 
-  describe('arrow keys (highlight layer)', () => {
-    const highlightKeyframes = [
-      { frame: 0 },
-      { frame: 60 },
-      { frame: 120 },
-    ];
-
-    it('navigates to next highlight keyframe when enabled', () => {
-      renderHook(() => useKeyboardShortcuts({
-        ...defaultProps,
-        selectedLayer: 'highlight',
-        highlightKeyframes,
-        selectedHighlightKeyframeIndex: 0,
-        highlightFramerate: 60,
-        isHighlightEnabled: true,
-      }));
-
-      simulateKeyDown('ArrowRight');
-
-      expect(mockSeek).toHaveBeenCalledWith(1); // frame 60 / 60fps = 1s
-    });
-
-    it('does not navigate when highlight is disabled', () => {
-      renderHook(() => useKeyboardShortcuts({
-        ...defaultProps,
-        selectedLayer: 'highlight',
-        highlightKeyframes,
-        isHighlightEnabled: false,
-      }));
-
-      simulateKeyDown('ArrowRight');
-
-      expect(mockSeek).not.toHaveBeenCalled();
-    });
-  });
-
   describe('isTextEditing suppression (T6980 — inline canvas/panel text edit)', () => {
     // Design §3.6: a new optional `isTextEditing` param guards the TOP of all
     // three handlers (Space, Ctrl+C/V, Arrows). Today only Space has a
@@ -330,9 +271,10 @@ describe('useKeyboardShortcuts', () => {
       }));
 
       simulateKeyDown('ArrowRight');
+      simulateKeyDown('ArrowRight', { shiftKey: true });
 
+      expect(mockStepForward).not.toHaveBeenCalled();
       expect(mockSeekForward).not.toHaveBeenCalled();
-      expect(mockSeekBackward).not.toHaveBeenCalled();
     });
 
     it('ArrowLeft: does NOT navigate crop keyframes when isTextEditing=true', () => {
@@ -361,7 +303,7 @@ describe('useKeyboardShortcuts', () => {
 
       simulateKeyDown('ArrowRight');
 
-      expect(mockSeekForward).toHaveBeenCalledWith(ARROW_SEEK_SECONDS);
+      expect(mockStepForward).toHaveBeenCalledTimes(1);
     });
 
     it('Ctrl+C: does NOT copy when isTextEditing=true', () => {
@@ -390,75 +332,6 @@ describe('useKeyboardShortcuts', () => {
       simulateKeyDown('KeyC', { ctrlKey: true });
 
       expect(mockOnCopyCrop).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('annotate mode navigation', () => {
-    const clipRegions = [
-      { id: 'region1', startTime: 0 },
-      { id: 'region2', startTime: 5 },
-      { id: 'region3', startTime: 10 },
-    ];
-
-    it('seeks in playhead layer', () => {
-      renderHook(() => useKeyboardShortcuts({
-        ...defaultProps,
-        editorMode: 'annotate',
-        annotateVideoUrl: 'http://test.mp4',
-        annotateSelectedLayer: 'playhead',
-      }));
-
-      simulateKeyDown('ArrowRight');
-
-      expect(mockSeekForward).toHaveBeenCalledWith(ARROW_SEEK_SECONDS);
-    });
-
-    it('navigates to next clip region on ArrowRight', () => {
-      renderHook(() => useKeyboardShortcuts({
-        ...defaultProps,
-        editorMode: 'annotate',
-        annotateVideoUrl: 'http://test.mp4',
-        annotateSelectedLayer: 'clips',
-        clipRegions,
-        annotateSelectedRegionId: 'region1',
-      }));
-
-      simulateKeyDown('ArrowRight');
-
-      expect(mockSelectAnnotateRegion).toHaveBeenCalledWith('region2');
-      expect(mockSeek).toHaveBeenCalledWith(5);
-    });
-
-    it('navigates to previous clip region on ArrowLeft', () => {
-      renderHook(() => useKeyboardShortcuts({
-        ...defaultProps,
-        editorMode: 'annotate',
-        annotateVideoUrl: 'http://test.mp4',
-        annotateSelectedLayer: 'clips',
-        clipRegions,
-        annotateSelectedRegionId: 'region3',
-      }));
-
-      simulateKeyDown('ArrowLeft');
-
-      expect(mockSelectAnnotateRegion).toHaveBeenCalledWith('region2');
-      expect(mockSeek).toHaveBeenCalledWith(5);
-    });
-
-    it('clamps to first region when at beginning', () => {
-      renderHook(() => useKeyboardShortcuts({
-        ...defaultProps,
-        editorMode: 'annotate',
-        annotateVideoUrl: 'http://test.mp4',
-        annotateSelectedLayer: 'clips',
-        clipRegions,
-        annotateSelectedRegionId: 'region1',
-      }));
-
-      simulateKeyDown('ArrowLeft');
-
-      // Should stay at first region
-      expect(mockSelectAnnotateRegion).not.toHaveBeenCalled();
     });
   });
 });

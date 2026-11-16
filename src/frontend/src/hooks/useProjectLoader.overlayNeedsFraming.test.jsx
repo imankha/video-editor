@@ -16,7 +16,7 @@ const { fetchClipsSpy, resetSpy, setLoadingSpy, apiFetchSpy } = vi.hoisted(() =>
 vi.mock('../stores/projectDataStore', () => ({
   useProjectDataStore: () => ({
     setProjectClips: vi.fn(),
-    setWorkingVideo: vi.fn(),
+    loadWorkingVideo: vi.fn().mockResolvedValue({ status: 'idle', projectId: null, videoId: null, video: null, error: null }),
     setLoading: setLoadingSpy,
     updateClipMetadata: vi.fn(),
     setClipMetadataCache: vi.fn(),

@@ -117,29 +117,15 @@ async def stop_sweep_loop():
         logger.info("[Sweep] Background sweep loop stopped")
 
 
-async def _ping_health():
-    """Ping localhost health endpoint to prevent Fly.io auto-suspend."""
-    import urllib.request
-    while True:
-        try:
-            urllib.request.urlopen("http://localhost:8000/api/health", timeout=5)
-            logger.debug("[Sweep] Keepalive ping OK")
-        except Exception as e:
-            logger.debug(f"[Sweep] Keepalive ping failed: {e}")
-        await asyncio.sleep(30)
-
-
 async def _run_sweep_loop():
     """Self-scheduling sweep: runs, finds next expiry, sleeps until then."""
     await asyncio.sleep(STARTUP_DELAY)
 
     while True:
         try:
-            keepalive = asyncio.create_task(_ping_health())
-            try:
-                await asyncio.to_thread(do_sweep)
-            finally:
-                keepalive.cancel()
+            # T2650: the recap encode runs on Modal, so the sweep thread only
+            # orchestrates; no localhost keepalive pinger is needed.
+            await asyncio.to_thread(do_sweep)
 
             next_expiry = get_next_expiry()
             if next_expiry is None:

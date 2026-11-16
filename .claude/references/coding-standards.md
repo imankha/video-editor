@@ -226,8 +226,7 @@ if (editorMode.canExport) ...  // Behavior attached to type
 |------|----------|
 | Editor modes | `EDITOR_MODES` in `src/frontend/src/stores/editorStore.js` |
 | Export status | `src/frontend/src/constants/exportStatus.js` |
-| Segment status | `src/frontend/src/constants/segmentStatus.js` |
-| Keyframe origins | `src/frontend/src/constants/keyframes.js` |
+| Keyframe origins | `src/frontend/src/constants/keyframeOrigins.js` |
 | Backend enums | `src/backend/app/constants/` |
 
 ---

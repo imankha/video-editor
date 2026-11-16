@@ -409,8 +409,6 @@ MODAL_APP_NAME = resolve_modal_app_name(APP_ENV)
 
 # Cached function references
 _render_overlay_fn = None
-_process_framing_ai_fn = None
-_process_framing_ai_parallel_fn = None
 _detect_players_fn = None
 _detect_players_batch_fn = None
 
@@ -467,62 +465,6 @@ def _get_render_overlay_fn():
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to render_overlay: {e}")
         raise RuntimeError(f"Modal render_overlay not available: {e}") from e
-
-
-def _get_process_framing_ai_fn():
-    """Get a reference to the deployed process_framing_ai function (Real-ESRGAN upscaling)."""
-    global _process_framing_ai_fn
-
-    if _process_framing_ai_fn is not None:
-        return _process_framing_ai_fn
-
-    try:
-        import modal
-        _process_framing_ai_fn = modal.Function.from_name(MODAL_APP_NAME, "process_framing_ai")
-        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/process_framing_ai")
-        return _process_framing_ai_fn
-    except Exception as e:
-        logger.error(f"[Modal] Failed to connect to process_framing_ai: {e}")
-        raise RuntimeError(f"Modal process_framing_ai not available: {e}") from e
-
-
-def _get_process_framing_ai_parallel_fn():
-    """Get a reference to the deployed process_framing_ai_parallel function."""
-    global _process_framing_ai_parallel_fn
-
-    if _process_framing_ai_parallel_fn is not None:
-        return _process_framing_ai_parallel_fn
-
-    try:
-        import modal
-        _process_framing_ai_parallel_fn = modal.Function.from_name(MODAL_APP_NAME, "process_framing_ai_parallel")
-        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/process_framing_ai_parallel")
-        return _process_framing_ai_parallel_fn
-    except Exception as e:
-        logger.error(f"[Modal] Failed to connect to process_framing_ai_parallel: {e}")
-        raise RuntimeError(f"Modal process_framing_ai_parallel not available: {e}") from e
-
-
-# GPU thresholds for framing AI parallelization (mirrors video_processing.py)
-# Based on E6 benchmark: T4 processes at ~1.47 fps (681ms/frame)
-FRAMING_AI_GPU_THRESHOLDS = {
-    3: (1, "sequential"),       # 0-3s: 1 GPU
-    10: (2, "2-gpu-parallel"),  # 3-10s: 2 GPUs
-    float('inf'): (4, "4-gpu-parallel"),  # 10s+: 4 GPUs
-}
-
-
-def get_framing_ai_gpu_config(video_duration: float) -> tuple:
-    """
-    Get optimal GPU config for framing_ai based on video duration.
-
-    Returns:
-        (num_chunks, description) tuple
-    """
-    for threshold, config in sorted(FRAMING_AI_GPU_THRESHOLDS.items()):
-        if video_duration < threshold:
-            return config
-    return (4, "4-gpu-parallel")
 
 
 def _get_detect_players_fn():
@@ -672,6 +614,50 @@ async def call_modal_compose(
     return _credit_modal_r2_ops(result, "compose_serve_time_modal")
 
 
+# Cached reference for the CPU-only recap encoder (T2650)
+_encode_recap_fn = None
+
+
+def _get_encode_recap_fn():
+    """Get a reference to the deployed encode_recap_modal function (T2650).
+
+    NOTE: like every function in video_processing.py it needs a MANUAL
+    `modal deploy`; until then this raises RuntimeError and the recap fails
+    (the sweep retries the game next run)."""
+    global _encode_recap_fn
+
+    if _encode_recap_fn is not None:
+        return _encode_recap_fn
+
+    try:
+        import modal
+        _encode_recap_fn = modal.Function.from_name(MODAL_APP_NAME, "encode_recap_modal")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/encode_recap_modal")
+        return _encode_recap_fn
+    except Exception as e:
+        logger.error(f"[Modal] Failed to connect to encode_recap_modal: {e}")
+        raise RuntimeError(f"Modal encode_recap_modal not available: {e}") from e
+
+
+async def call_modal_encode_recap(
+    *, user_prefix: str, segments: list[dict], recap_key: str, crf: int, preset: str,
+) -> dict:
+    """Route a recap encode to the CPU-only Modal `encode_recap_modal` function
+    (T2650: the sweep's and share link's recap encode leaves the API server).
+
+    `segments` is [{id, url, start, end}] in recap order; each `url` is a
+    presigned GET for the source (game video or legacy recap). Modal uploads the
+    MP4 to `{user_prefix}/{recap_key}` -- `user_prefix` MUST be the
+    already-R2-resolved prefix (`_resolve_modal_user_id`).
+
+    Returns `{"recap_key", "segments": [{id, duration}]}`. Raises on any Modal
+    error; the caller does not fall back to a local encode.
+    """
+    fn = _get_encode_recap_fn()
+    result = await fn.remote.aio(user_prefix, segments, recap_key, crf, preset)
+    return _credit_modal_r2_ops(result, "encode_recap_modal")
+
+
 def _get_process_clips_ai_fn():
     """Get a reference to the deployed process_clips_ai function (unified AI processing)."""
     global _process_clips_ai_fn
@@ -689,296 +675,6 @@ def _get_process_clips_ai_fn():
         raise RuntimeError(f"Modal process_clips_ai not available: {e}") from e
 
 
-
-
-async def call_modal_framing_ai(
-    job_id: str,
-    user_id: str,
-    input_key: str,
-    output_key: str,
-    keyframes: list,
-    output_width: int = 810,
-    output_height: int = 1440,
-    fps: int = 30,
-    segment_data: dict | None = None,
-    video_duration: float | None = None,
-    progress_callback = None,
-    call_id_callback = None,
-    include_audio: bool = True,
-    export_mode: str = "quality",
-    test_mode: bool = False,
-    source_start_time: float = 0.0,
-    source_end_time: float | None = None,
-    profile_id: str | None = None,
-) -> dict:
-    """
-    Call Modal process_framing_ai function for AI-upscaled crop exports.
-
-    Three modes:
-    1. test_mode=True: Fast FFmpeg crop+resize (no AI, for E2E tests)
-    2. MODAL_ENABLED=false: Local Real-ESRGAN/FFmpeg
-    3. MODAL_ENABLED=true: Cloud GPU via Modal
-
-    Args:
-        job_id: Unique export job identifier
-        user_id: Raw user ID (R2 prefix conversion handled internally)
-        input_key: R2 key for source video (games/{hash}.mp4 or raw_clips/{file})
-        output_key: R2 key for output video
-        keyframes: Crop keyframes [{time, x, y, width, height}, ...]
-        output_width: Target width (default 810 for 9:16)
-        output_height: Target height (default 1440)
-        fps: Target frame rate (default 30)
-        segment_data: Optional trim/speed data
-        video_duration: Video duration in seconds (for progress estimation)
-        progress_callback: async callable(progress: float, message: str, phase: str) for updates
-        call_id_callback: Optional callable(call_id: str) - NOT USED with remote_gen
-        test_mode: Skip AI upscaling, use fast FFmpeg crop+resize (for E2E tests)
-        source_start_time: Start time of clip in source video (seconds)
-        source_end_time: End time of clip in source video (seconds). None = full video.
-
-    Returns:
-        {"status": "success", "output_key": "..."} or
-        {"status": "error", "error": "..."}
-    """
-    if test_mode:
-        # Fast FFmpeg crop+resize - no AI, for E2E tests
-        from app.services.local_processors import local_framing_mock
-        logger.info(f"[Modal] Using TEST MODE mock for framing job {job_id}")
-        return await local_framing_mock(
-            job_id=job_id,
-            user_id=user_id,
-            input_key=input_key,
-            output_key=output_key,
-            keyframes=keyframes,
-            output_width=output_width,
-            output_height=output_height,
-            progress_callback=progress_callback,
-            source_start_time=source_start_time,
-            source_end_time=source_end_time,
-        )
-
-    if not _modal_enabled:
-        from app.services.local_processors import _framing_sync
-        logger.info(f"[Modal] Using local subprocess for framing job {job_id}")
-        return await _run_in_subprocess(
-            _framing_sync,
-            {
-                "job_id": job_id,
-                "user_id": user_id,
-                "input_key": input_key,
-                "output_key": output_key,
-                "keyframes": keyframes,
-                "output_width": output_width,
-                "output_height": output_height,
-                "fps": fps,
-                "video_duration": video_duration,
-                "segment_data": segment_data,
-                "include_audio": include_audio,
-                "export_mode": export_mode,
-                "source_start_time": source_start_time,
-                "source_end_time": source_end_time,
-                "profile_id": profile_id,
-            },
-            progress_callback=progress_callback,
-        )
-
-    # Convert raw user_id to R2-prefixed user_id for Modal
-    user_id = _resolve_modal_user_id(user_id)
-
-    # Determine parallelization strategy based on video duration
-    effective_duration = video_duration or 10  # Default to 10s if unknown
-    num_chunks, config_name = get_framing_ai_gpu_config(effective_duration)
-
-    estimated_frames = int(effective_duration * fps)
-
-    _log_modal_job_start(
-        job_type="framing_ai",
-        job_id=job_id,
-        user_id=user_id,
-        modal_app=MODAL_APP_NAME,
-        extra={
-            "config": config_name,
-            "num_chunks": num_chunks,
-            "resolution": f"{output_width}x{output_height}",
-            "duration": f"{effective_duration:.1f}s",
-            "frames": estimated_frames,
-            "input": input_key,
-            "output": output_key,
-        },
-    )
-
-    # Track timing for progress improvement
-    job_start_time = time.time()
-    log_progress_event(job_id, "modal_start", extra={
-        "type": "framing_ai",
-        "frames": estimated_frames,
-        "config": config_name,
-        "num_chunks": num_chunks,
-    })
-
-    last_error = None
-    for attempt in range(1, MODAL_JOB_RETRY_ATTEMPTS + 1):
-        slots = await _acquire_export_slot(job_id, progress_callback)
-        try:
-            # Use remote_gen.aio() to stream real progress from Modal
-            # This iterates over yield statements in the Modal function
-
-            # Choose parallel or sequential processing
-            if num_chunks > 1 and segment_data is None:
-                # Use parallel processing (not supported with segment_data/speed changes yet)
-                process_fn = _get_process_framing_ai_parallel_fn()
-                modal_fn_name = "process_framing_ai_parallel"
-                logger.info(f"[Modal] Using parallel processing with {num_chunks} chunks")
-
-                def get_generator(process_fn=process_fn):
-                    return process_fn.remote_gen.aio(
-                        job_id=job_id,
-                        user_id=user_id,
-                        input_key=input_key,
-                        output_key=output_key,
-                        keyframes=keyframes,
-                        output_width=output_width,
-                        output_height=output_height,
-                        fps=fps,
-                        num_chunks=num_chunks,
-                        include_audio=include_audio,
-                        source_start_time=source_start_time,
-                        source_end_time=source_end_time,
-                    )
-            else:
-                # Use sequential processing
-                process_fn = _get_process_framing_ai_fn()
-                modal_fn_name = "process_framing_ai"
-                if segment_data:
-                    logger.info("[Modal] Using sequential processing (segment_data present)")
-                else:
-                    logger.info("[Modal] Using sequential processing (short video)")
-
-                def get_generator(process_fn=process_fn):
-                    return process_fn.remote_gen.aio(
-                        job_id=job_id,
-                        user_id=user_id,
-                        input_key=input_key,
-                        output_key=output_key,
-                        keyframes=keyframes,
-                        output_width=output_width,
-                        output_height=output_height,
-                        fps=fps,
-                        segment_data=segment_data,
-                        include_audio=include_audio,
-                        source_start_time=source_start_time,
-                        source_end_time=source_end_time,
-                    )
-
-            gen = get_generator()
-
-            # remote_gen() returns a plain generator with no call-id handle (unlike
-            # call_modal_clips_ai, this path doesn't have the Modal function emit its
-            # own call id as a stream item) -- not available for this call type.
-            modal_call_id = None
-
-            log_progress_event(job_id, "modal_streaming_started")
-            logger.info(f"[Modal] Streaming progress from Modal for job {job_id}")
-
-            result = None
-            last_progress = None
-
-            # Iterate over yielded progress updates
-            while True:
-                update = await _next_stream_item(gen)
-                if update is None:
-                    break
-
-                # Check if this is the final result (has "status" key)
-                if "status" in update:
-                    result = _credit_modal_r2_ops(update, modal_fn_name)
-                    logger.info(f"[Modal] Received final result: {result.get('status')}")
-                    break
-
-                # This is a progress update - forward to callback
-                progress = update.get("progress", 0)
-                message = update.get("message", "Processing...")
-                phase = update.get("phase", "processing")
-
-                # Only log significant progress changes
-                if last_progress is None or abs(progress - last_progress) >= 5:
-                    logger.info(f"[Modal] Progress: {progress}% - {message}")
-                    last_progress = progress
-
-                if progress_callback:
-                    try:
-                        await progress_callback(progress, message, phase)
-                    except Exception as e:
-                        logger.warning(f"[Modal] Progress callback failed: {e}")
-
-            total_elapsed = time.time() - job_start_time
-            frames_processed = result.get("frames_processed", estimated_frames) if result else estimated_frames
-
-            log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
-                "status": result.get("status", "unknown") if result else "no_result",
-                "frames": frames_processed,
-                "fps_actual": round(frames_processed / total_elapsed, 1) if total_elapsed > 0 else 0
-            })
-
-            _log_modal_job_end(
-                job_type="framing_ai",
-                job_id=job_id,
-                user_id=user_id,
-                modal_app=MODAL_APP_NAME,
-                elapsed=total_elapsed,
-                status=result.get("status", "unknown") if result else "no_result",
-                extra={"call_id": modal_call_id or "unknown", "frames": frames_processed},
-            )
-
-            final = result or {"status": "error", "error": "No result received from Modal"}
-            final["gpu_seconds"] = round(total_elapsed, 2)
-            final["modal_function"] = "framing"
-            return final
-
-        except Exception as e:
-            last_error = e
-            total_elapsed = time.time() - job_start_time
-            error_class = classify_modal_error(e)
-
-            _log_modal_job_end(
-                job_type="framing_ai",
-                job_id=job_id,
-                user_id=user_id,
-                modal_app=MODAL_APP_NAME,
-                elapsed=total_elapsed,
-                status="error",
-                error=e,
-                error_class=error_class,
-                attempt=attempt,
-            )
-
-            if error_class == "transient" and attempt < MODAL_JOB_RETRY_ATTEMPTS:
-                delay = MODAL_JOB_RETRY_DELAY * (MODAL_JOB_RETRY_BACKOFF ** (attempt - 1))
-                logger.warning(
-                    f"[Modal] Transient error on attempt {attempt}/{MODAL_JOB_RETRY_ATTEMPTS}, "
-                    f"retrying in {delay:.0f}s: {e}"
-                )
-                if progress_callback:
-                    try:
-                        await progress_callback(
-                            -1,
-                            f"Retrying... attempt {attempt + 1}/{MODAL_JOB_RETRY_ATTEMPTS}",
-                            "retry",
-                        )
-                    except Exception:
-                        pass
-                await asyncio.sleep(delay)
-                continue
-            else:
-                break
-        finally:
-            slots.release()
-
-    # All retries exhausted or deterministic error
-    total_elapsed = time.time() - job_start_time
-    log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(last_error)[:50]})
-    logger.error(f"[Modal] AI framing job {job_id} failed: {last_error}", exc_info=True)
-    return {"status": "error", "error": _translate_modal_error(last_error)}
 
 
 async def call_modal_clips_ai(
@@ -1591,7 +1287,6 @@ if __name__ == "__main__":
         if modal_enabled():
             print("Modal is enabled")
             print("  - render_overlay: Apply highlight overlays (T4 GPU)")
-            print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling (T4 GPU)")
             print("  - detect_players_modal: YOLO player detection (T4 GPU)")
             print("  - process_clips_ai: Unified multi-clip AI upscaling (GPU)")
         else:

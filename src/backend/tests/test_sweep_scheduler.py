@@ -2,7 +2,7 @@
 Tests for app.services.sweep_scheduler — background cleanup sweep loop.
 
 Covers do_sweep, _find_games_for_hash, start/stop lifecycle,
-_run_sweep_loop delay calculation, keepalive, and error handling.
+_run_sweep_loop delay calculation and error handling.
 """
 
 import asyncio
@@ -1127,57 +1127,6 @@ class TestSweepLoopLifecycle:
 
 
 # ---------------------------------------------------------------------------
-# _ping_health tests
-# ---------------------------------------------------------------------------
-
-class TestPingHealth:
-    @pytest.mark.asyncio
-    async def test_ping_health_calls_urlopen(self, isolated_profile_db):
-        """Verify _ping_health pings the health endpoint."""
-        import app.services.sweep_scheduler as sched
-
-        call_count = 0
-
-        async def _mock_sleep(delay):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 2:
-                raise asyncio.CancelledError()
-
-        with patch("urllib.request.urlopen") as mock_urlopen, \
-             patch("asyncio.sleep", side_effect=_mock_sleep):
-            try:
-                await sched._ping_health()
-            except asyncio.CancelledError:
-                pass
-
-        mock_urlopen.assert_called_with("http://localhost:8000/api/health", timeout=5)
-
-    @pytest.mark.asyncio
-    async def test_ping_health_continues_on_exception(self, isolated_profile_db):
-        """Ping health continues even if urlopen raises."""
-        import app.services.sweep_scheduler as sched
-
-        call_count = 0
-
-        async def _mock_sleep(delay):
-            nonlocal call_count
-            call_count += 1
-            if call_count >= 3:
-                raise asyncio.CancelledError()
-
-        with patch("urllib.request.urlopen", side_effect=ConnectionError("refused")), \
-             patch("asyncio.sleep", side_effect=_mock_sleep):
-            try:
-                await sched._ping_health()
-            except asyncio.CancelledError:
-                pass
-
-        # Should have looped multiple times despite errors
-        assert call_count >= 2
-
-
-# ---------------------------------------------------------------------------
 # _run_sweep_loop delay calculation tests
 # ---------------------------------------------------------------------------
 
@@ -1354,27 +1303,3 @@ class TestRunSweepLoop:
 
         # ~2 hours = ~7200s
         assert sched.MIN_DELAY <= sleep_delays[1] <= sched.MAX_DELAY
-
-    @pytest.mark.asyncio
-    async def test_loop_creates_and_cancels_keepalive(self, isolated_profile_db):
-        """Verify the keepalive task is created before sweep and cancelled after."""
-        import app.services.sweep_scheduler as sched
-
-        sleep_delays = []
-
-        async def _mock_sleep(delay):
-            sleep_delays.append(delay)
-            if len(sleep_delays) >= 2:
-                raise asyncio.CancelledError()
-
-        with patch.object(sched, "do_sweep"), \
-             patch.object(sched, "get_next_expiry", return_value=None), \
-             patch("asyncio.sleep", side_effect=_mock_sleep), \
-             patch("asyncio.to_thread", new_callable=AsyncMock), \
-             patch("asyncio.create_task") as mock_create_task:
-            mock_task = MagicMock()
-            mock_create_task.return_value = mock_task
-            await sched._run_sweep_loop()
-
-        mock_create_task.assert_called()
-        mock_task.cancel.assert_called()

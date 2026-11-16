@@ -134,8 +134,8 @@ vi.mock('../../stores/editorStore', () => ({
 }));
 vi.mock('../../stores/overlayStore', () => ({
   useOverlayStore: () => ({
-    effectType: 'spotlight', highlightColor: '#fff', isLoadingWorkingVideo: false,
-    setEffectType: vi.fn(), setHighlightColor: vi.fn(), setIsLoadingWorkingVideo: vi.fn(),
+    effectType: 'spotlight', highlightColor: '#fff',
+    setEffectType: vi.fn(), setHighlightColor: vi.fn(),
     setOverlayChangedSinceExport: vi.fn(),
     highlightShape: 'ellipse', strokeWidth: 2, fillEnabled: true, fillOpacity: 0.5, dimStrength: 0.5,
     setHighlightShape: vi.fn(), setStrokeWidth: vi.fn(), setFillEnabled: vi.fn(), setFillOpacity: vi.fn(),
@@ -146,7 +146,7 @@ vi.mock('../../stores/overlayStore', () => ({
 }));
 vi.mock('../../stores/projectDataStore', () => ({
   useProjectDataStore: (selector) => selector({
-    workingVideo: null, setWorkingVideo: vi.fn(), clipMetadata: {}, setClipMetadata: vi.fn(),
+    workingVideo: { status: 'idle', projectId: null, videoId: null, video: null, error: null }, loadWorkingVideo: vi.fn(), clipMetadata: {}, setClipMetadata: vi.fn(),
     clips: [], clipMetadataCache: {}, getClipFileUrl: vi.fn(),
   }),
 }));

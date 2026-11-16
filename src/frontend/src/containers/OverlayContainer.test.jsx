@@ -68,7 +68,6 @@ function baseProps(overrides = {}) {
     overlayClipMetadata: null,
     isLoadingWorkingVideo: false,
     setOverlayClipMetadata: vi.fn(),
-    setIsLoadingWorkingVideo: vi.fn(),
     dragHighlight: null,
     setDragHighlight: vi.fn(),
     selectedHighlightKeyframeTime: null,

@@ -1,9 +1,12 @@
 ---
 domain: modal-gpu
-updated: 2026-09-25 (T11320: preflight export-size guard -- see "Preflight cost guard" under
+updated: 2026-11-16 (T4410: deleted the unused framing-AI pipeline -- `call_modal_framing_ai`,
+the four `process_framing_ai*` Modal functions and `get_framing_ai_gpu_config` were deleted;
+`local_framing*`/`_framing_sync` and the framing fan-out caps were removed too. Modal needs a deploy);
+        2026-09-25 (T11320: preflight export-size guard -- see "Preflight cost guard" under
 Testing seams / cost anchors and the T11320 entry under Active/upcoming work);
         2026-09-25 (T11210: corrected Entry-points caller lines -- `call_modal_framing_ai` is at
-modal_client.py:632, caller export_helpers.py:232, and is NOT the single-clip `/render` path;
+modal_client.py:632, caller export_helpers.py:232 [T13720, 2026-11-16: that line is a docstring; no production caller], and is NOT the single-clip `/render` path;
 single-clip `/render` uses `call_modal_clips_ai` (multi_clip.py:1479) via `_export_clips`, now pinned
 by tests/test_export_golden_single_clip_modal.py);
         2026-09-03 (T8270: staging + prod are now SEPARATE Modal apps -- app name resolved from
@@ -24,9 +27,9 @@ since ~forever - see Recovery section); 2026-07-11 (T4240 recovery bugs fixed; T
 
 ## Entry points
 Always call the **unified interface** in `modal_client.py` (backend CLAUDE.md rule) — it routes Modal vs local internally:
-- `call_modal_framing_ai` (`modal_client.py:632`) — framing+upscale of ONE already-known R2 key. Caller: `export_helpers.py:232` (the recovery/finalize seam). **NOT the single-clip `/render` path** — `POST /api/export/render` (`framing.py`) refuses >1 clip then calls `multi_clip._export_clips` with a one-element list, so single-clip export goes through `call_modal_clips_ai` just like multi-clip (concat is a no-op for one clip, `video_processing.py:3252`). That single-clip Modal path is characterized by `tests/test_export_golden_single_clip_modal.py` (T11210).
+- The single-clip `/render` path: `POST /api/export/render` (`framing.py`) refuses >1 clip then calls `multi_clip._export_clips` with a one-element list, so single-clip export goes through `call_modal_clips_ai` just like multi-clip (concat is a no-op for one clip). Characterized by `tests/test_export_golden_single_clip_modal.py` (T11210). The old one-key framing client was deleted in T4410 (no production caller).
 - `call_modal_clips_ai` (`:925`) — the export pipeline for 1..N clips. Caller: `multi_clip.py:1479`. NO local fallback — raises if Modal disabled (local branch lives in `multi_clip.py:1463+` instead).
-- `call_modal_overlay` (`:986`) / `call_modal_overlay_auto` (`:1200`, always sequential — parallel was 3-4x costlier, experiment E7). Callers: `export_worker.py:387`, `overlay.py:1867`.
+- `call_modal_overlay` (`:986`) / `call_modal_overlay_auto` (`:1200`, always sequential — parallel was 3-4x costlier, experiment E7). Caller: `overlay.py` (the export_worker caller was deleted in T4410).
 - `call_modal_detect_players` (`:1252`) / `_batch` (`:1299`) — YOLO. Caller: `routers/detection.py`.
 
 Deployed Modal app (T8270 — per-environment, NOT one shared app anymore): `modal.App(_resolve_modal_app_name(APP_ENV))` (`video_processing.py:56`) → `reel-ballers-video-v2` (production) or `reel-ballers-video-v2-staging` (staging), mirroring Fly's `reel-ballers-api` / `reel-ballers-api-staging` split. The name is resolved from `APP_ENV` by `resolve_modal_app_name` (`modal_client.py`, the SINGLE source of truth) and by a byte-for-byte copy at the top of `video_processing.py` (it can't import `app.*` — the Modal image doesn't mount `app`); `tests/test_modal_app_name.py` asserts the two copies agree so they can't drift. **No silent fallback:** an unrecognized `APP_ENV` RAISES rather than defaulting to the prod name (dev-family → distinct `-dev` name, Modal is off in dev anyway). Backend looks functions up lazily via `modal.Function.from_name(MODAL_APP_NAME, ...)` where `MODAL_APP_NAME = resolve_modal_app_name(APP_ENV)` (`modal_client.py:332-372,~400-540`). `@app.function`s (all use secret `modal.Secret.from_name("r2-credentials")`; no Volumes — weights baked into images):
@@ -34,15 +37,12 @@ Deployed Modal app (T8270 — per-environment, NOT one shared app anymore): `mod
 |---|---|---|---|
 | `render_overlay` (:189) | T4 | 600 | highlight overlay render, generator |
 | `detect_players_modal` (:797) / `_batch` (:913) | T4 | 120/300 | YOLO (`yolov8x.pt` baked into `yolo_image`) |
-| `process_framing_ai` (:1150) | T4 | 1800 | sequential framing+upscale, generator |
-| `process_framing_ai_l4` (:1628) | L4 | 1800 | 200-line benchmarking COPY, not wired into client (T4420 deletes) |
-| `process_framing_ai_chunk` (:1840) | T4 | 900 | parallel chunk worker |
-| `process_framing_ai_parallel` (:2043) | none (CPU orchestrator) | 3600 | fans out chunks |
 | `process_clips_ai` (:2387) | T4 | 3600 | multi-clip framing+concat, generator |
 | `stitch_members` (:3186) | none (CPU) | 1800 | T4945 collection member concat/re-encode (bare ffmpeg+boto3 `image`) |
 | `compose_serve_time_modal` (:~3250) | none (CPU) | 1800 | T7090 download-time compose: intro-card BURN + `[intro?][reel][outro?]` concat + branded outro off the 1GB Fly box. `compose_image` = bare `image` + pillow/numpy/pydantic + the WHOLE `app/` tree at `/root/app` (for `card_compose_plan`/`ffmpeg_concat`/`branded_outro`/fonts; deliberately NOT player_intro/user_db — the PIL card render runs app-side, PNG layers arrive via R2). **NEEDS MANUAL DEPLOY.** |
+| `encode_recap_modal` (end of file) | none (CPU) | 1800 | T2650 game-recap encode (sweep auto-export, share-link `ensure_recap`, hi-q backfill, legacy slice) off the Fly box. `recap_image` = `compose_image` + `ffmpeg-python`; runs the SAME pure `app.services.recap_encode.encode_recap` as the Modal-off local path (that module must never import DB/storage/FastAPI -- pinned by `test_t2650_recap_encode_off_server`). App passes presigned source URLs, Modal uploads the MP4, app writes the `_clips.json` mapping from returned durations. Modal failure RAISES (no local fallback) -> sweep marks the game failed/retries. **NEEDS MANUAL DEPLOY.** |
 
-**Capacity caps (T14130):** every `@app.function` sets `max_containers`. Constants at the top of `video_processing.py`: `MODAL_GPU_CONCURRENCY_LIMIT = 10` (the workspace plan's concurrent-GPU limit, Modal Starter -- update the constant if the plan changes; it also sizes the T14100 export semaphore), GPU functions `GPU_MAX_CONTAINERS = limit`, framing orchestrator `FRAMING_ORCHESTRATOR_MAX_CONTAINERS = limit // FRAMING_MAX_CHUNKS` (= 2: a >=10 s framing clip takes 4 T4s, so whole exports queue at the orchestrator rather than chunks of many exports interleaving), CPU stitch/compose `CPU_MAX_CONTAINERS = 20`. `FRAMING_MAX_CHUNKS` mirrors `get_framing_ai_gpu_config`'s largest fan-out; `tests/test_t14130_modal_capacity.py` pins both. Takes effect only after a staging-then-prod `deploy.py`.
+**Capacity caps (T14130):** every `@app.function` sets `max_containers`. Constants at the top of `video_processing.py`: `MODAL_GPU_CONCURRENCY_LIMIT = 10` (the workspace plan's concurrent-GPU limit, Modal Starter -- update the constant if the plan changes; it also sizes the T14100 export semaphore), GPU functions `GPU_MAX_CONTAINERS = limit`, CPU stitch/compose `CPU_MAX_CONTAINERS = 20`; `tests/test_t14130_modal_capacity.py` pins every GPU cap under the limit. (The framing fan-out caps were deleted with the framing-AI pipeline, T4410.) Takes effect only after a staging-then-prod `deploy.py`.
 **Local compose fallback is single-slot (T14130):** `serve_time_video._compose_local_fallback` holds `_LOCAL_FALLBACK_SLOT` (non-blocking `threading.Lock`) around the Modal-failed local compose (~1.7 GB peak). A concurrent fallback is REFUSED: returns False with `report["degraded_reason"] = "local_fallback_busy"`, `full_fidelity=False` -> the caller serves the bare reel, nothing cached, a retry gets the full compose. The Modal-OFF path (dev/in-container) is NOT gated.
 
 ## Data flow
@@ -50,14 +50,14 @@ Deployed Modal app (T8270 — per-environment, NOT one shared app anymore): `mod
 graph LR
   RT[export routers/services] --> UC[modal_client unified fns]
   UC -->|MODAL_ENABLED=true| MG[fn.remote_gen on Modal T4/L4]
-  UC -->|false| SP[_run_in_subprocess -> local_processors._framing_sync/_overlay_sync]
+  UC -->|false| SP[_run_in_subprocess -> local_processors._overlay_sync]
   SP -->|CUDA| AI[ai_upscaler.AIVideoUpscaler realesr_general_x4v3]
   SP -->|no CUDA| MOCK[MockVideoUpscaler ffmpeg crop+resize only]
   MG & AI --> R2[(R2 in/out via presigned URLs / r2-credentials)]
   MG -->|yield progress dicts| CB[progress_callback -> WS send_progress]
 ```
 - **T3950 invariant:** The branded outro is NOT inside any Modal function. Modal produces `working_videos` (intermediate). The outro fires in `overlay.py` at `final_videos` creation — on the backend server, after Modal completes, with the R2 object rewritten in-place. No Modal redeploy needed when T3950 feature is changed.
-- **Dispatch/monitoring:** Modal functions are Python generators; the backend iterates `fn.remote_gen.aio(...)` ON the event loop (`_next_stream_item`) and forwards each `{progress, phase, message}` yield to the async `progress_callback` (`call_modal_framing_ai` / `call_modal_clips_ai` / `call_modal_overlay`).
+- **Dispatch/monitoring:** Modal functions are Python generators; the backend iterates `fn.remote_gen.aio(...)` ON the event loop (`_next_stream_item`) and forwards each `{progress, phase, message}` yield to the async `progress_callback` (`call_modal_clips_ai` / `call_modal_overlay`).
   - **T14100: a Modal wait holds NO executor thread.** Every Modal call in `modal_client.py` uses `.remote_gen.aio` / `.remote.aio`; never `run_in_executor(None, ...)` or `to_thread(fn.remote, ...)` -- those parked a thread of the 32-thread default executor for the whole export (incl. Modal queue time) and froze `validate_session` for every authed request at ~32 concurrent exports. Guard (grep + 40-held-waits latency): `tests/test_t14100_modal_waits_off_threadpool.py`. Test fakes must expose `.aio` (see that file's `_HeldModalFn`).
   - **Export slots (T14100):** the three export paths take one of `MODAL_EXPORT_SLOTS` (= `MODAL_GPU_CONCURRENCY_LIMIT`, copy pinned by the test) per attempt via `_acquire_export_slot`; when none is free it sends phase `gpu_queued` ("Waiting for a free GPU...", `ExportPhase.GPU_QUEUED`, frontend `EXPORT_PROGRESS.QUEUED`). Stitch/compose/detect are not gated.
   - There is **no webhook and no Modal→backend callback** — progress is consumed in-process, then pushed over the export WebSocket via `export_helpers.send_progress`.
@@ -72,7 +72,7 @@ graph LR
   multi-clip endpoints actually use): the Modal function yields `{"modal_call_id": ...}` as its
   FIRST stream item; `modal_client.py` reads it off that item inside the existing `next(gen)`
   polling loop and fires `call_id_callback` once (`modal_client.py`'s `call_modal_clips_ai`).
-  `call_modal_framing_ai`/`call_modal_overlay` still have NO working call_id capture — their "NOT
+  `call_modal_overlay` still has NO working call_id capture — their "NOT
   USED with remote_gen" docstrings are accurate, not fixed by T7210.
   - ~~Recovering a **generator** call via `FunctionCall.get(timeout=0)` returns a `GeneratorDone`
     marker~~ **FALSE — corrected by T10360 (2026-09-18).** From a SECOND process it raises
@@ -128,7 +128,7 @@ graph LR
   - `POST /api/exports/{job_id}/resume-progress` (`exports.py:1004`) simulates progress from elapsed time while polling Modal.
   - Job-level retry inside the client: 3 attempts, backoff 2.0, gated by `classify_modal_error` transient/deterministic (`modal_client.py:104-111,153`); user-facing error translation in `_translate_modal_error` (`:297`).
 - **Modal↔R2:** Modal reads/writes R2 directly (`get_r2_client`, `video_processing.py:121`, env from the `r2-credentials` secret: `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`). Paths are `{user_prefix}/{key}` — `_resolve_modal_user_id` (`modal_client.py:345`) converts user_id → R2 prefix before every dispatch.
-- **Local path:** `_run_in_subprocess` (`modal_client.py:74`) runs `local_processors._framing_sync`/`_overlay_sync` in a `ProcessPoolExecutor(max_workers=2)`, progress bridged via a Manager queue (T2640: keeps ffmpeg/AI off the event loop).
+- **Local path:** `_run_in_subprocess` (`modal_client.py:74`) runs `local_processors._overlay_sync` in a `ProcessPoolExecutor(max_workers=2)`, progress bridged via a Manager queue (T2640: keeps ffmpeg/AI off the event loop).
   - `MockVideoUpscaler` (`local_processors.py:28`) is a drop-in for `AIVideoUpscaler` doing ffmpeg crop+resize only — pipeline verification without a GPU.
 
 ## Invariants & rules
@@ -139,13 +139,13 @@ graph LR
    - `image` (`:30`): debian_slim py3.11 + ffmpeg + boto3/opencv/numpy (overlay).
    - `yolo_image` (`:42`): + ultralytics/torch; pre-downloads `yolov8x.pt` (`:54-56`).
    - `upscale_image` (`:64`): pins `torch==2.1.0, torchvision==0.16.0, basicsr==1.4.2, realesrgan==0.3.0` (torchvision 0.17+ removed `functional_tensor` that basicsr imports, `:60-63`); pre-downloads `realesr-general-x4v3.pth` to `/root/.cache/realesrgan/weights/` (`:78-82`).
-5. **GPU selection:** `get_framing_ai_gpu_config(duration)` (`modal_client.py:412`): <3s→1 GPU, <10s→2, else 4; parallel only when `num_chunks>1 and segment_data is None` (`:620`). Everything production runs on T4.
+5. **GPU selection:** everything production runs on T4 (the duration-based framing fan-out was deleted with the framing-AI pipeline, T4410).
 6. **Production upscale pipeline (ground truth, verified 2026-07-03** — `docs/plans/tasks/upscale-quality/EPIC.md`): `SRVGGNetCompact` compact model via `RealESRGANer(scale=4, tile=0, half=True, dni_weight=None)` (`_get_realesrgan_model`, `video_processing.py:1076-1112`) → crop (Catmull-Rom `_interpolate_crop:1117`) → enhance 4x → Lanczos resize to target. T4 ≈ 1.47 fps; 10s clip ≈ $0.03. Do NOT confuse with `app/ai_upscaler/` (local path + SwinIR/HAT backends, not the prod hot path).
 
 ## Landmines & history
 - **Crop-interpolation math: two live Catmull-Rom copies** (T4420): `ai_upscaler/keyframe_interpolator.py` (local; also used by `highlight_transform.interpolate_crop_at_frame` for Spotlight mapping, frames as the spline parameter) and the inline `video_processing._interpolate_crop` (inline by policy: the GPU image does not mount `app/`). The linear crop module and the optimized benchmark copy were deleted (T16500). Parity is pinned by `tests/test_t4420_crop_spline_parity.py`: change one copy, the fixture fails until the other matches.
-- **The optimized benchmark Modal app** (`reel-ballers-video-optimized`, 8 T4/L4 variants) was never deployed by `deploy.py`; T16500 deleted its source and its e6 benchmark script. `process_framing_ai_l4` in `video_processing.py` is likewise an unwired copy (T4410).
-- **`deploy_result.txt` is stale** (old app name `reel-ballers-video`, old function list); the `local_entrypoint` example prints the old name too. Don't trust either as deploy ground truth. (T8270: `deploy.py` now writes per-env `deploy_result.staging.txt` / `deploy_result.production.txt`.)
+- **The optimized benchmark Modal app** (`reel-ballers-video-optimized`, 8 T4/L4 variants) was never deployed by `deploy.py`; T16500 deleted its source and its e6 benchmark script. Its L4 copy in `video_processing.py` was deleted in T4410.
+- **Deploy output:** `deploy.py` writes per-env `deploy_result.staging.txt` / `deploy_result.production.txt` (gitignored, T8270); the stale committed `deploy_result.txt` was deleted in T4410. The `local_entrypoint` example prints an old app name; don't trust it as deploy ground truth.
 - ~~**T4240 recovery-bug quartet** (FIXED 2026-07-11):~~ `exports.py:279` NameError was T4790 (fixed 2026-07-10). The remaining three T4240 bugs are now fixed: `check_modal_job_running` returns None on lookup error instead of treating it as "not running" (cleanup skips unknown-status jobs, no longer kills live paid jobs); fabricated `recovered_{job_id}.mp4` filename when `output_key` missing replaced with a loud failure and no DB row; `export_worker.py` except block narrowed so try-scoped vars are always in scope. Regression tests: `test_t4240_export_recovery.py`.
 - **`modal_queue.py` has ZERO registered task types** — `_process_single_task` always fails "Unknown task type" (`modal_queue.py:106-108`); retained scaffolding (clip extraction removed T740/T800). Startup recovery is per-user-first-request (`main.py:344-351` defers; `session_init.py:255-301` runs `recover_orphaned_jobs` + `process_modal_queue`), NOT at boot.
 - **Encode drift** (T4430/T4710):
@@ -173,7 +173,7 @@ graph LR
   reintroduce this failure mode for `compose_image` or any other minimal-image Modal function).
 
 ## Testing seams
-- `call_modal_framing_ai(test_mode=True)` → `local_processors.local_framing_mock` (`modal_client.py:541`, `local_processors.py:737`) — no GPU, no Modal, no render.
+- `multi_clip._export_clips(..., is_test_mode=True)` → `MockVideoUpscaler` — no GPU, no Modal, no AI (the old framing test-mode mock was deleted in T4410).
 - `MODAL_ENABLED=false` + no CUDA → `MockVideoUpscaler` end-to-end pipeline verification (T4120 recipe); /dotask containers have Modal off by default and optional token provisioning (T4180).
 - Cost/perf anchors: **E6's single-point T4 ≈ 681 ms/frame is SUPERSEDED by the T11370 real-staging calibration** (see the Preflight cost guard entry below for the actual formula/constants) — E6's figure folded ~2s/clip of cold-start+extract+encode into a 180-frame average, running ~30% high vs the isolated GAN-loop rate. Modal jobs can run 40+ min (hence the 60-min stale threshold in `cleanup_stale_exports`). Framing cost anchor ≈ 0.3c/exported-second still stands (T4940 sanity check) — unrelated to the per-frame GAN constant, not revisited by T11370.
 - **Preflight cost guard (T11320, `app/services/export_cost_guard.py`, calibrated T11370,
@@ -192,7 +192,7 @@ graph LR
   intercept crop-only formula had no way to represent.
   - **T11370 calibration method:** 3 real `process_clips_ai` dispatches on
     `reel-ballers-video-v2-staging` (NOT the stale `reel-ballers-video` app name
-    `e6_l4_benchmark.py` used — that script is now fully superseded/stale, do not resurrect it),
+    `e6_l4_benchmark.py` used — that script was deleted in T4410, do not resurrect it),
     each a single Modal container processing several clips of the SAME 1080p30 source at
     different static crop sizes, so per-clip in-loop rate isolates crop-size scaling from
     container-to-container cold-start/variance. Every Modal-streamed progress item was
@@ -313,7 +313,7 @@ graph LR
   `tests/test_t8280_fps_export_choice_repro.py`.
 - ~~**T3950**~~ IMPLEMENTED 2026-07-11: "Made with Reel Ballers" branded outro (~1.75s). NOT in `video_processing.py` — `app/services/branded_outro.py` wired into `overlay.py`'s `final_videos` producers (router layer, both engines, no Modal edit/redeploy). Programmatic `color`+`drawtext` card (bundled font, `fontfile=`), matched to reel res/fps/SAR/pixfmt/audio, concat `-c copy` (re-encode fallback). Flag `BRANDED_OUTRO_ENABLED` (default true). Non-fatal on failure. Render-time only, no persistence. Tests: `test_t3950_branded_outro.py`. See lines 3/42 and export-pipeline.md invariant.
 - ~~**T4240**~~ DONE 2026-07-11 (all four recovery bugs fixed — see Landmines above).
-- **T4420** (TODO, depends on T4370 harness): one interpolation module packaged into the Modal image; GPU-param on `process_framing_ai` (kills the L4 copy); delete `_optimized.py`. Requires Modal redeploy (ask user).
+- **T4420** (TODO, depends on T4370 harness): one interpolation module packaged into the Modal image; GPU-param on `process_clips_ai` (the framing-AI functions and their L4 copy were deleted in T4410); `_optimized.py` was already deleted by T16500. Requires Modal redeploy (ask user).
 - **T4430** (TODO, depends on T4370): named encode profiles + single ffprobe.
 - **Upscale Quality epic** (`docs/plans/tasks/upscale-quality/EPIC.md`, strict order): T4700 SR testbed (`src/backend/experiments/sr_testbed/`, prime directive: no quality change ships without a testbed run) → T4710 encode/denoise quick wins (crf, bt709, `dni_weight`) → T4720 GAN A/B → T4730 temporal VSR prototype (FlashVSR/SeedVR2, L40S) → T4740 prod integration with crop-size routing → T4750 fine-tune.
 - **T7090** (impl 2026-08-16, download-compose to Modal): `compose_serve_time_modal` (CPU, bare-image+app-tree) dispatched by `modal_client.call_modal_compose` / `_get_compose_fn` (mirrors `call_modal_stitch_members`), routed through the `serve_time_video.compose_serve_time_dispatched` seam (Modal-on -> R2-scratch round-trip; ANY Modal error incl. undeployed -> local `compose_serve_time` fallback; Modal-off local is the only in-container path per T4180). The intro-card ffmpeg graph is built by the PURE `app/services/card_compose_plan.build_intro_card_cmd`, shared by the local `_build_card` and the Modal burn (no drift). **Requires `modal deploy app/modal_functions/video_processing.py` before the Modal path works** (else `from_name` raises -> non-fatal local fallback). Live cost/latency/OOM-avoidance + the `/root/app` sys.path/font resolution are a staging-verification gap (unexercisable in-container).
@@ -346,6 +346,6 @@ graph LR
   Live-drive in a Modal-off /dotask container CANNOT reach the guard (it only runs inside the
   `if modal_enabled():` branch) — proven instead by the WS-frame contract test mirroring the
   backend's real `export_progress` payload.
-- **T2650** (TODO): move sweep auto-export compute from Fly to Modal.
+- **T2650** (done): recap encode moved to `encode_recap_modal`; sweep keepalive pinger deleted (sweep thread now only orchestrates and waits on Modal).
 - Historical: T2480 shipped Catmull-Rom spline crop interpolation on the Modal side (matching frontend curves) — the origin of today's duplicated spline copies; T50/T51 were the original Modal cost/parallelization analyses (parallel overlay rejected as 3-4x costlier, E7).
 - Related DONE infra: T1200 (Modal job-id logging + retry), T1520 (disconnect/retry UX reconciling with Modal job state), T2450-T2470 (auto-export reliability: presigned URLs to FFmpeg, pending-status recovery, sweep keepalive).

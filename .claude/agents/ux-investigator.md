@@ -20,7 +20,7 @@ Browser webapp (mobile + desktop, PWA installable). Pipeline: **Annotate** (mark
 
 ## Evidence You Work From (in-house analytics, aggregates only)
 
-Write side `src/backend/app/analytics.py`, read side `src/backend/app/routers/admin.py`. NO per-event streams; never propose third-party trackers or per-event Postgres tables.
+Write side `src/backend/app/analytics.py`, read side `src/backend/app/routers/admin/`. NO per-event streams; never propose third-party trackers or per-event Postgres tables.
 
 | Signal | Where | Tells you |
 |---|---|---|

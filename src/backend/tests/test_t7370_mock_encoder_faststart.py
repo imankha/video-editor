@@ -58,23 +58,3 @@ def test_mock_video_upscaler_output_is_faststart(tmp_path):
 
     assert result["status"] == "success"
     _assert_faststart(output)
-
-
-def test_local_framing_mock_encode_call_includes_faststart():
-    """local_framing_mock (the single-clip framing CPU fallback -- this is the
-    exact path T4330's manual container testing hit) does its own R2
-    download/upload around the ffmpeg call, so exercising it behaviorally needs
-    mocking `download_from_r2`/`generate_presigned_url_global`/`upload_to_r2` --
-    real setup for a one-kwarg fix. This pins the fix at the source level
-    instead: the ffmpeg output call must literally include the faststart flag,
-    so a future edit that touches this call site and drops it fails loudly."""
-    import inspect
-
-    from app.services import local_processors
-
-    source = inspect.getsource(local_processors.local_framing_mock)
-    assert "movflags" in source and "+faststart" in source, (
-        "local_framing_mock's ffmpeg output call must set movflags=+faststart "
-        "(T7370) -- every other encoder in this codebase does, and dropping it "
-        "leaves the frontend unable to parse the rendered working video."
-    )

@@ -97,7 +97,16 @@ logging.getLogger("s3transfer").setLevel(logging.WARNING)
 # Import routers and websocket handler
 from app.middleware import RequestContextMiddleware
 from app.routers import (
-    admin_router,
+    admin_analytics_router,
+    admin_bugs_router,
+    admin_campaigns_router,
+    admin_credits_router,
+    admin_open_router,
+    admin_ops_router,
+    admin_referrals_router,
+    admin_revenue_router,
+    admin_session_router,
+    admin_users_router,
     auth_router,
     bootstrap_router,
     clips_router,
@@ -293,7 +302,18 @@ app.include_router(profiles_router)
 app.include_router(intro_cards_router)
 app.include_router(credits_router, prefix="/api")
 app.include_router(exports_router, prefix="/api")
-app.include_router(admin_router, prefix="/api")
+# T4610: open routes first -- POST /admin/impersonate/stop must win over the guarded
+# /admin/impersonate/{target_user_id}.
+app.include_router(admin_open_router, prefix="/api")
+app.include_router(admin_bugs_router, prefix="/api")
+app.include_router(admin_referrals_router, prefix="/api")
+app.include_router(admin_campaigns_router, prefix="/api")
+app.include_router(admin_revenue_router, prefix="/api")
+app.include_router(admin_ops_router, prefix="/api")
+app.include_router(admin_credits_router, prefix="/api")
+app.include_router(admin_users_router, prefix="/api")
+app.include_router(admin_session_router, prefix="/api")
+app.include_router(admin_analytics_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 app.include_router(gallery_shares_router)
 app.include_router(shared_router)

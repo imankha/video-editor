@@ -170,31 +170,6 @@ def run_baseline_tests():
     ))
 
     # =========================================================================
-    # Test 3: process_framing_ai (T4 GPU, Real-ESRGAN)
-    # AI upscale a 6s clip
-    # =========================================================================
-    print("\n" + "=" * 60)
-    print("TEST 3: process_framing_ai (T4 GPU, Real-ESRGAN)")
-    print(f"  - Extracts {CLIP_DURATION}s clip")
-    print("  - Crops to 540x960")
-    print("  - AI upscales 4x to 2160x3840, then scales to 1080x1920")
-    print("  - Uses Real-ESRGAN on T4 GPU")
-    print("=" * 60)
-
-    results.append(measure_modal_function(
-        'process_framing_ai',
-        job_id=f"{job_prefix}_ai",
-        user_id=TEST_USER_ID,
-        input_key=TEST_VIDEO_KEY,
-        output_key=f"test_outputs/e1_ai_{job_prefix}.mp4",
-        keyframes=CROP_KEYFRAMES,
-        output_width=1080,
-        output_height=1920,
-        fps=30,
-        segment_data={"trim_start": CLIP_START, "trim_end": CLIP_END},
-    ))
-
-    # =========================================================================
     # Print Summary
     # =========================================================================
     print("\n" + "=" * 60)

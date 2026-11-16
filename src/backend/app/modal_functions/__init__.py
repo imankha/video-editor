@@ -6,10 +6,9 @@ for video export processing.
 
 Available functions:
     - render_overlay: Apply highlight overlays to video (GPU - required for performance)
-    - process_framing_ai: Crop with Real-ESRGAN AI upscaling (GPU - required for AI)
     - process_clips_ai: Unified multi-clip AI upscaling (GPU)
 """
 
-from .video_processing import app, process_framing_ai, render_overlay
+from .video_processing import app, process_clips_ai, render_overlay
 
-__all__ = ["app", "process_framing_ai", "render_overlay"]
+__all__ = ["app", "process_clips_ai", "render_overlay"]

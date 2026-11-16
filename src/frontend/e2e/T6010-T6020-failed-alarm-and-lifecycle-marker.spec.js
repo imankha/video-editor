@@ -215,10 +215,10 @@ test.describe('T6020 — lifecycle writes marked at the call site', () => {
     await page.waitForTimeout(1000);
     await expect(page.getByText(BANNER)).toBeHidden();
 
-    // POST /api/exports/framing is a real gesture -- unmarked, must arm.
+    // POST /api/export/render is a real gesture -- unmarked, must arm.
     await page.evaluate(async () => {
       try {
-        await fetch('/api/exports/framing', {
+        await fetch('/api/export/render', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },

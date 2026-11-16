@@ -71,15 +71,6 @@ class TestChargeSitesShareOneHelper:
         for s in (0, 0.3, 6.027, 6.49, 6.5, 6.51, 17.26, 100.0001):
             assert compute_export_credits(s, 30) == round_credits_half_up(s), f"mismatch at {s}s"
 
-    def test_legacy_exports_path_imports_the_same_function_object(self):
-        """`routers/exports.py`'s inline reservation must call the SAME helper
-        object -- not a second inline `math.ceil`/`round` reimplementation."""
-        from app.routers import exports as exports_router
-
-        assert exports_router.round_credits_half_up is round_credits_half_up
-        # And there is no stray module-level `math` left to inline a ceil with.
-        assert not hasattr(exports_router, "math")
-
     def test_fractional_second_charge_matches_across_both_sites(self):
         """6.027s and 6.5s resolve to the same credit count through the framing
         helper as through the raw shared helper the exports path uses."""

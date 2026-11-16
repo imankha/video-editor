@@ -155,10 +155,10 @@ describe('write-attempt arming (T5960)', () => {
       expect(isMutatingApiRequest('/api/exports/job-abc-9/resume-progress', { method: 'POST', rbNonDataWrite: true })).toBe(false);
     });
 
-    it('DOES arm on a real export-start gesture (unmarked -- does not over-exclude /api/exports/)', () => {
+    it('DOES arm on a real export-start gesture (unmarked -- does not over-exclude export starts)', () => {
       // These are real gesture writes (the export button) -- unmarked, must arm.
-      expect(isMutatingApiRequest('/api/exports', { method: 'POST' })).toBe(true);
-      expect(isMutatingApiRequest('/api/exports/framing', { method: 'POST' })).toBe(true);
+      expect(isMutatingApiRequest('/api/export/render', { method: 'POST' })).toBe(true);
+      expect(isMutatingApiRequest('/api/export/render-overlay', { method: 'POST' })).toBe(true);
     });
 
     it('DOES arm on genuine user-data write gestures', () => {

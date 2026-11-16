@@ -977,7 +977,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         # 2. Fallback: X-User-ID header (backward compat for dev/tests)
         # SECURITY: Only enabled in dev/staging -- never in production. An admin
-        # route is not an exception: _require_admin() only checks whether the
+        # route is not an exception: require_admin only checks whether the
         # resolved user_id IS an admin, never whether the caller really IS that
         # user_id, so trusting an unsigned header here is a full auth bypass.
         if not user_id and APP_ENV != "production":

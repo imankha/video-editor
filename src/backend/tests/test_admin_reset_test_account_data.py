@@ -41,9 +41,8 @@ TARGET_ID = "target-user-id"
 
 @pytest.fixture
 def admin_stub(monkeypatch):
-    from app.routers import admin as m
+    from app.routers.admin import users as m
 
-    monkeypatch.setattr(m, "_require_admin", lambda: None)
     monkeypatch.setattr(m, "get_current_user_id", lambda: ADMIN_ID)
     return m
 

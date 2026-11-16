@@ -33,6 +33,7 @@ from ..storage import (
     upload_to_r2,
 )
 from ..user_context import set_current_user_id
+from .recap_encode import encode_recap, video_dimensions
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ MAX_AUTO_EXPORT_ATTEMPTS = 3
 # resolve_clip_source falls back to the recap at each clip's frozen bounds. That
 # only works if the recap holds real pixels: encode at NATIVE resolution (no 480p
 # downscale) at master-grade quality. crf 18 is near-visually-lossless; "fast"
-# keeps the inline (still-CPU, pre-T2650) sweep encode within budget (Risk 3).
+# keeps the CPU encode (on Modal since T2650) within budget (Risk 3).
 # Both are tunable here without touching the pipeline.
 RECAP_CRF = 18
 RECAP_PRESET = "fast"
@@ -540,31 +541,35 @@ def _export_brilliant_clip(
     )
 
 
-def _video_dimensions(probe: dict):
-    """(width, height) of the first video stream in an ffprobe result, or None.
+def _encode_recap_dispatched(user_id: str, segments: list[dict], recap_key: str) -> list[dict]:
+    """Encode the recap and store it at `recap_key`; returns [{id, duration}] (T2650).
 
-    None when the probe carries no video stream dimensions (e.g. a mocked probe);
-    callers treat that as "resolution unknown" and skip concat normalization.
+    Modal on: the CPU Modal function `encode_recap_modal` downloads the sources
+    through the presigned URLs in `segments`, encodes, and uploads the MP4 itself
+    -- no video encoding on the API server. A Modal failure RAISES (no local
+    fallback): the sweep marks the game failed and retries it next run; the
+    share request reports the error. Modal off (dev / containers): the same
+    `recap_encode.encode_recap` runs locally.
     """
-    for stream in probe.get('streams', []) or []:
-        if stream.get('codec_type') == 'video':
-            width, height = stream.get('width'), stream.get('height')
-            if width and height:
-                return (int(width), int(height))
-    return None
+    from . import modal_client
 
+    if modal_client.modal_enabled():
+        import asyncio
 
-def _pick_canonical_resolution(resolutions: list[tuple]) -> tuple:
-    """Choose the concat-normalization target for a mixed-resolution recap.
+        result = asyncio.run(modal_client.call_modal_encode_recap(
+            user_prefix=modal_client._resolve_modal_user_id(user_id),
+            segments=segments,
+            recap_key=recap_key,
+            crf=RECAP_CRF,
+            preset=RECAP_PRESET,
+        ))
+        return result["segments"]
 
-    Prefers the resolution shared by the MOST clips (fewest clips get rescaled ->
-    fewest crop-keyframe regions shifted, per Risk 1), tie-broken toward the
-    larger frame (preserve pixels for reframe/upscale). resolutions must be
-    non-empty and contain no None.
-    """
-    from collections import Counter
-    counts = Counter(resolutions)
-    return max(counts, key=lambda r: (counts[r], r[0] * r[1]))
+    with tempfile.TemporaryDirectory() as temp_dir:
+        recap_path = Path(temp_dir) / "recap.mp4"
+        encoded = encode_recap(segments, recap_path, crf=RECAP_CRF, preset=RECAP_PRESET)
+        upload_to_r2(user_id, recap_key, recap_path)
+    return encoded
 
 
 def _generate_recap(
@@ -602,139 +607,69 @@ def _generate_recap(
     The recap_start/recap_end mapping (recaps/{game_id}_clips.json) is written in
     the same shape as before; resolve_clip_source reads it to re-materialize a
     clip from the recap at its frozen bounds.
+    T2650: the encode itself (extract, normalize, concat, upload) goes through
+    `_encode_recap_dispatched` -- on Modal when Modal is on; this function only
+    resolves source URLs and writes the mapping from the returned durations.
     """
     t0 = time.perf_counter()
     logger.info(f"[AutoExport] Recap game={game_id} starting with {len(clips)} clips")
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        clips_by_hash = defaultdict(list)
-        for clip in clips:
-            clips_by_hash[clip['video_hash']].append(clip)
-        logger.info(f"[AutoExport] Recap game={game_id} {len(clips_by_hash)} unique video sources")
+    clips_by_hash = defaultdict(list)
+    for clip in clips:
+        clips_by_hash[clip['video_hash']].append(clip)
+    logger.info(f"[AutoExport] Recap game={game_id} {len(clips_by_hash)} unique video sources")
 
-        extracted_paths = []
-        clip_resolutions = []  # aligned with extracted_paths; (w,h) or None
-        clip_mapping = []
-        recap_offset = 0.0
-        for video_hash, hash_clips in clips_by_hash.items():
-            video_url = generate_presigned_url_global(f"games/{video_hash}.mp4")
-            if not video_url:
-                logger.error(
-                    f"[AutoExport] Recap game={game_id} failed to get URL for hash={video_hash[:12]}"
-                )
-                continue
-
-            for clip in hash_clips:
-                # Skip clips with an invalid range (missing or inverted, i.e.
-                # end <= start). ffmpeg's -ss/-to extracts nothing for these and
-                # raises, which would otherwise fail the whole game's recap (bug 23p).
-                if (clip['start_time'] is None or clip['end_time'] is None
-                        or clip['end_time'] <= clip['start_time']):
-                    logger.warning(
-                        f"[AutoExport] Recap game={game_id} skipping clip {clip['id']}: "
-                        f"invalid range start={clip['start_time']} end={clip['end_time']} "
-                        f"(end <= start) — excluded from recap"
-                    )
-                    continue
-                out_path = Path(temp_dir) / f"clip_{clip['id']}.mp4"
-                # T4140: NATIVE resolution (no scale filter) at master-grade quality.
-                (
-                    ffmpeg.input(
-                        video_url,
-                        ss=clip['start_time'],
-                        to=clip['end_time'],
-                    )
-                    .output(
-                        str(out_path),
-                        vcodec="libx264",
-                        preset=RECAP_PRESET,
-                        crf=RECAP_CRF,
-                        acodec="aac",
-                        movflags="+faststart",
-                    )
-                    .run(quiet=True, overwrite_output=True)
-                )
-                extracted_paths.append(out_path)
-
-                probe = ffmpeg.probe(str(out_path))
-                duration = float(probe['format']['duration'])
-                clip_resolutions.append(_video_dimensions(probe))
-                clip_mapping.append({
-                    'id': clip['id'],
-                    'name': clip['name'],
-                    'rating': clip['rating'],
-                    'tags': decode_data(clip['tags']) or [],
-                    'notes': clip['notes'] or '',
-                    'recap_start': round(recap_offset, 3),
-                    'recap_end': round(recap_offset + duration, 3),
-                })
-                recap_offset += duration
-
-        if not extracted_paths:
-            logger.error(f"[AutoExport] Recap game={game_id} no clips extracted after {time.perf_counter() - t0:.2f}s")
-            raise RuntimeError("No clips extracted for recap")
-
-        # T4140: concat demuxer (c=copy) requires a uniform resolution. Native-res
-        # encoding leaves mixed-resolution multi-source games non-uniform, so scale
-        # ONLY the minority segments up/down to a shared canonical resolution.
-        known_res = [r for r in clip_resolutions if r is not None]
-        if len(set(known_res)) > 1:
-            canonical = _pick_canonical_resolution(known_res)
-            cw, ch = canonical
-            logger.info(
-                f"[AutoExport] Recap game={game_id} mixed resolutions "
-                f"{sorted(set(known_res))} -> canonical {cw}x{ch}; normalizing "
-                f"non-conforming segments (crop keyframes on those clips shift)"
+    segments = []
+    clips_by_id = {}
+    for video_hash, hash_clips in clips_by_hash.items():
+        video_url = generate_presigned_url_global(f"games/{video_hash}.mp4")
+        if not video_url:
+            logger.error(
+                f"[AutoExport] Recap game={game_id} failed to get URL for hash={video_hash[:12]}"
             )
-            for idx, res in enumerate(clip_resolutions):
-                if res is None or res == canonical:
-                    continue
-                src = extracted_paths[idx]
-                normalized = src.with_name(f"norm_{src.name}")
-                (
-                    ffmpeg.input(str(src))
-                    .filter("scale", cw, ch)
-                    .filter("setsar", "1")
-                    .output(
-                        str(normalized),
-                        vcodec="libx264",
-                        preset=RECAP_PRESET,
-                        crf=RECAP_CRF,
-                        acodec="aac",
-                        movflags="+faststart",
-                    )
-                    .run(quiet=True, overwrite_output=True)
-                )
-                extracted_paths[idx] = normalized
+            continue
+        for clip in hash_clips:
+            clips_by_id[clip['id']] = clip
+            segments.append({
+                'id': clip['id'], 'url': video_url,
+                'start': clip['start_time'], 'end': clip['end_time'],
+            })
 
-        logger.info(f"[AutoExport] Recap game={game_id} extracted {len(extracted_paths)} clips in {time.perf_counter() - t0:.2f}s, concatenating")
-        concat_list = Path(temp_dir) / "concat.txt"
-        with open(concat_list, "w") as f:
-            for path in extracted_paths:
-                f.write(f"file '{path}'\n")
+    if not segments:
+        logger.error(f"[AutoExport] Recap game={game_id} no clips extracted after {time.perf_counter() - t0:.2f}s")
+        raise RuntimeError("No clips extracted for recap")
 
-        recap_path = Path(temp_dir) / "recap.mp4"
-        (
-            ffmpeg.input(str(concat_list), f="concat", safe=0)
-            .output(str(recap_path), c="copy", movflags="+faststart")
-            .run(quiet=True, overwrite_output=True)
-        )
+    recap_r2_key, mapping_r2_key = recap_r2_keys(game_id, layer)
+    encoded = _encode_recap_dispatched(user_id, segments, recap_r2_key)
+    logger.info(f"[AutoExport] Recap game={game_id} extracted {len(encoded)} clips in {time.perf_counter() - t0:.2f}s")
 
-        recap_r2_key, mapping_r2_key = recap_r2_keys(game_id, layer)
-        upload_to_r2(user_id, recap_r2_key, recap_path)
+    clip_mapping = []
+    recap_offset = 0.0
+    for seg in encoded:
+        clip = clips_by_id[seg['id']]
+        clip_mapping.append({
+            'id': clip['id'],
+            'name': clip['name'],
+            'rating': clip['rating'],
+            'tags': decode_data(clip['tags']) or [],
+            'notes': clip['notes'] or '',
+            'recap_start': round(recap_offset, 3),
+            'recap_end': round(recap_offset + seg['duration'], 3),
+        })
+        recap_offset += seg['duration']
 
-        mapping_payload = (
-            {"schema": RECAP_MAP_SCHEMA, "layer": layer, "clips": clip_mapping}
-            if layer is not None else clip_mapping
-        )
-        upload_bytes_to_r2(
-            user_id,
-            mapping_r2_key,
-            json.dumps(mapping_payload).encode(),
-        )
+    mapping_payload = (
+        {"schema": RECAP_MAP_SCHEMA, "layer": layer, "clips": clip_mapping}
+        if layer is not None else clip_mapping
+    )
+    upload_bytes_to_r2(
+        user_id,
+        mapping_r2_key,
+        json.dumps(mapping_payload).encode(),
+    )
 
     elapsed = time.perf_counter() - t0
-    logger.info(f"[AutoExport] Recap game={game_id} layer={layer or 'legacy-mixed'} complete in {elapsed:.2f}s ({len(extracted_paths)} clips, {recap_offset:.1f}s duration)")
+    logger.info(f"[AutoExport] Recap game={game_id} layer={layer or 'legacy-mixed'} complete in {elapsed:.2f}s ({len(encoded)} clips, {recap_offset:.1f}s duration)")
     return recap_r2_key
 
 
@@ -757,68 +692,54 @@ def _generate_recap_from_legacy_slice(
     if not legacy_url:
         raise RuntimeError(f"[AutoExport] game={game_id} legacy recap missing at slice time")
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        extracted_paths = []
-        clip_mapping = []
-        recap_offset = 0.0
-        for entry in sorted(legacy_entries, key=lambda e: e.get('recap_start') or 0.0):
-            start, end = entry.get('recap_start'), entry.get('recap_end')
-            if start is None or end is None or end <= start:
-                logger.warning(
-                    f"[AutoExport] Recap-slice game={game_id} skipping entry "
-                    f"{entry.get('id')}: invalid range start={start} end={end}"
-                )
-                continue
-            out_path = Path(temp_dir) / f"clip_{entry['id']}.mp4"
-            (
-                ffmpeg.input(legacy_url, ss=start, to=end)
-                .output(
-                    str(out_path), vcodec="libx264", preset=RECAP_PRESET,
-                    crf=RECAP_CRF, acodec="aac", movflags="+faststart",
-                )
-                .run(quiet=True, overwrite_output=True)
+    entries = []
+    for entry in sorted(legacy_entries, key=lambda e: e.get('recap_start') or 0.0):
+        start, end = entry.get('recap_start'), entry.get('recap_end')
+        if start is None or end is None or end <= start:
+            logger.warning(
+                f"[AutoExport] Recap-slice game={game_id} skipping entry "
+                f"{entry.get('id')}: invalid range start={start} end={end}"
             )
-            extracted_paths.append(out_path)
-            duration = float(end) - float(start)
-            clip_mapping.append({
-                'id': entry['id'],
-                'name': entry.get('name'),
-                'rating': entry.get('rating'),
-                'tags': entry.get('tags') or [],
-                'notes': entry.get('notes') or '',
-                'recap_start': round(recap_offset, 3),
-                'recap_end': round(recap_offset + duration, 3),
-            })
-            recap_offset += duration
-
-        if not extracted_paths:
-            raise RuntimeError(
-                f"[AutoExport] game={game_id} layer={layer} no valid segments "
-                f"sliced from the legacy recap"
-            )
-
-        concat_list = Path(temp_dir) / "concat.txt"
-        with open(concat_list, "w") as f:
-            for path in extracted_paths:
-                f.write(f"file '{path}'\n")
-
-        recap_path = Path(temp_dir) / "recap.mp4"
-        (
-            ffmpeg.input(str(concat_list), f="concat", safe=0)
-            .output(str(recap_path), c="copy", movflags="+faststart")
-            .run(quiet=True, overwrite_output=True)
+            continue
+        entries.append(entry)
+    if not entries:
+        raise RuntimeError(
+            f"[AutoExport] game={game_id} layer={layer} no valid segments "
+            f"sliced from the legacy recap"
         )
 
-        recap_r2_key, mapping_r2_key = recap_r2_keys(game_id, layer)
-        upload_to_r2(user_id, recap_r2_key, recap_path)
-        upload_bytes_to_r2(
-            user_id, mapping_r2_key,
-            json.dumps({"schema": RECAP_MAP_SCHEMA, "layer": layer, "clips": clip_mapping}).encode(),
-        )
+    entries_by_id = {e['id']: e for e in entries}
+    segments = [
+        {'id': e['id'], 'url': legacy_url, 'start': e['recap_start'], 'end': e['recap_end']}
+        for e in entries
+    ]
+    recap_r2_key, mapping_r2_key = recap_r2_keys(game_id, layer)
+    encoded = _encode_recap_dispatched(user_id, segments, recap_r2_key)
+
+    clip_mapping = []
+    recap_offset = 0.0
+    for seg in encoded:
+        entry = entries_by_id[seg['id']]
+        duration = float(entry['recap_end']) - float(entry['recap_start'])
+        clip_mapping.append({
+            'id': entry['id'],
+            'name': entry.get('name'),
+            'rating': entry.get('rating'),
+            'tags': entry.get('tags') or [],
+            'notes': entry.get('notes') or '',
+            'recap_start': round(recap_offset, 3),
+            'recap_end': round(recap_offset + duration, 3),
+        })
+        recap_offset += duration
+
+    upload_bytes_to_r2(
+        user_id, mapping_r2_key,
+        json.dumps({"schema": RECAP_MAP_SCHEMA, "layer": layer, "clips": clip_mapping}).encode(),
+    )
 
     logger.info(
         f"[AutoExport] Recap-slice game={game_id} layer={layer} complete in "
-        f"{time.perf_counter() - t0:.2f}s ({len(extracted_paths)} clips, {recap_offset:.1f}s)"
+        f"{time.perf_counter() - t0:.2f}s ({len(encoded)} clips, {recap_offset:.1f}s)"
     )
     return recap_r2_key
 
@@ -916,7 +837,7 @@ def _recap_is_legacy_480p(user_id: str, game_id: int) -> bool | None:
     if not recap_url:
         return None
     try:
-        dims = _video_dimensions(ffmpeg.probe(recap_url))
+        dims = video_dimensions(ffmpeg.probe(recap_url))
     except Exception as e:
         logger.warning(f"[Backfill] game={game_id} recap probe failed: {e}")
         return None

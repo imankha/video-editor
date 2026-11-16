@@ -12,9 +12,9 @@ also writes working_videos/projects/working_clips.
 Decisions recorded in docs/plans/tasks/export-write-path/T4380-export-job-repository.md
 (Progress Log) and mirrored in .claude/knowledge/export-pipeline.md:
 
-- `create()` inserts ExportStatus.PENDING — export_worker.process_export_job
-  hard-gates on `status == 'pending'` before running a job, so this is the ONE
-  value that keeps the async-worker path alive. `create_if_none_active()` is a
+- `create()` inserts ExportStatus.PENDING (T4410 deleted the async worker that
+  ran pending jobs; startup recovery and the tests still seed pending rows
+  through it). `create_if_none_active()` is a
   SEPARATE creation path (T9540) for the synchronous inline-render endpoints,
   which insert PROCESSING because they ARE the worker for that request.
 - `create()`/`create_if_none_active()` RAISE on insert failure. This is a

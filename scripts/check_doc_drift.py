@@ -20,9 +20,9 @@ import tempfile
 
 from ci_policy import resolve
 
-# Ratchet: dead path references on master when this check landed (T13710). Lower it as docs
-# are fixed; never raise it.
-BASELINE = 48
+# Ratchet: dead path references allowed on master. T13710 landed it at 49; T13720 cleared the
+# backlog. Never raise it.
+BASELINE = 0
 PLAN = 'docs/plans/PLAN.md'
 EXTENSIONS = 'py|js|jsx|ts|tsx|mjs|cjs|sh|bat|yml|yaml|json|md|sql|toml|astro|css|html'
 PATH_TOKEN = re.compile(rf'^[\w.\-/]+\.(?:{EXTENSIONS})$')

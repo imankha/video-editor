@@ -174,9 +174,8 @@ class TestGroupedByDimension:
         return old
 
     def test_campaigns_one_row_per_campaign_and_young_member_keeps_group_maturing(self, pg_conn, monkeypatch):
-        import app.routers.admin as admin
+        from app.routers.admin import analytics as admin
 
-        monkeypatch.setattr(admin, "_require_admin", lambda: None)
         self._seed()
 
         result = admin.analytics_activation(group="campaigns")
@@ -191,9 +190,8 @@ class TestGroupedByDimension:
         assert b["export_completed"] is None and b["share_completed"] is None
 
     def test_builds_one_row_per_signup_build(self, pg_conn, monkeypatch):
-        import app.routers.admin as admin
+        from app.routers.admin import analytics as admin
 
-        monkeypatch.setattr(admin, "_require_admin", lambda: None)
         self._seed()
 
         result = admin.analytics_activation(group="builds")
@@ -204,9 +202,8 @@ class TestGroupedByDimension:
         assert "t7420campa" not in rows
 
     def test_cohorts_group_by_signup_month(self, pg_conn, monkeypatch):
-        import app.routers.admin as admin
+        from app.routers.admin import analytics as admin
 
-        monkeypatch.setattr(admin, "_require_admin", lambda: None)
         old = self._seed()
 
         result = admin.analytics_activation(group="cohorts")

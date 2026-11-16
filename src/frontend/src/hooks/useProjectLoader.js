@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { API_BASE, resolveApiUrl } from '../config';
+import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFocusStore } from '../stores/focusStore';
@@ -8,11 +8,10 @@ import { useVideoStore } from '../stores/videoStore';
 // T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
 import { clipFramerate, clipSourceDuration } from '../utils/clipSelectors';
-import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
+import { extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { seedClipVersion } from '../api/focusActions';
 import { EDITOR_MODES } from '../stores/editorStore';
 import { allowEnterFraming } from '../utils/reelReEditable';
-import { withTabProfile } from '../utils/sessionInit';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -82,7 +81,7 @@ let latestLoadId = 0;
 export function useProjectLoader() {
   const {
     setProjectClips,
-    setWorkingVideo,
+    loadWorkingVideo,
     setLoading,
     updateClipMetadata,
     setClipMetadataCache,
@@ -102,7 +101,6 @@ export function useProjectLoader() {
   const loadProject = useCallback(async (project, options = {}) => {
     const {
       mode = null,
-      onWorkingVideoLoaded = null,
       onProgress = () => {},
     } = options;
 
@@ -233,7 +231,7 @@ export function useProjectLoader() {
         ...clip,
         duration: metadataCache[clip.id]?.duration || 0,
       }));
-      // T6250: build the value for the return payload / onWorkingVideoLoaded, but
+      // T6250: build the value for the return payload, but
       // do NOT seed projectDataStore.clipMetadata here. That store field is the
       // "fresh framing export just happened" trigger for OverlayScreen's Effect A
       // (screens/OverlayScreen.jsx:596) and is set ONLY by the genuine export
@@ -243,41 +241,16 @@ export function useProjectLoader() {
       // direct-to-Overlay now fall to Effect B (the plain-load owner) alone.
       const overlayClipMetadata = buildClipMetadata(clipsWithDuration);
 
-      // Load working video in background if it exists
+      // Start the working video early (owner ruling T4490: opening Spotlight must
+      // not get slower). The same deduped action OverlayScreen calls, so the video
+      // is fetched once; projectDataStore.workingVideo holds its status.
       let workingVideo = null;
-      if (project.working_video_id && project.working_video_url) {
+      if (project.working_video_id) {
         onProgress({ stage: 'working-video', message: 'Loading working video...' });
         setLoading(true, 'working-video');
-
-        try {
-          const workingVideoUrl = withTabProfile(resolveApiUrl(project.working_video_url));
-          const metadata = await extractVideoMetadataFromUrl(workingVideoUrl, 'working_video.mp4');
-          if (isStale()) return { project, stale: true };
-
-          workingVideo = { file: null, url: workingVideoUrl, metadata };
-          setWorkingVideo(workingVideo);
-
-          if (onWorkingVideoLoaded) {
-            await onWorkingVideoLoaded({
-              file: null,
-              url: workingVideoUrl,
-              metadata,
-              clipMetadata: overlayClipMetadata,
-            });
-          }
-
-          console.log('[useProjectLoader] Loaded working video via streaming URL');
-        } catch (err) {
-          // T5440: a missing asset (hard 404) is a known data-rot case (dangling DB
-          // ref / R2 prune), not a code fault — log ONE concise line, not an error
-          // stack. OverlayScreen owns the user-facing "re-export" state; here we
-          // just leave workingVideo null and continue loading the rest of the project.
-          if (err instanceof VideoAssetMissingError) {
-            console.warn(`[useProjectLoader] Working video no longer available (HTTP ${err.status}) — re-export to rebuild. project=${projectId}`);
-          } else {
-            console.error('[useProjectLoader] Error loading working video:', err);
-          }
-        }
+        const loaded = await loadWorkingVideo(projectId, project.working_video_id);
+        if (isStale()) return { project, stale: true };
+        if (loaded.status === 'ready' && loaded.videoId === project.working_video_id) workingVideo = loaded.video;
       }
 
       if (isStale()) return { project, stale: true };
@@ -298,7 +271,7 @@ export function useProjectLoader() {
       if (!isStale()) setLoading(false);
       throw err;
     }
-  }, [resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, setWorkingVideo, setLoading, setClipMetadataCache, updateClipMetadata]);
+  }, [resetProjectData, resetFramingStore, resetOverlayStore, resetVideoStore, setProjectClips, loadWorkingVideo, setLoading, setClipMetadataCache, updateClipMetadata]);
 
   return { loadProject };
 }

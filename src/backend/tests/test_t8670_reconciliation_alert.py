@@ -309,7 +309,7 @@ class TestLockReleasePath:
         send_mock = AsyncMock(return_value=True)
         try:
             with patch("app.services.pg.get_pg", cm), \
-                 patch("app.routers.admin.get_pg", cm), \
+                 patch("app.routers.admin.revenue.get_pg", cm), \
                  patch("app.services.auth_db.get_pg", cm), \
                  patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture), \
                  patch.object(reconciliation_alert, "send_admin_update_email", send_mock):
@@ -403,7 +403,7 @@ class TestLockReleasePath:
         try:
             with caplog.at_level(logging.CRITICAL, logger="app.services.reconciliation_alert"), \
                  patch("app.services.pg.get_pg", lock_get_pg), \
-                 patch("app.routers.admin.get_pg", compute_cm), \
+                 patch("app.routers.admin.revenue.get_pg", compute_cm), \
                  patch("app.services.auth_db.get_pg", compute_cm), \
                  patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture), \
                  patch.object(reconciliation_alert, "send_admin_update_email", send_mock):
@@ -500,7 +500,7 @@ class TestLockReleasePath:
         send_mock1 = AsyncMock(return_value=True)
         try:
             with patch("app.services.pg.get_pg", lock_get_pg), \
-                 patch("app.routers.admin.get_pg", compute_cm), \
+                 patch("app.routers.admin.revenue.get_pg", compute_cm), \
                  patch("app.services.auth_db.get_pg", compute_cm), \
                  patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture), \
                  patch.object(reconciliation_alert, "send_admin_update_email", send_mock1):
@@ -629,7 +629,7 @@ class TestFreshConnectionMarkerSurvivesLockConnDeath:
         fixture = [make_pi("user-a", 399, pi_id="pi_unknown")]
         try:
             with patch("app.services.pg.get_pg", lock_cm), \
-                 patch("app.routers.admin.get_pg", compute_cm), \
+                 patch("app.routers.admin.revenue.get_pg", compute_cm), \
                  patch("app.services.auth_db.get_pg", compute_cm), \
                  patch("app.services.revenue_reconciliation.fetch_stripe_intents", return_value=fixture), \
                  patch.object(reconciliation_alert, "send_admin_update_email", send1):

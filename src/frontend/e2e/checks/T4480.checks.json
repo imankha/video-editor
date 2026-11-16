@@ -1,0 +1,6 @@
+{
+  "criteria": {
+    "T4480:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/screens/__tests__/overlayScreenOneLoader.test.jsx -t \"T4480:C1\""},
+    "T4480:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/screens/__tests__/overlayScreenOneLoader.test.jsx -t \"T4480:C2\""}
+  }
+}

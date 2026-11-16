@@ -237,7 +237,7 @@ so this constant now renders nowhere). The Focus/Overlay "publish later" toast c
 section relabelled "Other reels" → "Other highlights" (T11280; "Other clips" was the T11230 interim).
 Legacy multi-clip drafts stay reachable ONLY via the Clips-tab **Legacy highlights** group
 (`data-testid="legacy-reel-drafts"`, T11220 below) + Published tab. Tab-IA test renamed
-`ProjectManager.fourTabIA.test.jsx` → `.threeTabIA.test.jsx`. NOTE: many entries BELOW that describe
+from the old four-tab name to `ProjectManager.threeTabIA.test.jsx`. NOTE: many entries BELOW that describe
 a four-tab bar / "Reels" tab / "Create reel" are pre-T11230 HISTORY — the live IA is three tabs.)
 updated: 2026-09-26 (T11220 — the In Progress Clips tab (`ProjectManager.jsx`, `activeTab ===
 'projects'`) now renders a clearly-labelled **"Legacy reels"** group (`data-testid=
@@ -480,8 +480,8 @@ already correctly floored on a real phone. Before filing a touch-target finding,
 `window.matchMedia('(hover: none) and (pointer: coarse)').matches` is true in the test context, or
 check the control's className for `coarse-pointer:min-*` first. **Genuine gap found and fixed:**
 `ClipDetailsEditor.jsx`'s own LOCAL `StarRating` (line ~39, a T9630-era byte-copy of
-`shared/StarRating.jsx` that was never reconciled) had no touch floor at all — fixed to match its
-shared twin. Same fix applied to the shared `StarRating.jsx` and `TagSelector.jsx` chip buttons
+`shared/StarRating.jsx` (removed T11840) that was never reconciled) had no touch floor at all — fixed to match its
+shared twin. Same fix applied to the shared `StarRating.jsx` (removed T11840) and `TagSelector.jsx` chip buttons
 (both previously had zero touch-target handling, not a false positive). **Known residual risk, not
 yet live-verified:** the `landscape-inline` Annotate layout (~844×390, the most vertically
 constrained surface in the app) puts StarRating + TagSelector's tag lane on one `flex items-center`
@@ -510,7 +510,7 @@ pass caught the first draft comparing against an inlined `5` instead). New
 a different surface — the T10450 split is scoped to the T10310 row only, not the
 inline play editor). **Concurrent-session note:** the shared main checkout already
 had unrelated uncommitted WIP claiming task id T10430 (a "Brilliant" 5-star badge
-icon, `components/shared/BrilliantIcon.jsx` + `clipConstants.js`'s new
+icon, `components/shared/BrilliantIcon.jsx` (removed T10430) + `clipConstants.js`'s new
 `BRILLIANT_RATING`) at this task's start, so T10450 was implemented in a disposable
 worktree (`git worktree add`, not `git checkout -b` in the shared tree) per
 `.claude/knowledge`'s own concurrent-session precedent — never assume the next
@@ -733,7 +733,7 @@ the button, so the brief pause while the clip's project id lands reads as "prepa
 (evidence E09). Pure render from the existing `focusPending` prop — no store/effect/persistence change;
 clears itself when `setAutoProjectId` lands (the live enabled CTA shows NO caption). Vocabulary: "clip"
 not the brief's proposed "highlight" (T9860 standing rule — the object is a clip). Test:
-`AnnotateFullscreenOverlay.firstClipInvitation.test.jsx` (caption present when pending, absent when
+`AnnotateFullscreenOverlay.firstClipInvitation.test.jsx` (test since removed) (caption present when pending, absent when
 live). Prior:)
 updated: 2026-09-15 (T9930 — simplify upload + de-clutter fresh home. **Upload dialog
 (`GameDetailsModal.jsx`) RE-COLLAPSED its metadata** — Opponent / Game Date / Game Type /
@@ -783,7 +783,7 @@ navigation-only (`handleAddSpotlightLater` FocusScreen, `handlePublishLater` Ove
 caption implied durability was gated on the click ("Keep it in your drafts and finish it whenever you
 want").** That false model was AC1's whole target. Fix (frontend-only): a retention reassurance line
 (`retentionNote` prop) above BOTH completion action grids (`FocusPublishActionBar`/
-`OverlayPublishActionBar`), derived once by the new PURE read `utils/resultRetentionNote.js`
+`OverlayPublishActionBar`), derived once by the new PURE read `utils/resultRetentionNote.js` (removed T11810)
 (`getDraftStatus`→one of `RESULT_RETENTION.{PRIVATE_DRAFT,PRIVATE_READY,PUBLISHED}` in
 displayNames.js) + reframed `SAVE_DRAFT_CAPTION`s. Focus completion (working video, no final)→DRAFT→
 "Saved to your drafts. Only you can see it."; Overlay completion (final video)→PRIVATE→"Private and
@@ -792,7 +792,7 @@ ready to watch...". **AC4 guard lives in the deriver**: an already-published ree
 it", never an implied visibility change; the deriver + prop NEVER write, so no persistence rule is
 touched. Explicit Save-draft control + T9830 outcome buttons preserved (kickoff). Scope stayed OUT of
 T9880 (publish/share split), T9890 (entry-point recovery), T9900 (persistent saving-status
-indicator). Tests: `resultRetentionNote.test.js` (4, incl. AC4), Focus/OverlayPublishActionBar
+indicator). Tests: `resultRetentionNote.test.js` (removed T11810) (4, incl. AC4), Focus/OverlayPublishActionBar
 retention-note cases. NOTE: `screens/__tests__/{focus,overlay}PublishExit.test.jsx` pass in ISOLATION
 but a multi-file batch run of the large screen harnesses shows a vitest cross-file worker-crash
 cascade ("document is not defined") — pre-existing isolation artifact, run them one file at a time.
@@ -837,7 +837,7 @@ clip"/"Publish reel", masked by `.catch()`-guarded locators) turned out to exist
 (T4110, T6180, T8520-T8530, tutorial-capture-publish, T8480) — fixed as part of commit 6 using the
 same target strings. `src/landing/` (marketing site, separate deploy pipeline, never imports
 `displayNames.js`) was deliberately left untouched — its "Highlight Reels" SEO copy is a different
-product's vocabulary, not this app's. Two dead components (`CompareModelsButton.jsx`,
+product's vocabulary, not this app's. Two dead components (deleted T10100: `CompareModelsButton.jsx`,
 `GalleryButton.jsx` — the latter still reads the now-deleted `SECTION_NAMES.LIBRARY`, harmless since
 it has zero importers) were intentionally left for a filed follow-up deletion task, not touched here.
 Prior:)
@@ -901,7 +901,7 @@ save guard:** `saveInFlightRef` (a ref, set synchronously at the top of handleSa
 `finally`) no-ops a second Save while one is awaiting its round trip — fixes the real double-click bug
 (useRawClipSave's pendingSaves dedup returned null → false "Couldn't save" for a duplicate of a
 succeeding save, and in create mode addClipRegion ran before the dedup, leaving an orphan region).
-**Shared `StarRating.jsx` gained an OPT-IN `showLabel` prop** (default false) — the overlay's old LOCAL
+**Shared `StarRating.jsx` (removed T11840) gained an OPT-IN `showLabel` prop** (default false) — the overlay's old LOCAL
 labeled StarRating was extracted to shared, but a shared StarRating already existed (used by
 UploadClipModal with NO label); showLabel keeps UploadClipModal byte-identical while the Annotate
 surfaces pass `showLabel`. **`NoSportTagWarning` de-ambered** once (shared, 4 call sites: overlay
@@ -911,7 +911,7 @@ sites removed) but left intact + unit-tested — T9820 owns it; the two explicit
 outcome, so no create-mode caption. Backend: clips.py creation was ALREADY idempotent-by-natural-key
 and never gated on rating — only stale "5 stars automatically creates a project" docstrings fixed
 (clips.py save/update/`_create_auto_project_for_clip` + log; useRawClipSave saveClip/updateClip). Tests:
-`AnnotateFullscreenOverlay.explicitOutcomes.test.jsx` (new, 8 — AC map: same-two-buttons per rating,
+`AnnotateFullscreenOverlay.explicitOutcomes.test.jsx` (test since removed) (new, 8 — AC map: same-two-buttons per rating,
 save-play=no-draft, create=empty-form-ok, double-click one-create, all 4 layouts) + rewrote the
 obsolete toggle/caption/auto-flip assertions in layer/stripLayout/oneTap/keys/saveStatus/focusPrompt/
 mobileStageCta tests. QA: container has no browser/backend (same limit as T9630/T9820) — no live-drive;
@@ -1201,7 +1201,7 @@ bottom sheet and the portrait fullscreen sheet) — extracted as `stageCta` + `f
 so both surfaces reuse the identical button + T8730 confirm-then-navigate. Edit mode only; mobile CREATE
 still closes on save (Save/Cancel, no in-flight CTA). AnnotateModeView threads `onOpenInFocus`/
 `onOpenInOverlay` to BOTH mobile render sites (they had none before). Test:
-`AnnotateFullscreenOverlay.mobileStageCta.test.jsx`. **Live status:** desktop strip stay-open +
+`AnnotateFullscreenOverlay.mobileStageCta.test.jsx` (test since removed). **Live status:** desktop strip stay-open +
 relabel CONFIRMED live (supervisor, real account); mobile edit CTA now present (was the gap).
 **STILL OWED: mobile CREATE-then-close live check** (touch-rating a fresh segment wasn't scriptable in
 time; unit tests cover it). Design: `docs/plans/tasks/T9330-design.md`. Prior:)
@@ -1219,7 +1219,7 @@ the canvas on mobile. STALE-PREMISE NOTE for future readers: the T9350 task file
 Zoom already rendered as a normal-flow, panel-surface (`bg-gray-800 border`), desktop-only bar
 directly above the canvas, so there was no overlay restacking and Zoom's behavior is byte-identical.
 AddFootageButton gained `coarse-pointer:min-h-[44px]` (T7350 touch-target floor). Guard test:
-`AnnotateModeView.toolbar.test.jsx`. Prior:)
+`AnnotateModeView.toolbar.test.jsx` (test since removed). Prior:)
 updated: 2026-09-08 (T8970 Playback Annotations mode bug fixes -- 3 gaps found by live-drive.
 **Item 1 (blank annotate video after exiting playback):** the annotate `<video>` nodes
 (AnnotateModeView.jsx multiVideo branch) UNMOUNT when `playback.isPlaybackMode` flips true (the
@@ -1489,7 +1489,7 @@ T8370's `useClipUpload` hook -> `POST /api/clips/upload` (game_id NULL, emits `c
 T8380 also REMOVED the T6830 `clipsTabDisabled` dead-end guard (+ its /home/reels->Games redirect
 effect + the T8780 disabled caption): the In Progress Clips tab is now always reachable so a
 zero-content account can start by uploading; Games stays the default LANDING tab via `initialTab`.
-The per-file metadata modal `UploadClipModal.jsx` is deliberately NOT used by this batch path (it
+The per-file metadata modal `UploadClipModal.jsx` (removed T11240) is deliberately NOT used by this batch path (it
 stays in Annotate's `ClipListItem`/`ClipDetailsEditor` -- this doc's prior reference to "Annotate's
 ClipSelectorSidebar" was already stale before T11240: `ClipSelectorSidebar` was Focus-only, and
 T11240 deleted it); Add Video auto-names clips from filename, editable
@@ -1568,7 +1568,7 @@ Games `Gamepad2` / In Progress Clips `Scissors` / In Progress Reels `Clapperboar
 tab bar container `grid-cols-3` -> `grid-cols-4`; the `SegmentedTabButton` label span gained
 `whitespace-normal break-words` + `text-[10px] sm:text-sm` so the two-word labels wrap at 320px (no `xs`
 breakpoint in tailwind.config). The T8545 DOM-order landmine (label-first so the accessible name reads
-"{label}{count}") is UNCHANGED and now load-bearing for four tabs. Tests: `ProjectManager.fourTabIA.test.jsx`
+"{label}{count}") is UNCHANGED and now load-bearing for four tabs. Tests: `ProjectManager.fourTabIA.test.jsx` (renamed `ProjectManager.threeTabIA.test.jsx`, T11230)
 is the canonical four-tab-nav suite (the old "three-way tab navigation (T8545)" describe block in
 `ProjectManager.homeTabDefaults.test.jsx` was deleted as superseded). Design: `docs/plans/tasks/T8555-design.md`
 + `T8555-ui-spec.md`.)
@@ -1669,7 +1669,7 @@ updated: 2026-09-03 (T8490 star-scale caption + glyph labels + Keeper Save renam
 hook but never destructured by its one caller, `AnnotateContainer.jsx`; deleted outright, not
 imported), `NotesOverlay.jsx` — all now import the single canonical
 `src/frontend/src/components/shared/clipConstants.js` export instead (`ClipListItem.jsx` and
-`ClipSelectorSidebar.jsx` already did, via `getRatingDisplay`). Every glyph render site now carries
+`ClipSelectorSidebar.jsx` (removed T11240) already did, via `getRatingDisplay`). Every glyph render site now carries
 a `title`/`aria-label` built from `RATING_ADJECTIVES[rating]`. New invariant: **do not reintroduce a
 local `RATING_NOTATION`/`RATING_ADJECTIVES` copy** — import from `clipConstants.js`.
 **T11110 (2026-09-25): rating vocabulary is now Mental Lapse(1) / Technical Lapse(2) / Interesting(3)
@@ -1762,7 +1762,7 @@ mobile inline sheet, non-fullscreen sidebar) must pass `existingClip` whenever t
 open in EDIT mode** -- a new render site that omits it silently falls back to CREATE mode with
 no error, exactly like this bug. Verified live via dev-verify (dev stack + TSV-imported clips):
 pre-fix Save POSTed a 4th `raw_clip` alongside 3 existing ones; post-fix it PUTs the selected
-clip's id. Regression coverage: `ClipsSidePanel.editMode.test.jsx` (unit, mocks the overlay to
+clip's id. Regression coverage: `ClipsSidePanel.editMode.test.jsx` (test since removed) (unit, mocks the overlay to
 assert the prop) and the new T8590 block in `e2e/clip-selection-state-machine.spec.js` (proven
 to fail on the pre-fix code). See Landmines "Add Play CTA must gate on isEditMode (T8130)" below
 -- this is the sibling bug on the same surface, caught by the T8600 ux-investigator review.)
@@ -1770,7 +1770,7 @@ prior_update: 2026-09-02 (T8360 split single-clip vs multi-clip drafts: the Home
 tab is renamed "Clips" (`SECTION_NAMES.CLIPS`, still tab id `projects` / URL `/home/reels`)
 and now shows ONLY single-clip auto-drafts, routed by `is_auto_created` (NOT `clip_count`).
 The "Create Highlight Reel" assembly button and the multi-clip drafts it produces (`is_auto_created
-=== false`) moved OFF this tab entirely onto the Highlight Reels surface (`DownloadsPanel.jsx`)
+=== false`) moved OFF this tab entirely onto the Highlight Reels surface (`DownloadsPanel.jsx`, renamed `PublishedReelsPanel.jsx` by T8555)
 as a new "Highlights (in-progress)" section above the published list. This SUPERSEDES the
 T8130 entry below, which said the rename/relocation was deliberately deferred pending this
 task — T8360 is now that task, and it shipped both. Design: `docs/plans/tasks/T8360-design.md`.
@@ -2246,7 +2246,7 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   the "time" control, no separate widget), (2) Name + a `RatingPill` on ONE tier (+ a gold
   "Highlight made" chip when `existingClip.autoProjectId` is set), (3) a "Details" disclosure holding
   Play-category (My athlete/Team, FIRST row per H16) → teammates → tags → notes.** The old four-badge
-  row (named/rated/noted/clip, T10410) is GONE. Rating is now `RatingPill.jsx` (a labeled pill that
+  row (named/rated/noted/clip, T10410) is GONE. Rating is now `RatingPill.jsx` (removed T11840) (a labeled pill that
   opens the same best-first meanings list; NEUTRAL slate when unrated — no amber-dashed "to-do", no
   "Required"; gold `#F5B700` at rating 5 reusing T11110; NO chess `RATING_NOTATION` on pill or rows).
   The `RatingPill key={existingClip.id}` at each render site keeps the T10590 clip-switch-closes-popup
@@ -2291,7 +2291,7 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   popup was `absolute top-full left-0` with no portal/collision handling, so in the
   fullscreen editor a pill near the bottom/right edge rendered the card off-screen.
   It now **portals to `document.body`** with flip-aware, viewport-clamped `fixed`
-  positioning (`computePickerPos` in `RatingPill.jsx`: left-align + clamp, prefer
+  positioning (`computePickerPos` in `RatingPill.jsx`, removed T11840: left-align + clamp, prefer
   below / flip above only when below can't fit and above has more room, `maxHeight`
   + `overflow-y-auto` so rows stay reachable at extreme anchors), recomputed on
   resize/scroll. New z-rung **`Z.POPOVER` (`z-[110]`)** so the body portal clears
@@ -2323,7 +2323,7 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
     and is no longer DOM-adjacent to the pill (Tab would otherwise jump to an
     unrelated editor control); Escape returns focus to the `triggerRef`. Mobile keeps
     its native sheet focus.
-  - Tests: `RatingPill.test.jsx` (viewport clamp/flip incl. the M1 capped-vs-scroll
+  - Tests: `RatingPill.test.jsx` (removed T11840) (viewport clamp/flip incl. the M1 capped-vs-scroll
     case, B1 sibling-Escape guard, M2 focus in/out), `zLayers.test.js` (POPOVER rung).
 - **No rating gate (T11120 gate REMOVED, 2026-10-06).** New plays are created at `DEFAULT_PLAY_RATING` (4, Good;
   `clipConstants.js`) at Mark play, so the "Rate this play" popup, `rateGate`/`guardRateThenExit`/`pendingRatingId`
@@ -2358,7 +2358,7 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
     confirmation toast via `announceReelCreated(pid, {message: ANNOTATE.HIGHLIGHT_MOVED_TO_CLIPS,
     withAction:false})` ("Highlight moved to Clips so you can edit it later", no action button —
     `announceReelCreated` gained `message`/`withAction` params; default callers unchanged). Synchronous
-    double-create guard: `highlightChoiceInFlightRef`. Tests: `AnnotateContainer.rateGate.test.jsx`
+    double-create guard: `highlightChoiceInFlightRef`. Tests: `AnnotateContainer.rateGate.test.jsx` (gate removed; now `AnnotateContainer.noRateGate.test.jsx`)
     (T11130 describe) + `AnnotateFullscreenOverlay.highlightChoice.test.jsx`.
   - **H8 (T11130): the editor's OWN stage CTA + first-clip "Keep marking plays" invitation are REMOVED**
     from `AnnotateFullscreenOverlay` (all layouts) — the ONE surviving stage button lives on the main
@@ -2705,8 +2705,8 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   keeps a landscape phone single-lane regardless of orientation. `totalLayerHeight` switches
   '6.75rem' (mobile, video + 1 track) / '9.75rem' (desktop, video + 2 lanes). Both lane labels'
   `onClick` still select the ONE `'clips'` keyboard-nav layer (arrow-key nav in
-  `useKeyboardShortcuts.js` walks the full unfiltered `clipRegions` array regardless of which lane a
-  clip renders in) — there is no per-lane selection state. `region.index` is left as-is when
+  `AnnotateScreen.jsx`'s keydown handler walks every clip region regardless of which lane a
+  clip renders in; T4570 removed the never-reached Annotate branch from `useKeyboardShortcuts.js`) — there is no per-lane selection state. `region.index` is left as-is when
   filtering into per-lane arrays (it reflects position in the full chronological list, not
   position-within-lane). Covered by `AnnotateTimeline.twoLane.test.jsx` (unit) and
   `e2e/T5700-two-lanes.qa.spec.js` (real-browser QA, including the T4933 landscape case).
@@ -2778,7 +2778,7 @@ soccer pick), and the column is `NOT NULL` so there is no `sport IS NULL` cohort
   local profile before the PUT and rolls back to the pre-gesture snapshot on failure (mirrors
   `setIntroFact`), then reconciles via `fetchProfiles({force:true})`. Covered by
   `NoSportTagWarning.test.jsx`, `profileStore.updateProfile.test.js`, updated
-  `UploadClipModal.noSport.test.jsx`, and live-drive `e2e/T7922-mobile-inline-sport-picker.qa.spec.js`
+  `UploadClipModal.noSport.test.jsx` (removed with the modal, T11240), and live-drive `e2e/T7922-mobile-inline-sport-picker.qa.spec.js`
   (320+375, picker→tags swap + rating-survives-remount + Save round-trip).
 - `ManageProfilesModal` offers "No Sport" as an explicit option in BOTH the row
   `InlineSportSelect` and the `ProfileForm` dropdown (distinct from the "Other" free-text branch).
@@ -2840,7 +2840,7 @@ The full checklist for an 11th→Nth sport:
   settled flag, never `readyState`, which is not a reliable "still loading"
   signal on every engine.
 - **T11800 stale videoStore into Annotate:** the global `videoStore` carries Focus's `clipOffset`/`clipDuration` into Annotate on any mode switch that skips `reset()` (Focus/Overlay/DraftReelPreview "Done for now" call raw `setEditorMode`). `useVideo` then reports the PLAY length as duration, the pending-selection `videoDuration > 0` gate passes early, `seek` clamps, and auto-deselect wipes the re-selected play. Fix: `useVideoStore.getState().reset()` at the top of `handleLoadGame` (game-open seam). Red-first proof: `AnnotateContainer.doneForNowReselect.test.jsx` (real `useVideo` + real store; the older `pendingSelection` test hard-codes duration/currentTime and cannot see this). The "is framed" banner is `components/FramedBanner.jsx` (memory-only `galleryStore.justFramed`, spent at mount); no-origin exits go through `utils/leaveFocusForLater.js` (Clips tab + `clipsRingTarget`/`clipsRingProjectId`, ring cleared by timer).
-- **T11810:** the "Saved" chip, `RESULT_RETENTION` and `utils/resultRetentionNote.js` are gone; older notes below that mention them are historical.
+- **T11810:** the "Saved" chip, `RESULT_RETENTION` and `utils/resultRetentionNote.js` were removed; older notes below that mention them are historical.
 - **Add Play CTA must gate on `isEditMode` (T8130, 2026-09-02).** Any new button that calls
   `onAddClip`/`handleAddClipFromButton` (AnnotateContainer.jsx) MUST mirror `AnnotateControls`'
   `isEditMode` label/icon flip (`Add Play`/`Plus` vs `Edit Play`/`Pencil`) — that handler branches
@@ -2889,7 +2889,7 @@ The full checklist for an 11th→Nth sport:
      queries still return the whole family). A missing `surface` fires
      `:unknown_surface` + `console.warn` rather than silently reusing the bare pre-T8600 name —
      if you add a 5th render site and its beacon events show up as `unknown_surface`, you forgot
-     this prop. Render-site inventory test: `AnnotateModeView.beaconSurfaces.test.jsx`.
+     this prop. Render-site inventory test: `AnnotateModeView.beaconSurfaces.test.jsx` (test since removed).
 - **`annotation_completed` fires on WATCHED VIDEO, not a clip created — its label is display-only (T7930, 2026-08-28).**
   `POST /{game_id}/finish-annotation` (games.py, fired from `AnnotateScreen` mode-change/unmount via
   `gamesDataStore.finishAnnotation`) emits `record_milestone("annotation_completed")` purely on
@@ -2903,7 +2903,7 @@ The full checklist for an 11th→Nth sport:
   (`annotation_completed`) and daily_col (`annotations_completed`) are UNCHANGED — they are stored
   history in `user_actions`/`daily_counters`; a rename would sever the time series.** Every admin
   surface that renders this label had to follow, because two of them derive/hardcode it:
-  - `admin.py` builds funnel keys + `last_step` at READ time via `label.lower().replace(" ", "_")`, so
+  - `routers/admin/` builds funnel keys + `last_step` at READ time via `label.lower().replace(" ", "_")`, so
     the funnel step key moved `annotation_done` -> `watched_annotate_video`
     (`FunnelChart.jsx` STAGES key updated; that chart was later deleted as unused, T15910) and the `last_step` badge string moved "Annotation Done" ->
     "Watched Annotate Video" (`UserTable.jsx` STEP_STYLES map key updated to keep the cyan style).
@@ -3469,7 +3469,7 @@ The full checklist for an 11th→Nth sport:
     `onPointerEnter`/`onPointerLeave` on its root, passes `phase` + `streamUrl` to the
     component). Component is pure imperative DOM control driven by `phase` — no store, no
     writes, no watched-marking, no achievements (EPIC: preview is EPHEMERAL; the real
-    player's watched-marking at `DownloadsPanel.jsx:130-140` is the write path preview must
+    player's watched-marking at `DownloadsPanel.jsx:130-140` (file since renamed `PublishedReelsPanel.jsx`) is the write path preview must
     NOT touch).
   - **Single-active registry** is module-level in `useTilePreview.js` (`activePreviewStop`):
     a tile claims the slot at WARM (force-stopping whoever was active), so at most ONE preview

@@ -1,6 +1,6 @@
 # T5940: Split the admin server file
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-07-26

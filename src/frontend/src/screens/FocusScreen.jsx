@@ -7,6 +7,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
+import { useFullscreenToggle } from '../hooks/useFullscreenToggle';
 import { useIsCockpit } from '../hooks/useIsMobile';
 import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -24,7 +25,6 @@ import { FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW, FRAME_COPY } from '../config/
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { deriveFramingCtaState } from '../utils/framingCtaState';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
-import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
@@ -33,7 +33,7 @@ import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipFramerate
 import { API_BASE } from '../config';
 import { withTabProfile } from '../utils/tabProfile';
 import apiFetch from '../utils/apiFetch';
-import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
+import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useProjectsStore, useVideoStore } from '../stores';
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
@@ -87,7 +87,6 @@ export function FocusScreen({
   const loadingStage = useProjectDataStore(state => state.loadingStage);
   const clipsError = useProjectDataStore(state => state.clipsError);
   const clipMetadataCache = useProjectDataStore(state => state.clipMetadataCache);
-  const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
   const fetchClips = useProjectDataStore(state => state.fetchClips);
   const updateClipMetadata = useProjectDataStore(state => state.updateClipMetadata);
@@ -101,15 +100,11 @@ export function FocusScreen({
     setFramingChangedSinceExport,
   } = useFocusStore();
 
-  // Overlay store
-  const resetOverlayStore = useOverlayStore(state => state.reset);
-  const setIsLoadingWorkingVideo = useOverlayStore(state => state.setIsLoadingWorkingVideo);
-
   // Local state
   const [dragCrop, setDragCrop] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState('playhead');
   const [videoFile, setVideoFile] = useState(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const { isFullscreen, toggleFullscreen: handleToggleFullscreen } = useFullscreenToggle();
   // T740: outdated clips dialog and state removed — framing always uses latest boundaries
   // T10650: spinner while resolveWorkingVideoPreviewUrl resolves the "Back to
   // Preview" URL. Ephemeral gesture state, never persisted.
@@ -139,9 +134,6 @@ export function FocusScreen({
   // App's error path, so this tracks the render's whole lifetime.
   const publishIntentProjectId = usePublishIntentStore((s) => s.projectId);
   const publishLoading = publishIntentProjectId === projectId;
-  // T9100: FocusScreen no longer READS the shared workingVideo record (the
-  // post-export preview now uses the completion store); it still WRITES it via
-  // setWorkingVideo. So the reactive selector is gone, but the store action stays.
   const localExportButtonRef = useRef(null);
   const initialLoadDoneRef = useRef(false);
   const fullscreenContainerRef = useRef(null);
@@ -872,7 +864,6 @@ export function FocusScreen({
     seekForward,
     seekBackward,
     seek,
-    editorMode: 'framing',
     selectedLayer,
     copiedCrop,
     onCopyCrop: framingHandleCopyCrop,
@@ -880,21 +871,7 @@ export function FocusScreen({
     keyframes,
     framerate,
     selectedCropKeyframeIndex,
-    highlightKeyframes: [],
-    highlightFramerate: 30,
-    selectedHighlightKeyframeIndex: null,
-    isHighlightEnabled: false,
-    annotateVideoUrl: null,
-    annotateSelectedLayer: null,
-    clipRegions: [],
-    annotateSelectedRegionId: null,
-    selectAnnotateRegion: null,
   });
-
-  // Fullscreen toggle
-  const handleToggleFullscreen = useCallback(() => {
-    setIsFullscreen(prev => !prev);
-  }, []);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, isFullscreen);
@@ -927,18 +904,6 @@ export function FocusScreen({
   // Outdated clips dialog handlers
   // T740: handleContinueWithOriginal and handleUseLatestClips removed — auto-refresh is silent
 
-  // Handle Escape key to exit fullscreen
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        setIsFullscreen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen]);
-
   // T9285 review fix: the openMode staleness-scoping guard used to live here,
   // but this effect can only run while FocusScreen is mounted, which requires
   // editorMode === FRAMING — and `openMode` is always FRAMING too for this
@@ -953,7 +918,9 @@ export function FocusScreen({
   // generated export_id ExportButtonContainer sent as this render's job key) is
   // threaded through so it can be stamped onto the preview payload and
   // acknowledged on whichever of the four decision gestures the user picks.
-  const handleProceedToOverlayInternal = useCallback(async (renderedVideoBlob, clipMetadata, exportedProjectId, exportJobId) => {
+  // T4490: the first argument (a client-rendered blob) is always null -- every
+  // caller (ExportButtonContainer) renders on the server -- so it is ignored.
+  const handleProceedToOverlayInternal = useCallback(async (_renderedVideoBlob, clipMetadata, exportedProjectId, exportJobId) => {
     const currentlyViewingProjectId = useProjectsStore.getState().selectedProjectId;
 
     console.log('[FocusScreen] Starting overlay transition...', {
@@ -983,78 +950,30 @@ export function FocusScreen({
     // shadow version). T4400 removed the full-state save entirely: every edit
     // was already persisted by its own gesture, so there is nothing to save here.
 
-    let workingVideoSet = false;
-
-    if (renderedVideoBlob) {
-      const url = URL.createObjectURL(renderedVideoBlob);
-
-      try {
-        console.log('[FocusScreen] Creating blob URL and extracting metadata...');
-        const meta = await extractVideoMetadata(renderedVideoBlob);
-        console.log('[FocusScreen] Video metadata extracted:', { duration: meta?.duration, width: meta?.width, height: meta?.height });
-
-        setWorkingVideo({ file: renderedVideoBlob, url, metadata: meta });
-        workingVideoSet = true;
-      } catch (err) {
-        console.warn('[FocusScreen] Metadata extraction failed, using fallback:', err.message);
-
-        const totalDuration = clipMetadata?.source_clips?.length > 0
-          ? clipMetadata.source_clips[clipMetadata.source_clips.length - 1].end_time
-          : clips.reduce((sum, c) => {
-              const meta = clipMetadataCache[c.id];
-              return sum + (meta?.duration || 0);
-            }, 0);
-
-        const [ratioW, ratioH] = (globalAspectRatio || '9:16').split(':').map(Number);
-        const isPortrait = ratioH > ratioW;
-        const width = isPortrait ? 1080 : 1920;
-        const height = isPortrait ? 1920 : 1080;
-
-        const fallbackMeta = {
-          width,
-          height,
-          duration: totalDuration,
-          aspectRatio: ratioW / ratioH,
-          fileName: 'rendered_video.mp4',
-          size: renderedVideoBlob.size,
-          format: 'mp4',
-        };
-
-        console.log('[FocusScreen] Using fallback metadata:', fallbackMeta);
-        setWorkingVideo({ file: renderedVideoBlob, url, metadata: fallbackMeta });
-        workingVideoSet = true;
-      }
-    } else {
-      setIsLoadingWorkingVideo(true);
-      console.log('[FocusScreen] MVC flow: working video on server, signaling OverlayScreen to wait');
-      setWorkingVideo(null);
-
-      // T11970: refresh + playback URL run together and the panel opens as soon as the
-      // URL resolves. T8390: the preview needs a playable URL now, not just the refreshed
-      // working_video_id pointer (resolveWorkingVideoPreviewUrl degrades to no preview).
-      // T9285: setWorkingVideo(null) above stays as-is so OverlayScreen's real loader
-      // (OverlayScreen.jsx:487) runs on entry; the preview opens via focusCompletionStore.
-      // The sync-prefix guarantee (no frame between isExporting=false and this) holds
-      // because no save is awaited before it (T4020/T4400).
-      setOpeningHighlight(true);
-      try {
-        const opened = await loadAndOfferFocusCompletion({
-          projectId,
-          refreshProject,
-          resolvePreviewUrl: resolveWorkingVideoPreviewUrl,
-          openMode: EDITOR_MODES.FRAMING,
-          jobId: exportJobId,
-          openPreview,
-          recordFunnelEvent,
-        });
-        // The completion toast is suppressed while this project is open in Focus, so a
-        // missing preview URL must be announced here.
-        if (!opened) toast.error(FOCUS_PREVIEW.LOAD_FAILED);
-      } catch (err) {
-        console.error('[FocusScreen] Failed to open completion preview (continuing):', err);
-      }
-
-      workingVideoSet = true;
+    // T4490: Frame writes nothing to Spotlight's state. loadAndOfferFocusCompletion
+    // refreshes the project, so it carries the new working_video_id, and
+    // OverlayScreen loads that video itself (projectDataStore.loadWorkingVideo).
+    // T11970: refresh + playback URL run together and the panel opens as soon as the
+    // URL resolves. T8390: the preview needs a playable URL now, not just the refreshed
+    // working_video_id pointer (resolveWorkingVideoPreviewUrl degrades to no preview).
+    // The sync-prefix guarantee (no frame between isExporting=false and this) holds
+    // because no save is awaited before it (T4020/T4400).
+    setOpeningHighlight(true);
+    try {
+      const opened = await loadAndOfferFocusCompletion({
+        projectId,
+        refreshProject,
+        resolvePreviewUrl: resolveWorkingVideoPreviewUrl,
+        openMode: EDITOR_MODES.FRAMING,
+        jobId: exportJobId,
+        openPreview,
+        recordFunnelEvent,
+      });
+      // The completion toast is suppressed while this project is open in Focus, so a
+      // missing preview URL must be announced here.
+      if (!opened) toast.error(FOCUS_PREVIEW.LOAD_FAILED);
+    } catch (err) {
+      console.error('[FocusScreen] Failed to open completion preview (continuing):', err);
     }
 
     if (clipMetadata) {
@@ -1082,24 +1001,16 @@ export function FocusScreen({
     // left a window where deriveFramingCtaState still read the pre-refetch
     // clips (stale exported_at) and fell back to 'generate', flashing "Sharpen
     // my highlight" + a fresh credit estimate right after a successful render.
-    // A no-op for the renderedVideoBlob branch above, which never sets it true.
     setOpeningHighlight(false);
 
     if (onProceedToOverlay) {
       try {
-        await onProceedToOverlay(renderedVideoBlob, clipMetadata);
+        await onProceedToOverlay(null, clipMetadata);
       } catch (err) {
         console.warn('[FocusScreen] Parent onProceedToOverlay failed (continuing):', err);
       }
     }
-
-    // T9285: the preview-opening + achievement call moved into the renderedVideoBlob-
-    // less branch above (where previewUrl is actually resolved); this is now
-    // only the "neither branch produced a working video" failure log.
-    if (!workingVideoSet) {
-      console.error('[FocusScreen] Cannot offer overlay — working video not set');
-    }
-  }, [onProceedToOverlay, setWorkingVideo, setOverlayClipMetadata, setFramingChangedSinceExport, setEditorMode, clips, clipMetadataCache, globalAspectRatio, refreshProject, projectId, onExportComplete, setIsLoadingWorkingVideo, openPreview, fetchProjectClips]);
+  }, [onProceedToOverlay, setOverlayClipMetadata, setFramingChangedSinceExport, refreshProject, projectId, onExportComplete, openPreview, fetchProjectClips]);
 
   // T9790: acknowledge the completed framing job on the decision gesture. The
   // live completion path (offerFocusCompletionPreview) deliberately does NOT

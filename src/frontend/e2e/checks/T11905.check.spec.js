@@ -37,6 +37,9 @@ const describeRun = (r) => `${r.file} --grep '${r.grep}':\n` +
 
 test.describe('T11905 Spotlight draft helper', () => {
   test('T11905:C1 every spec that uses the Spotlight-draft helper executes its assertions; none is skipped for a missing button', async () => {
+    // T16580: several of these specs sign in with the dev fixture account or run dev-harness-only
+    // steps, and one needs a portrait draft, so on a deployed target the check can only fail.
+    test.skip(!!process.env.E2E_BASE_URL, '[T16580] runs specs that need dev-only fixtures (the dev fixture account, dev-harness steps, a portrait draft); a deployed target has none');
     test.setTimeout(20 * 60 * 1000);
     const runs = await runSpecTests(HELPER_SPECS);
     console.log(runs.map(describeRun).join('\n'));

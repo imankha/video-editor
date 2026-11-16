@@ -1,0 +1,6 @@
+{"criteria": {
+  "T2650:C1": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t2650_recap_encode_off_server.py -p no:cacheprovider -q -k 'dispatches or runs_no_server or modal_failure'"},
+  "T2650:C2": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t2650_recap_encode_off_server.py -p no:cacheprovider -q -k 'modal_encode_recap_function or import_surface or round_trip'"},
+  "T2650:C3": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t2650_recap_encode_off_server.py -p no:cacheprovider -q -k keepalive"},
+  "T2650:C4": {"kind": "human", "why": "encode_recap_modal must be deployed to the staging Modal app (owner-approved GPU-app redeploy); only then can a real share link on staging be seen to run the recap encode on Modal (Modal dashboard) instead of the Fly machine"}
+}}
