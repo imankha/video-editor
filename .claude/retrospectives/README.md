@@ -27,7 +27,7 @@ Skip for **Trivial** and **Simple** tasks unless something notable happened.
 .claude/retrospectives/T{id}-{short-name}.md
 ```
 
-Example: `T06-tracking-toggle.md`
+Example: `T{id}-{slug}.md`
 
 ---
 

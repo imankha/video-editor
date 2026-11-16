@@ -30,8 +30,8 @@ Before writing any code, categorize every file from the approved plan:
 | Category | Definition | Example |
 |----------|------------|---------|
 | **Foundation** | Files that other changed files import from (new utils, rewritten stores, new API endpoints) | `clipSelectors.js`, `projectDataStore.js` |
-| **Consumer** | Files that import from foundation files but NOT from each other | `FramingScreen.jsx`, `App.jsx` |
-| **Cleanup** | File deletions, index.js export updates, simple 1-line removals | `clipStore.js` (DELETE), `index.js` |
+| **Consumer** | Files that import from foundation files but NOT from each other | `FocusScreen.jsx`, `App.jsx` |
+| **Cleanup** | File deletions, index.js export updates, simple 1-line removals | `clipSelectors.js` (DELETE), `index.js` |
 | **Tests** | Test files that need mock/assertion updates | `*.test.js`, `*.test.jsx` |
 
 ### Step 2: Foundation Phase (Sequential)

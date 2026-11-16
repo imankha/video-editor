@@ -86,7 +86,7 @@ export function getEditorContext() {
       strokeWidth: overlay.strokeWidth,
       fillEnabled: overlay.fillEnabled,
       dimStrength: overlay.dimStrength,
-      isLoadingWorkingVideo: overlay.isLoadingWorkingVideo,
+      isLoadingWorkingVideo: projectData.workingVideo.status === 'loading',
     };
   }
 

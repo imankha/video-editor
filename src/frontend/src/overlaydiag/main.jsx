@@ -78,7 +78,7 @@ function OverlayDiagHarness() {
     editorMode: 'overlay', setSelectedLayer: () => {},
     effectiveOverlayVideoUrl: '/overlaydiag-sample.mp4',
     overlayClipMetadata: null, isLoadingWorkingVideo: false,
-    setOverlayClipMetadata: () => {}, setIsLoadingWorkingVideo: () => {},
+    setOverlayClipMetadata: () => {},
     dragHighlight: null, setDragHighlight: () => {},
     selectedHighlightKeyframeTime: null, setSelectedHighlightKeyframeTime: () => {},
     highlightEffectType: 'dark_overlay', setHighlightEffectType: () => {}, highlightColor: null,

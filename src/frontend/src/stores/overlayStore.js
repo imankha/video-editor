@@ -34,8 +34,6 @@ export const useOverlayStore = create((set) => ({
   posterSlowmoSection: null,    // [start, end] or null -- feeds the client-side default preview only
   posterUploadedFilename: null, // last-uploaded cover's stored basename, or null
 
-  isLoadingWorkingVideo: false,
-
   overlayChangedSinceExport: false,
 
   setEffectType: (type) => set({ effectType: type }),
@@ -52,8 +50,6 @@ export const useOverlayStore = create((set) => ({
   setPosterSlowmoSection: (s) => set({ posterSlowmoSection: s }),
   setPosterUploadedFilename: (f) => set({ posterUploadedFilename: f }),
 
-  setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
-
   setOverlayChangedSinceExport: (changed) => set({ overlayChangedSinceExport: changed }),
 
   reset: () => set({
@@ -67,14 +63,12 @@ export const useOverlayStore = create((set) => ({
     posterMarkerTime: null,
     posterSlowmoSection: null,
     posterUploadedFilename: null,
-    isLoadingWorkingVideo: false,
     overlayChangedSinceExport: false,
   }),
 }));
 
 export const useOverlayEffectType = () => useOverlayStore(state => state.effectType);
 export const useOverlayHighlightColor = () => useOverlayStore(state => state.highlightColor);
-export const useOverlayIsLoading = () => useOverlayStore(state => state.isLoadingWorkingVideo);
 export const useOverlayChangedSinceExport = () => useOverlayStore(state => state.overlayChangedSinceExport);
 export const useOverlayStrokeWidth = () => useOverlayStore(state => state.strokeWidth);
 export const useOverlayFillEnabled = () => useOverlayStore(state => state.fillEnabled);

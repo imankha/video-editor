@@ -49,7 +49,7 @@ says "set", never "saved"). Hidden while `previewActive`. Disabled while a crop 
 `CropOverlay` gained an `onDragStateChange(bool)` callback fired ONCE per gesture at pointer
 down(true)/up/cancel(false) — never per move (move path stays ref-based, no re-render) — which
 `FocusModeView` stores as `isCropDragging` (memory-only). Strings in `FOCUS_EDITOR`
-(`config/displayNames.js`). Coverage: `FocusModeView.setFocusPoint.test.jsx`,
+(`config/displayNames.js`). Coverage: `FocusModeView.setFocusPoint.test.jsx` (test since removed),
 `FramingActionRow.test.jsx` T11700 block, `CropOverlay.test.jsx` (unchanged drag tests still green).
 **T11710 — teach the drag:** `CropOverlay` renders the 0-focus-point coaching cues, derived from a
 single `showCoach = focusPointCount === 0 && !isDragging && !isPlaying && !chromeHidden` (no state,
@@ -69,7 +69,7 @@ rotate your phone for a larger video"); **its SUBTITLE flipped to "Everything he
 upright" now that T11740** (which removed the portrait horizontal overflow — the mode-tab row
 `mode-framing`/`mode-overlay` was the real offender, ~556px at 390; confirmed NOT caused by
 Epic A) **has merged**. Coverage:
-`CropOverlay.test.jsx` T11710 block, `CropLayer.test.jsx`, `FramingInstructions.test.jsx`,
+`CropOverlay.test.jsx` T11710 block, `CropLayer.test.jsx`, `FramingInstructions.test.jsx` (removed; `FramingInstructions` replaced by `FramingGuide.jsx`),
 `RotateNudge.test.jsx`, `ExportButtonView.test.jsx`. **T11720 — compact locked band on phones:**
 `ActionBand` gained `compactLocked` — below `sm` only (`sm:hidden` compact ~52px row: amber
 `FOCUS_HINTS.GENERATE_LOCKED_SHORT` caption + a disabled "Generate" pill `generate-locked-pill`),
@@ -85,7 +85,7 @@ via the clip-save write path (`POST /clips/raw/save` with `create_project`, `e2e
 annotateClips.js:createUnframedDraft` — the backend of the Annotate "Save clip" gesture, same
 `_create_auto_project_for_clip` mechanism that mints a 0-keyframe auto-project; the draft is deleted
 in `afterEach`, never left behind). `T8510-export-guard.qa.spec.js` (4 tests: compact band @390,
-disabled-caption @1440, tap-unlock @390/1440) and `e2e/T11700-frame-unlock.qa.spec.js` (locked +
+disabled-caption @1440, tap-unlock @390/1440) and `e2e/T11700-frame-unlock.qa.spec.js` (removed with the framing-guide rework) (locked +
 unlocked states across 390/768/1440, settings-drawer-over-band, T11720 AC1 timeline/Trim-reachability
 hit-test, scoped overflow audit) both create+open their own fresh unframed draft and run GREEN.
 `T4880-mobile-editor-reachable.spec.js` proves the portrait Set-focus-point control and the landscape
@@ -393,7 +393,7 @@ the segment/speed/trim timeline track collapses behind an "Advanced editing" dis
 default `true` so every existing caller/test stays byte-identical); defaults OPEN when the clip
 already has user splits/trim (`boundaries.length > 2 || trimRange`) so a returning user's edits are
 never hidden by default. **Slice 2 — "Use a wider frame" is a crop EDIT, not a stored
-preference/view toggle.** `utils/widenFraming.js`'s `wideFrameTarget` is a bounded
+preference/view toggle.** `utils/widenFraming.js`'s (removed T10310) `wideFrameTarget` is a bounded
 `WIDE_FRAME_SCALE = 2` scale of the DEFAULT crop size, clamped per-axis to `maxFitCrop` (kept only
 as the small-source safety net) — **not** literal max-fit, because a full max-fit crop (crop
 height == source height) leaves zero vertical framing freedom, so widening would collapse every
@@ -435,9 +435,9 @@ a transform sized for the small stage box onto a viewport no longer constrained 
 aspect (a reviewer finding fixed before the slice-3 commit). The approximation disclosure
 (`EDITOR_PANELS.PREVIEW_DISCLOSURE`/`PREVIEW_MULTI_CLIP_DISCLOSURE`) shows only while previewing.
 No GPU or real-browser environment was available in this task's container to run the R1 GPU-cost
-measurement or the design doc's real-browser QA spec (`e2e/T9950-framing-preview.qa.spec.js`,
+measurement or the design doc's real-browser QA spec (`e2e/T9950-framing-preview.qa.spec.js`, since removed,
 not written — both left for T10160 / a real dev-stack environment respectively, per the task's
-outcome record). Coverage: `widenFraming.test.js`, `useFramingHistory.test.js`,
+outcome record). Coverage: `widenFraming.test.js` (removed T10310), `useFramingHistory.test.js`,
 `outputPreviewTransform.test.js`, `FramingActionRow.test.jsx`,
 `FocusModeView.framingActionRow.test.jsx`, `FocusModeView.advancedEditing.test.jsx`,
 `CropOverlay.test.jsx` chromeHidden block.)
@@ -594,7 +594,7 @@ is consumed by `ExportButtonContainer` and `useProjectLoader`.
   left as a documented exception).
 - Coverage: Vitest `src/utils/effectiveDuration.test.js` (6s+3s@0.5x→9s, trim, live-over-saved
   precedence, DB-array format, fail-closed NaN) + real-browser
-  `e2e/T5780-framing-effective-duration.qa.spec.js` (live speed tick, trim drop, source-timeline
+  `e2e/T5780-framing-effective-duration.qa.spec.js` (removed T7770) (live speed tick, trim drop, source-timeline
   readout unchanged, responsive 375/desktop; asserts the chip against the segment track's OWN
   reported visual durations, so it's clip-duration-agnostic).
 
@@ -687,7 +687,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   FRAMING); publish stays gated ONLY on the stake (the T9740 stake-claim split is preserved as the
   SECOND double-fire guard). Errors (POST reject / 409 `export_in_flight` / WS error) clear the
   stake + toast + leave the user on Focus with the preview open; the 5-min `PUBLISH_INTENT_TIMEOUT_MS`
-  is a backstop only, not the primary error path. `scheduleExportWhenReady.js`
+  is a backstop only, not the primary error path. `scheduleExportWhenReady.js` (removed T10660)
   (`scheduleExportWhenReady` + `scheduleOverlayPublishExport`) and its tests are DELETED — do NOT
   reintroduce a shared-ref readiness poll; it existed only to reach a mounted overlay export button,
   a need the headless render removes. The duplication between `startOverlayPublishRender` and
@@ -714,14 +714,14 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   the crop box smoothly follow the `interpolateCropSpline` path between focus points BEFORE any paid
   render — there is no distinct "preview" state/render to build, and none should be added. T9610's
   contribution was PROMINENCE only: a `FramingInstructions` component
-  (`src/frontend/src/modes/focus/FramingInstructions.jsx`) mounted at the top of FocusModeView's
+  (`src/frontend/src/modes/focus/FramingInstructions.jsx`, since replaced by `FramingGuide.jsx`) mounted at the top of FocusModeView's
   editor column (non-fullscreen) — a 3-step visible sequence (move the box → step forward → move it
   again) that names the primitive with `EDITOR_PANELS.FOCUS_POINT` ("Focus point", NEVER "keyframe"
   in parent copy) and a "press play to preview … before you export" prompt. It shows expanded until
   the first framing success (2 non-`trim` keyframes), then collapses to the preview prompt;
   expand/collapse is EPHEMERAL view state (`guideOverride ?? focusPointCount < 2`, gesture override,
-  no useEffect — precedent T5641 straightenVisible). Coverage: `FramingInstructions.test.jsx`,
-  `FocusModeView.framingGuide.test.jsx`, `e2e/T9610-teach-framing.qa.spec.js`.
+  no useEffect — precedent T5641 straightenVisible). Coverage: `FramingInstructions.test.jsx` (removed),
+  `FocusModeView.framingGuide.test.jsx`, `e2e/T9610-teach-framing.qa.spec.js` (both removed with the framing-guide rework).
   **T9950 (2026-09-15) extended this to an OUTPUT-ASPECT view of the same playback**, not a second
   mechanism: `FocusModeView`'s `previewing` toggle re-frames the SAME `<video>` via a
   `contentTransform` on `VideoPlayer`'s existing inner transform node (the algebraic inverse of
@@ -783,7 +783,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   B → `overlay-data` fetched by two owners (HAR: x3 = A StrictMode-doubled + B once; `outdated-clips`
   x2 is its single owner's StrictMode double, one caller `OverlayScreen.jsx:183`, prod=1). **Fix =
   delete the `setClipMetadata` store seed in `useProjectLoader.js`** (the local `buildClipMetadata`
-  value is kept for the return payload + `onWorkingVideoLoaded`). Now: genuine fresh export → Effect A
+  value is kept for the return payload; its onWorkingVideoLoaded callback was removed in T4490). Now: genuine fresh export → Effect A
   owns (B's `!clipMetadata` guard blocks it); every plain open / Framing→Overlay nav / direct
   Drafts→Overlay → Effect B owns (its `duration` comes from the working video `loadProject` sets before
   OverlayScreen mounts). Same "one owner per entry gesture" rule as T6190's clips fetch. Do NOT collapse
@@ -1440,7 +1440,7 @@ keyframed** — camera tilt is constant for a recording.
   since the box now == video aspect, the display rect fills the container (no letterbox math to
   drift). Fullscreen/`mobileFs` branches are byte-identical (aspect box + `fitToAspect` gated off;
   CSS `:fullscreen` still forces 100vw/100vh). Desktop `lg+` puts the Overlay Settings card
-  (extracted to `components/OverlaySettingsCard.jsx` from `ExportButtonView`) BESIDE the video in
+  (extracted to `components/OverlaySettingsCard.jsx` (removed T9270) from `ExportButtonView`) BESIDE the video in
   a `lg:flex-row` row (reclaimed pillarbox width); the "Add Spotlight" CTA + progress stay
   full-width at the bottom; Controls bind to the video width (below the box, inside the
   `lg:w-fit` video column). `ExportButtonView`'s settings card is now framing-only. Real-browser
@@ -1736,7 +1736,7 @@ a no-op.
 Below lg (e.g. 768px), the box is `w-full max-w-full` with the aspect-ratio style still
 applied — width-bound, not height-bound, so height is DERIVED from width via aspect-ratio
 rather than pinned to 70vh. Settings card extracted from `ExportButtonView` into a new
-presentational component `OverlaySettingsCard.jsx` (all props, no store/hook logic).
+presentational component `OverlaySettingsCard.jsx` (removed T9270) (all props, no store/hook logic).
 
 - **Implementation files**:
   - `src/frontend/src/components/VideoPlayer.jsx`: added `fitToAspect` boolean prop; when
@@ -1746,7 +1746,7 @@ presentational component `OverlaySettingsCard.jsx` (all props, no store/hook log
     `stageBoxStyle` (the aspect-ratio CSS + lg:70vh cap) and the A1 flex-row/stack layout;
     passes `fitToAspect={useAspectStage}` to `VideoPlayer` and renders `OverlaySettingsCard`
     beside it on lg+.
-  - `src/frontend/src/components/OverlaySettingsCard.jsx` (new): presentational card with
+  - `src/frontend/src/components/OverlaySettingsCard.jsx` (new; removed T9270): presentational card with
     color, shape, stroke, fill, dim, effect controls.
   - `src/frontend/src/components/ExportButtonView.jsx`: removed settings card (moved to
     `OverlayModeView` for the beside-video placement).

@@ -12,7 +12,8 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
-import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
+import { useFullscreenToggle } from '../hooks/useFullscreenToggle';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
@@ -39,8 +40,7 @@ import { allowEnterFraming } from '../utils/reelReEditable';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
-import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, ERROR_COPY, SPOTLIGHT_COPY } from '../config/displayNames';
-import { userErrorMessage } from '../utils/userError';
+import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, SPOTLIGHT_COPY } from '../config/displayNames';
 
 // T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Finish card.
 const OVERLAY_READY_GUIDE = resolveGuide({ screen: 'overlay', job: { status: 'ready' }, local: {} });
@@ -87,28 +87,28 @@ const DEFAULT_TEXT_SPEC = {
 };
 
 // Pure, unit-testable derivation of Overlay's effective video source (T9150).
-// A `workingVideo` record is only USABLE when it carries BOTH a url and metadata --
-// pairing one video's url with a different video's metadata (e.g. the reel's URL with
-// the source clip's landscape dimensions) is the T9100 bug class: a banned silent
-// fallback for internal data that poisons the video->screen transform and, via
-// effectiveOverlayMetadata feeding the stage box's aspect ratio, can starve the
-// settings panel to 0px width. Exported for the regression test; not used outside
-// this file.
+// `workingVideo` is projectDataStore's T4490 slice ({status, videoId, video, error}).
+// Only a 'ready' slice for THIS project's working_video_id is usable; its `video`
+// always carries url + metadata together (pairing one video's url with another's
+// metadata is the T9100 bug class). While the project has a working video that is
+// not ready (loading or failed), wait (null source) instead of falling back to the
+// framing clip. Exported for the regression test; not used outside this file.
 export function deriveOverlayVideoSource({
   workingVideo,
-  projectWorkingVideoUrl,
-  isLoadingWorkingVideo,
+  projectWorkingVideoId,
   framingVideoUrl,
   framingMetadata,
 }) {
-  const workingVideoUsable = !!(workingVideo?.url && workingVideo?.metadata);
-  const shouldWait = !workingVideoUsable && !!(projectWorkingVideoUrl || isLoadingWorkingVideo);
+  const forThisVideo = !!projectWorkingVideoId && workingVideo.videoId === projectWorkingVideoId;
+  const workingVideoUsable = forThisVideo && workingVideo.status === 'ready';
+  const shouldWait = !!projectWorkingVideoId && !workingVideoUsable;
+  const video = workingVideoUsable ? workingVideo.video : null;
   return {
     workingVideoUsable,
     shouldWaitForWorkingVideo: shouldWait,
-    effectiveOverlayVideoUrl: workingVideoUsable ? workingVideo.url : (shouldWait ? null : framingVideoUrl),
-    effectiveOverlayMetadata: workingVideoUsable ? workingVideo.metadata : (shouldWait ? null : framingMetadata),
-    effectiveOverlayFile: workingVideoUsable ? workingVideo.file : null,
+    effectiveOverlayVideoUrl: video ? video.url : (shouldWait ? null : framingVideoUrl),
+    effectiveOverlayMetadata: video ? video.metadata : (shouldWait ? null : framingMetadata),
+    effectiveOverlayFile: video ? video.file : null,
   };
 }
 
@@ -126,7 +126,7 @@ export function OverlayScreen({
 
   // Project data store - canonical owner for working video and clip metadata
   const workingVideo = useProjectDataStore(state => state.workingVideo);
-  const setWorkingVideo = useProjectDataStore(state => state.setWorkingVideo);
+  const loadWorkingVideo = useProjectDataStore(state => state.loadWorkingVideo);
   const overlayClipMetadata = useProjectDataStore(state => state.clipMetadata);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
   const clips = useProjectDataStore(state => state.clips);
@@ -137,10 +137,8 @@ export function OverlayScreen({
   const {
     effectType: highlightEffectType,
     highlightColor,
-    isLoadingWorkingVideo,
     setEffectType: setHighlightEffectType,
     setHighlightColor,
-    setIsLoadingWorkingVideo,
     setOverlayChangedSinceExport,
     highlightShape,
     strokeWidth,
@@ -238,7 +236,7 @@ export function OverlayScreen({
   // T740: Check if framing is outdated (boundaries changed since last export)
   const [framingOutdated, setFramingOutdated] = useState(false);
   useEffect(() => {
-    if (!projectId || !workingVideo?.url) return;
+    if (!projectId || !workingVideo.video?.url) return;
     const checkOutdated = async () => {
       try {
         const response = await apiFetch(`${API_BASE}/api/projects/${projectId}/outdated-clips`);
@@ -250,7 +248,7 @@ export function OverlayScreen({
       }
     };
     checkOutdated();
-  }, [projectId, workingVideo?.url]);
+  }, [projectId, workingVideo.video?.url]);
 
   // Local state
   const [selectedLayer, setSelectedLayer] = useState('playhead');
@@ -259,7 +257,7 @@ export function OverlayScreen({
   // which persists. A layer-level view toggle, like showPlayerBoxes -- not a
   // gesture-persisted datum, so it is intentionally not written to the backend.
   const [textLayerHidden, setTextLayerHidden] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const { isFullscreen, toggleFullscreen: handleToggleFullscreen } = useFullscreenToggle();
   const internalExportButtonRef = useRef(null);
   const exportButtonRef = externalExportButtonRef || internalExportButtonRef;
 
@@ -273,15 +271,6 @@ export function OverlayScreen({
   const { publish: publishProject, isPublishing } = usePublishProject({ id: projectId });
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
-  const workingVideoFetchIdRef = useRef(null); // Track which working_video_id we've started fetching
-  const workingVideoRecoveryAttemptedRef = useRef(false); // Guard against infinite refresh loops
-  const workingVideoAttemptsRef = useRef(0); // Count metadata-load attempts for the current URL
-  const MAX_WORKING_VIDEO_ATTEMPTS = 2;
-  const [workingVideoLoadError, setWorkingVideoLoadError] = useState(null);
-  // T5440: distinguishes a hard 404 (asset genuinely gone — re-export, no retry)
-  // from a transient load error (retry offered). Drives the "video unavailable"
-  // state and suppresses the misleading "Retry Loading Video" button.
-  const [workingVideoMissing, setWorkingVideoMissing] = useState(false);
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -296,50 +285,35 @@ export function OverlayScreen({
   const framingVideoUrl = firstClipId != null ? getClipFileUrl(firstClipId, projectId) : undefined;
   const framingMetadata = firstClipId != null ? clipMetadataCache[firstClipId] : undefined;
 
-  // See deriveOverlayVideoSource (top of file) for why the url/metadata pairing must
-  // be atomic -- a half-populated workingVideo record is the T9100 bug class.
+  // See deriveOverlayVideoSource (top of file): the T4490 slice is the only
+  // working-video state; a 'ready' slice always carries url + metadata together.
   const {
-    workingVideoUsable,
     shouldWaitForWorkingVideo,
     effectiveOverlayVideoUrl,
     effectiveOverlayMetadata,
     effectiveOverlayFile,
   } = deriveOverlayVideoSource({
     workingVideo,
-    projectWorkingVideoUrl: project?.working_video_url,
-    isLoadingWorkingVideo,
+    projectWorkingVideoId: project?.working_video_id,
     framingVideoUrl,
     framingMetadata,
   });
-  // Runs in an effect (not the render body) so a persistent half-record logs once
-  // per occurrence instead of once per render (OverlayScreen re-renders on every
-  // currentTime tick) -- a log, not a persisted write, so an effect is fine here.
-  useEffect(() => {
-    if (workingVideo && !workingVideoUsable) {
-      console.error('[OverlayScreen] Half-populated workingVideo record - refusing it', {
-        hasUrl: !!workingVideo.url,
-        hasMetadata: !!workingVideo.metadata,
-      });
-    }
-  }, [workingVideo, workingVideoUsable]);
 
   // Diagnostic: log video source state on every render where something interesting happens
   useEffect(() => {
     // Gate on project: before project data loads, having no video source is
     // the normal mount state, not an anomaly worth warning about.
-    if (project && !effectiveOverlayVideoUrl && !isLoadingWorkingVideo && !shouldWaitForWorkingVideo) {
+    if (project && !effectiveOverlayVideoUrl && !shouldWaitForWorkingVideo) {
       console.warn('[OverlayScreen] No video source available', {
-        workingVideo: !!workingVideo,
-        workingVideoUrl: workingVideo?.url?.substring(0, 50),
-        projectWorkingVideoUrl: project?.working_video_url?.substring(0, 50),
+        workingVideoStatus: workingVideo.status,
+        workingVideoId: workingVideo.videoId,
         projectWorkingVideoId: project?.working_video_id,
-        isLoadingWorkingVideo,
         shouldWaitForWorkingVideo,
         framingVideoUrl: framingVideoUrl?.substring(0, 50),
         clipsCount: clips?.length,
       });
     }
-  }, [effectiveOverlayVideoUrl, workingVideo, project, isLoadingWorkingVideo, shouldWaitForWorkingVideo, framingVideoUrl, clips?.length]);
+  }, [effectiveOverlayVideoUrl, workingVideo, project, shouldWaitForWorkingVideo, framingVideoUrl, clips?.length]);
 
   // =========================================
   // VIDEO HOOK - Without segment awareness for overlay mode
@@ -365,6 +339,8 @@ export function OverlayScreen({
     seek,
     stepForward,
     stepBackward,
+    seekForward,
+    seekBackward,
     restart,
     clearError,
     isUrlExpiredError,
@@ -403,7 +379,7 @@ export function OverlayScreen({
       } else if (error) {
         needs.video = true;
         trace.failed('video', error);
-      } else if (project && !isLoadingWorkingVideo && !shouldWaitForWorkingVideo) {
+      } else if (project && !shouldWaitForWorkingVideo) {
         needs.video = true;
         trace.empty('video');
       }
@@ -417,7 +393,7 @@ export function OverlayScreen({
     if (needs.video && needs.overlayData) {
       trace.settled();
     }
-  }, [projectId, effectiveOverlayVideoUrl, error, project, isLoadingWorkingVideo, shouldWaitForWorkingVideo, overlayLoadedProjectId, overlaySyncState]);
+  }, [projectId, effectiveOverlayVideoUrl, error, project, shouldWaitForWorkingVideo, overlayLoadedProjectId, overlaySyncState]);
 
   // =========================================
   // HIGHLIGHT REGIONS HOOK - OWNED BY THIS SCREEN
@@ -568,114 +544,14 @@ export function OverlayScreen({
   // INITIALIZATION - Load working video if needed
   // =========================================
 
+  // T4490: projectDataStore.loadWorkingVideo owns the load (dedup on
+  // working_video_id, bounded retry, stale results dropped). A read, not a write.
+  // A new render changes working_video_id (Frame's completion refreshes the
+  // project), which is what triggers a fresh load; nothing is handed over.
+  const projectWorkingVideoId = project?.working_video_id;
   useEffect(() => {
-    // If no working video in store but project has a working video, use the proxy URL (streaming).
-    // T1670: Guard on working_video_id (not URL) because the proxy URL is stable across exports
-    // (/api/projects/{id}/working_video/stream never changes). The ID changes per export,
-    // so a new export triggers a fresh load even though the URL is the same.
-    if (!workingVideoUsable && project?.working_video_url && workingVideoFetchIdRef.current !== project.working_video_id) {
-      workingVideoFetchIdRef.current = project.working_video_id;
-      workingVideoRecoveryAttemptedRef.current = false; // Reset recovery guard
-      workingVideoAttemptsRef.current = 0;
-      setWorkingVideoLoadError(null);
-      setWorkingVideoMissing(false);
-      setIsLoadingWorkingVideo(true);
-
-      const attemptLoad = async () => {
-        workingVideoAttemptsRef.current += 1;
-        const attempt = workingVideoAttemptsRef.current;
-        try {
-          // T5642: load the working video via a presigned R2 URL, NOT the
-          // same-origin `/working_video/stream` proxy. On staging/prod the
-          // frontend is cross-origin to the API (pages.dev -> fly.dev) and the
-          // overlay <video> element carries no crossOrigin attribute, so its
-          // cross-origin range requests to the proxy arrive without the session
-          // cookie -> 401 -> Chrome "Format error". The presigned R2 URL is a
-          // different, anonymous origin (no cookie needed), mirroring how Framing
-          // already loads clips (clips.py get_clip_playback_url).
-          const presignResp = await apiFetch(
-            `${API_BASE}/api/projects/${projectId}/working_video/playback-url`
-          );
-          if (!presignResp.ok) {
-            // A hard 404 means the working video's R2 object / DB ref is gone —
-            // surface the same "re-export" state videoMetadata raises for 404s.
-            if (presignResp.status === 404) {
-              throw new VideoAssetMissingError(
-                `${API_BASE}/api/projects/${projectId}/working_video/playback-url`,
-                404
-              );
-            }
-            throw new Error(`playback-url fetch returned ${presignResp.status}`);
-          }
-          const { url: workingVideoUrl } = await presignResp.json();
-          if (!workingVideoUrl) {
-            throw new Error('playback-url response missing url');
-          }
-          console.log(`[OverlayScreen] Loading working video (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}) via presigned URL:`, workingVideoUrl.substring(0, 80));
-          const meta = await extractVideoMetadataFromUrl(workingVideoUrl, 'working_video.mp4');
-          console.log('[OverlayScreen] Extracted metadata from presigned URL:', meta);
-          setWorkingVideo({ file: null, url: workingVideoUrl, metadata: meta });
-          setIsLoadingWorkingVideo(false);
-        } catch (err) {
-          // T5440: a hard 404 means the working video's R2 object is gone (dangling
-          // DB ref / prune) — retrying cannot recover it. Show a single "re-export"
-          // state, do NOT run the transient retry (no attempt-2, no probe storm).
-          if (err instanceof VideoAssetMissingError) {
-            console.warn(`[OverlayScreen] Working video no longer available (HTTP ${err.status}) — re-export to rebuild.`, {
-              projectId,
-              workingVideoId: project?.working_video_id,
-            });
-            setWorkingVideoMissing(true);
-            setWorkingVideoLoadError('This highlight’s video is no longer available. Re-generate to rebuild it.');
-            setIsLoadingWorkingVideo(false);
-            return;
-          }
-          console.error(`[OverlayScreen] Working video load failed (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, err.message, {
-            projectId,
-            workingVideoId: project?.working_video_id,
-          });
-          if (attempt < MAX_WORKING_VIDEO_ATTEMPTS) {
-            attemptLoad();
-          } else {
-            // Exhausted attempts — surface failure to the user.
-            // Leave workingVideoFetchIdRef set so this effect does not re-fire
-            // for the same working_video_id; user must click retry to clear + re-attempt.
-            setWorkingVideoLoadError(userErrorMessage(err, ERROR_COPY.LOAD_VIDEO));
-            setIsLoadingWorkingVideo(false);
-          }
-        }
-      };
-      attemptLoad();
-    } else if (!workingVideoUsable && !project?.working_video_url && isLoadingWorkingVideo) {
-      // Stuck state: isLoadingWorkingVideo was set externally (by FocusScreen) but
-      // project data doesn't include working_video_url. This happens when React renders
-      // OverlayScreen before the refreshed project data has propagated.
-      // Recovery: refresh project once to get the URL. If still missing, clear the flag.
-      // We handle both outcomes inline because when the project has no working video,
-      // the effect deps (project?.working_video_url, working_video_id) stay null
-      // and the effect would never re-run to reach the else branch.
-      if (!workingVideoRecoveryAttemptedRef.current) {
-        workingVideoRecoveryAttemptedRef.current = true;
-        console.log('[OverlayScreen] isLoadingWorkingVideo=true but no URL — refreshing project to get presigned URL');
-        refreshProject().then((freshProject) => {
-          if (!freshProject?.working_video_url) {
-            console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
-            setIsLoadingWorkingVideo(false);
-          }
-        });
-      } else {
-        console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
-        setIsLoadingWorkingVideo(false);
-      }
-    } else if (project && !workingVideoUsable && !project.working_video_url && !isLoadingWorkingVideo) {
-      // Project loaded but has no working video URL at all — log why.
-      // (Before project data loads, this state is normal — stay quiet.)
-      console.warn('[OverlayScreen] No working video URL in project data', {
-        projectId,
-        workingVideoId: project.working_video_id,
-      });
-    }
-  }, [workingVideo, workingVideoUsable, project, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo, refreshProject]);
+    if (projectId && projectWorkingVideoId) loadWorkingVideo(projectId, projectWorkingVideoId);
+  }, [projectId, projectWorkingVideoId, loadWorkingVideo]);
 
   // Load video into useVideo hook when effectiveOverlayVideoUrl is available
   // Uses a ref to track the source URL to prevent infinite loops (blob URLs are always unique)
@@ -701,15 +577,16 @@ export function OverlayScreen({
 
   // T6630: the video element reaching "has playable data" for the current src
   // is the authoritative signal that loading actually worked right now. If a
-  // working-video load attempt failed earlier (or a fallback URL took a retry
-  // to land) but the player is now showing frames, `workingVideoLoadError`
-  // must not keep the "failed to load" banner up over a working video.
-  useEffect(() => {
-    if (!isVideoElementLoading && videoUrl && (workingVideoLoadError || workingVideoMissing)) {
-      setWorkingVideoLoadError(null);
-      setWorkingVideoMissing(false);
-    }
-  }, [isVideoElementLoading, videoUrl, workingVideoLoadError, workingVideoMissing]);
+  // working-video load failed earlier (or a fallback URL took a retry to land)
+  // but the player is now showing frames, the "failed to load" banner must not
+  // stay up over a working video.
+  // T5440: 'missing' (hard 404, asset gone: re-export, no retry) is distinct from
+  // 'error' (retry offered).
+  const playerShowingFrames = !isVideoElementLoading && !!videoUrl;
+  const workingVideoFailed = !!projectWorkingVideoId && workingVideo.videoId === projectWorkingVideoId
+    && (workingVideo.status === 'error' || workingVideo.status === 'missing') && !playerShowingFrames;
+  const workingVideoLoadError = workingVideoFailed ? workingVideo.error : null;
+  const workingVideoMissing = workingVideoFailed && workingVideo.status === 'missing';
 
   // Initialize highlight regions when duration available
   useEffect(() => {
@@ -718,6 +595,62 @@ export function OverlayScreen({
       initializeHighlightRegions(highlightDuration);
     }
   }, [effectiveOverlayMetadata?.duration, duration, initializeHighlightRegions]);
+
+  // T4480: the ONE place loaded overlay-data reaches the editor. Both load triggers
+  // below (fresh export, plain open) call it, so a new Spotlight setting is wired
+  // once and can never go missing from one of the two cases. Read-only hydration
+  // (T5225 design 5.1): callers run it while overlaySyncState is still 'loading',
+  // so canSyncActions is false and none of these local sets can fire a surgical POST.
+  // `resetRegions` (fresh export only) clears regions left over from before the
+  // render; it sits in the saved-regions branch because reset() also nulls the
+  // region duration that the default-region addHighlightRegion(0) needs.
+  const applyOverlayData = useCallback((data, regionDuration, { resetRegions = false } = {}) => {
+    // T4330: seed the action client's version tracker from this load,
+    // BEFORE any overlay action can fire -- otherwise a tab's first-ever
+    // edit always omits expected_version and skips the 409 conflict check.
+    overlayActions.seedProjectVersion(projectId, data.version);
+
+    // Hold the flat video-level detection payload (T5600) so addRegion can
+    // slice instant tracking squares for newly created regions.
+    // T5646: this survives resetHighlightRegions() -- reset() no longer nulls the
+    // video-level payload (it clears only per-region state).
+    setHighlightVideoDetections(data.detections_data || null);
+    setHighlightCarryNote(data.highlight_carry_note || null);  // T4350
+
+    if (data.has_data && data.highlights_data?.length > 0) {
+      if (resetRegions) resetHighlightRegions();
+      restoreHighlightRegions(data.highlights_data, regionDuration);
+      console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions, duration:', regionDuration);
+    } else {
+      // No saved regions - create default for first 2 seconds
+      console.log('[OverlayScreen] No saved highlight regions - creating default');
+      addHighlightRegion(0);
+    }
+
+    if (data.effect_type) setHighlightEffectType(data.effect_type);
+    if (data.highlight_color) setHighlightColor(data.highlight_color);
+    if (data.highlight_shape) setHighlightShape(data.highlight_shape);
+    if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
+    if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
+    if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
+    if (data.dim_strength != null) setDimStrength(data.dim_strength);
+    // T5410: read-only restore of the pre-export poster marker + the
+    // slow-mo section (feeds the client-side default-preview midpoint).
+    setPosterMarkerTime(data.poster_marker_time ?? null);
+    setPosterSlowmoSection(data.poster_slowmo_section ?? null);
+    // T6380: hydrate the uploaded-cover state from poster_source so a
+    // reload restores "Custom image in use" when the served cover is an upload.
+    setPosterUploadedFilename(
+      data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
+    );
+
+    // T5225: restore text blocks.
+    restoreTextOverlays(data.text_overlays || [], regionDuration);
+
+    setOverlayLoadedProjectId(projectId);
+    setOverlaySyncState('ready');
+    setOverlayChangedSinceExport(false);
+  }, [projectId, setHighlightVideoDetections, setHighlightCarryNote, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setPosterMarkerTime, setPosterSlowmoSection, setPosterUploadedFilename, restoreTextOverlays, setOverlayLoadedProjectId, setOverlaySyncState, setOverlayChangedSinceExport]);
 
   // Handle fresh export transition - load highlight regions from backend
   // The backend now creates regions with player detection data during export
@@ -745,79 +678,13 @@ export function OverlayScreen({
           if (!response.ok) throw new Error(`overlay-data HTTP ${response.status}`);
           const data = await response.json();
 
-          // T4330: seed the action client's version tracker from this load,
-          // BEFORE any overlay action can fire -- otherwise a tab's first-ever
-          // edit always omits expected_version and skips the 409 conflict check.
-          overlayActions.seedProjectVersion(projectId, data.version);
-
-          // Hold the flat video-level detection payload (T5600) so addRegion can
-          // slice instant tracking squares for newly created regions.
-          // T5646: this survives the resetHighlightRegions() below — reset() no
-          // longer nulls the video-level payload (it clears only per-region state),
-          // so the ordering here is safe and a later delete->re-add still slices
-          // detections. (reset() also nulls `duration`, so it cannot be hoisted
-          // above the else-branch addHighlightRegion(0), which needs duration set.)
-          setHighlightVideoDetections(data.detections_data || null);
-          setHighlightCarryNote(data.highlight_carry_note || null);  // T4350
-
           // Use video_duration from backend, fall back to video metadata or region end times
           const videoDuration = data.video_duration
             || effectiveOverlayMetadata?.duration
             || Math.max(...(data.highlights_data || []).map(r => r.end_time || 0), 0)
             || 0;
 
-          if (data.has_data && data.highlights_data?.length > 0) {
-            // Reset existing regions first
-            resetHighlightRegions();
-
-            restoreHighlightRegions(data.highlights_data, videoDuration);
-            console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions with detection data, duration:', videoDuration);
-
-            // Check if detection data was loaded
-            const hasDetections = data.highlights_data.some(r => r.detections?.some(d => d.boxes?.length > 0));
-            if (hasDetections) {
-              console.log('[OverlayScreen] Detection data loaded - green bar should appear');
-            } else {
-              console.log('[OverlayScreen] No detection boxes in highlight regions (detection may have found no players)');
-            }
-          } else {
-            // Fallback: create default region if backend has no data
-            console.log('[OverlayScreen] No saved highlight regions - creating default');
-            addHighlightRegion(0);
-          }
-
-          if (data.effect_type) {
-            setHighlightEffectType(data.effect_type);
-          }
-          if (data.highlight_color) {
-            setHighlightColor(data.highlight_color);
-          }
-          if (data.highlight_shape) setHighlightShape(data.highlight_shape);
-          if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
-          if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
-          if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
-          if (data.dim_strength != null) setDimStrength(data.dim_strength);
-          // T5410: read-only restore of the pre-export poster marker + the
-          // slow-mo section (feeds the client-side default-preview midpoint).
-          setPosterMarkerTime(data.poster_marker_time ?? null);
-          setPosterSlowmoSection(data.poster_slowmo_section ?? null);
-          // T6380: hydrate the uploaded-cover state from poster_source so a
-          // reload restores "Custom image in use" when the served cover is an
-          // upload (bug 2 -- this was previously hardcoded null and only ever
-          // set from the upload response, so the state was session-local).
-          setPosterUploadedFilename(
-            data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
-          );
-
-          // T5225: restore text blocks. Read-only hydration
-          // (design §5.1) -- no write-back; runs while overlaySyncState is
-          // still 'loading' (set above), so canSyncActions is false and none
-          // of these local sets can fire a surgical POST.
-          restoreTextOverlays(data.text_overlays || [], videoDuration);
-
-          setOverlayLoadedProjectId(projectId);
-          setOverlaySyncState('ready');
-          setOverlayChangedSinceExport(false);
+          applyOverlayData(data, videoDuration, { resetRegions: true });
         } catch (err) {
           // T16480: never stand a default circle in for the saved spotlights.
           // 'error' keeps canSyncActions false and the editor unmounted until Retry.
@@ -827,7 +694,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setHighlightVideoDetections, setHighlightCarryNote, restoreTextOverlays]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, applyOverlayData, setOverlaySyncState, setOverlayLoadedProjectId]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -869,52 +736,7 @@ export function OverlayScreen({
           // T16480: a server error is a failed load, never "nothing saved".
           if (!response.ok) throw new Error(`overlay-data HTTP ${response.status}`);
           const data = await response.json();
-
-          // T4330: seed the action client's version tracker from this load,
-          // BEFORE any overlay action can fire -- otherwise a tab's first-ever
-          // edit always omits expected_version and skips the 409 conflict check.
-          overlayActions.seedProjectVersion(projectId, data.version);
-
-          // Hold the flat video-level detection payload (T5600) so addRegion can
-          // slice instant tracking squares for newly created regions.
-          setHighlightVideoDetections(data.detections_data || null);
-          setHighlightCarryNote(data.highlight_carry_note || null);  // T4350
-
-          if (data.has_data && data.highlights_data?.length > 0) {
-            restoreHighlightRegions(data.highlights_data, effectiveDuration);
-            console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions');
-          } else {
-            // No saved regions - create default for first 2 seconds
-            console.log('[OverlayScreen] No saved highlight regions - creating default');
-            addHighlightRegion(0);
-          }
-          if (data.effect_type) {
-            setHighlightEffectType(data.effect_type);
-          }
-          if (data.highlight_color) {
-            setHighlightColor(data.highlight_color);
-          }
-          if (data.highlight_shape) setHighlightShape(data.highlight_shape);
-          if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
-          if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
-          if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
-          if (data.dim_strength != null) setDimStrength(data.dim_strength);
-          // T5410: read-only restore of the pre-export poster marker + the
-          // slow-mo section (feeds the client-side default-preview midpoint).
-          setPosterMarkerTime(data.poster_marker_time ?? null);
-          setPosterSlowmoSection(data.poster_slowmo_section ?? null);
-          // T6380: hydrate the uploaded-cover state from poster_source (bug 2).
-          setPosterUploadedFilename(
-            data.poster_source === 'upload' ? (data.poster_filename ?? null) : null
-          );
-
-          // T5225: restore text blocks (read-only, see the
-          // fresh-export effect above for the write-back-safety rationale).
-          restoreTextOverlays(data.text_overlays || [], effectiveDuration);
-
-          setOverlayLoadedProjectId(projectId);
-          setOverlaySyncState('ready');
-          setOverlayChangedSinceExport(false);
+          applyOverlayData(data, effectiveDuration);
         } catch (err) {
           // T16480: see the fresh-export loader's catch above.
           console.error('[OverlayScreen] Failed to load overlay data:', err);
@@ -923,7 +745,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections, setHighlightCarryNote, restoreTextOverlays]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, overlayClipMetadata, applyOverlayData, setOverlaySyncState, setOverlayLoadedProjectId]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)
@@ -1445,9 +1267,8 @@ export function OverlayScreen({
     setSelectedLayer,
     effectiveOverlayVideoUrl,
     overlayClipMetadata,
-    isLoadingWorkingVideo,
+    isLoadingWorkingVideo: shouldWaitForWorkingVideo,
     setOverlayClipMetadata,
-    setIsLoadingWorkingVideo,
     dragHighlight,
     setDragHighlight,
     selectedHighlightKeyframeTime,
@@ -1512,69 +1333,25 @@ export function OverlayScreen({
   // KEYBOARD SHORTCUTS
   // =========================================
 
-  const isTextEditing = inlineEditingElementId != null;
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      // T6980: suppress overlay shortcuts entirely while inline text-editing so
-      // Space/arrows land in the editor field, not the playhead. The tagName
-      // guard below already covers the focused <input>, but the explicit flag is
-      // the robust fix (same rationale as useKeyboardShortcuts' isTextEditing).
-      if (isTextEditing) return;
-
-      // Don't handle if typing in an input or textarea
-      const tagName = event.target?.tagName?.toLowerCase();
-      if (tagName === 'input' || tagName === 'textarea') {
-        return;
-      }
-
-      // Space bar: Toggle play/pause
-      if (event.code === 'Space' && effectiveOverlayVideoUrl) {
-        event.preventDefault();
-        togglePlay();
-        return;
-      }
-
-      // Arrow keys: Step forward/backward
-      if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
-        if (!effectiveOverlayVideoUrl) return;
-        // Don't handle if modifier keys are pressed
-        if (event.ctrlKey || event.metaKey || event.altKey) return;
-
-        event.preventDefault();
-        if (event.code === 'ArrowLeft') {
-          stepBackward();
-        } else {
-          stepForward();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [effectiveOverlayVideoUrl, togglePlay, stepForward, stepBackward, isTextEditing]);
+  // T4570: the same handler as Frame (arrow = one frame, Shift+arrow = 4s).
+  useKeyboardShortcuts({
+    hasVideo: Boolean(effectiveOverlayVideoUrl),
+    togglePlay,
+    stepForward,
+    stepBackward,
+    seekForward,
+    seekBackward,
+    seek,
+    // T6980: Space/arrows stay in the inline text editor while typing.
+    isTextEditing: inlineEditingElementId != null,
+  });
 
   // =========================================
   // FULLSCREEN HANDLER
   // =========================================
 
-  const handleToggleFullscreen = useCallback(() => {
-    setIsFullscreen(prev => !prev);
-  }, []);
-
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, isFullscreen);
-
-  // Escape key to exit fullscreen
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        setIsFullscreen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen]);
 
   // =========================================
   // HANDLERS
@@ -1594,7 +1371,7 @@ export function OverlayScreen({
       // Extract actual filename from current working video URL (format: working_64_abc123.mp4)
       // The URL might be a presigned R2 URL or a local API URL
       let filename = null;
-      const currentUrl = workingVideo?.url || project?.working_video_url;
+      const currentUrl = workingVideo.video?.url || project?.working_video_url;
       if (currentUrl) {
         // Try to extract filename from URL path (before query params)
         const urlPath = currentUrl.split('?')[0];
@@ -1632,16 +1409,11 @@ export function OverlayScreen({
   }, [setOverlaySyncState]);
 
   // Manual retry after working-video load has exhausted automatic attempts.
-  // Refresh the project to get a fresh presigned URL (in case the failure was
-  // due to URL expiry), then clear guards so the load effect re-runs.
+  // The action fetches a fresh presigned URL, so an expired URL recovers too.
   const handleRetryWorkingVideo = useCallback(async () => {
     console.log('[OverlayScreen] Manual retry of working video load');
-    setWorkingVideoLoadError(null);
-    setWorkingVideoMissing(false);
-    workingVideoFetchIdRef.current = null;
-    workingVideoAttemptsRef.current = 0;
-    await refreshProject();
-  }, [refreshProject]);
+    await loadWorkingVideo(projectId, projectWorkingVideoId, { force: true });
+  }, [loadWorkingVideo, projectId, projectWorkingVideoId]);
 
   const handleSwitchToFraming = useCallback(() => {
     // T11220: a legacy multi-clip project cannot re-enter Focus/Framing — the
@@ -1806,7 +1578,7 @@ export function OverlayScreen({
       isPlaying={isPlaying}
       handlers={handlers}
       // Loading state
-      isLoading={!workingVideoLoadError && (isLoading || isLoadingWorkingVideo || shouldWaitForWorkingVideo)}
+      isLoading={!workingVideoLoadError && (isLoading || shouldWaitForWorkingVideo)}
       isVideoElementLoading={isVideoElementLoading}
       loadingProgress={loadingProgress}
       loadingElapsedSeconds={loadingElapsedSeconds}

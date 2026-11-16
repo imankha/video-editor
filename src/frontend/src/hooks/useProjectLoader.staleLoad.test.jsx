@@ -15,7 +15,7 @@ const { fetchClipsSpy, setProjectClipsSpy, setClipMetadataCacheSpy, setLoadingSp
 vi.mock('../stores/projectDataStore', () => ({
   useProjectDataStore: () => ({
     setProjectClips: setProjectClipsSpy,
-    setWorkingVideo: vi.fn(),
+    loadWorkingVideo: vi.fn().mockResolvedValue({ status: 'idle', projectId: null, videoId: null, video: null, error: null }),
     setLoading: setLoadingSpy,
     updateClipMetadata: vi.fn(),
     setClipMetadataCache: setClipMetadataCacheSpy,

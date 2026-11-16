@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T4490:C1": {
+      "kind": "code",
+      "command": "! grep -q 'isLoadingWorkingVideo' src/frontend/src/stores/overlayStore.js && ! grep -qE 'workingVideo(FetchIdRef|RecoveryAttemptedRef|AttemptsRef)|setWorkingVideo(LoadError|Missing)' src/frontend/src/screens/OverlayScreen.jsx && ! grep -rqE 'setWorkingVideo\\b|setIsLoadingWorkingVideo' src/frontend/src --include=*.js --include=*.jsx --exclude-dir=__tests__ --exclude=*.test.* && cd src/frontend && npx vitest run src/stores/__tests__/projectDataStore.workingVideo.test.js"
+    },
+    "T4490:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/screens/__tests__/overlayWorkingVideoOwner.test.jsx"
+    },
+    "T4490:C3": {
+      "kind": "code",
+      "command": "! grep -qE 'useOverlayStore|overlayStore' src/frontend/src/screens/FocusScreen.jsx"
+    }
+  }
+}
