@@ -12,7 +12,7 @@ class) as a property of the shared publish writer's aspect-ratio resolver:
 - On any probe failure (R2 disabled in dev/test, ffprobe failure, non-standard
   ratio) it falls back to the project's explicit setting, logged, never silent.
 
-Pure-unit: the two ffprobe seams (ffprobe_bytes / probe_dimensions_via_url) and
+Pure-unit: the probe seam (_probe_output_dims, over T4430's probe_video) and
 generate_presigned_url are patched, so no real ffmpeg or R2 is touched.
 """
 
@@ -57,7 +57,7 @@ class TestDeriveAspectRatioLabel:
 class TestResolveFromInMemoryBytes:
 
     def test_bytes_probe_yields_file_derived_label(self):
-        with patch.object(pub, "ffprobe_bytes", return_value=DIMS_16_9):
+        with patch.object(pub, "_probe_output_dims", return_value=DIMS_16_9):
             assert resolve_output_aspect_ratio(
                 project_aspect_ratio="16:9", video_bytes=b"xxx") == "16:9"
 
@@ -65,18 +65,18 @@ class TestResolveFromInMemoryBytes:
         """THE T4160 incident class: the project setting says 9:16 but the actual
         rendered file is 16:9 -> the file wins, so a 16:9 reel never lands in the
         9:16 ranking pool."""
-        with patch.object(pub, "ffprobe_bytes", return_value=DIMS_16_9):
+        with patch.object(pub, "_probe_output_dims", return_value=DIMS_16_9):
             assert resolve_output_aspect_ratio(
                 project_aspect_ratio="9:16", video_bytes=b"xxx") == "16:9"
 
     def test_nonstandard_file_falls_back_to_project_setting(self):
-        with patch.object(pub, "ffprobe_bytes", return_value=DIMS_SQUARE):
+        with patch.object(pub, "_probe_output_dims", return_value=DIMS_SQUARE):
             assert resolve_output_aspect_ratio(
                 project_aspect_ratio="9:16", video_bytes=b"xxx") == "9:16"
 
     def test_ffprobe_failure_falls_back_to_project_setting(self):
-        # ffprobe_bytes returns None on failure (fake bytes, no ffmpeg, etc.)
-        with patch.object(pub, "ffprobe_bytes", return_value=None):
+        # _probe_output_dims returns None on failure (fake bytes, no ffmpeg, etc.)
+        with patch.object(pub, "_probe_output_dims", return_value=None):
             assert resolve_output_aspect_ratio(
                 project_aspect_ratio="9:16", video_bytes=b"fake") == "9:16"
 
@@ -87,7 +87,7 @@ class TestResolveFromR2PresignedUrl:
 
     def test_r2_probe_yields_file_derived_label(self):
         with patch("app.storage.generate_presigned_url", return_value="https://r2/x"), \
-             patch.object(pub, "probe_dimensions_via_url", return_value=DIMS_9_16):
+             patch.object(pub, "_probe_output_dims", return_value=DIMS_9_16):
             assert resolve_output_aspect_ratio(
                 project_aspect_ratio="16:9", user_id="u1",
                 r2_relative_path="final_videos/x.mp4") == "9:16"
@@ -96,7 +96,7 @@ class TestResolveFromR2PresignedUrl:
         # generate_presigned_url returns None when R2 is disabled (dev/test) --
         # the exact reason the T4370 goldens need no re-bless for this change.
         with patch("app.storage.generate_presigned_url", return_value=None) as mock_gen, \
-             patch.object(pub, "probe_dimensions_via_url") as mock_probe:
+             patch.object(pub, "_probe_output_dims") as mock_probe:
             assert resolve_output_aspect_ratio(
                 project_aspect_ratio="9:16", user_id="u1",
                 r2_relative_path="final_videos/x.mp4") == "9:16"
@@ -105,14 +105,14 @@ class TestResolveFromR2PresignedUrl:
 
     def test_r2_probe_failure_falls_back(self):
         with patch("app.storage.generate_presigned_url", return_value="https://r2/x"), \
-             patch.object(pub, "probe_dimensions_via_url", return_value=None):
+             patch.object(pub, "_probe_output_dims", return_value=None):
             assert resolve_output_aspect_ratio(
                 project_aspect_ratio="16:9", user_id="u1",
                 r2_relative_path="final_videos/x.mp4") == "16:9"
 
     def test_bytes_take_precedence_over_r2_probe(self):
         """When the caller holds bytes, the R2 presign path is never reached."""
-        with patch.object(pub, "ffprobe_bytes", return_value=DIMS_16_9), \
+        with patch.object(pub, "_probe_output_dims", return_value=DIMS_16_9), \
              patch("app.storage.generate_presigned_url") as mock_gen:
             assert resolve_output_aspect_ratio(
                 project_aspect_ratio="9:16", video_bytes=b"xxx",

@@ -126,7 +126,7 @@ async def test_present_source_extract_failure_stays_generic(db):
 
     with patch("app.services.export_helpers.resolve_clip_source",
                return_value=("https://r2/games/x.mp4", 3560.0, 3566.0, True)), \
-         patch.object(framing, "get_video_info", return_value={}), \
+         patch.object(framing, "probe_video", return_value={}), \
          patch.object(framing, "ffmpeg", ffmpeg_mock), \
          patch.object(framing.manager, "send_progress", new=AsyncMock()), \
          patch("app.services.export_helpers.sync_export_db_to_r2", return_value=None), \

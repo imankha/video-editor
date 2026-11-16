@@ -19,11 +19,9 @@ try:
 except ImportError:
     torch = None
 import contextlib
-import json
 import logging
 import os
 import shutil
-import subprocess
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -34,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from ..constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH
+from ..services.video_probe import probe_video
 
 # Import utilities
 from . import utils
@@ -68,75 +67,6 @@ logging.getLogger('realesrgan').setLevel(logging.CRITICAL)
 os.environ['REALESRGAN_VERBOSE'] = '0'
 
 logger = logging.getLogger(__name__)
-
-
-def get_video_metadata_ffprobe(video_path: str) -> dict[str, Any] | None:
-    """
-    Get accurate video metadata using ffprobe.
-    This reads container metadata which matches what browsers report.
-
-    Args:
-        video_path: Path to the video file
-
-    Returns:
-        Dict with 'duration', 'fps', 'frame_count', 'width', 'height' or None on failure
-    """
-    try:
-        # Get stream info including duration and frame count
-        result = subprocess.run(
-            [
-                'ffprobe', '-v', 'error',
-                '-select_streams', 'v:0',
-                '-show_entries', 'stream=duration,r_frame_rate,nb_frames,width,height',
-                '-show_entries', 'format=duration',
-                '-of', 'json',
-                video_path
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-
-        if result.returncode != 0:
-            logger.warning(f"ffprobe failed for {video_path}: {result.stderr}")
-            return None
-
-        data = json.loads(result.stdout)
-
-        # Get stream info
-        stream = data.get('streams', [{}])[0]
-        format_info = data.get('format', {})
-
-        # Get FPS (r_frame_rate is like "30/1" or "30000/1001")
-        fps_str = stream.get('r_frame_rate', '30/1')
-        fps_parts = fps_str.split('/')
-        fps = float(fps_parts[0]) / float(fps_parts[1]) if len(fps_parts) == 2 else float(fps_parts[0])
-
-        # Get duration - prefer stream duration, fall back to format duration
-        duration = None
-        if stream.get('duration'):
-            duration = float(stream['duration'])
-        elif format_info.get('duration'):
-            duration = float(format_info['duration'])
-
-        # Get frame count from stream if available
-        frame_count = None
-        if stream.get('nb_frames'):
-            frame_count = int(stream['nb_frames'])
-        elif duration and fps:
-            # Calculate from duration and fps
-            frame_count = round(duration * fps)
-
-        return {
-            'duration': duration,
-            'fps': fps,
-            'frame_count': frame_count,
-            'width': int(stream.get('width', 0)),
-            'height': int(stream.get('height', 0))
-        }
-    except Exception as e:
-        logger.warning(f"Failed to get video metadata via ffprobe: {e}")
-        return None
 
 
 class AIVideoUpscaler:
@@ -526,27 +456,23 @@ class AIVideoUpscaler:
         # extract_frame_with_crop call (covers crop and pre-upscale crop=None paths).
         self.frame_processor.rotation = rotation
 
-        # Get accurate video metadata using ffprobe (matches browser's duration reporting)
-        ffprobe_metadata = get_video_metadata_ffprobe(input_path)
+        # Container metadata via ffprobe (matches browser's duration reporting).
+        # T4430: raises when the file can't be read -- no OpenCV/30 fps guess.
+        probe = probe_video(input_path)
+        original_fps = probe['fps']
+        original_width, original_height = probe['width'], probe['height']
+        container_duration = probe['stream_duration'] or probe['duration']
 
-        # Get video info from OpenCV as fallback/verification
+        # OpenCV frame count: what the frame loop below can actually read
         cap = cv2.VideoCapture(input_path)
         opencv_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        opencv_fps = cap.get(cv2.CAP_PROP_FPS)
-        original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        # Use ffprobe values if available, fall back to OpenCV
-        if ffprobe_metadata:
-            original_fps = ffprobe_metadata['fps']
-            ffprobe_frame_count = ffprobe_metadata['frame_count'] or opencv_total_frames
-            container_duration = ffprobe_metadata['duration']
-            logger.info(f"Using ffprobe metadata: fps={original_fps}, frames={ffprobe_frame_count}, duration={container_duration:.6f}s")
-        else:
-            original_fps = opencv_fps
+        ffprobe_frame_count = probe['frame_count']
+        if ffprobe_frame_count is None and container_duration:
+            ffprobe_frame_count = round(container_duration * original_fps)
+        if ffprobe_frame_count is None:
             ffprobe_frame_count = opencv_total_frames
-            container_duration = None
-            logger.warning("ffprobe metadata unavailable, using OpenCV values")
+        logger.info(f"Using ffprobe metadata: fps={original_fps}, frames={ffprobe_frame_count}, duration={container_duration}")
 
         # Use the MINIMUM of ffprobe and OpenCV frame counts as starting point
         # ffprobe can report more frames than OpenCV can actually read
@@ -582,12 +508,10 @@ class AIVideoUpscaler:
         logger.info("=" * 60)
         logger.info("SOURCE VIDEO ANALYSIS")
         logger.info("=" * 60)
-        if ffprobe_metadata:
-            logger.info(f"  [ffprobe] container_duration: {container_duration:.6f}s")
-            logger.info(f"  [ffprobe] fps: {ffprobe_metadata['fps']}")
-            logger.info(f"  [ffprobe] frame_count: {ffprobe_frame_count}")
+        logger.info(f"  [ffprobe] container_duration: {container_duration}s")
+        logger.info(f"  [ffprobe] fps: {original_fps}")
+        logger.info(f"  [ffprobe] frame_count: {ffprobe_frame_count}")
         logger.info(f"  [OpenCV] CAP_PROP_FRAME_COUNT: {opencv_total_frames}")
-        logger.info(f"  [OpenCV] CAP_PROP_FPS: {opencv_fps}")
         logger.info(f"  [FINAL] video_total_frames (verified readable): {video_total_frames}")
         logger.info(f"  [FINAL] original_fps: {original_fps}")
         logger.info(f"  [FINAL] duration: {duration:.6f}s")

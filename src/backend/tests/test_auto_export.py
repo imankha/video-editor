@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.services.video_probe import VideoProbeError
 from app.utils.encoding import encode_data
 
 # Module path prefix for patching
@@ -168,6 +169,11 @@ def isolated_profile_db(tmp_path):
             "tmp_path": tmp_path,
             "mock_sync": mock_sync,
         }
+
+
+def _probe(duration, width=1920, height=1080):
+    """A probe_video result (T4430) for a mocked encoded segment / recap."""
+    return {"duration": duration, "width": width, "height": height}
 
 
 def _insert_game(db_path, name="Test Game", blake3_hash="abc123", status=None):
@@ -843,8 +849,9 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
-    def test_recap_generates_concat(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
+    def test_recap_generates_concat(self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         from app.services.auto_export import _generate_recap
 
         mock_stream = MagicMock()
@@ -852,7 +859,7 @@ class TestGenerateRecap:
         mock_stream.filter.return_value = mock_stream
         mock_stream.output.return_value = mock_stream
         mock_stream.run.return_value = None
-        mock_ffmpeg.probe.return_value = {"format": {"duration": "5.0"}}
+        mock_probe.return_value = _probe(5.0)
 
         result = _generate_recap(USER_ID, PROFILE_ID, 1, self._make_clips())
         assert result == "recaps/1.mp4"
@@ -866,8 +873,9 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
-    def test_recap_multi_video(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
+    def test_recap_multi_video(self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         from app.services.auto_export import _generate_recap
 
         mock_stream = MagicMock()
@@ -875,7 +883,7 @@ class TestGenerateRecap:
         mock_stream.filter.return_value = mock_stream
         mock_stream.output.return_value = mock_stream
         mock_stream.run.return_value = None
-        mock_ffmpeg.probe.return_value = {"format": {"duration": "5.0"}}
+        mock_probe.return_value = _probe(5.0)
 
         clips = [
             {"id": 1, "video_hash": "hash_a", "start_time": 0.0, "end_time": 5.0,
@@ -892,8 +900,9 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
-    def test_recap_skips_inverted_range_clip(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
+    def test_recap_skips_inverted_range_clip(self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """Bug 23p: a clip with end_time < start_time (inverted range) must be
         skipped so it doesn't fail the whole recap. The valid clips still export."""
         import json
@@ -905,7 +914,7 @@ class TestGenerateRecap:
         mock_stream.filter.return_value = mock_stream
         mock_stream.output.return_value = mock_stream
         mock_stream.run.return_value = None
-        mock_ffmpeg.probe.return_value = {"format": {"duration": "5.0"}}
+        mock_probe.return_value = _probe(5.0)
 
         clips = [
             {"id": 1, "video_hash": "abc", "start_time": 0.0, "end_time": 5.0,
@@ -927,8 +936,9 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
-    def test_recap_all_clips_invalid_raises(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
+    def test_recap_all_clips_invalid_raises(self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """If every clip has an invalid range, nothing is extracted and recap raises."""
         from app.services.auto_export import _generate_recap
 
@@ -951,8 +961,9 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
-    def test_recap_partial_url_failure_continues(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
+    def test_recap_partial_url_failure_continues(self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """If one video hash fails to get URL, others still process."""
         from app.services.auto_export import _generate_recap
 
@@ -965,7 +976,7 @@ class TestGenerateRecap:
         mock_stream.filter.return_value = mock_stream
         mock_stream.output.return_value = mock_stream
         mock_stream.run.return_value = None
-        mock_ffmpeg.probe.return_value = {"format": {"duration": "5.0"}}
+        mock_probe.return_value = _probe(5.0)
 
         clips = [
             {"id": 1, "video_hash": "hash_a", "start_time": 0.0, "end_time": 5.0,
@@ -979,8 +990,9 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
-    def test_recap_clip_mapping_includes_tags_and_notes(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
+    def test_recap_clip_mapping_includes_tags_and_notes(self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """Verify clip_mapping JSON contains correct metadata."""
         import json
 
@@ -991,7 +1003,7 @@ class TestGenerateRecap:
         mock_stream.filter.return_value = mock_stream
         mock_stream.output.return_value = mock_stream
         mock_stream.run.return_value = None
-        mock_ffmpeg.probe.return_value = {"format": {"duration": "4.5"}}
+        mock_probe.return_value = _probe(4.5)
 
         clips = [
             {"id": 10, "video_hash": "abc", "start_time": 0.0, "end_time": 5.0,
@@ -1012,8 +1024,9 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
-    def test_recap_timing_logged(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db, caplog):
+    def test_recap_timing_logged(self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db, caplog):
         import logging
 
         from app.services.auto_export import _generate_recap
@@ -1023,7 +1036,7 @@ class TestGenerateRecap:
         mock_stream.filter.return_value = mock_stream
         mock_stream.output.return_value = mock_stream
         mock_stream.run.return_value = None
-        mock_ffmpeg.probe.return_value = {"format": {"duration": "5.0"}}
+        mock_probe.return_value = _probe(5.0)
 
         with caplog.at_level(logging.INFO, logger="app.services.auto_export"):
             _generate_recap(USER_ID, PROFILE_ID, 1, self._make_clips())
@@ -1037,9 +1050,10 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
     def test_recap_encodes_native_resolution_master_quality(
-        self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db
+        self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db
     ):
         """T4140: recap segments encode at NATIVE resolution (no 854x480 scale) at
         master-grade quality (crf 18, non-ultrafast preset), still producing the
@@ -1051,10 +1065,7 @@ class TestGenerateRecap:
         mock_stream.filter.return_value = mock_stream
         mock_stream.output.return_value = mock_stream
         mock_stream.run.return_value = None
-        mock_ffmpeg.probe.return_value = {
-            "format": {"duration": "5.0"},
-            "streams": [{"codec_type": "video", "width": 1920, "height": 1080}],
-        }
+        mock_probe.return_value = _probe(5.0, 1920, 1080)
 
         _generate_recap(USER_ID, PROFILE_ID, 1, self._make_clips())
 
@@ -1084,9 +1095,10 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch("app.services.recap_encode.probe_video")
     @patch("app.services.recap_encode.ffmpeg")
     def test_recap_mixed_resolution_normalizes_minority_segment(
-        self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db
+        self, mock_ffmpeg, mock_probe, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db
     ):
         """Mixed-resolution multi-source game: concat c=copy needs a uniform
         resolution, so the minority segment is scaled to the canonical (majority /
@@ -1100,13 +1112,8 @@ class TestGenerateRecap:
         mock_stream.output.return_value = mock_stream
         mock_stream.run.return_value = None
         # Two 1080p sources (majority) then one 720p source.
-        mock_ffmpeg.probe.side_effect = [
-            {"format": {"duration": "5.0"},
-             "streams": [{"codec_type": "video", "width": 1920, "height": 1080}]},
-            {"format": {"duration": "5.0"},
-             "streams": [{"codec_type": "video", "width": 1920, "height": 1080}]},
-            {"format": {"duration": "3.0"},
-             "streams": [{"codec_type": "video", "width": 1280, "height": 720}]},
+        mock_probe.side_effect = [
+            _probe(5.0, 1920, 1080), _probe(5.0, 1920, 1080), _probe(3.0, 1280, 720),
         ]
         clips = [
             {"id": 1, "video_hash": "hash_a", "start_time": 0.0, "end_time": 5.0,
@@ -1126,22 +1133,20 @@ class TestGenerateRecap:
         assert len(scale_calls) == 1
         assert scale_calls[0].args == ("scale", 1920, 1080)
 
-    @patch(f"{M}.ffmpeg")
+    @patch(f"{M}.probe_video")
     @patch(f"{M}.generate_presigned_url", return_value="RECAP_URL")
-    def test_recap_is_legacy_480p_signature(self, mock_presign, mock_ffmpeg, isolated_profile_db):
+    def test_recap_is_legacy_480p_signature(self, mock_presign, mock_probe, isolated_profile_db):
         """The backfill's idempotency probe: 854x480 -> legacy (upgrade), native ->
         already hi-q, unreadable/missing -> None (skip, never crash)."""
         from app.services.auto_export import _recap_is_legacy_480p
 
-        mock_ffmpeg.probe.return_value = {
-            "streams": [{"codec_type": "video", "width": 854, "height": 480}]}
+        mock_probe.return_value = _probe(None, 854, 480)
         assert _recap_is_legacy_480p(USER_ID, 1) is True
 
-        mock_ffmpeg.probe.return_value = {
-            "streams": [{"codec_type": "video", "width": 1920, "height": 1080}]}
+        mock_probe.return_value = _probe(None, 1920, 1080)
         assert _recap_is_legacy_480p(USER_ID, 1) is False
 
-        mock_ffmpeg.probe.side_effect = Exception("boom")
+        mock_probe.side_effect = VideoProbeError("boom")
         assert _recap_is_legacy_480p(USER_ID, 1) is None
 
     def test_recap_is_legacy_480p_missing_recap_returns_none(self, isolated_profile_db):

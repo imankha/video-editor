@@ -38,6 +38,7 @@ from ..services.modal_client import (
     call_modal_detect_players,
     modal_enabled,
 )
+from ..services.video_probe import VideoProbeError, probe_video
 from ..storage import (
     R2_BUCKET,
     R2_ENABLED,
@@ -193,16 +194,20 @@ def extract_frame(video_path: str, frame_number: int):
     if not os.path.exists(video_path):
         raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
+    try:
+        probe = probe_video(video_path)
+    except VideoProbeError as e:
+        logger.warning(f"Cannot probe video: {video_path}: {e}")
+        raise HTTPException(status_code=400, detail="We couldn't check this video for athletes. Try again.") from e
+    width, height = probe['width'], probe['height']
+
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         logger.warning(f"Cannot open video: {video_path}")
         raise HTTPException(status_code=400, detail="We couldn't check this video for athletes. Try again.")
 
     try:
-        # Get video properties
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         if frame_number < 0 or frame_number >= total_frames:
             raise HTTPException(

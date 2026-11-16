@@ -17,10 +17,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import cv2
-
 # Import GPU encoder detection from ffmpeg_service
 from ..services.ffmpeg_service import build_video_encoding_params, get_best_encoder
+from ..services.video_probe import probe_video
 from .frame_interpolator import InterpolationBackend, get_frame_interpolator
 
 logger = logging.getLogger(__name__)
@@ -224,9 +223,7 @@ class VideoEncoder:
             logger.info("Input video has no audio stream - skipping audio processing")
 
         # Get original FPS from input video (needed for frame interpolation and segment processing)
-        cap = cv2.VideoCapture(input_video_path)
-        original_fps = cap.get(cv2.CAP_PROP_FPS)
-        cap.release()
+        original_fps = probe_video(input_video_path)['fps']
 
         # DIAGNOSTIC: Log encoding parameters for debugging duration mismatch
         logger.info("=" * 60)

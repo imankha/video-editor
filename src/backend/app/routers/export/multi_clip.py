@@ -35,6 +35,7 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...services.export_cost_guard import ExportBudgetExceeded, enforce_export_budget
 from ...services.ffmpeg_service import get_video_duration
 from ...services.modal_client import call_modal_clips_ai, call_modal_detect_players_batch, modal_enabled
+from ...services.video_probe import VideoProbeError, probe_video
 from ...storage import delete_from_r2, download_from_r2, generate_presigned_url, upload_bytes_to_r2, upload_to_r2
 from ...user_context import set_current_user_id
 from ...utils.encoding import encode_data
@@ -182,17 +183,21 @@ def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_t
         logger.error("[Detection] YOLO model is None - ultralytics may not be installed")
         return {'timestamp': timestamp, 'boxes': []}
 
+    # T4430: rate and size from the one probe -- no 30 fps guess.
+    try:
+        probe = probe_video(video_path)
+    except VideoProbeError as e:
+        logger.error(f"[Detection] Cannot probe video: {video_path}: {e}")
+        return {'timestamp': timestamp, 'boxes': []}
+    fps, width, height = probe['fps'], probe['width'], probe['height']
+
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         logger.error(f"[Detection] Cannot open video: {video_path} (exists={os.path.exists(video_path)})")
         return {'timestamp': timestamp, 'boxes': []}
 
     try:
-        # Get video properties
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         # Use pre-calculated frame number if provided (avoids rounding errors at clip boundaries)
         naive_frame = int(timestamp * fps)

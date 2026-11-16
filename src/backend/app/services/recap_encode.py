@@ -15,21 +15,9 @@ from pathlib import Path
 
 import ffmpeg
 
+from app.services.video_probe import probe_video
+
 logger = logging.getLogger(__name__)
-
-
-def video_dimensions(probe: dict):
-    """(width, height) of the first video stream in an ffprobe result, or None.
-
-    None when the probe carries no video stream dimensions (e.g. a mocked probe);
-    callers treat that as "resolution unknown" and skip concat normalization.
-    """
-    for stream in probe.get('streams', []) or []:
-        if stream.get('codec_type') == 'video':
-            width, height = stream.get('width'), stream.get('height')
-            if width and height:
-                return (int(width), int(height))
-    return None
 
 
 def pick_canonical_resolution(resolutions: list[tuple]) -> tuple:
@@ -59,7 +47,7 @@ def encode_recap(segments: list[dict], out_path, *, crf: int, preset: str) -> li
     """
     with tempfile.TemporaryDirectory() as temp_dir:
         extracted_paths = []
-        resolutions = []  # aligned with extracted_paths; (w,h) or None
+        resolutions = []  # aligned with extracted_paths; (w,h)
         encoded = []
         for seg in segments:
             start, end = seg['start'], seg['end']
@@ -83,24 +71,23 @@ def encode_recap(segments: list[dict], out_path, *, crf: int, preset: str) -> li
                 .run(quiet=True, overwrite_output=True)
             )
             extracted_paths.append(out)
-            probe = ffmpeg.probe(str(out))
-            resolutions.append(video_dimensions(probe))
-            encoded.append({'id': seg['id'], 'duration': float(probe['format']['duration'])})
+            probe = probe_video(str(out))
+            resolutions.append((probe['width'], probe['height']))
+            encoded.append({'id': seg['id'], 'duration': probe['duration']})
 
         if not extracted_paths:
             raise RuntimeError("No clips extracted for recap")
 
-        known_res = [r for r in resolutions if r is not None]
-        if len(set(known_res)) > 1:
-            canonical = pick_canonical_resolution(known_res)
+        if len(set(resolutions)) > 1:
+            canonical = pick_canonical_resolution(resolutions)
             cw, ch = canonical
             logger.info(
-                f"[RecapEncode] mixed resolutions {sorted(set(known_res))} -> canonical "
+                f"[RecapEncode] mixed resolutions {sorted(set(resolutions))} -> canonical "
                 f"{cw}x{ch}; normalizing non-conforming segments (crop keyframes on "
                 f"those clips shift)"
             )
             for idx, res in enumerate(resolutions):
-                if res is None or res == canonical:
+                if res == canonical:
                     continue
                 src = extracted_paths[idx]
                 normalized = src.with_name(f"norm_{src.name}")

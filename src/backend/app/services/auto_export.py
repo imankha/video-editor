@@ -33,7 +33,8 @@ from ..storage import (
     upload_to_r2,
 )
 from ..user_context import set_current_user_id
-from .recap_encode import encode_recap, video_dimensions
+from .recap_encode import encode_recap
+from .video_probe import probe_video
 
 logger = logging.getLogger(__name__)
 
@@ -837,13 +838,11 @@ def _recap_is_legacy_480p(user_id: str, game_id: int) -> bool | None:
     if not recap_url:
         return None
     try:
-        dims = video_dimensions(ffmpeg.probe(recap_url))
+        probe = probe_video(recap_url)
     except Exception as e:
         logger.warning(f"[Backfill] game={game_id} recap probe failed: {e}")
         return None
-    if dims is None:
-        return None
-    return dims == _LEGACY_RECAP_DIMENSIONS
+    return (probe['width'], probe['height']) == _LEGACY_RECAP_DIMENSIONS
 
 
 def backfill_hiq_recaps(limit: int = 25, dry_run: bool = False) -> dict:

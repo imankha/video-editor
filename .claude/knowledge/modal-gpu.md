@@ -151,7 +151,7 @@ graph LR
 - **Encode drift** (T4430/T4710):
   - Modal final encode is `libx264 -crf 23 -preset fast` while parallel chunks are crf 18 — last step is the lowest quality.
   - Modal path missing bt709 color tags (local `video_encoder.py:789-792` sets them; some players render washed out).
-  - `-shortest` truncation fix applied in one path, still passed in others (`overlay.py:707` per audit E3); ~55 hand-built ffmpeg arg lists across 13 modules.
+  - `-shortest` removed from the last app-side path, `overlay.py::_process_frames_to_ffmpeg` (T4430; it stopped the local Spotlight render at the end of a shorter audio track, regression `test_t4430_video_probe.py`). Hand-built ffmpeg arg lists remain across modules; named encode profiles are out of scope (the differing quality tiers are intentional).
   - `dni_weight` denoise blend (`realesr-general-wdn-x4v3` companion) is unused while far crops carry block noise the GAN sharpens.
 - **Local torch import is optional/guarded** (`ai_upscaler/__init__.py:16-19`) so CPU containers can still import the torch-free `KeyframeInterpolator` needed by the overlay renderer (T4120).
 - Containers (/dotask) run Modal OFF by default (T4180); `MODAL_ENABLED=false` local-render verify mode is the sanctioned in-container way to exercise exports (T4120).
