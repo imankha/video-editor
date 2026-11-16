@@ -199,7 +199,10 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
   await kebab.waitFor({ state: 'attached', timeout: 30000 });
   await reelCard.hover().catch(() => {});
   await kebab.click({ force: true, delay: 10 });
-  await page.getByRole('button', { name: /^Copy link$/ }).evaluate((el) => {
+  // T16620: scope to the kebab's menu. It is portaled to document.body (not inside the
+  // card), and each CollectionHeader also renders a "Copy link" icon button, so a
+  // page-wide role query matched 9 buttons and failed strict mode.
+  await page.getByTestId('reel-tile-menu').getByRole('button', { name: /^Copy link$/ }).evaluate((el) => {
     for (let i = 0; i < 5; i++) el.click();
   });
 
