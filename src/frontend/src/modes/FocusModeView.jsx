@@ -6,7 +6,7 @@ import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { parseEditorPath, dropSeekParam } from '../stores/editorStore';
-import { forwardRef, useRef, useState, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
+import { forwardRef, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
@@ -58,8 +58,8 @@ const SHORT_DESKTOP_BOX_HEIGHT_CLASS = '[@media(min-width:1024px)]:!h-[max(320px
 // size, once a taller ActionBand (T15400/T15470) shrinks the available-height term enough to
 // hit that floor. Add an explicit WIDTH floor (half the column) so a narrow output aspect
 // can't collapse the preview below a usable size; height still follows via the element's
-// `aspect-ratio` style and any resulting overflow is handled by the existing scroll-fit effect
-// (stageRef useLayoutEffect below), same as any other tall stage box.
+// `aspect-ratio` style; any resulting overflow is reached by scrolling, same as any other tall
+// stage box (T16630: the screen opens at the top, nothing scrolls it on load).
 const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar))))]';
 
 /**
@@ -480,59 +480,6 @@ export function FocusModeView({
   // T13580: on a phone the lane opens below the fixed action band; the Trim
   // button gesture scrolls it into view (scroll-margin keeps it clear of the band).
   const trimScopeRef = useRef(null);
-  // T15400: at a short desktop viewport (e.g. 1366x660) the header/chip content
-  // above the stage plus the sticky ActionBand leave no room for the stage to
-  // be fully visible at scrollTop=0 -- no height floor or padding can fix that,
-  // since it's a space problem, not a sizing problem (see T15400 investigation).
-  // Scroll it into view once per clip load, same scroll-margin pattern as
-  // trim-guide-scope above, so the stage (and its crop box) land above the band
-  // without the user having to find the scroll position themselves.
-  const stageRef = useRef(null);
-  useLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (!videoUrl || isFullscreen || mobileFs || !stage) return undefined;
-    const scroller = stage.closest('.overflow-auto');
-    const band = document.querySelector('[data-testid="action-band"]');
-    if (!scroller || !band) {
-      console.warn('[T15400] focus stage fit: missing scroller or action band');
-      return undefined;
-    }
-    let active = true;
-    const stop = () => { active = false; };
-    // T15650: the timeline block (trim-guide-scope, incl. its zoom chip) renders as a
-    // SIBLING below this stage, not inside it -- the stage alone clearing the band left
-    // the timeline (and the zoom chip at its top) still sitting behind the band on load,
-    // even though plenty of scroll room existed (the `s.top - c.top` cap below is a header-
-    // room ceiling, not the actual constraint here). Measure the deficit from whichever of
-    // the stage or the timeline block sits lower, so the fit scrolls far enough to clear both.
-    const fit = () => {
-      if (!active) return;
-      const s = stage.getBoundingClientRect();
-      const b = band.getBoundingClientRect();
-      const c = scroller.getBoundingClientRect();
-      const scope = trimScopeRef.current;
-      const scopeBottom = scope ? scope.getBoundingClientRect().bottom : s.bottom;
-      const deficit = Math.max(s.bottom, scopeBottom) - b.top + 8;
-      if (deficit <= 0) return;
-      const delta = Math.min(deficit, s.top - c.top);
-      const room = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
-      if (delta > room) {
-        console.warn('[T15400] focus stage fit: insufficient scroll room', { delta, room });
-      }
-      scroller.scrollTop += Math.min(delta, room);
-    };
-    const ro = new ResizeObserver(fit);
-    ro.observe(stage);
-    ro.observe(band);
-    ro.observe(scroller);
-    if (trimScopeRef.current) ro.observe(trimScopeRef.current);
-    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
-    events.forEach((evt) => scroller.addEventListener(evt, stop, { passive: true, once: true }));
-    return () => {
-      ro.disconnect();
-      events.forEach((evt) => scroller.removeEventListener(evt, stop));
-    };
-  }, [videoUrl, isFullscreen, mobileFs]);
   const handleToggleTrim = () => {
     const opening = !advancedOpen;
     setAdvancedOverride(opening);
@@ -934,7 +881,6 @@ export function FocusModeView({
               header + stage-controls height, not measured: verify it in the
               cta-consistency Focus row before trusting it. */}
           <div
-            ref={stageRef}
             data-testid="focus-video-stage"
             className={`relative bg-gray-900 ${
               (isFullscreen || mobileFs)

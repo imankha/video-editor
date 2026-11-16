@@ -17,6 +17,24 @@ import { loginForCheck, checkApi } from '../helpers/checkAuth';
 test.setTimeout(240000);
 test.use({ viewport: { width: 810, height: 1080 } });
 
+/**
+ * T16630: the editor opens at the top (nothing scrolls it on load), so at a short viewport
+ * the parent scrolls the stage up clear of the action band. Do the same: scroll App's
+ * editor scroller just far enough that `testId`'s bottom edge sits above the band.
+ */
+async function scrollClearOfBand(page, testId) {
+  // Polled: the stage keeps growing until its video has loaded, so re-scroll until clear.
+  await expect.poll(() => page.getByTestId(testId).first().evaluate((el) => {
+    const scroller = el.closest('.flex-1.overflow-auto');
+    const band = document.querySelector('[data-testid="action-band"]');
+    if (!scroller || !band) return 'no scroller or action band';
+    const deficit = el.getBoundingClientRect().bottom - band.getBoundingClientRect().top + 8;
+    if (deficit > 0) scroller.scrollTop += deficit;
+    return el.getBoundingClientRect().bottom <= band.getBoundingClientRect().top + 0.5;
+  }), { message: `scroll ${testId} clear of the action band`, timeout: 60000 }).toBe(true);
+  await page.waitForTimeout(150);
+}
+
 test('T15470:C1 - Spotlight video and controls fit above the action band on iPad portrait', async ({ context, page }) => {
   await loginForCheck(context);
 
@@ -29,9 +47,10 @@ test('T15470:C1 - Spotlight video and controls fit above the action band on iPad
 
   await page.goto(`/overlay/p/${candidate.id}`);
   await page.getByTestId('overlay-video-stage').waitFor({ timeout: 90000 });
-  // let the scroll-fit ResizeObserver effect settle before measuring (same pattern as
-  // T15400's checks -- an immediate read can catch the layout mid-adjustment).
+  // Let the layout settle, then scroll the stage and its controls clear of the band the
+  // way a parent would (T16630: the screen opens at the top). Controls sit below the stage.
   await page.waitForTimeout(500);
+  await scrollClearOfBand(page, 'play-button');
 
   const band = await page.getByTestId('action-band').boundingBox();
   expect(band, 'action band present').not.toBeNull();
