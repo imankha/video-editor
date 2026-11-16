@@ -2,16 +2,21 @@
 # T16410 acceptance checks for the staging accounts database move (ord -> lax).
 # Needs flyctl with FLY_API_TOKEN, psql and curl. Staging only: never point this at prod apps.
 #
-#   c1  both staging apps run in lax, the API's DATABASE_URL user exists only on the new DB, the
-#       schema_migrations ledger matches the frozen old DB row for row, and every old table exists
-#       on the new DB with at least its old row count (staging keeps writing to the new DB)
+#   c1  both staging apps run in lax, the API's DATABASE_URL user exists on the new DB, the old
+#       ord database app is gone, every schema_migrations row of the frozen old DB is on the new DB,
+#       and every old table exists on the new DB. The frozen old DB is
+#       scripts/t16410_staging_frozen.txt: T16460 destroyed the old app on 2026-11-16 after a final
+#       dump to R2. Row counts are not compared any more: they matched at the switch (2026-11-14),
+#       and since then staging both adds and removes rows (expired sessions, storage refs), so
+#       "at least the old count" is no longer a property of a correct move.
 #   c2  a signed-in GET /api/auth/me logs [REQ_TIMING] auth_ms < 20
 #   c3  sign-in, a public shared link and the admin dashboard answer 200
 set -euo pipefail
 
 API_APP=reel-ballers-api-staging
 NEW_DB=${T16410_NEW_DB:-reel-ballers-db-staging-lax}
-OLD_DB=${T16410_OLD_DB:-reel-ballers-db-staging}
+OLD_DB=reel-ballers-db-staging  # destroyed by T16460; only its absence is checked
+FROZEN=${T16410_FROZEN:-scripts/t16410_staging_frozen.txt}
 DB_NAME=reel_ballers_api_staging
 NEW_DB_NAME=${T16410_NEW_DB_NAME:-$DB_NAME}  # red run: an empty database stands in for a failed restore
 API=https://api-staging.reelballers.com
@@ -63,27 +68,30 @@ c1() {
   done
   user_sql="select count(*) from pg_user where usename = '$DB_NAME'"
   [ "$(db_query "$NEW_DB" 25432 "$user_sql")" = 1 ] || fail "$NEW_DB has no $DB_NAME user (not attached)"
-  [ "$(db_query "$OLD_DB" 15432 "$user_sql")" = 0 ] || fail "$OLD_DB still has the $DB_NAME user (still attached)"
-  echo "attached to $NEW_DB only"
+  fly apps list --json | python3 -c 'import json,sys; print("\n".join(a["Name"] for a in json.load(sys.stdin)))' >"$WORK/apps" \
+    || fail "cannot list fly apps"
+  grep -qx "$OLD_DB" "$WORK/apps" && fail "$OLD_DB still exists"
+  echo "attached to $NEW_DB; $OLD_DB is gone"
 
+  [ -s "$FROZEN" ] || fail "frozen snapshot $FROZEN is missing"
   ledger_sql="select string_agg(m::text, E'\\n' order by m::text) from schema_migrations m"
-  old_ledger=$(db_query "$OLD_DB" 15432 "$ledger_sql")
   new_ledger=$(db_query "$NEW_DB" 25432 "$ledger_sql" "$NEW_DB_NAME" 2>&1) || fail "cannot read schema_migrations on $NEW_DB/$NEW_DB_NAME: $new_ledger"
-  [ -n "$old_ledger" ] || fail "$OLD_DB has an empty schema_migrations ledger"
-  [ "$old_ledger" = "$new_ledger" ] || fail "schema_migrations differs between $OLD_DB and $NEW_DB/$NEW_DB_NAME"
-  echo "schema_migrations identical: $(echo "$old_ledger" | wc -l) rows"
+  sed -n 's/^ledger|//p' "$FROZEN" >"$WORK/ledger_old"
+  [ -s "$WORK/ledger_old" ] || fail "$FROZEN has no ledger rows"
+  while IFS= read -r row; do
+    grep -qxF -- "$row" <<<"$new_ledger" || fail "schema_migrations row missing on $NEW_DB/$NEW_DB_NAME: $row"
+  done <"$WORK/ledger_old"
+  echo "all $(wc -l <"$WORK/ledger_old") frozen schema_migrations rows present on $NEW_DB"
 
   counts_sql="select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', table_name), false, true, '')))[1]::text
     from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by 1"
-  db_query "$OLD_DB" 15432 "$counts_sql" >"$WORK/counts_old"
+  grep -v '^#' "$FROZEN" | grep -v '^ledger|' >"$WORK/counts_old"
   db_query "$NEW_DB" 25432 "$counts_sql" "$NEW_DB_NAME" >"$WORK/counts_new"
-  [ -s "$WORK/counts_old" ] || fail "$OLD_DB has no tables"
-  while IFS='|' read -r table old; do
-    new=$(sed -n "s/^$table|//p" "$WORK/counts_new")
-    [ -n "$new" ] || fail "table $table is missing on $NEW_DB/$NEW_DB_NAME"
-    [ "$new" -ge "$old" ] || fail "table $table has $new rows on $NEW_DB/$NEW_DB_NAME, $old on $OLD_DB"
+  [ -s "$WORK/counts_old" ] || fail "$FROZEN has no tables"
+  while IFS='|' read -r table _old; do
+    grep -q "^$table|" "$WORK/counts_new" || fail "table $table is missing on $NEW_DB/$NEW_DB_NAME"
   done <"$WORK/counts_old"
-  echo "all $(wc -l <"$WORK/counts_old") old tables present on $NEW_DB with >= old row counts"
+  echo "all $(wc -l <"$WORK/counts_old") old tables present on $NEW_DB"
 }
 
 c2() {

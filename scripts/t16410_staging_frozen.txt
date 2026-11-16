@@ -1,0 +1,82 @@
+# T16410/T16460: the old staging accounts database (reel-ballers-db-staging, ord) as it stood frozen,
+# read 2026-11-16 just before T16460 destroyed it. Its full dump is in R2:
+# reel-ballers-users/db-backups/T16460/reel-ballers-db-staging-final-2026-11-16.dump
+# Lines: table|row count, then ledger|schema_migrations row.
+account_deletions|10
+admin_users|1
+bug_reports|24
+campaigns|0
+credit_migration_state|1
+credit_reservations|0
+credit_transactions|436
+credits|12
+daily_counters|237
+game_ref_counts|18
+game_storage_refs|63
+impersonation_audit|18
+ip_rate_events|14
+otp_codes|0
+payments|27
+pending_teammate_shares|0
+r2_grace_deletions|30
+reconciliation_alert_runs|1
+referrals|1
+schema_migrations|47
+sessions|12
+share_claims|0
+share_games|3
+share_videos|26
+shares|34
+upload_failures|20
+user_actions|453
+user_resume_points|9
+user_segments|12
+user_usage_daily|92
+users|12
+ledger|(1,"Baseline: mark Postgres schema as migrated","2026-05-17 18:12:41.394743+00")
+ledger|(2,"Create game_ref_counts, drop deprecated columns","2026-05-17 18:12:41.394743+00")
+ledger|(3,"Add annotation_playback to shares.share_type CHECK constraint","2026-05-19 05:32:09.203806+00")
+ledger|(4,"Add referrals table and invite_code column on users","2026-05-19 05:32:09.203806+00")
+ledger|(5,"Create user_milestones table with cohort dimensions and backfill","2026-05-23 21:18:10.993769+00")
+ledger|(6,"Create daily_counters table and backfill signups from user_milestones","2026-05-24 02:05:21.556337+00")
+ledger|(7,"Create user_flow_events table and add daily_counters columns for new flow events","2026-05-24 02:05:21.556337+00")
+ledger|(8,"Create bug_reports table for structured bug tracking","2026-05-26 05:31:56.025923+00")
+ledger|(9,"Replace user_milestones with user_segments, rename user_flow_events to user_actions","2026-06-05 20:04:17.505969+00")
+ledger|(10,"Add UTM and click_source columns to user_segments for campaign attribution","2026-06-05 20:04:17.505969+00")
+ledger|(11,"Add sessions_started, invites_sent, shares_viewed, exports_started to daily_counters","2026-06-05 20:04:17.505969+00")
+ledger|(12,"Add total_usage_seconds and current_session_start to user_segments for session duration tracking","2026-06-05 20:04:17.505969+00")
+ledger|(13,"Add indexes for admin dashboard query performance","2026-06-05 20:04:17.505969+00")
+ledger|(14,"Add platform column to user_actions for mobile/desktop/pwa tracking","2026-06-06 16:51:27.121586+00")
+ledger|(15,"Normalize legacy platform values (desktop -> webapp-desktop, mobile -> webapp-mobile, pwa -> pwa-mobile)","2026-06-13 00:33:29.841614+00")
+ledger|(16,"Add 'collection' share_type + collection_definition/collection_is_public to shares (T3620)","2026-06-14 04:21:25.773658+00")
+ledger|(17,"Add referrals.inherited_sport snapshot for sport inheritance through invite (T2915)","2026-06-19 21:32:02.115467+00")
+ledger|(18,"Add shares.sharer_default_sport snapshot so share invites carry sport inheritance (T2915)","2026-06-19 21:32:02.115467+00")
+ledger|(19,"Add credits, credit_transactions, credit_reservations, credit_migration_state (T5840: move money out of the per-user SQLite last-write-wins blob)","2026-07-26 19:29:48.695507+00")
+ledger|(20,"Add 'game_link' to shares.share_type CHECK + share_games.game_date snapshot (T5720)","2026-08-02 05:48:30.003441+00")
+ledger|(21,"share_claims table: per-claimer record of a public game-link claim (T5730)","2026-08-02 05:48:30.003441+00")
+ledger|(22,"Add user_usage_daily per-user per-day engaged-usage buckets (T5770)","2026-08-02 05:24:06.579454+00")
+ledger|(23,"Rename pending_teammate_shares.recipient_email -> invited_email (T7550): the column is ADVISORY (who the share was emailed to), never a claim gate. Any link/id-holder can claim (open-by-token, matching game_link) -- the old name misled readers into thinking it authorized the claim.","2026-08-26 22:19:17.780776+00")
+ledger|(24,"T7510: add attempt/outcome/failure daily_counters columns (game_uploads_succeeded/_failed, clips_attempted/_failed)","2026-08-27 04:16:22.862294+00")
+ledger|(25,"Clear stale pre-T2930 game_storage_refs rows before reviving it as the derived ref-set","2026-08-27 04:16:22.862294+00")
+ledger|(26,"T8110: add users.is_test_account flag (seed the 7 known internal accounts)","2026-09-04 00:09:20.717325+00")
+ledger|(27,"Add daily_counters.clips_uploaded (T8370 clip_uploaded daily rollup)","2026-10-21 02:13:42.768273+00")
+ledger|(28,"T9400: add bug_reports.client_report_id + unique index for idempotent report submission (dedup retries so an ambiguous failure files once)","2026-10-21 02:13:42.768273+00")
+ledger|(29,"T10270: upload_failures table -- durable per-event record of every upload failure (design doc §3.2/§5), TTL-swept by cleanup._do_cleanup","2026-10-21 02:13:42.768273+00")
+ledger|(30,"T8620: append-only payments ledger -- one row per money event (purchase/refund/dispute), never updated or deleted; Stripe-captured amounts; pseudonymous (user_id only).","2026-10-21 02:13:42.768273+00")
+ledger|(31,"T8630: account deletion audit table + payments append-only trigger; deletion stamps account_deleted_at and records who/when/which-path/how-much, ledger rows preserved.","2026-10-21 02:13:42.768273+00")
+ledger|(32,"T8630 r4: drop analytics->users FKs so user_segments/user_actions/referrals rows survive account deletion (de-identified, kept for channel/cohort revenue attribution), matching the payments ledger.","2026-10-21 02:13:42.768273+00")
+ledger|(33,"T8630 r5: add user_segments.was_test_account snapshot so a deleted payer keeps the exact test-exclusion status it had while live","2026-10-21 02:13:42.768273+00")
+ledger|(34,"T8670 r2: reconciliation_alert_runs single-row last-run marker so the scheduled drift alert cannot double-fire across non-overlapping passes","2026-10-21 02:13:42.768273+00")
+ledger|(35,"T8660: clear activity fields on retained deleted-user segments","2026-10-21 02:13:42.768273+00")
+ledger|(36,"Add daily_counters.paywall_shown / buy_modal_opened (T13330 purchase-funnel tries)","2026-10-24 16:17:15.741282+00")
+ledger|(37,"Add users.email_opted_out_at / email_unsubscribe_token (T13910 subscriber email)","2026-10-29 16:17:04.990783+00")
+ledger|(38,"Add campaigns table (T13980 admin-created attribution campaigns)","2026-10-30 20:56:53.381762+00")
+ledger|(39,"Add user_segments.signup_build/signup_commit (T14000 Builds dimension)","2026-10-30 20:56:53.381762+00")
+ledger|(40,"Add idx_game_refs_expires + r2_grace_deletions.queued_by_* (T14140 PG-driven sweep)","2026-11-02 00:46:54.013503+00")
+ledger|(41,"Add ip_rate_events (T14180 per-IP OTP/signup limits)","2026-11-02 00:46:54.013503+00")
+ledger|(42,"Add upload_failures.flow_id + user_usage_daily upload outcomes (T15050)","2026-11-05 06:59:44.225504+00")
+ledger|(43,"Add user_segments.country (T15100 country dimension)","2026-11-05 18:34:47.790042+00")
+ledger|(44,"Add campaigns spend-tracking columns (T15200 paid-ads registry)","2026-11-08 17:59:57.868845+00")
+ledger|(45,"Add user_segments.landing_path (T15010 landing page dimension)","2026-11-08 20:32:28.868846+00")
+ledger|(46,"Add account_deletions.email_hash + user_segments.returning_after_deletion (T15290 account deletion keeps analytics)","2026-11-08 20:32:28.868846+00")
+ledger|(47,"Add user_resume_points table (T14980 resume where you left off)","2026-11-09 02:39:25.533358+00")
