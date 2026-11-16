@@ -1,6 +1,6 @@
 # T2650: Recap encoding off the server
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Stack Layers:** Backend, Modal
 **Migration:** [ ]

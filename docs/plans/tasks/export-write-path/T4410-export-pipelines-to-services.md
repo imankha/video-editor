@@ -1,6 +1,6 @@
 # T4410: Delete the unused export pipelines
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-07-03
