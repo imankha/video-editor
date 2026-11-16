@@ -66,7 +66,9 @@ Differences from T16410's plan: the database name (step 0), stopping writes with
 - Sign-in works: 5 real sign-ins since the switch (one by an admin) and 4 new accounts.
 - Real signed-in requests check the session in 3 to 11 ms (it was about 180 ms before the move).
 - The 4 newest public shared video links open (HTTP 200).
-- Not yet checked: the admin dashboard loading for a signed-in admin, and that nothing still connects to the old databases. Both checks were blocked by the session's permission rules. The old databases stay until both pass.
+- Nothing from the app connects to the old databases. Only Fly's own housekeeping connections remain (`repmgr`, `flypgadmin`). The last sign-in written to the old production database is from 2026-11-14 23:31 UTC, before the switch.
+- Final backups of both old databases are in R2, in the bucket `reel-ballers-users`: `db-backups/T16460/reel-ballers-db-prod-final-2026-11-16.dump` (418 KB) and `db-backups/T16460/reel-ballers-db-staging-final-2026-11-16.dump` (129 KB). Each was restored into a scratch Postgres 17 and matched its live database exactly (31 tables, 47 migration entries). The copies read back from R2 match byte for byte. No R2 cleanup job lists outside the `{env}/users/` folders, so `db-backups/` is safe.
+- Not yet checked: the admin dashboard loading for a signed-in admin. The saved admin session that `/bug` uses is gone: every sign-in deletes that user's older sessions (`_issue_session_cookie`), and the owner signed in as admin after the switch. Using the owner's live session from the database was blocked, rightly. The old databases stay until the owner confirms the dashboard loads.
 
 ## Acceptance Criteria
 
