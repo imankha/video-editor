@@ -1,20 +1,19 @@
 import { useEffect } from 'react';
-import { EDITOR_MODES } from '../stores';
 
-// Arrow key seek amount (seconds) for playhead navigation
+// Shift+arrow seek amount (seconds)
 export const ARROW_SEEK_SECONDS = 4;
 
 /**
- * useKeyboardShortcuts - Consolidated keyboard handler for video editor
+ * useKeyboardShortcuts - the one keyboard handler for Frame and Spotlight
  *
  * Handles:
  * - Space bar: Toggle play/pause
- * - Ctrl/Cmd+C: Copy crop keyframe at current time
- * - Ctrl/Cmd+V: Paste crop keyframe at current time
- * - Arrow keys: Layer-specific navigation (playhead uses seek, others navigate keyframes)
+ * - Arrow keys: step one frame; Shift+arrow seeks ARROW_SEEK_SECONDS (T4570).
+ *   On Frame's crop layer a plain arrow jumps between crop keyframes instead.
+ * - Ctrl/Cmd+C / Ctrl/Cmd+V: copy/paste the crop keyframe (Frame only: active
+ *   when onCopyCrop is passed)
  *
- * @param {Object} params - All required dependencies
- * @see APP_REFACTOR_PLAN.md Task 2.1 for refactoring context
+ * Spotlight passes only the video controls; Frame also passes its crop props.
  */
 export function useKeyboardShortcuts({
   // Video state
@@ -26,37 +25,18 @@ export function useKeyboardShortcuts({
   seekBackward,
   seek,
 
-  // Mode state
-  editorMode,
+  // Frame crop layer (Spotlight omits these)
   selectedLayer,
-
-  // Copy/paste crop
   copiedCrop,
   onCopyCrop,
   onPasteCrop,
-
-  // Keyframe navigation
   keyframes = [],
-  framerate = 30,
-  selectedCropKeyframeIndex,
-
-  // Highlight navigation
-  highlightKeyframes = [],
-  highlightFramerate = 30,
-  selectedHighlightKeyframeIndex,
-  isHighlightEnabled = false,
-
-  // Annotate mode
-  annotateVideoUrl,
-  annotateSelectedLayer,
-  clipRegions = [],
-  annotateSelectedRegionId,
-  selectAnnotateRegion,
+  framerate,
+  selectedCropKeyframeIndex = null,
 
   // T6980: true while the user is typing in an inline text editor (canvas
   // transparent <input> or the Text-tab panel input). Suppresses Space, copy/
-  // paste, and arrow navigation so keystrokes stay in the field. Arrows and
-  // Ctrl+C/V have NO tagName guard today, so this flag is the real fix.
+  // paste, and arrow navigation so keystrokes stay in the field.
   isTextEditing = false,
 }) {
   // Space bar: Toggle play/pause
@@ -81,8 +61,10 @@ export function useKeyboardShortcuts({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [hasVideo, togglePlay, isTextEditing]);
 
-  // Ctrl+C/V: Copy/paste crop keyframe
+  // Ctrl+C/V: Copy/paste crop keyframe (Frame only)
   useEffect(() => {
+    if (!onCopyCrop) return undefined;
+
     const handleKeyDown = (event) => {
       // T6980: never copy/paste crop while inline text-editing.
       if (isTextEditing) return;
@@ -93,7 +75,7 @@ export function useKeyboardShortcuts({
         // Only prevent default if no text is selected
         if (window.getSelection().toString().length === 0) {
           event.preventDefault();
-          onCopyCrop?.();
+          onCopyCrop();
         }
       }
 
@@ -101,7 +83,7 @@ export function useKeyboardShortcuts({
       if ((event.ctrlKey || event.metaKey) && event.code === 'KeyV') {
         if (copiedCrop) {
           event.preventDefault();
-          onPasteCrop?.();
+          onPasteCrop();
         }
       }
     };
@@ -110,7 +92,7 @@ export function useKeyboardShortcuts({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [hasVideo, copiedCrop, onCopyCrop, onPasteCrop, isTextEditing]);
 
-  // Arrow keys: Layer-specific navigation
+  // Arrow keys: step a frame, Shift seeks, crop layer jumps keyframes
   useEffect(() => {
     const handleArrowKeys = (event) => {
       // T6980: never seek/navigate while inline text-editing.
@@ -120,98 +102,45 @@ export function useKeyboardShortcuts({
       // Don't handle if modifier keys are pressed
       if (event.ctrlKey || event.metaKey || event.altKey) return;
 
-      // Handle annotate mode
-      if (editorMode === EDITOR_MODES.ANNOTATE && annotateVideoUrl) {
-        event.preventDefault();
-        const isLeft = event.code === 'ArrowLeft';
+      // Don't handle if typing in an input or textarea
+      const tagName = event.target?.tagName?.toLowerCase();
+      if (tagName === 'input' || tagName === 'textarea') return;
 
-        // Playhead layer: seek with arrow keys
-        if (annotateSelectedLayer === 'playhead') {
-          if (isLeft) {
-            seekBackward?.(ARROW_SEEK_SECONDS) ?? stepBackward();
-          } else {
-            seekForward?.(ARROW_SEEK_SECONDS) ?? stepForward();
-          }
-          return;
-        }
-
-        // Clips layer: navigate between annotated clips
-        if (clipRegions.length > 0) {
-          const sortedRegions = [...clipRegions].sort((a, b) => a.startTime - b.startTime);
-
-          let currentIndex = sortedRegions.findIndex(r => r.id === annotateSelectedRegionId);
-          if (currentIndex === -1) {
-            currentIndex = isLeft ? sortedRegions.length : -1;
-          }
-
-          const targetIndex = isLeft
-            ? Math.max(0, currentIndex - 1)
-            : Math.min(sortedRegions.length - 1, currentIndex + 1);
-
-          if (targetIndex !== currentIndex || currentIndex === -1) {
-            const targetRegion = sortedRegions[targetIndex];
-            selectAnnotateRegion?.(targetRegion.id);
-            seek(targetRegion.startTime);
-          }
-        }
-        return;
-      }
-
-      // Framing/overlay mode
       if (!hasVideo) return;
       event.preventDefault();
 
       const isLeft = event.code === 'ArrowLeft';
-      const direction = isLeft ? -1 : 1;
 
-      switch (selectedLayer) {
-        case 'playhead': {
-          // Seek 5 seconds with arrow keys
-          if (isLeft) {
-            seekBackward?.(ARROW_SEEK_SECONDS) ?? stepBackward();
-          } else {
-            seekForward?.(ARROW_SEEK_SECONDS) ?? stepForward();
-          }
-          break;
+      if (event.shiftKey) {
+        if (isLeft) {
+          seekBackward(ARROW_SEEK_SECONDS);
+        } else {
+          seekForward(ARROW_SEEK_SECONDS);
+        }
+        return;
+      }
+
+      if (selectedLayer === 'crop') {
+        if (keyframes.length === 0) return;
+
+        let targetIndex;
+        if (selectedCropKeyframeIndex === null) {
+          targetIndex = isLeft ? keyframes.length - 1 : 0;
+        } else {
+          targetIndex = selectedCropKeyframeIndex + (isLeft ? -1 : 1);
+          targetIndex = Math.max(0, Math.min(targetIndex, keyframes.length - 1));
         }
 
-        case 'crop': {
-          if (keyframes.length === 0) break;
-
-          let targetIndex;
-          if (selectedCropKeyframeIndex === null) {
-            targetIndex = isLeft ? keyframes.length - 1 : 0;
-          } else {
-            targetIndex = selectedCropKeyframeIndex + direction;
-            targetIndex = Math.max(0, Math.min(targetIndex, keyframes.length - 1));
-          }
-
-          if (targetIndex !== selectedCropKeyframeIndex) {
-            const keyframe = keyframes[targetIndex];
-            const keyframeTime = keyframe.frame / framerate;
-            seek(keyframeTime);
-          }
-          break;
+        if (targetIndex !== selectedCropKeyframeIndex) {
+          seek(keyframes[targetIndex].frame / framerate);
         }
+        return;
+      }
 
-        case 'highlight': {
-          if (highlightKeyframes.length === 0 || !isHighlightEnabled) break;
-
-          let targetIndex;
-          if (selectedHighlightKeyframeIndex === null) {
-            targetIndex = isLeft ? highlightKeyframes.length - 1 : 0;
-          } else {
-            targetIndex = selectedHighlightKeyframeIndex + direction;
-            targetIndex = Math.max(0, Math.min(targetIndex, highlightKeyframes.length - 1));
-          }
-
-          if (targetIndex !== selectedHighlightKeyframeIndex) {
-            const keyframe = highlightKeyframes[targetIndex];
-            const keyframeTime = keyframe.frame / highlightFramerate;
-            seek(keyframeTime);
-          }
-          break;
-        }
+      if (isLeft) {
+        stepBackward();
+      } else {
+        stepForward();
       }
     };
 
@@ -221,23 +150,13 @@ export function useKeyboardShortcuts({
     hasVideo,
     selectedLayer,
     selectedCropKeyframeIndex,
-    selectedHighlightKeyframeIndex,
     keyframes,
-    highlightKeyframes,
     framerate,
-    highlightFramerate,
-    isHighlightEnabled,
     stepForward,
     stepBackward,
     seekForward,
     seekBackward,
     seek,
-    editorMode,
-    annotateVideoUrl,
-    clipRegions,
-    annotateSelectedRegionId,
-    selectAnnotateRegion,
-    annotateSelectedLayer,
     isTextEditing,
   ]);
 }

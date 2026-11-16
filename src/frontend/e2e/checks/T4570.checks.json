@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T4570:C1": {
+      "kind": "code",
+      "command": "grep -q 'useKeyboardShortcuts({' src/frontend/src/screens/FocusScreen.jsx && grep -q 'useKeyboardShortcuts({' src/frontend/src/screens/OverlayScreen.jsx && cd src/frontend && npx vitest run src/hooks/useKeyboardShortcuts.sameArrows.test.js -t 'T4570:C1'"
+    },
+    "T4570:C2": {
+      "kind": "code",
+      "command": "! grep -qE \"addEventListener\\(\\s*['\\\"]keydown\" src/frontend/src/screens/OverlayScreen.jsx && grep -q 'useKeyboardShortcuts({' src/frontend/src/screens/OverlayScreen.jsx && ! grep -qiE 'annotate|highlight' src/frontend/src/hooks/useKeyboardShortcuts.js"
+    }
+  }
+}

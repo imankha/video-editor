@@ -2705,8 +2705,8 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   keeps a landscape phone single-lane regardless of orientation. `totalLayerHeight` switches
   '6.75rem' (mobile, video + 1 track) / '9.75rem' (desktop, video + 2 lanes). Both lane labels'
   `onClick` still select the ONE `'clips'` keyboard-nav layer (arrow-key nav in
-  `useKeyboardShortcuts.js` walks the full unfiltered `clipRegions` array regardless of which lane a
-  clip renders in) — there is no per-lane selection state. `region.index` is left as-is when
+  `AnnotateScreen.jsx`'s keydown handler walks every clip region regardless of which lane a
+  clip renders in; T4570 removed the never-reached Annotate branch from `useKeyboardShortcuts.js`) — there is no per-lane selection state. `region.index` is left as-is when
   filtering into per-lane arrays (it reflects position in the full chronological list, not
   position-within-lane). Covered by `AnnotateTimeline.twoLane.test.jsx` (unit) and
   `e2e/T5700-two-lanes.qa.spec.js` (real-browser QA, including the T4933 landscape case).

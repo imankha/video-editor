@@ -7,6 +7,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
+import { useFullscreenToggle } from '../hooks/useFullscreenToggle';
 import { useIsCockpit } from '../hooks/useIsMobile';
 import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -103,7 +104,7 @@ export function FocusScreen({
   const [dragCrop, setDragCrop] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState('playhead');
   const [videoFile, setVideoFile] = useState(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const { isFullscreen, toggleFullscreen: handleToggleFullscreen } = useFullscreenToggle();
   // T740: outdated clips dialog and state removed — framing always uses latest boundaries
   // T10650: spinner while resolveWorkingVideoPreviewUrl resolves the "Back to
   // Preview" URL. Ephemeral gesture state, never persisted.
@@ -863,7 +864,6 @@ export function FocusScreen({
     seekForward,
     seekBackward,
     seek,
-    editorMode: 'framing',
     selectedLayer,
     copiedCrop,
     onCopyCrop: framingHandleCopyCrop,
@@ -871,21 +871,7 @@ export function FocusScreen({
     keyframes,
     framerate,
     selectedCropKeyframeIndex,
-    highlightKeyframes: [],
-    highlightFramerate: 30,
-    selectedHighlightKeyframeIndex: null,
-    isHighlightEnabled: false,
-    annotateVideoUrl: null,
-    annotateSelectedLayer: null,
-    clipRegions: [],
-    annotateSelectedRegionId: null,
-    selectAnnotateRegion: null,
   });
-
-  // Fullscreen toggle
-  const handleToggleFullscreen = useCallback(() => {
-    setIsFullscreen(prev => !prev);
-  }, []);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, isFullscreen);
@@ -917,18 +903,6 @@ export function FocusScreen({
 
   // Outdated clips dialog handlers
   // T740: handleContinueWithOriginal and handleUseLatestClips removed — auto-refresh is silent
-
-  // Handle Escape key to exit fullscreen
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        setIsFullscreen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen]);
 
   // T9285 review fix: the openMode staleness-scoping guard used to live here,
   // but this effect can only run while FocusScreen is mounted, which requires

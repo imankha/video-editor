@@ -12,6 +12,8 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
+import { useFullscreenToggle } from '../hooks/useFullscreenToggle';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
@@ -255,7 +257,7 @@ export function OverlayScreen({
   // which persists. A layer-level view toggle, like showPlayerBoxes -- not a
   // gesture-persisted datum, so it is intentionally not written to the backend.
   const [textLayerHidden, setTextLayerHidden] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const { isFullscreen, toggleFullscreen: handleToggleFullscreen } = useFullscreenToggle();
   const internalExportButtonRef = useRef(null);
   const exportButtonRef = externalExportButtonRef || internalExportButtonRef;
 
@@ -337,6 +339,8 @@ export function OverlayScreen({
     seek,
     stepForward,
     stepBackward,
+    seekForward,
+    seekBackward,
     restart,
     clearError,
     isUrlExpiredError,
@@ -1329,69 +1333,25 @@ export function OverlayScreen({
   // KEYBOARD SHORTCUTS
   // =========================================
 
-  const isTextEditing = inlineEditingElementId != null;
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      // T6980: suppress overlay shortcuts entirely while inline text-editing so
-      // Space/arrows land in the editor field, not the playhead. The tagName
-      // guard below already covers the focused <input>, but the explicit flag is
-      // the robust fix (same rationale as useKeyboardShortcuts' isTextEditing).
-      if (isTextEditing) return;
-
-      // Don't handle if typing in an input or textarea
-      const tagName = event.target?.tagName?.toLowerCase();
-      if (tagName === 'input' || tagName === 'textarea') {
-        return;
-      }
-
-      // Space bar: Toggle play/pause
-      if (event.code === 'Space' && effectiveOverlayVideoUrl) {
-        event.preventDefault();
-        togglePlay();
-        return;
-      }
-
-      // Arrow keys: Step forward/backward
-      if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
-        if (!effectiveOverlayVideoUrl) return;
-        // Don't handle if modifier keys are pressed
-        if (event.ctrlKey || event.metaKey || event.altKey) return;
-
-        event.preventDefault();
-        if (event.code === 'ArrowLeft') {
-          stepBackward();
-        } else {
-          stepForward();
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [effectiveOverlayVideoUrl, togglePlay, stepForward, stepBackward, isTextEditing]);
+  // T4570: the same handler as Frame (arrow = one frame, Shift+arrow = 4s).
+  useKeyboardShortcuts({
+    hasVideo: Boolean(effectiveOverlayVideoUrl),
+    togglePlay,
+    stepForward,
+    stepBackward,
+    seekForward,
+    seekBackward,
+    seek,
+    // T6980: Space/arrows stay in the inline text editor while typing.
+    isTextEditing: inlineEditingElementId != null,
+  });
 
   // =========================================
   // FULLSCREEN HANDLER
   // =========================================
 
-  const handleToggleFullscreen = useCallback(() => {
-    setIsFullscreen(prev => !prev);
-  }, []);
-
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, isFullscreen);
-
-  // Escape key to exit fullscreen
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        setIsFullscreen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen]);
 
   // =========================================
   // HANDLERS
