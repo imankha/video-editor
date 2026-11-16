@@ -133,6 +133,11 @@ compose_image = (
     .add_local_dir(_app_dir, remote_path="/root/app", copy=True)
 )
 
+# Image for the CPU-only recap encoder (T2650, `encode_recap_modal`): the
+# compose image's mounted `app/` tree plus ffmpeg-python, which the shared
+# `app.services.recap_encode` pipeline uses (no DB deps -- see that module).
+recap_image = compose_image.pip_install("ffmpeg-python")
+
 # Separate image for YOLO detection (includes ultralytics)
 # Model weights are downloaded during image build to avoid cold-start latency (~140MB)
 yolo_image = (
@@ -3746,6 +3751,39 @@ def compose_serve_time_modal(
         "full_fidelity": full_fidelity,
         "degraded_reason": degraded_reason,
     }
+
+
+@app.function(
+    image=recap_image,     # compose image + ffmpeg-python, whole app/ tree mounted
+    gpu=None,              # CPU only -- libx264 re-encode + concat (T2650)
+    max_containers=CPU_MAX_CONTAINERS,
+    timeout=1800,
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+@_reports_r2_ops
+def encode_recap_modal(
+    user_prefix: str, segments: list, recap_key: str, crf: int, preset: str,
+) -> dict:
+    """T2650: encode a game recap off the API server.
+
+    `segments` is [{id, url, start, end}] in recap order; each `url` is a
+    presigned GET the app minted for the source. Runs the SAME
+    `encode_recap` pipeline as the app's Modal-off path, then uploads the MP4 to
+    `{user_prefix}/{recap_key}`. The app writes the clip mapping from the
+    returned durations (all DB/mapping writes stay on the server).
+
+    Returns `{"recap_key", "segments": [{id, duration}]}`; raises on failure.
+    """
+    from app.services.recap_encode import encode_recap
+
+    bucket = os.environ["R2_BUCKET_NAME"]
+    r2 = get_r2_client()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        recap_path = os.path.join(temp_dir, "recap.mp4")
+        encoded = encode_recap(segments, recap_path, crf=crf, preset=preset)
+        r2.upload_file(recap_path, bucket, f"{user_prefix}/{recap_key}")
+    logger.info(f"[encode_recap_modal] {len(encoded)} segments -> {user_prefix}/{recap_key}")
+    return {"recap_key": recap_key, "segments": encoded}
 
 
 # Local testing entrypoint

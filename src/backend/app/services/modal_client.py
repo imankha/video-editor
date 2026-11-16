@@ -672,6 +672,50 @@ async def call_modal_compose(
     return _credit_modal_r2_ops(result, "compose_serve_time_modal")
 
 
+# Cached reference for the CPU-only recap encoder (T2650)
+_encode_recap_fn = None
+
+
+def _get_encode_recap_fn():
+    """Get a reference to the deployed encode_recap_modal function (T2650).
+
+    NOTE: like every function in video_processing.py it needs a MANUAL
+    `modal deploy`; until then this raises RuntimeError and the recap fails
+    (the sweep retries the game next run)."""
+    global _encode_recap_fn
+
+    if _encode_recap_fn is not None:
+        return _encode_recap_fn
+
+    try:
+        import modal
+        _encode_recap_fn = modal.Function.from_name(MODAL_APP_NAME, "encode_recap_modal")
+        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/encode_recap_modal")
+        return _encode_recap_fn
+    except Exception as e:
+        logger.error(f"[Modal] Failed to connect to encode_recap_modal: {e}")
+        raise RuntimeError(f"Modal encode_recap_modal not available: {e}") from e
+
+
+async def call_modal_encode_recap(
+    *, user_prefix: str, segments: list[dict], recap_key: str, crf: int, preset: str,
+) -> dict:
+    """Route a recap encode to the CPU-only Modal `encode_recap_modal` function
+    (T2650: the sweep's and share link's recap encode leaves the API server).
+
+    `segments` is [{id, url, start, end}] in recap order; each `url` is a
+    presigned GET for the source (game video or legacy recap). Modal uploads the
+    MP4 to `{user_prefix}/{recap_key}` -- `user_prefix` MUST be the
+    already-R2-resolved prefix (`_resolve_modal_user_id`).
+
+    Returns `{"recap_key", "segments": [{id, duration}]}`. Raises on any Modal
+    error; the caller does not fall back to a local encode.
+    """
+    fn = _get_encode_recap_fn()
+    result = await fn.remote.aio(user_prefix, segments, recap_key, crf, preset)
+    return _credit_modal_r2_ops(result, "encode_recap_modal")
+
+
 def _get_process_clips_ai_fn():
     """Get a reference to the deployed process_clips_ai function (unified AI processing)."""
     global _process_clips_ai_fn
