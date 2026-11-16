@@ -28,6 +28,7 @@ import subprocess
 import tempfile
 import sys
 import time
+import traceback
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -597,7 +598,10 @@ def start(args):
     if args.headless:
         log_path = TASKS_ROOT / "profiles" / sanitize(slug) / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        with log_path.open("w", encoding="utf-8") as log:
+        log_path.write_text("", encoding="utf-8")
+        # Append mode: a crash's traceback is appended to this file by the loop itself (T16610), and a child
+        # writing at its own offset would overwrite it.
+        with log_path.open("a", encoding="utf-8") as log:
             # `resume` is the whole headless run: the build loop, then autoland. The same command
             # continues a group that stopped, so nothing is special about the first launch.
             subprocess.Popen([Path(sys.executable).as_posix(), Path(__file__).resolve().as_posix(), "resume", slug],
@@ -824,6 +828,31 @@ def run_preland_check(checkout):
                           capture_output=True, text=True, check=False)
 
 
+# A refusal naming one of these is not transient: retrying cannot change the answer.
+PUSH_REFUSAL_REASONS = ("non-fast-forward", "fetch first", "authentication failed", "could not read username",
+                        "permission", "protected branch", "hook declined", "crlf-noise guard", "refusing to push",
+                        "no checkout", "detached head")
+PUSH_RETRY_SECONDS = 15
+
+
+def push_branch(slug):
+    """task.sh push, retried once when the refusal gives no reason (g-t2650-1, 2026-11-15: GitHub refused
+    the push with none, a retry worked, but the loop had already crashed). A second refusal, or one that
+    names its reason, raises CalledProcessError as before."""
+    for attempt in (1, 2):
+        result = task_sh("push", slug, check=False, capture_output=True)
+        output = (result.stdout or "") + (result.stderr or "")
+        sys.stderr.write(output)
+        if result.returncode == 0:
+            return
+        reason = next((r for r in PUSH_REFUSAL_REASONS if r in output.lower()), None)
+        if attempt == 2 or reason:
+            raise subprocess.CalledProcessError(result.returncode, ["task.sh", "push", slug], result.stdout, result.stderr)
+        print(f"[dotask] push refused with no reason (exit {result.returncode}); retrying once in "
+              f"{PUSH_RETRY_SECONDS}s", file=sys.stderr, flush=True)
+        time.sleep(PUSH_RETRY_SECONDS)
+
+
 def land(args):
     slug = args.slug
     checkout = TASKS_ROOT / sanitize(slug)
@@ -854,7 +883,7 @@ def land(args):
             "to restart the stack on the new HEAD and test again")
 
     print(f"[dotask] pushing {branch}...")
-    task_sh("push", slug)
+    push_branch(slug)
 
     title = ", ".join(group["tasks"]) + ": " + task_title(task_file_in(checkout, group["tasks"][0]))
     # A file, not an argument (newlines survive Windows shims), outside the checkout (which must stay clean).
@@ -1450,6 +1479,12 @@ def locked(action):
                 # with a stale ETA and nothing relaunched it (g-t15400-4, PR #739, 2026-11-10).
                 if checkout.is_dir():
                     append_status(checkout, f"LOOP_CRASHED {type(exc).__name__}: {str(exc)[:160]}")
+                # The status line is one line; the run log keeps where it happened. A resume run by hand prints
+                # to its own terminal, so g-t11180-4's TypeError (2026-11-15) left no traceback anywhere (T16610).
+                log_path = TASKS_ROOT / "profiles" / sanitize(args.slug) / "run.log"
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+                with log_path.open("a", encoding="utf-8") as log:
+                    log.write(f"[dotask] LOOP_CRASHED traceback:\n{traceback.format_exc()}")
                 raise
     return run
 
@@ -1915,7 +1950,9 @@ def set_group_budget(checkout, group):
 def budget_left_minutes(group):
     # A raised budget is saved on the group (autoland), so `status` and a restart see it, not just the process
     # that had DOTASK_VERIFY_BUDGET_MIN in its environment (g-t15540-4, 2026-11-12: status showed 0 min left).
-    return group.get("verify_budget_min", VERIFY_BUDGET_MINUTES) - group.get("verify_spent_s", 0) / 60
+    # A null in the group file reads as unset (T16610): the default budget, nothing spent.
+    budget = group.get("verify_budget_min")
+    return (VERIFY_BUDGET_MINUTES if budget is None else budget) - (group.get("verify_spent_s") or 0) / 60
 
 
 def renew_round_budget(checkout, group, round_number):
@@ -1929,7 +1966,7 @@ def renew_round_budget(checkout, group, round_number):
 
 
 def spend_budget(group, checkout, seconds):
-    group["verify_spent_s"] = group.get("verify_spent_s", 0) + seconds
+    group["verify_spent_s"] = (group.get("verify_spent_s") or 0) + seconds
     save_group(checkout, group)
 
 
@@ -2216,8 +2253,9 @@ def changes(args):
                      "expected": text, "actual": "Not built this way at the tested HEAD."})
     group["owner_changes"] = {"head": head, "bugs": bugs}
     # The owner re-tests anyway, but the re-check of their changes should not start with no budget left.
-    budget = group.get("verify_budget_min", VERIFY_BUDGET_MINUTES)
-    group["verify_spent_s"] = min(group.get("verify_spent_s", 0), (budget - OWNER_CHANGES_RECHECK_MIN) * 60)
+    budget = group.get("verify_budget_min")
+    budget = VERIFY_BUDGET_MINUTES if budget is None else budget
+    group["verify_spent_s"] = min(group.get("verify_spent_s") or 0, (budget - OWNER_CHANGES_RECHECK_MIN) * 60)
     save_group(checkout, group)
     append_status(checkout, f"OWNER_CHANGES {head[:9]}: {len(bugs)} change(s) for "
                             f"{' '.join(sorted({b['task'] for b in bugs}))}; fix round next")
@@ -2281,7 +2319,7 @@ def autoland(args):
         if check.returncode:  # hygiene is the worker's to fix; a browser pass on it would be wasted
             summary = f"pre-land check failed on {head[:9]}"
             write_lf(checkout / VERIFY_FILE, json.dumps({"head": head, "criteria": [], "bugs": [
-                {"scope": "group", "title": "pre-land check failed", "actual": check.stdout + check.stderr}]}, indent=2) + "\n")
+                {"scope": "group", "title": "pre-land check failed", "actual": (check.stdout or "") + (check.stderr or "")}]}, indent=2) + "\n")
         else:
             renew_round_budget(checkout, group, round_number)
             try:
