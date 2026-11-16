@@ -5,7 +5,8 @@ updated: 2026-11-11 (T15980 — fixed the staging failure of T15630:C1's check: 
 clicks on the Forward/Back 5s transport buttons (not a named cutout target), silently swallowing
 them — same mechanism T15930/T15940 found for T15550/T15640. Extracted the inline
 "turn Guidance off via the header toggle" snippet (now a 3rd occurrence) into
-`disableGuidanceForCheck(page)` in `e2e/helpers/checkAuth.js`; `T15630.check.spec.js` calls it
+`disableGuidanceForCheck(page)` in `e2e/helpers/checkAuth.js` (T16590: it waits up to 5 s for the
+switch to be drawn, then for it to be enabled, since before settings load it reads Off whatever is saved); `T15630.check.spec.js` calls it
 once after the first `openGameInAnnotate`. Live-verified on staging: red (pre-fix) failed inside
 `seekTo`'s own timeout exactly as reported; green (post-fix) passed 3/3 consecutive runs.
 **UNRESOLVED LANDMINE found while investigating, NOT fixed here (does not reproduce on the

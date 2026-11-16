@@ -41,13 +41,18 @@ export function checkApi(path) {
  * clicks on controls that aren't one of those cutouts until the check's own timeout
  * (T15930/T15940 root-caused this for T15550/T15640; T15980 is the 3rd occurrence,
  * so it's extracted here instead of re-inlined a 3rd time -- refactor rule 1).
- * Idempotent no-op if the toggle is absent or already off.
+ * Idempotent no-op if the toggle never shows up within a few seconds or is already off.
+ * T16590: on a fresh page load the switch is not drawn yet, so look for it with a wait;
+ * then wait until it is enabled, because before settings load it is disabled and reads
+ * Off whatever the saved value is (T13420).
  *
  * @param {import('@playwright/test').Page} page
  */
 export async function disableGuidanceForCheck(page) {
   const toggle = page.getByTestId('guidance-toggle').first();
-  if (!(await toggle.count().catch(() => 0))) return;
+  const shown = await toggle.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+  if (!shown) return;
+  await expect(toggle).toBeEnabled({ timeout: 30000 });
   if ((await toggle.getAttribute('aria-checked')) !== 'false') {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-checked', 'false', { timeout: 10000 });
