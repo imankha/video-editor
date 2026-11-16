@@ -1,6 +1,6 @@
 # T4430: One video probe
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-07-03
