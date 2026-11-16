@@ -36,11 +36,6 @@ def _get_archive_r2_key(project_id: int) -> str:
     return f"archive/{project_id}.msgpack"
 
 
-def _row_to_dict(row) -> dict[str, Any]:
-    """Convert a sqlite3.Row to a dictionary. Binary columns stay as raw bytes for msgpack."""
-    return {key: row[key] for key in row.keys()}
-
-
 def archive_project(project_id: int, user_id: str | None = None) -> bool:
     """
     Mark a finished project archived (hidden from drafts).

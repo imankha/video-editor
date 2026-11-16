@@ -302,31 +302,6 @@ class TestArchiveRestore:
         assert restored_segments == original_segments, \
             f"segments_data mismatch after restore:\n  original: {original_segments}\n  restored: {restored_segments}"
 
-    def test_archive_row_to_dict_preserves_bytes(self, project_with_framed_clip):
-        """_row_to_dict preserves binary columns as raw bytes for msgpack archival."""
-        project_id, clip_id = project_with_framed_clip
-
-        from app.services.project_archive import _row_to_dict
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM working_clips WHERE id = ?", (clip_id,))
-            row = cursor.fetchone()
-
-        row_dict = _row_to_dict(row)
-
-        assert isinstance(row_dict["crop_data"], bytes), \
-            f"_row_to_dict crop_data should be bytes, got {type(row_dict['crop_data']).__name__}"
-        assert isinstance(row_dict["segments_data"], bytes), \
-            f"_row_to_dict segments_data should be bytes, got {type(row_dict['segments_data']).__name__}"
-
-        crop = decode_data(row_dict["crop_data"])
-        assert isinstance(crop, list)
-        assert crop[0]["frame"] == 0
-
-        segments = decode_data(row_dict["segments_data"])
-        assert isinstance(segments, dict)
-        assert segments["trimRange"]["start"] == 1.5
-
     def test_restore_writes_msgpack_bytes(self, project_with_framed_clip):
         """After restore, DB columns should contain msgpack bytes, not JSON strings."""
         project_id, clip_id = project_with_framed_clip
