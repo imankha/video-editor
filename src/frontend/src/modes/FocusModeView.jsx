@@ -14,7 +14,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import useVideoDisplayRect from '../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../utils/outputPreviewTransform';
-import { FRAME_COPY } from '../config/displayNames';
+import { FOCUS_HINTS, FRAME_COPY } from '../config/displayNames';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
@@ -883,7 +883,10 @@ export function FocusModeView({
               T12020: the 70vh cap also leaves room for the sticky ActionBand
               (--cta-bar-h, set by useCtaBarHeight) so the video's bottom edge and
               its controls never sit under the bar. The 30rem term (T16640, measured; T12440's
-              22rem estimate under-reserved) is the header + controls + crop-track height. */}
+              22rem estimate under-reserved) is the header + controls + crop-track height.
+              T16650: below lg the fixed-height box is a flex column so the player shrinks
+              and the Controls fit INSIDE it; they used to hang ~50px under the box and sat
+              on top of the RotateNudge right below. Desktop (lg:block) keeps them hanging. */}
           <div
             data-testid="focus-video-stage"
             className={`relative bg-gray-900 ${
@@ -891,7 +894,7 @@ export function FocusModeView({
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
                   ? `rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-30rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`
-                  : `rounded-lg h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-30rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
+                  : `rounded-lg flex flex-col lg:block h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-30rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
             }`}
             style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}
             onClick={mobileFs ? togglePlay : undefined}
@@ -1059,11 +1062,21 @@ export function FocusModeView({
             </div>
           )}
 
+          {/* T16650: on a phone the 32px crop track is too narrow for the empty-timeline
+              hint (it wrapped out of the track and across the playhead), so below lg it
+              shows here as a caption above the timeline and the in-track copy is hidden. */}
+          {!mobileFs && videoUrl && focusPointCount === 0 && (
+            <p data-testid="timeline-empty-caption" className="lg:hidden mt-1 px-2 text-xs text-gray-400">
+              {FOCUS_HINTS.TIMELINE_EMPTY}
+            </p>
+          )}
+
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && (
             <div
               data-testid="trim-guide-scope"
               ref={trimScopeRef}
+              className="max-lg:[&_[data-crop-empty-hint]]:hidden"
               style={{ scrollMarginBottom: 'calc(var(--cta-bar-h, 0px) + 0.5rem)' }}
             >
               {focusTimelineBlock}

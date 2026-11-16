@@ -122,7 +122,7 @@ export default function CropLayer({
             the flat-list model's 0-keyframe start state nothing rendered. Show the
             drag-naming hint when there are no focus points on the timeline. */}
         {visibleKeyframes.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none px-2">
+          <div data-crop-empty-hint className="absolute inset-0 flex items-center justify-center pointer-events-none px-2">
             <span className="text-gray-400 text-sm text-center">{FOCUS_HINTS.TIMELINE_EMPTY}</span>
           </div>
         )}
