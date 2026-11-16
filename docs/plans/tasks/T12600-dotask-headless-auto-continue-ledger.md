@@ -1,6 +1,6 @@
 # T12600: Headless workers can ask a question
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-12

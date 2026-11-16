@@ -1,6 +1,6 @@
 # T16590: The "turn Guidance off" test helper gives up too early
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 1
 **Created:** 2026-11-15
