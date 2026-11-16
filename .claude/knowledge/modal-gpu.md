@@ -3,7 +3,7 @@ domain: modal-gpu
 updated: 2026-09-25 (T11320: preflight export-size guard -- see "Preflight cost guard" under
 Testing seams / cost anchors and the T11320 entry under Active/upcoming work);
         2026-09-25 (T11210: corrected Entry-points caller lines -- `call_modal_framing_ai` is at
-modal_client.py:632, caller export_helpers.py:232, and is NOT the single-clip `/render` path;
+modal_client.py:632, caller export_helpers.py:232 [T13720, 2026-11-16: that line is a docstring; no production caller], and is NOT the single-clip `/render` path;
 single-clip `/render` uses `call_modal_clips_ai` (multi_clip.py:1479) via `_export_clips`, now pinned
 by tests/test_export_golden_single_clip_modal.py);
         2026-09-03 (T8270: staging + prod are now SEPARATE Modal apps -- app name resolved from
@@ -24,7 +24,7 @@ since ~forever - see Recovery section); 2026-07-11 (T4240 recovery bugs fixed; T
 
 ## Entry points
 Always call the **unified interface** in `modal_client.py` (backend CLAUDE.md rule) — it routes Modal vs local internally:
-- `call_modal_framing_ai` (`modal_client.py:632`) — framing+upscale of ONE already-known R2 key. Caller: `export_helpers.py:232` (the recovery/finalize seam). **NOT the single-clip `/render` path** — `POST /api/export/render` (`framing.py`) refuses >1 clip then calls `multi_clip._export_clips` with a one-element list, so single-clip export goes through `call_modal_clips_ai` just like multi-clip (concat is a no-op for one clip, `video_processing.py:3252`). That single-clip Modal path is characterized by `tests/test_export_golden_single_clip_modal.py` (T11210).
+- `call_modal_framing_ai` (`modal_client.py:632`) — framing+upscale of ONE already-known R2 key. **No production caller** (only tests call it; `export_helpers.py`'s `create_progress_callback` docstring names it as a usage example). T4410 deletes it. **NOT the single-clip `/render` path** — `POST /api/export/render` (`framing.py`) refuses >1 clip then calls `multi_clip._export_clips` with a one-element list, so single-clip export goes through `call_modal_clips_ai` just like multi-clip (concat is a no-op for one clip, `video_processing.py:3252`). That single-clip Modal path is characterized by `tests/test_export_golden_single_clip_modal.py` (T11210).
 - `call_modal_clips_ai` (`:925`) — the export pipeline for 1..N clips. Caller: `multi_clip.py:1479`. NO local fallback — raises if Modal disabled (local branch lives in `multi_clip.py:1463+` instead).
 - `call_modal_overlay` (`:986`) / `call_modal_overlay_auto` (`:1200`, always sequential — parallel was 3-4x costlier, experiment E7). Callers: `export_worker.py:387`, `overlay.py:1867`.
 - `call_modal_detect_players` (`:1252`) / `_batch` (`:1299`) — YOLO. Caller: `routers/detection.py`.
@@ -313,7 +313,7 @@ graph LR
   `tests/test_t8280_fps_export_choice_repro.py`.
 - ~~**T3950**~~ IMPLEMENTED 2026-07-11: "Made with Reel Ballers" branded outro (~1.75s). NOT in `video_processing.py` — `app/services/branded_outro.py` wired into `overlay.py`'s `final_videos` producers (router layer, both engines, no Modal edit/redeploy). Programmatic `color`+`drawtext` card (bundled font, `fontfile=`), matched to reel res/fps/SAR/pixfmt/audio, concat `-c copy` (re-encode fallback). Flag `BRANDED_OUTRO_ENABLED` (default true). Non-fatal on failure. Render-time only, no persistence. Tests: `test_t3950_branded_outro.py`. See lines 3/42 and export-pipeline.md invariant.
 - ~~**T4240**~~ DONE 2026-07-11 (all four recovery bugs fixed — see Landmines above).
-- **T4420** (TODO, depends on T4370 harness): one interpolation module packaged into the Modal image; GPU-param on `process_framing_ai` (kills the L4 copy); delete `_optimized.py`. Requires Modal redeploy (ask user).
+- **T4420** (TODO, depends on T4370 harness): one interpolation module packaged into the Modal image; GPU-param on `process_framing_ai` (kills the L4 copy); `_optimized.py` was already deleted by T16500. Requires Modal redeploy (ask user).
 - **T4430** (TODO, depends on T4370): named encode profiles + single ffprobe.
 - **Upscale Quality epic** (`docs/plans/tasks/upscale-quality/EPIC.md`, strict order): T4700 SR testbed (`src/backend/experiments/sr_testbed/`, prime directive: no quality change ships without a testbed run) → T4710 encode/denoise quick wins (crf, bt709, `dni_weight`) → T4720 GAN A/B → T4730 temporal VSR prototype (FlashVSR/SeedVR2, L40S) → T4740 prod integration with crop-size routing → T4750 fine-tune.
 - **T7090** (impl 2026-08-16, download-compose to Modal): `compose_serve_time_modal` (CPU, bare-image+app-tree) dispatched by `modal_client.call_modal_compose` / `_get_compose_fn` (mirrors `call_modal_stitch_members`), routed through the `serve_time_video.compose_serve_time_dispatched` seam (Modal-on -> R2-scratch round-trip; ANY Modal error incl. undeployed -> local `compose_serve_time` fallback; Modal-off local is the only in-container path per T4180). The intro-card ffmpeg graph is built by the PURE `app/services/card_compose_plan.build_intro_card_cmd`, shared by the local `_build_card` and the Modal burn (no drift). **Requires `modal deploy app/modal_functions/video_processing.py` before the Modal path works** (else `from_name` raises -> non-fatal local fallback). Live cost/latency/OOM-avoidance + the `/root/app` sys.path/font resolution are a staging-verification gap (unexercisable in-container).

@@ -1,0 +1,4 @@
+{"criteria": {
+  "T13720:C1": {"kind": "code", "command": "grep -q '^BASELINE = 0$' scripts/check_doc_drift.py && python3 scripts/check_doc_drift.py"},
+  "T13720:C2": {"kind": "code", "command": "grep -q 'No production caller' .claude/knowledge/modal-gpu.md && ! grep -q 'Caller: `export_helpers.py:232`' .claude/knowledge/modal-gpu.md && grep -q 'constants/keyframeOrigins.js' .claude/references/coding-standards.md && test -f src/frontend/src/constants/keyframeOrigins.js && test -f src/frontend/src/screens/FocusScreen.jsx && grep -q 'projectDataStore.workingVideo' .claude/knowledge/export-pipeline.md"}
+}}

@@ -57,7 +57,7 @@ Parse HTTP Archive (HAR) files and produce actionable performance insights using
 
 ## What the Script Outputs
 
-The `har-analysis.json` contains:
+The `$TEMP/har-analysis.json` contains:
 ```json
 {
   "summary": { "total_requests", "total_size_kb", "total_time_ms", "page_load_time_ms" },

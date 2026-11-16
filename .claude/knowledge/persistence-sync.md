@@ -372,7 +372,7 @@ correctly — the runner just never established a baseline for the copy it downl
    force-push there. Both non-OK paths now populate `MigrateResult.r2_version` via
    `_r2_version_or_none` (one HEAD, FAILURE path only; coerces the `R2VersionResult` enum to `None`
    so it never leaks into JSON as a version). `status` stays `"sync_failed"` (consumed by
-   `test_migration_runner.py` scenario (d) and the admin endpoint).
+   `test_migration_runner.py` (removed T5087) scenario (d) and the admin endpoint).
 4. **`_migrate_user_db` (user.sqlite) does NOT share the defect.** It uses `ensure_user_database`,
    whose first-access restore calls `sync_user_db_from_r2_if_newer` and records the baseline
    with `set_local_user_db_version(user_id, new_version)` from the SAME download that gated it — so
@@ -407,7 +407,7 @@ preserved, a genuinely stale non-None writer still refused with the real `r2_ver
 ERROR/enum never fabricate a baseline or upload, a mid-download move refuses (never clobbers), a live
 WAL sidecar refuses the swap+upload (`wal_busy`), and an end-to-end multi-profile `_migrate_user` that
 converges and is idempotent on re-run; only the enum-coercion case (`_r2_version_or_none`, a kept
-function) survives, in the same file. `test_migration_runner.py` (T4830) covered five equivalent
+function) survives, in the same file. `test_migration_runner.py` (T4830, removed T5087) covered five equivalent
 scenarios for the bulk primitive and is deleted in full. **The analogous invariants for the SURVIVING
 seam primitive (`migrate_local_profile_db_at_seam`) have their OWN separate coverage in
 `tests/test_t5083_jit_seam.py`** (wal_busy, CAS refusal, etc. — see the T5083 section below), so this
@@ -469,7 +469,7 @@ before any sync result exists, so undoing the target leaves the reel worse off.
 **Frontend.** `useMoveReels.js` branches on `code === 'move_source_cleanup_failed'` BEFORE the
 generic `sync_failed` branch, shows a sticky (`duration: 0`) `toast.error` with a "Finish removing"
 action calling `finishMove(videoIds, targetProfileId)` → /finish, returns `{partial: true}`, and
-fires a new `onPartial` cb WITHOUT `onMoved`. `DownloadsPanel.jsx`'s `onReelsMovePartial` does NOT
+fires a new `onPartial` cb WITHOUT `onMoved`. `DownloadsPanel.jsx`'s (renamed `PublishedReelsPanel.jsx`, T8555) `onReelsMovePartial` does NOT
 optimistically remove the reels (they still live here) — it re-fetches summary/count +
 `notifyCollectionsChanged()` and clears the picker.
 

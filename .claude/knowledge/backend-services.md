@@ -1523,10 +1523,10 @@ path filters; a backend-only commit raised the server's number with no matching 
 **Where the number comes from (two independent computations, kept in agreement by comment, not by
 sharing code):** `git rev-list --count HEAD` — `src/frontend/vite.config.js` bakes it into the bundle
 as `__APP_BUILD__`; `src/frontend/generate-version.js` (runs via `prebuild`/`predev`) computes the
-SAME expression independently and writes it to `public/build.json` (`{build, commit}`), which Vite
+SAME expression independently and writes it to `src/frontend/public/build.json` (gitignored) (`{build, commit}`), which Vite
 copies verbatim into `dist/` — a fetchable fact, since scraping `__APP_BUILD__` back out of a hashed,
 minified bundle would be fragile. `.json` is outside `vite.config.js`'s `workbox.globPatterns`, so the
-service worker never precaches (and never serves stale) `build.json`. The backend gets its number as
+service worker never precaches (and never serves stale) `src/frontend/public/build.json`. The backend gets its number as
 the `APP_BUILD` build-arg (`deploy-backend.yml` passes `git rev-list --count HEAD` computed in CI;
 `deploy_production.sh` computes it locally the same way), read by `app/version.py` and served via the
 `X-App-Build` header + `GET /api/version`'s `build` field (see the T5070 entry just above). Both
