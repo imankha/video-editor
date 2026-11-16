@@ -1,6 +1,6 @@
 # T4490: One owner for the Spotlight video
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-07-03
