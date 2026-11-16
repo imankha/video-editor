@@ -58,23 +58,13 @@ function baseProps(overrides = {}) {
     isSeeking: false,
     seek: vi.fn(),
     togglePlay: vi.fn(),
-    framingVideoUrl: null,
-    framingMetadata: null,
-    keyframes: [],
-    segments: {},
-    segmentSpeeds: {},
-    segmentBoundaries: [],
-    trimRange: null,
     selectedProjectId: 'proj-1',
     selectedProject: {},
     clips: [],
     hasClips: false,
     editorMode: EDITOR_MODES.OVERLAY,
-    setEditorMode: vi.fn(),
     setSelectedLayer: vi.fn(),
-    overlayVideoFile: null,
-    overlayVideoUrl: 'blob:overlay',
-    overlayVideoMetadata: { width: 1920, height: 1080, duration: 10 },
+    effectiveOverlayVideoUrl: 'blob:overlay',
     overlayClipMetadata: null,
     isLoadingWorkingVideo: false,
     setOverlayClipMetadata: vi.fn(),
@@ -110,7 +100,6 @@ function baseProps(overrides = {}) {
     getRegionHighlightAtTime: vi.fn(() => null),
     getRegionsForExport: vi.fn(() => []),
     restoreHighlightRegions: vi.fn(),
-    initializeHighlightRegionsFromClips: vi.fn(),
     ...overrides,
   };
 }
@@ -124,7 +113,7 @@ function drive(initialProps) {
 
 describe('OverlayContainer guided-pick wiring (T11570 BLOCKING fix)', () => {
   beforeEach(() => {
-    // recordAchievement fire-and-forgets a real fetch; stub it so an
+    // The funnel beacon fire-and-forgets a real fetch; stub it so an
     // accidental all-picked state in these tests doesn't hit the network.
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
   });

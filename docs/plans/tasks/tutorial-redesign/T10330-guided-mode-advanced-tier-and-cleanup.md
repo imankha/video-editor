@@ -37,8 +37,9 @@ entry, so shipping without it changes nothing about how a new parent gets to a s
    engine per design §2.2), retire the dead `TUTORIAL_VIDEOS_ENABLED` flags on both sides once the
    Help-panel video entry point (T7630/T10320) is the only path, and the e2e specs that assert the
    old quest panel (`T4780-tutorial-quest-steps.spec.js`, `T8120-quest-overlay-modal-occlusion.qa.spec.js`).
-   `quest_config.py` step ids, achievements, `/api/quests/progress` and `questStore.recordAchievement`
-   SURVIVE as the milestone ledger (identifiers never renamed, T7930 lesson).
+   (Amended, quest-removal G3: the quest step ids, achievements, `/api/quests/progress` and the quest
+   store were all deleted in T11180/T11185; there is no milestone ledger. Guided facts come from
+   games, clips, exports, final_videos and shares.)
 4. **Voice-readiness audit** (design V2): every rule's `say` copy is a short spoken-style sentence;
    TTS itself stays out of scope.
 5. **Per-rule measurement readout**: impression beacons already ship with the core; add the admin

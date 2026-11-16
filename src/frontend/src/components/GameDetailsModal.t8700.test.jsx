@@ -23,15 +23,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // caught. Do not add it before then -- it would just be testing today's
 // soon-to-change copy.
 
-const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
 // T12830: submit probes footage; jsdom cannot decode video, so stub the probe.
 vi.mock('../utils/videoMetadata', () => ({ extractVideoMetadata: vi.fn().mockResolvedValue({}) }));
-vi.mock('../stores/questStore', () => {
-  const state = { recordAchievement: recordAchievementSpy };
-  const useQuestStore = (sel) => (sel ? sel(state) : state);
-  useQuestStore.getState = () => state;
-  return { useQuestStore };
-});
 
 vi.mock('../stores/creditStore', () => {
   const state = { balance: 88, loaded: true, fetchCredits: vi.fn() };
@@ -82,7 +75,6 @@ function pickFile(container) {
 
 describe('GameDetailsModal — T8700 test 12 (Opponent/Date stable contract)', () => {
   beforeEach(() => {
-    recordAchievementSpy.mockClear();
   });
 
   it('submit is enabled once a video is picked, with opponent/date left untouched', () => {

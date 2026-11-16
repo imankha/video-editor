@@ -22,7 +22,6 @@ vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 import apiFetch from '../utils/apiFetch';
 import { AnnotateContainer } from './AnnotateContainer';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useToastStore } from '../components/shared/Toast';
 import { ANNOTATE } from '../config/displayNames';
@@ -98,7 +97,6 @@ function baseProps(overrides = {}) {
 }
 
 const authOriginal = useAuthStore.getState();
-const questOriginal = useQuestStore.getState();
 const uploadOriginal = useUploadStore.getState();
 
 const saveCalls = () => apiFetch.mock.calls.filter(([url]) => String(url).includes('/clips/raw/save'));
@@ -117,10 +115,6 @@ describe('T14370 - Mark play while the game is still loading', () => {
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
     });
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({
-      recordAchievement: vi.fn(),
-      fetchProgress: vi.fn().mockResolvedValue(undefined),
-    });
     useUploadStore.setState({ uploads: [] });
     window.matchMedia = (query) => ({
       matches: false,
@@ -141,7 +135,6 @@ describe('T14370 - Mark play while the game is still loading', () => {
     errSpy.mockRestore();
     warnSpy.mockRestore();
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useUploadStore.setState(uploadOriginal, true);
     useToastStore.setState({ toasts: [] });
   });

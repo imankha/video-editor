@@ -39,7 +39,6 @@ vi.mock('../modes/annotate', async (importOriginal) => {
 import apiFetch from '../utils/apiFetch';
 import { AnnotateContainer } from './AnnotateContainer';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { useToastStore } from '../components/shared/Toast';
 import { __resetBeginLoadDedup } from './annotateVideoLoad';
 
@@ -87,7 +86,6 @@ function baseProps(overrides = {}) {
 }
 
 const authOriginal = useAuthStore.getState();
-const questOriginal = useQuestStore.getState();
 
 describe('AnnotateContainer pending clip selection (T10750)', () => {
   beforeEach(() => {
@@ -95,10 +93,6 @@ describe('AnnotateContainer pending clip selection (T10750)', () => {
     apiFetch.mockReset();
     apiFetch.mockImplementation(() => Promise.resolve({ ok: true, status: 200, json: async () => ({}) }));
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({
-      recordAchievement: vi.fn(),
-      fetchProgress: vi.fn().mockResolvedValue(undefined),
-    });
     window.matchMedia = (query) => ({
       matches: false, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {},
@@ -109,7 +103,6 @@ describe('AnnotateContainer pending clip selection (T10750)', () => {
 
   afterEach(() => {
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useToastStore.setState({ toasts: [] });
   });
 

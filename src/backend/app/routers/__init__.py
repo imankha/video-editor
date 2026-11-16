@@ -39,11 +39,10 @@ from .intro_cards import router as intro_cards_router
 from .payments import router as payments_router
 from .profiles import router as profiles_router
 from .projects import router as projects_router
-from .quests import router as quests_router
 from .settings import router as settings_router
 from .shares import gallery_shares_router, shared_router
 from .storage import router as storage_router
 from .suggestions import router as suggestions_router
 from .users import router as users_router
 
-__all__ = ['admin_analytics_router', 'admin_bugs_router', 'admin_campaigns_router', 'admin_credits_router', 'admin_open_router', 'admin_ops_router', 'admin_referrals_router', 'admin_revenue_router', 'admin_session_router', 'admin_users_router', 'auth_router', 'bootstrap_router', 'clips_router', 'collections_router', 'credits_router', 'detection_router', 'downloads_router', 'export_router', 'gallery_shares_router', 'games_router', 'games_upload_router', 'health_router', 'intro_cards_router', 'payments_router', 'profiles_router', 'projects_router', 'quests_router', 'settings_router', 'shared_router', 'storage_router', 'suggestions_router', 'users_router']
+__all__ = ['admin_analytics_router', 'admin_bugs_router', 'admin_campaigns_router', 'admin_credits_router', 'admin_open_router', 'admin_ops_router', 'admin_referrals_router', 'admin_revenue_router', 'admin_session_router', 'admin_users_router', 'auth_router', 'bootstrap_router', 'clips_router', 'collections_router', 'credits_router', 'detection_router', 'downloads_router', 'export_router', 'gallery_shares_router', 'games_router', 'games_upload_router', 'health_router', 'intro_cards_router', 'payments_router', 'profiles_router', 'projects_router', 'settings_router', 'shared_router', 'storage_router', 'suggestions_router', 'users_router']

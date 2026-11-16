@@ -26,7 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, field_validator
 from starlette.background import BackgroundTask
 
@@ -45,9 +45,6 @@ from ...profile_context import get_current_profile_id
 from ...schemas import TextSpec
 from ...services import export_job_repository
 from ...services.ffmpeg_service import get_encoding_command_parts
-from ...services.image_extractor import (
-    list_highlight_images,
-)
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
 from ...services.poster import (
     first_slowmo_section,
@@ -2151,50 +2148,6 @@ async def get_overlay_data(project_id: int):
             'poster_source': poster_source,
             'poster_filename': poster_filename,
         })
-
-
-@router.get("/highlights/{filename}")
-async def get_highlight_image(filename: str):
-    """
-    Serve a highlight player image by filename.
-
-    Images are extracted from raw clips during highlight persistence
-    and stored in the highlights directory for debugging/inspection.
-
-    Response:
-    - PNG image file of the player bounding box
-    """
-    # Validate filename to prevent directory traversal
-    if '..' in filename or '/' in filename or '\\' in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
-    # Redirect to R2 presigned URL
-    user_id = get_current_user_id()
-    presigned_url = generate_presigned_url(
-        user_id=user_id,
-        relative_path=f"highlights/{filename}",
-        expires_in=3600,
-        content_type="image/png"
-    )
-    if presigned_url:
-        return RedirectResponse(url=presigned_url, status_code=302)
-    logger.warning("Failed to generate R2 URL for highlight image")
-    raise HTTPException(status_code=404, detail="We couldn't load this image. Try again.")
-
-
-@router.get("/highlights")
-async def list_highlights(raw_clip_id: int | None = None):
-    """
-    List all highlight images, optionally filtered by raw_clip_id.
-
-    Response:
-    - images: List of image info dicts with filename, url, raw_clip_id, frame, keyframe_index
-    """
-    images = list_highlight_images(raw_clip_id)
-    return JSONResponse({
-        'images': images,
-        'count': len(images)
-    })
 
 
 # =============================================================================

@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T4660:C1": {
+      "kind": "code",
+      "command": "cd src/backend && python -m pytest -q -p no:cacheprovider tests/test_t4660_game_display_name.py::test_only_one_function_builds_a_game_display_name"
+    },
+    "T4660:C2": {
+      "kind": "code",
+      "command": "cd src/backend && python -m pytest -q -p no:cacheprovider tests/test_t4660_game_display_name.py -k same_game_reads_the_same"
+    }
+  }
+}

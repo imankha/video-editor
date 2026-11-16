@@ -11,22 +11,17 @@ vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 import apiFetch from '../utils/apiFetch';
 import { useRawClipSave } from './useRawClipSave';
 import { useToastStore } from '../components/shared/Toast';
-import { useQuestStore } from '../stores/questStore';
 import { ANNOTATE } from '../config/displayNames';
-
-const questOriginal = useQuestStore.getState();
 
 describe('useRawClipSave.saveClip non-OK create (T14370)', () => {
   let errSpy;
   beforeEach(() => {
     errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    useQuestStore.setState({ fetchProgress: vi.fn().mockResolvedValue(undefined) });
     useToastStore.setState({ toasts: [] });
     apiFetch.mockReset();
   });
   afterEach(() => {
     errSpy.mockRestore();
-    useQuestStore.setState(questOriginal, true);
     useToastStore.setState({ toasts: [] });
   });
 

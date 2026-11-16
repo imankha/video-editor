@@ -417,7 +417,7 @@ def test_compose_modal_entrypoint_imports_do_not_pull_in_database():
     staging raised `ModuleNotFoundError: No module named 'msgpack'` because
     importing `app.services.branded_outro` (one of the three modules
     `compose_serve_time_modal` imports) transitively ran `app.services`'s
-    package `__init__` -> `image_extractor` -> a module-level
+    package `__init__` -> a highlight-image module (since deleted, T16500) -> a module-level
     `from ..database import get_highlights_path` -> the full
     `app.migrations` tree -> `v004_overlay_tuning`'s module-level
     `import msgpack`. `compose_image` never installs `msgpack` (by design --

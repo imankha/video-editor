@@ -1,0 +1,1 @@
+{"criteria": {"T16480:C1": {"kind": "browser"}, "T16480:C2": {"kind": "browser"}, "T16480:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/screens/__tests__/overlayScreenFailedLoad.test.jsx -t \"T16480:C3\""}}}

@@ -1,10 +1,6 @@
 // T14530: every message the upload pipeline emits can reach a parent (the footage row
 // prints progress.message), so none may name the mechanism.
-import { describe, it, expect, vi } from 'vitest';
-
-vi.mock('../stores/questStore', () => ({
-  useQuestStore: { getState: () => ({ fetchProgress: vi.fn() }) },
-}));
+import { describe, it, expect } from 'vitest';
 
 import { hashAndAnalyze } from './uploadManager';
 

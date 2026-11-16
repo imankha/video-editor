@@ -838,7 +838,8 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
     so framing work is kept, not discarded.
 
     Surgical: only the changed ratio + the re-fit crop boxes are written, in place (no version
-    bump). Clips with no crop keyframes are left empty — export applies the new ratio's centered
+    bump). The answer carries each re-fit clip's crop_data (T10990), so the client applies it
+    without refetching the clip list. Clips with no crop keyframes are left empty — export applies the new ratio's centered
     default to them automatically. Clips missing stored dimensions are skipped (logged), since a
     box can't be re-centered without knowing the frame size.
     """
@@ -908,7 +909,8 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
         """, (project_id, project_id))
         clips = cursor.fetchall()
 
-        updated_count = 0
+        # T10990: the re-fit crops go back in the answer, so switching is one request.
+        refit_clips = []
         for clip in clips:
             crop_keyframes = decode_data(clip['crop_data']) or []
             if not crop_keyframes:
@@ -949,14 +951,19 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
                 "UPDATE working_clips SET crop_data = ? WHERE id = ?",
                 (encode_data(refit), clip['id']),
             )
-            updated_count += 1
+            refit_clips.append({"id": clip['id'], "crop_data": refit})
 
         conn.commit()
         logger.info(
             f"[Aspect Ratio] project={project_id} -> {body.aspect_ratio}, "
-            f"re-fit {updated_count}/{len(clips)} clips"
+            f"re-fit {len(refit_clips)}/{len(clips)} clips"
         )
-        return {"success": True, "aspect_ratio": body.aspect_ratio, "updated_clip_count": updated_count}
+        return {
+            "success": True,
+            "aspect_ratio": body.aspect_ratio,
+            "updated_clip_count": len(refit_clips),
+            "clips": refit_clips,
+        }
 
 
 # ============ RAW CLIPS (LIBRARY) ============

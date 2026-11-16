@@ -3,7 +3,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { uploadGame, uploadMultiVideoGame, UPLOAD_PHASE } from '../services/uploadManager';
 import { captureVideoFrame } from '../utils/captureVideoFrame';
 import { toast } from '../components/shared';
-import { useQuestStore } from './questStore';
 import { useCreditStore } from './creditStore';
 import { GameCreateStatus } from '../constants/gameConstants';
 import { ERROR_COPY, UPLOAD_PROGRESS_COPY } from '../config/displayNames';
@@ -119,8 +118,7 @@ export const useUploadStore = create((set, get) => {
         message: `${gameName || 'Video'} uploaded successfully`,
       });
     }
-    // T540: refresh quest progress after upload. T1580: refresh credits (deducted at activation).
-    useQuestStore.getState().fetchProgress({ force: true });
+    // T1580: refresh credits (deducted at activation).
     useCreditStore.getState().fetchCredits();
     advanceQueue();
   };

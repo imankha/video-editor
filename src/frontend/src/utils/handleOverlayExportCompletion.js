@@ -43,7 +43,6 @@ import { STAGE_REASONS } from '../config/displayNames';
  * @param {Object} deps.EDITOR_MODES
  * @param {() => {projectId:number|null, clear:Function}} deps.getPublishIntentState
  * @param {(opts:{force:boolean}) => Promise<any>} deps.fetchProjects
- * @param {() => void} deps.refreshQuestProgress
  * @param {() => string} deps.getEditorMode - CURRENT editor mode (fresh read)
  * @param {() => number|null} deps.getSelectedProjectId - CURRENT selection (fresh read)
  * @param {() => Array} deps.getProjects - CURRENT projects snapshot (post-fetch)
@@ -57,7 +56,6 @@ export async function handleOverlayExportCompletion(completed, {
   EDITOR_MODES,
   getPublishIntentState,
   fetchProjects,
-  refreshQuestProgress,
   getEditorMode,
   getSelectedProjectId,
   getProjects,
@@ -78,8 +76,6 @@ export async function handleOverlayExportCompletion(completed, {
 
   await fetchProjects({ force: true, reason: 'export-complete' });
   // Downloads count is auto-refreshed by DownloadsPanel via galleryStore.
-  // T540: refresh quest progress after any export completes.
-  refreshQuestProgress();
 
   // Read mode/project FRESH from stores: the export WebSocket manager holds this
   // callback from export start, so closure values can be stale.

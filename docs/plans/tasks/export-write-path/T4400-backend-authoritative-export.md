@@ -1,6 +1,6 @@
 # T4400: Old tab cannot overwrite newer edits
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-07-03

@@ -1069,6 +1069,11 @@ landing site's `TutorialModal.tsx` is a separate marketing surface and stays (de
 
 ### 13.1 What dies, what survives
 
+> **Amended by the quest-removal epic (G3, T11180/T11185, 2026-11-15):** there is no quest milestone
+> ledger. The quest config, `_check_all_steps`, the `achievements` table, `/api/quests/*` and the
+> quest store were all deleted. Guided facts come from games, clips, exports, final_videos and
+> shares (own content = `shared_by IS NULL`). Funnel event names stay frozen.
+
 ```mermaid
 flowchart LR
     subgraph dies[DELETED in T7630]

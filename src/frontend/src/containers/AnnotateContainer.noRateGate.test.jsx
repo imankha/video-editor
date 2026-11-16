@@ -26,7 +26,6 @@ vi.mock('../modes/annotate', async (importOriginal) => {
 import apiFetch from '../utils/apiFetch';
 import { AnnotateContainer } from './AnnotateContainer';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { useToastStore } from '../components/shared/Toast';
 
 const flushMicrotasks = () => new Promise((r) => setTimeout(r, 0));
@@ -54,7 +53,6 @@ function baseProps(overrides = {}) {
 }
 
 const authOriginal = useAuthStore.getState();
-const questOriginal = useQuestStore.getState();
 
 async function markPlay(result) {
   await act(async () => { result.current.handleAddClipFromButton(); });
@@ -67,10 +65,6 @@ describe('AnnotateContainer - no rate gate', () => {
     apiFetch.mockReset();
     apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false, success: true }) });
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({
-      recordAchievement: vi.fn(),
-      fetchProgress: vi.fn().mockResolvedValue(undefined),
-    });
     window.matchMedia = (query) => ({
       matches: false, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {},
@@ -81,7 +75,6 @@ describe('AnnotateContainer - no rate gate', () => {
 
   afterEach(() => {
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useToastStore.setState({ toasts: [] });
   });
 

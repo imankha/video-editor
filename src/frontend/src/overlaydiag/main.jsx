@@ -73,12 +73,10 @@ function OverlayDiagHarness() {
   // wired live; the rest are inert stubs (handlers are never fired in this harness).
   const overlay = OverlayContainer({
     videoRef, currentTime, duration: VIDEO_METADATA.duration, isPlaying, isSeeking, seek, togglePlay,
-    framingVideoUrl: null, framingMetadata: null,
-    keyframes: [], segments: null, segmentSpeeds: {}, segmentBoundaries: [], trimRange: null,
     selectedProjectId: 'diag', selectedProject: null,
     hasClips: false,
-    editorMode: 'overlay', setEditorMode: () => {}, setSelectedLayer: () => {},
-    overlayVideoFile: null, overlayVideoUrl: '/overlaydiag-sample.mp4', overlayVideoMetadata: VIDEO_METADATA,
+    editorMode: 'overlay', setSelectedLayer: () => {},
+    effectiveOverlayVideoUrl: '/overlaydiag-sample.mp4',
     overlayClipMetadata: null, isLoadingWorkingVideo: false,
     setOverlayClipMetadata: () => {}, setIsLoadingWorkingVideo: () => {},
     dragHighlight: null, setDragHighlight: () => {},
@@ -91,7 +89,7 @@ function OverlayDiagHarness() {
     moveHighlightRegionStart: () => {}, moveHighlightRegionEnd: () => {},
     toggleHighlightRegion: () => {}, addHighlightRegionKeyframe: () => {}, removeHighlightRegionKeyframe: () => {},
     getRegionAtTime: () => REGION, isTimeInEnabledRegion: () => false, getRegionHighlightAtTime: () => null,
-    getRegionsForExport: () => [], restoreHighlightRegions: () => {}, initializeHighlightRegionsFromClips: () => {},
+    getRegionsForExport: () => [], restoreHighlightRegions: () => {},
   });
 
   const { showPlayerBoxes, togglePlayerBoxes, handlePlaySpotlight, spotlightPlayMode, isPastSpotlight } = overlay;

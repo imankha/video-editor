@@ -223,7 +223,7 @@ test.describe('Full Workflow Tests', () => {
   });
 
   // Test 2 removed: "Annotate Mode - Upload video and import TSV" is fully covered
-  // by new-user-flow.spec.js Quest 1 Step 1 (Add Game + annotate flow).
+  // by new-user-flow.spec.js Step 1 (Add Game + annotate flow).
 
   test('3. Annotate Mode - Export TSV round-trip', async ({ page }) => {
     await enterAnnotateMode(page);
@@ -244,7 +244,7 @@ test.describe('Full Workflow Tests', () => {
   });
 
   // Tests 4-5 removed: "Watch plays button enabled" and "enters playback mode"
-  // are fully covered by new-user-flow.spec.js Quest 1 Step 3 (Watch plays).
+  // were covered by new-user-flow.spec.js (Watch plays, since retired).
 
   // Test 6 removed: project creation via API is tested in "Projects CRUD works"
   // below. Running it immediately after test 5's annotate export causes

@@ -1,6 +1,6 @@
 # T16480: Failed load never replaces saved spotlights
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-11-13

@@ -26,7 +26,6 @@ import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
-import { useFocusStore } from '../stores/focusStore';
 import { useExportStore } from '../stores/exportStore';
 import { startLoadTrace } from '../utils/loadTrace';
 import * as overlayActions from '../api/overlayActions';
@@ -210,9 +209,6 @@ export function OverlayScreen({
       console.warn(`[OverlayScreen] Single-clip project ${projectId} references a game but has no in-match timestamp - data gap (re-export to backfill).`);
     }
   }, [projectId, projectListItem, gameName, gameClock]);
-
-  // Framing store - for detecting uncommitted changes
-  const hasChangedSinceExport = useFocusStore(state => state.hasChangedSinceExport);
 
   // Export store - for dismissing "export complete" toast on changes
   const dismissExportCompleteToast = useExportStore(state => state.dismissExportCompleteToast);
@@ -434,7 +430,6 @@ export function OverlayScreen({
     keyframes: highlightRegionKeyframes,
     framerate: highlightRegionsFramerate,
     initializeWithDuration: initializeHighlightRegions,
-    initializeFromClipMetadata: initializeHighlightRegionsFromClips,
     addRegion: addHighlightRegion,
     deleteRegionByIndex: deleteHighlightRegion,
     moveRegionStart: moveHighlightRegionStart,
@@ -746,6 +741,8 @@ export function OverlayScreen({
       (async () => {
         try {
           const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
+          // T16480: a server error is a failed load, never "nothing saved".
+          if (!response.ok) throw new Error(`overlay-data HTTP ${response.status}`);
           const data = await response.json();
 
           // T4330: seed the action client's version tracker from this load,
@@ -822,10 +819,11 @@ export function OverlayScreen({
           setOverlaySyncState('ready');
           setOverlayChangedSinceExport(false);
         } catch (err) {
+          // T16480: never stand a default circle in for the saved spotlights.
+          // 'error' keeps canSyncActions false and the editor unmounted until Retry.
           console.error('[OverlayScreen] Failed to load overlay data after export:', err);
-          addHighlightRegion(0);
           setOverlayLoadedProjectId(projectId);
-          setOverlaySyncState('ready');
+          setOverlaySyncState('error');
         }
       })();
     }
@@ -868,6 +866,8 @@ export function OverlayScreen({
         try {
           console.log('[OverlayScreen] Loading overlay data for project:', projectId);
           const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
+          // T16480: a server error is a failed load, never "nothing saved".
+          if (!response.ok) throw new Error(`overlay-data HTTP ${response.status}`);
           const data = await response.json();
 
           // T4330: seed the action client's version tracker from this load,
@@ -916,10 +916,10 @@ export function OverlayScreen({
           setOverlaySyncState('ready');
           setOverlayChangedSinceExport(false);
         } catch (err) {
+          // T16480: see the fresh-export loader's catch above.
           console.error('[OverlayScreen] Failed to load overlay data:', err);
-          addHighlightRegion(0);
           setOverlayLoadedProjectId(projectId);
-          setOverlaySyncState('ready');
+          setOverlaySyncState('error');
         }
       })();
     }
@@ -1103,7 +1103,7 @@ export function OverlayScreen({
   const wrappedSetHighlightColor = useCallback((color) => {
     track('overlay_settings_change', { field: 'highlightColor', value: color }, { debugOnly: true });
     setHighlightColor(color);
-    // T3700: quest_3 "Pick your highlight color"
+    // T3700: overlay_color_set funnel event
     recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_COLOR_SET);
     setOverlayChangedSinceExport(true);
     if (!canSyncActions) return;
@@ -1152,7 +1152,7 @@ export function OverlayScreen({
   const wrappedSetHighlightShape = useCallback((val) => {
     track('overlay_settings_change', { field: 'highlightShape', value: val }, { debugOnly: true });
     setHighlightShape(val);
-    // T3700: quest_3 "Choose the spotlight shape" (Body/Ground)
+    // T3700: overlay_shape_set funnel event (Body/Ground)
     recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_SHAPE_SET);
     if (canSyncActions) {
       dispatchOverlayAction('setHighlightShape', () => overlayActions.setHighlightShape(projectId, val));
@@ -1438,22 +1438,12 @@ export function OverlayScreen({
     isSeeking,
     seek,
     togglePlay,
-    framingVideoUrl,
-    framingMetadata,
-    keyframes: [], // No framing keyframes in overlay mode
-    segments: null,
-    segmentSpeeds: {},
-    segmentBoundaries: [],
-    trimRange: null,
     selectedProjectId: projectId,
     selectedProject: project,
     hasClips,
     editorMode: 'overlay',
-    setEditorMode: () => {},
     setSelectedLayer,
-    overlayVideoFile: workingVideo?.file,
-    overlayVideoUrl: workingVideo?.url,
-    overlayVideoMetadata: workingVideo?.metadata,
+    effectiveOverlayVideoUrl,
     overlayClipMetadata,
     isLoadingWorkingVideo,
     setOverlayClipMetadata,
@@ -1488,7 +1478,6 @@ export function OverlayScreen({
     getRegionHighlightAtTime,
     getRegionsForExport,
     restoreHighlightRegions,
-    initializeHighlightRegionsFromClips,
   });
 
   const {
@@ -1636,6 +1625,12 @@ export function OverlayScreen({
     }
   }, [projectId, workingVideo, project, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl, effectiveOverlayMetadata]);
 
+  // T16480: Retry gesture after a failed overlay-data load. Back to 'idle' so
+  // the plain-open loader fetches again (it waits for the video duration).
+  const handleRetryOverlayData = useCallback(() => {
+    setOverlaySyncState('idle');
+  }, [setOverlaySyncState]);
+
   // Manual retry after working-video load has exhausted automatic attempts.
   // Refresh the project to get a fresh presigned URL (in case the failure was
   // due to URL expiry), then clear guards so the load effect re-runs.
@@ -1763,6 +1758,24 @@ export function OverlayScreen({
   // T4350: persistent "highlights need re-placement" banner copy (null when nothing
   // to surface), derived from the carry note the last re-export stamped.
   const highlightCarryMessage = describeHighlightCarryNote(highlightCarryNote);
+
+  // T16480: a failed load shows Retry in place of the editor, so no default
+  // circle stands in for the saved spotlights and no edit can be made.
+  if (overlaySyncState === 'error' && overlayLoadedProjectId === projectId) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 h-[40vh] sm:h-[60vh] px-6 text-center">
+        <p className="text-white text-base font-semibold">{SPOTLIGHT_COPY.LOAD_FAILED_TITLE}</p>
+        <p className="text-gray-400 text-sm">{SPOTLIGHT_COPY.LOAD_FAILED_BODY}</p>
+        <button
+          type="button"
+          onClick={handleRetryOverlayData}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+        >
+          {SPOTLIGHT_COPY.LOAD_RETRY}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -122,12 +122,7 @@ video-editor/
 │   │           ├── export_worker.py    # Background export job processor
 │   │           ├── clip_cache.py       # Clip caching to avoid re-encoding
 │   │           ├── clip_pipeline.py    # Clip processing pipeline
-│   │           ├── video_processor.py  # Abstract GPU processing interface
 │   │           ├── ffmpeg_service.py   # FFmpeg helper functions
-│   │           ├── ffmpeg_errors.py    # FFmpeg error parsing
-│   │           ├── local_gpu_processor.py  # Local GPU implementation
-│   │           ├── image_extractor.py  # Frame extraction utilities
-│   │           ├── progress_reporter.py # WebSocket progress updates
 │   │           ├── r2_storage.py       # Cloudflare R2 storage integration
 │   │           ├── db_sync.py          # SQLite <-> R2 sync with versioning
 │   │           └── transitions/        # Video transition strategies
@@ -174,7 +169,6 @@ video-editor/
 │           │   ├── useExportManager.js   # Export job management
 │           │   ├── useExportRecovery.js  # Resume interrupted exports
 │           │   ├── useKeyboardShortcuts.js # Keyboard shortcuts
-│           │   ├── useTimeline.js        # Timeline state management
 │           │   └── useTimelineZoom.js    # Timeline zoom controls
 │           ├── screens/            # Self-contained screen components
 │           │   ├── ProjectsScreen.jsx    # Owns project selection
@@ -478,30 +472,7 @@ useToastStore.getState().addToast({
 
 ## Services Layer
 
-The backend uses a services layer for GPU-intensive operations, designed for future extensibility to WebGPU or cloud GPU processing.
-
-### Video Processor Interface
-
-```python
-from app.services import VideoProcessor, ProcessingBackend, ProcessorFactory
-
-# Available backends (enum)
-ProcessingBackend.LOCAL_GPU   # Current: Real-ESRGAN on local GPU
-ProcessingBackend.WEB_GPU     # Future: Browser-based processing
-ProcessingBackend.CLOUD_GPU   # Future: Cloud GPU processing (Modal, etc.)
-ProcessingBackend.CPU_ONLY    # Fallback: CPU-only processing
-
-# Get a processor
-processor = ProcessorFactory.create(ProcessingBackend.LOCAL_GPU)
-
-# Process a clip
-result = await processor.process_clip(ProcessingConfig(
-    input_path="/path/to/input.mp4",
-    output_path="/path/to/output.mp4",
-    target_width=1080,
-    use_ai_upscale=True
-))
-```
+Business logic lives in `app/services/`; GPU exports dispatch through `app/services/modal_client.py` (Modal) or `app/services/local_processors.py` (local).
 
 ### Shared Constants
 

@@ -22,12 +22,6 @@ vi.mock('../stores/galleryStore', () => {
   useGalleryStore.getState = () => galleryApi;
   return { useGalleryStore };
 });
-vi.mock('../stores/questStore', () => {
-  const api = { recordAchievement: vi.fn() };
-  const useQuestStore = () => api;
-  useQuestStore.getState = () => api;
-  return { useQuestStore };
-});
 vi.mock('../components/shared/Toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { usePublishProject } from './usePublishProject';

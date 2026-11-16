@@ -25,7 +25,7 @@ from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, Sh
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import acquire_write_lock, durable_sync
 from app.profile_context import get_current_profile_id
-from app.queries import default_game_name, derive_clip_name
+from app.queries import default_game_name, derive_clip_name, short_game_date
 
 # T11430: router-to-router import of the highlight-instances read helper (the
 # only `from app.routers` import in this module). Left here (not lifted to a
@@ -43,6 +43,7 @@ from app.services.auth_db import (
 )
 from app.services.auto_export import auto_export_game, recap_r2_keys
 from app.services.credit_ledger import CreditsUnavailable, deduct_credits, get_balance
+from app.services.game_display import game_display_name
 from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
 from app.services.upload_failures import record_upload_failure_from_payload
 from app.storage import (
@@ -54,7 +55,6 @@ from app.storage import (
     generate_presigned_url_global,
     get_r2_client,
     log_video_resolution,
-    presigned_r2_http_client,
     r2_head_object_global,
     r2_key,
 )
@@ -206,28 +206,6 @@ def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
 
 
 
-def format_short_date(iso_date: str | None) -> str:
-    """
-    Format a YYYY-MM-DD string as "Mon D" (e.g. "Dec 6"). Returns "" for a
-    missing/blank date and the raw value if it cannot be parsed. Platform-safe:
-    %-d is not portable (fails on Windows), so it falls back to %#d-style zero
-    stripping. Extracted (T9930) so the create-time fallback title and the
-    display-name builder share one date format.
-    """
-    if not iso_date:
-        return ""
-    from datetime import datetime
-    try:
-        dt = datetime.strptime(iso_date, "%Y-%m-%d")
-    except (ValueError, TypeError):
-        return iso_date
-    try:
-        return dt.strftime("%b %-d")  # "Dec 6"
-    except (ValueError, Exception):
-        # On Windows, %-d may not work; strip the leading zero manually.
-        return dt.strftime("%b %d").replace(" 0", " ")
-
-
 def upload_fallback_name(upload_date: str | None) -> str:
     """
     Honest title for a game created with no opponent (T9930). The parent gave no
@@ -236,7 +214,7 @@ def upload_fallback_name(upload_date: str | None) -> str:
     day as a match date (the old default titled these "Vs Unnamed opponent
     <today>", asserting a match date the user never entered — evaluator S11).
     """
-    date_str = format_short_date(upload_date)
+    date_str = short_game_date(upload_date)
     return f"Game uploaded {date_str}" if date_str else "Game uploaded"
 
 
@@ -263,44 +241,6 @@ def unnamed_upload_name(original_filename: str | None, upload_date: str | None, 
         name = f"{base} ({n})"
         n += 1
     return name
-
-
-def generate_game_display_name(
-    opponent_name: str | None,
-    game_date: str | None,
-    game_type: str | None,
-    tournament_name: str | None,
-    fallback_name: str
-) -> str:
-    """
-    Generate a display name for a game based on its details.
-
-    Format:
-    - Home: "Vs <Opponent> <Date>"
-    - Away: "at <Opponent> <Date>"
-    - Tournament: "<Tournament>: Vs <Opponent> <Date>"
-
-    Falls back to the stored name if opponent_name is not set.
-    """
-    if not opponent_name:
-        return fallback_name
-
-    # Format date as "Mon D" (e.g., "Dec 6")
-    date_str = format_short_date(game_date)
-
-    # Build the name based on game type
-    if game_type == GameType.TOURNAMENT and tournament_name:
-        prefix = f"{tournament_name}: Vs"
-    elif game_type == GameType.AWAY:
-        prefix = "at"
-    else:  # home or default
-        prefix = "Vs"
-
-    parts = [prefix, opponent_name]
-    if date_str:
-        parts.append(date_str)
-
-    return " ".join(parts)
 
 
 # ==============================================================================
@@ -688,7 +628,7 @@ async def create_game(request: CreateGameRequest):
             display_name = f"{explicit_name} ({suffix})"
             suffix += 1
     else:
-        display_name = generate_game_display_name(
+        display_name = game_display_name(
             request.opponent_name,
             request.game_date,
             request.game_type,
@@ -1763,7 +1703,7 @@ async def _list_games_impl(skip_presigned_urls=False):
                 f"date={row['game_date']}, type={row['game_type']}, name={row['name']}"
             )
 
-        display_name = generate_game_display_name(
+        display_name = game_display_name(
             row['opponent_name'],
             row['game_date'],
             row['game_type'],
@@ -2426,7 +2366,7 @@ async def get_game(game_id: int):
 
         annotations = load_annotations_from_db(game_id)
 
-        display_name = generate_game_display_name(
+        display_name = game_display_name(
             row['opponent_name'],
             row['game_date'],
             row['game_type'],
@@ -2515,7 +2455,7 @@ async def update_game(
             final_date = updates.get('game_date', game['game_date'])
             final_type = updates.get('game_type', game['game_type'])
             final_tournament = updates.get('tournament_name', game['tournament_name'])
-            updates['name'] = generate_game_display_name(
+            updates['name'] = game_display_name(
                 final_opponent, final_date, final_type, final_tournament, game['name']
             )
 
@@ -3532,7 +3472,7 @@ async def load_game(game_id: int):
 
         annotations = load_annotations_from_db(game_id)
 
-        display_name = generate_game_display_name(
+        display_name = game_display_name(
             row['opponent_name'],
             row['game_date'],
             row['game_type'],
@@ -3628,217 +3568,6 @@ async def load_game(game_id: int):
     }
 
 
-@router.get("/{game_id:int}/stream")
-async def stream_game_bounded(
-    game_id: int,
-    request: Request,
-    t: float | None = None,
-):
-    """
-    Bounded streaming proxy for annotation playback. Serves byte ranges
-    covering the moov atom + annotated clip regions instead of the full
-    game video. Same three-window strategy as T1430's clip proxy.
-
-    If no clips exist for this game, all ranges are allowed (full video).
-    """
-    MOOV_WINDOW_END = 10 * 1024 * 1024 - 1
-    MOOV_TAIL_SIZE = 10 * 1024 * 1024
-    PRE_PAD_SECONDS = 2.0
-    POST_PAD_SECONDS = 5.0
-    MIN_PAD_BYTES = 5 * 1024 * 1024
-    GAP_OVERRUN_EXTRA = 20 * 1024 * 1024
-    import httpx
-    from fastapi.responses import StreamingResponse
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT
-                COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
-                g.video_filename,
-                COALESCE(gv.duration, g.video_duration) AS video_duration,
-                COALESCE(gv.video_size, g.video_size) AS video_size
-            FROM games g
-            LEFT JOIN game_videos gv
-                ON gv.game_id = g.id AND gv.sequence = 1
-            WHERE g.id = ?
-        """, (game_id,))
-        game_row = cursor.fetchone()
-
-        if not game_row:
-            raise HTTPException(404, "We couldn't find that game.")
-        if not game_row['video_duration'] or not game_row['video_size']:
-            logger.warning("Game video missing duration/size metadata")
-            raise HTTPException(422, "We couldn't load this video. Try again.")
-        if not game_row['blake3_hash']:
-            raise HTTPException(422, "We couldn't load this video. Try again.")
-
-        blake3_hash = game_row['blake3_hash']
-        video_filename = game_row['video_filename']
-        duration = game_row['video_duration']
-        size = game_row['video_size']
-
-        cursor.execute(
-            "SELECT start_time, end_time FROM raw_clips WHERE game_id = ? ORDER BY start_time",
-            (game_id,),
-        )
-        clips = cursor.fetchall()
-
-    moov_end = min(size - 1, MOOV_WINDOW_END)
-    moov_tail_start = max(0, size - MOOV_TAIL_SIZE)
-
-    if not clips:
-        clip_windows = [(0, size - 1)]
-    else:
-        raw_windows = []
-        for clip in clips:
-            start_byte_raw = int((clip['start_time'] / duration) * size)
-            end_byte_raw = int((clip['end_time'] / duration) * size)
-            pre_pad = max(int((PRE_PAD_SECONDS / duration) * size), MIN_PAD_BYTES)
-            post_pad = max(int((POST_PAD_SECONDS / duration) * size), MIN_PAD_BYTES)
-            raw_windows.append((
-                max(0, start_byte_raw - pre_pad),
-                min(size - 1, end_byte_raw + post_pad),
-            ))
-        raw_windows.sort()
-        clip_windows = [raw_windows[0]]
-        for start, end in raw_windows[1:]:
-            prev_start, prev_end = clip_windows[-1]
-            if start <= prev_end + 1:
-                clip_windows[-1] = (prev_start, max(prev_end, end))
-            else:
-                clip_windows.append((start, end))
-
-    presigned_url = get_game_video_url(blake3_hash, video_filename)
-    if not presigned_url:
-        logger.warning("Failed to generate R2 URL")
-        raise HTTPException(404, "We couldn't load this video. Try again.")
-
-    # No upfront R2 probe -- it added ~1.5s of latency per seek
-    # (separate TCP/TLS handshake). Errors are caught in stream_from_r2().
-
-    range_hdr = request.headers.get("range") or request.headers.get("Range")
-    req_start = 0
-    req_end = size - 1
-    if range_hdr and range_hdr.startswith("bytes="):
-        spec = range_hdr[len("bytes="):].strip()
-        if "-" in spec:
-            lo_s, hi_s = spec.split("-", 1)
-            try:
-                if lo_s:
-                    req_start = int(lo_s)
-                if hi_s:
-                    req_end = int(hi_s)
-            except ValueError:
-                raise HTTPException(416, "We couldn't load this video. Try again.") from None
-
-    window_kind = None
-    window_end = None
-
-    if req_start <= moov_end:
-        window_end = moov_end
-        window_kind = "moov"
-    else:
-        for win_start, win_end_val in clip_windows:
-            if win_start <= req_start <= win_end_val:
-                window_end = win_end_val
-                window_kind = "clip"
-                break
-
-        if window_kind is None and req_start >= moov_tail_start:
-            window_end = size - 1
-            window_kind = "moov_tail"
-
-        if window_kind is None:
-            for _, win_end_val in clip_windows:
-                if win_end_val < req_start <= win_end_val + GAP_OVERRUN_EXTRA:
-                    window_end = min(
-                        win_end_val + GAP_OVERRUN_EXTRA,
-                        moov_tail_start - 1 if moov_tail_start > 0 else size - 1,
-                    )
-                    window_kind = "clip_overrun"
-                    logger.info(
-                        f"[game-stream] overrun game_id={game_id} req={req_start}-{req_end} "
-                        f"clip_win_end={win_end_val} overrun_end={window_end}"
-                    )
-                    break
-
-    if window_kind is None:
-        # Window must be large enough for smooth playback (~2 min of
-        # video) but not so large that seeks become sluggish (browser
-        # has to cancel a huge in-flight download on each seek).
-        MIN_SEEK = 20 * 1024 * 1024   # 20 MB floor
-        MAX_SEEK = 100 * 1024 * 1024  # 100 MB cap
-        two_min_bytes = int((120.0 / max(duration, 1)) * size)
-        seek_size = max(MIN_SEEK, min(two_min_bytes, MAX_SEEK))
-        window_end = min(req_start + seek_size, size - 1)
-        window_kind = "seek"
-
-    req_end = min(req_end, window_end)
-    if req_start > req_end:
-        raise HTTPException(
-            status_code=416,
-            detail="We couldn't load this video. Try again.",
-            headers={"Content-Range": f"bytes */{size}"},
-        )
-
-    segment_len = req_end - req_start + 1
-    logger.info(
-        f"[game-stream] game_id={game_id} window={window_kind} "
-        f"range={req_start}-{req_end} segment_len={segment_len}"
-    )
-
-    async def stream_from_r2():
-        async with presigned_r2_http_client(timeout=httpx.Timeout(60.0, connect=10.0)) as client, client.stream(
-            "GET",
-            presigned_url,
-            headers={"Range": f"bytes={req_start}-{req_end}"},
-        ) as response:
-            if response.status_code not in (200, 206):
-                error_body = ""
-                try:
-                    raw = await response.aread()
-                    error_body = raw[:500].decode("utf-8", errors="replace")
-                except Exception:
-                    error_body = "(unreadable)"
-                logger.error(
-                    f"[game-stream] R2 error game_id={game_id} "
-                    f"r2_status={response.status_code} blake3={blake3_hash} "
-                    f"range={req_start}-{req_end} window={window_kind} "
-                    f"body_snippet={error_body!r}"
-                )
-                logger.warning(f"R2 returned {response.status_code}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail="We couldn't load this video. Try again.",
-                )
-            bytes_streamed = 0
-            try:
-                async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
-                    bytes_streamed += len(chunk)
-                    yield chunk
-            except Exception as e:
-                logger.error(
-                    f"[game-stream] R2 stream interrupted game_id={game_id} "
-                    f"window={window_kind} range={req_start}-{req_end} "
-                    f"bytes_streamed={bytes_streamed}/{segment_len} "
-                    f"error={type(e).__name__}: {e}"
-                )
-
-    return StreamingResponse(
-        stream_from_r2(),
-        status_code=206,
-        media_type="video/mp4",
-        headers={
-            "Content-Range": f"bytes {req_start}-{req_end}/{size}",
-            "Content-Length": str(segment_len),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "private, max-age=300, immutable",
-        },
-    )
-
-
 @router.get("/{game_id:int}/poster.jpg")
 async def get_game_poster(
     game_id: int, request: Request, profile_id: str | None = None
@@ -3925,11 +3654,17 @@ async def get_game_poster(
     # to serve does a game with a recap fall to the recap-derived card.
     # ensure_recap_poster operates on GLOBAL (env-prefixed) keys, same scheme as
     # the share-unfurl path (_recap_r2_key/_recap_poster_r2_key in shares.py).
-    if ensure_game_source_poster(user_id, profile_id, game_id):
+    # T16560: both makers block (R2 HEAD/presign + an ffmpeg frame seek), so they run
+    # in a thread; on the event loop, the first Home visit after T10540 remade every
+    # card one tile at a time and stalled every other request meanwhile.
+    # asyncio.to_thread copies the request's user/profile ContextVars.
+    if await asyncio.to_thread(ensure_game_source_poster, user_id, profile_id, game_id):
         pass
     elif row["recap_video_url"]:
         recap_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
-        if not ensure_recap_poster(recap_key, card_poster_key, resize_width=480, jpeg_quality=3):
+        if not await asyncio.to_thread(
+            ensure_recap_poster, recap_key, card_poster_key, resize_width=480, jpeg_quality=3
+        ):
             log_video_resolution(
                 logger, kind="game_poster", outcome=VideoServeOutcome.MISSING,
                 key=card_poster_key, entity_id=game_id, user_id=user_id,

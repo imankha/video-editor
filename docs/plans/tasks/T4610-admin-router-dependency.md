@@ -1,6 +1,6 @@
 # T4610: Admin check at router level
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-07-03

@@ -1,6 +1,6 @@
 # T10990: Portrait and landscape switch in one step
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-09-21

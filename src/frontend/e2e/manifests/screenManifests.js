@@ -53,7 +53,7 @@ async function reachOverlay(page) {
   const reachable = (await overlayTab.count()) > 0 && (await overlayTab.isEnabled());
   if (!reachable) return { ready: false, reason: 'Overlay needs an exported reel; not available in this env' };
   await overlayTab.click();
-  await page.getByRole('button', { name: /Create Reel/ }).waitFor({ timeout: 90000 });
+  await page.locator('[data-testid="primary-cta"]:visible').first().waitFor({ timeout: 90000 });
   return { ready: true };
 }
 
@@ -139,8 +139,8 @@ export const SCREENS = [
     name: 'Overlay',
     setup: reachOverlay,
     actions: [
-      // Overlay's primary export button — the reel-completion action (T7580).
-      { label: 'Create Reel button', locator: (p) => p.getByRole('button', { name: /Create Reel/ }) },
+      // Overlay's primary export button (T11905: by test id; its label has changed twice).
+      { label: 'Overlay primary CTA', locator: (p) => p.locator('[data-testid="primary-cta"]:visible').first() },
       { label: 'Focus mode tab', locator: (p) => p.getByTestId('mode-framing'), reachOnly: true },
     ],
     // T5430 (invariant #4, coarse-pointer projects only): Overlay-specific icon

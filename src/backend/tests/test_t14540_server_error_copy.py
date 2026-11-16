@@ -36,7 +36,6 @@ SCANNED = sorted(
         APP / "main.py",
         APP / "middleware" / "db_sync.py",
         APP / "services" / "export_helpers.py",
-        APP / "services" / "progress_reporter.py",
     ) if p.name not in SKIP_FILES and SKIP_DIR not in p.parents
 )
 

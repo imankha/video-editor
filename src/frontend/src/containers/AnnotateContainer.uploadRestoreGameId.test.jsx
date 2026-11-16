@@ -19,7 +19,6 @@ vi.mock('../utils/videoMetadata', async (importOriginal) => ({
 import apiFetch from '../utils/apiFetch';
 import { AnnotateContainer } from './AnnotateContainer';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { toast } from '../components/shared';
 
@@ -52,7 +51,6 @@ const uploading = (gameId) => ({
 });
 
 const authOriginal = useAuthStore.getState();
-const questOriginal = useQuestStore.getState();
 const uploadOriginal = useUploadStore.getState();
 
 describe('AnnotateContainer reopening an uploading game (T12790)', () => {
@@ -60,7 +58,6 @@ describe('AnnotateContainer reopening an uploading game (T12790)', () => {
     apiFetch.mockReset();
     apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({ recordAchievement: vi.fn(), fetchProgress: vi.fn().mockResolvedValue(undefined) });
     window.matchMedia = (query) => ({
       matches: false, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
@@ -69,7 +66,6 @@ describe('AnnotateContainer reopening an uploading game (T12790)', () => {
 
   afterEach(() => {
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useUploadStore.setState(uploadOriginal, true);
   });
 
@@ -137,7 +133,6 @@ describe('AnnotateContainer creating a Veo-zip game (T13245)', () => {
   beforeEach(() => {
     apiFetch.mockReset();
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({ recordAchievement: vi.fn(), fetchProgress: vi.fn().mockResolvedValue(undefined) });
     window.matchMedia = (query) => ({
       matches: false, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
@@ -151,7 +146,6 @@ describe('AnnotateContainer creating a Veo-zip game (T13245)', () => {
   afterEach(() => {
     URL.createObjectURL = originalCreate;
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useUploadStore.setState(uploadOriginal, true);
     vi.restoreAllMocks();
   });
@@ -245,7 +239,6 @@ describe('AnnotateContainer re-uploading a video already in a game (T13540)', ()
     apiFetch.mockReset();
     apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
     useAuthStore.setState({ isAuthenticated: true });
-    useQuestStore.setState({ recordAchievement: vi.fn(), fetchProgress: vi.fn().mockResolvedValue(undefined) });
     window.matchMedia = (query) => ({
       matches: false, media: query, onchange: null,
       addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
@@ -258,7 +251,6 @@ describe('AnnotateContainer re-uploading a video already in a game (T13540)', ()
   afterEach(() => {
     URL.createObjectURL = originalCreate;
     useAuthStore.setState(authOriginal, true);
-    useQuestStore.setState(questOriginal, true);
     useUploadStore.setState(uploadOriginal, true);
   });
 

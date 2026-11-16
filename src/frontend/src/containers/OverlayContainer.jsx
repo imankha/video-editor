@@ -1,6 +1,5 @@
 import { useEffect, useCallback, useMemo, useState } from 'react';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
-import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
 import { useSpotlightLoop } from '../modes/overlay/hooks/useSpotlightLoop';
 import { EDITOR_MODES } from '../stores';
 import { countDetectionAssignments } from '../modes/overlay/utils/detectionAssignment';
@@ -42,7 +41,6 @@ export const selectRegionDetection = (detections, currentFrame, fps) => {
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
  *
  * This container manages:
- * - Overlay video state (rendered video from Framing export)
  * - Highlight region management (create, edit, delete regions)
  * - Player detection for click-to-track feature
  * - Highlight keyframe management within regions
@@ -66,17 +64,6 @@ export function OverlayContainer({
   seek,
   togglePlay,
 
-  // Framing video state (for pass-through mode)
-  framingVideoUrl,
-  framingMetadata,
-
-  // Keyframes and segments from Framing mode
-  keyframes,
-  segments,
-  segmentSpeeds,
-  segmentBoundaries,
-  trimRange,
-
   // Project context
   selectedProjectId,
   selectedProject,
@@ -86,13 +73,11 @@ export function OverlayContainer({
 
   // Editor mode
   editorMode,
-  setEditorMode,
   setSelectedLayer,
 
-  // Overlay state from useOverlayState hook (passed from App.jsx to avoid duplicate state)
-  overlayVideoFile,
-  overlayVideoUrl,
-  overlayVideoMetadata,
+  // The Spotlight video the screen chose (OverlayScreen's deriveOverlayVideoSource
+  // is the only place that picks it).
+  effectiveOverlayVideoUrl,
   overlayClipMetadata,
   isLoadingWorkingVideo,
   setOverlayClipMetadata,
@@ -129,44 +114,7 @@ export function OverlayContainer({
   getRegionHighlightAtTime,
   getRegionsForExport,
   restoreHighlightRegions,
-  initializeHighlightRegionsFromClips,
-
 }) {
-
-  // DERIVED STATE: Check for framing edits
-  const hasFramingEdits = useMemo(() => {
-    const hasCropEdits = keyframes.length > 2 || (
-      keyframes.length === 2 &&
-      (keyframes[0].x !== keyframes[1].x ||
-       keyframes[0].y !== keyframes[1].y ||
-       keyframes[0].width !== keyframes[1].width ||
-       keyframes[0].height !== keyframes[1].height)
-    );
-    const hasTrimEdits = trimRange !== null;
-    const hasSpeedEdits = Object.values(segmentSpeeds).some(speed => speed !== 1);
-    const hasSegmentSplits = segmentBoundaries.length > 2;
-    return hasCropEdits || hasTrimEdits || hasSpeedEdits || hasSegmentSplits;
-  }, [keyframes, trimRange, segmentSpeeds, segmentBoundaries]);
-
-  // DERIVED STATE: Effective overlay video (pass-through or rendered)
-  const effectiveOverlayVideoUrl = useMemo(() => {
-    if (overlayVideoUrl) return overlayVideoUrl;
-    if (!hasFramingEdits && framingVideoUrl) return framingVideoUrl;
-    return null;
-  }, [overlayVideoUrl, hasFramingEdits, framingVideoUrl]);
-
-  const effectiveOverlayMetadata = useMemo(() => {
-    if (overlayVideoMetadata) return overlayVideoMetadata;
-    if (!hasFramingEdits && framingMetadata) return framingMetadata;
-    return null;
-  }, [overlayVideoMetadata, hasFramingEdits, framingMetadata]);
-
-  const effectiveOverlayFile = useMemo(() => {
-    // T4270: there is no framing-file pass-through -- raw clips carry no File object
-    // (they are streamed via file_url), so the old `framingVideoFile` branch was dead.
-    if (overlayVideoFile) return overlayVideoFile;
-    return null;
-  }, [overlayVideoFile]);
 
   // =========================================
   // SPOTLIGHT LOOP PLAYBACK (T5370)
@@ -193,7 +141,7 @@ export function OverlayContainer({
 
   // The playhead has run past the spotlight — surfaces the "Back to spotlight" pill.
   // Gated on effectiveOverlayVideoUrl (set only once a working video load succeeds,
-  // or a valid framing-passthrough applies -- see the useMemo above), NOT duration:
+  // or a valid framing-passthrough applies -- see OverlayScreen's deriveOverlayVideoSource), NOT duration:
   // duration/currentTime live in the SHARED useVideo hook and keep Framing's last
   // values while Overlay's own video is loading or has failed to load, so a
   // duration > 0 check alone still let the pill show before this video ever loaded
@@ -497,7 +445,7 @@ export function OverlayContainer({
     // When a detection marker is parked, the browser's seek lands NEAR but not
     // exactly on the detection frame. Anchoring the keyframe to the detection's
     // exact timestamp (not the imprecise currentTime) guarantees it falls within
-    // ASSIGN_TOLERANCE_S so the marker counts as assigned and quest_3 completes.
+    // ASSIGN_TOLERANCE_S so the marker counts as assigned.
     const assignTime = clickedDetection?.timestamp ?? currentTime;
     const region = getRegionAtTime(assignTime);
     if (!region) {
@@ -590,13 +538,7 @@ export function OverlayContainer({
 
   return {
     // Video state
-    overlayVideoUrl,
-    overlayVideoMetadata,
-    overlayVideoFile,
     isLoadingWorkingVideo,
-    effectiveOverlayVideoUrl,
-    effectiveOverlayMetadata,
-    effectiveOverlayFile,
 
     // Highlight regions
     highlightRegions,
@@ -643,9 +585,6 @@ export function OverlayContainer({
     pickGuideTotal: guidedPick.total,    // total detection markers across all regions
     onResumePickGuideStep: guidedPick.resumeTrackedMarker,  // "Go to step N" (away state)
 
-    // Derived state
-    hasFramingEdits,
-
     // Spotlight loop playback (T5370)
     spotlightSpan,
     spotlightPlayMode,
@@ -668,153 +607,6 @@ export function OverlayContainer({
     setOverlayClipMetadata,
     setIsLoadingWorkingVideo,
   };
-}
-
-/**
- * OverlayVideoOverlays - Video overlay components for Overlay mode
- */
-export function OverlayVideoOverlays({
-  effectiveOverlayVideoUrl,
-  effectiveOverlayMetadata,
-  currentHighlightState,
-  onHighlightChange,
-  onHighlightComplete,
-  isTimeInEnabledRegion,
-  currentTime,
-  highlightEffectType,
-  zoom,
-  panOffset,
-  videoRef,
-  // Player detection (auto-detected during framing export - U8)
-  playerDetectionEnabled,
-  playerDetections,
-  detectionVideoWidth,
-  detectionVideoHeight,
-  isDetectionLoading,
-  showPlayerBoxes,
-  onPlayerSelect,
-}) {
-  if (!effectiveOverlayVideoUrl) return null;
-
-  // Show detection boxes if: enabled, has detections, and boxes are toggled on
-  const shouldShowDetections = playerDetectionEnabled && playerDetections?.length > 0 && showPlayerBoxes;
-
-  return (
-    <>
-      {/* Highlight overlay */}
-      {currentHighlightState && effectiveOverlayMetadata && (
-        <HighlightOverlay
-          key="highlight"
-          videoRef={videoRef}
-          videoMetadata={effectiveOverlayMetadata}
-          currentHighlight={currentHighlightState}
-          onHighlightChange={onHighlightChange}
-          onHighlightComplete={onHighlightComplete}
-          isEnabled={isTimeInEnabledRegion(currentTime)}
-          effectType={highlightEffectType}
-          zoom={zoom}
-          panOffset={panOffset}
-        />
-      )}
-
-      {/* Player detection overlay - shows boxes when detected (auto-detection from framing export) */}
-      {effectiveOverlayMetadata && shouldShowDetections && (
-        <PlayerDetectionOverlay
-          key="player-detection"
-          videoRef={videoRef}
-          videoMetadata={effectiveOverlayMetadata}
-          detections={playerDetections}
-          detectionVideoWidth={detectionVideoWidth}
-          detectionVideoHeight={detectionVideoHeight}
-          isLoading={isDetectionLoading}
-          onPlayerSelect={onPlayerSelect}
-          zoom={zoom}
-          panOffset={panOffset}
-        />
-      )}
-    </>
-  );
-}
-
-/**
- * OverlayTimeline - Timeline component for Overlay mode
- */
-export function OverlayTimeline({
-  videoRef,
-  videoUrl,
-  metadata,
-  currentTime,
-  duration,
-  highlightRegions,
-  highlightBoundaries,
-  highlightKeyframes,
-  highlightFramerate,
-  onAddHighlightRegion,
-  onDeleteHighlightRegion,
-  onMoveHighlightRegionStart,
-  onMoveHighlightRegionEnd,
-  onRemoveHighlightKeyframe,
-  onToggleHighlightRegion,
-  onSelectedKeyframeChange,
-  onHighlightChange,
-  onHighlightComplete,
-  zoom,
-  panOffset,
-  visualDuration,
-  selectedLayer,
-  onLayerSelect,
-  onSeek,
-  onDetectionMarkerClick,  // Called when user clicks a green detection marker
-  sourceTimeToVisualTime,
-  visualTimeToSourceTime,
-  timelineZoom,
-  onTimelineZoomByWheel,
-  timelineZoomControls, // T10930: {zoomIn, zoomOut, resetZoom} -> TimelineZoomChip
-  timelineScale,
-  timelineScrollPosition,
-  onTimelineScrollPositionChange,
-  trimRange,
-  isPlaying,
-}) {
-  return (
-    <OverlayMode
-      videoRef={videoRef}
-      videoUrl={videoUrl}
-      metadata={metadata}
-      currentTime={currentTime}
-      duration={duration}
-      highlightRegions={highlightRegions}
-      highlightBoundaries={highlightBoundaries}
-      highlightKeyframes={highlightKeyframes}
-      highlightFramerate={highlightFramerate}
-      onAddHighlightRegion={onAddHighlightRegion}
-      onDeleteHighlightRegion={onDeleteHighlightRegion}
-      onMoveHighlightRegionStart={onMoveHighlightRegionStart}
-      onMoveHighlightRegionEnd={onMoveHighlightRegionEnd}
-      onRemoveHighlightKeyframe={onRemoveHighlightKeyframe}
-      onToggleHighlightRegion={onToggleHighlightRegion}
-      onSelectedKeyframeChange={onSelectedKeyframeChange}
-      onHighlightChange={onHighlightChange}
-      onHighlightComplete={onHighlightComplete}
-      zoom={zoom}
-      panOffset={panOffset}
-      visualDuration={visualDuration}
-      selectedLayer={selectedLayer}
-      onLayerSelect={onLayerSelect}
-      onSeek={onSeek}
-      onDetectionMarkerClick={onDetectionMarkerClick}
-      sourceTimeToVisualTime={sourceTimeToVisualTime}
-      visualTimeToSourceTime={visualTimeToSourceTime}
-      timelineZoom={timelineZoom}
-      onTimelineZoomByWheel={onTimelineZoomByWheel}
-      timelineZoomControls={timelineZoomControls}
-      timelineScale={timelineScale}
-      timelineScrollPosition={timelineScrollPosition}
-      onTimelineScrollPositionChange={onTimelineScrollPositionChange}
-      trimRange={trimRange}
-      isPlaying={isPlaying}
-    />
-  );
 }
 
 export default OverlayContainer;

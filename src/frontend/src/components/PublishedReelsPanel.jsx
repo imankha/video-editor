@@ -113,7 +113,7 @@ export function PublishedReelsPanel({
   useEffect(() => { storyPlayerRef.current = storyPlayer; }, [storyPlayer]);
   const watchTimerRef = useRef(null);
   // T10010: separate timer for the activation `result_viewed` beacon (>=2s / >=50%
-  // of duration), distinct from the 1s quest-achievement timer above.
+  // of duration), distinct from the 1s gallery_watched_1s timer above.
   const viewedTimerRef = useRef(null);
   // Reels already marked watched in the current player session — avoids redundant
   // PATCH/recompute calls when the user navigates back and forth (T3900).
@@ -559,9 +559,9 @@ export function PublishedReelsPanel({
     // Published tab's own active/inactive state -- there is no "close the
     // panel" action anymore (it was a drawer-only concept), so exiting the
     // player always drops the user back on My Reels, never out of the app.
-    // T540: Record achievements for viewing gallery video
+    // T540: funnel events for viewing a gallery video
     recordFunnelEvent(FUNNEL_EVENTS.GALLERY_VIEWED);
-    // Custom project video gets a separate achievement for Quest 3
+    // A custom project video gets its own event
     if (download.source_type === SourceType.CUSTOM_PROJECT) {
       recordFunnelEvent(FUNNEL_EVENTS.CUSTOM_PROJECT_VIEWED);
     }

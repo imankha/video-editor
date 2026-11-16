@@ -7,32 +7,30 @@ parent never entered (evaluator finding S11). The upload dialog now sends an
 empty opponent/date; the backend must title such a game by its UPLOAD date only
 ("Game uploaded <date>"), never claiming a match opponent or match date.
 
-Pure-function tests (no DB / no client): format_short_date, upload_fallback_name,
-and generate_game_display_name's empty-opponent fallback path.
+Pure-function tests (no DB / no client): short_game_date, upload_fallback_name,
+and game_display_name's empty-opponent fallback path.
 """
 
-from app.routers.games import (
-    format_short_date,
-    upload_fallback_name,
-    generate_game_display_name,
-)
 from app.constants import GameType
+from app.queries import short_game_date
+from app.routers.games import upload_fallback_name
+from app.services.game_display import game_display_name
 
 
 class TestFormatShortDate:
     def test_formats_iso_as_mon_day(self):
-        assert format_short_date("2026-12-06") == "Dec 6"
-        assert format_short_date("2026-09-12") == "Sep 12"
+        assert short_game_date("2026-12-06") == "Dec 6"
+        assert short_game_date("2026-09-12") == "Sep 12"
 
     def test_strips_leading_zero_on_single_digit_day(self):
-        assert format_short_date("2026-09-06") == "Sep 6"
+        assert short_game_date("2026-09-06") == "Sep 6"
 
     def test_blank_or_missing_is_empty_string(self):
-        assert format_short_date("") == ""
-        assert format_short_date(None) == ""
+        assert short_game_date("") == ""
+        assert short_game_date(None) == ""
 
     def test_unparseable_returns_raw_value(self):
-        assert format_short_date("garbage") == "garbage"
+        assert short_game_date("garbage") == "garbage"
 
 
 class TestUploadFallbackName:
@@ -59,19 +57,19 @@ class TestGenerateGameDisplayNameFallback:
         fallback = upload_fallback_name("2026-09-12")
         # "unknown" is a raw string (T8930 — not a backend enum member); the
         # empty-opponent branch returns before game_type is consulted anyway.
-        assert generate_game_display_name(
+        assert game_display_name(
             None, "2020-01-01", "unknown", None, fallback
         ) == "Game uploaded Sep 12"
-        assert generate_game_display_name(
+        assert game_display_name(
             "", None, "unknown", None, fallback
         ) == "Game uploaded Sep 12"
 
     def test_real_opponent_still_builds_the_vs_title(self):
-        assert generate_game_display_name(
+        assert game_display_name(
             "Carlsbad SC", "2026-12-06", GameType.HOME, None, "unused"
         ) == "Vs Carlsbad SC Dec 6"
 
     def test_away_opponent_uses_at_prefix(self):
-        assert generate_game_display_name(
+        assert game_display_name(
             "Carlsbad SC", "2026-12-06", GameType.AWAY, None, "unused"
         ) == "at Carlsbad SC Dec 6"

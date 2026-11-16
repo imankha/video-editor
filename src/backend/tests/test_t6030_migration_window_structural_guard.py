@@ -226,7 +226,7 @@ POST_V023_COLUMNS = {
     # read in this file's below-head fixture set names either column directly
     # (list_projects/list_project_clips project neither), so no new
     # test_* driver needed beyond the explicit column-drop coverage above.
-HEAD_VERSION_AUDITED = 61  # v061 (T16090): deletes orphaned archived projects (archived_at IS NOT NULL AND final_video_id IS NULL) and nulls raw_clips.auto_project_id for them -- no new column, nothing to add to POST_V023_COLUMNS; the migration only removes rows an already-migrated DB would otherwise keep, so a below-head DB just sees the orphan a bit longer until its own JIT run, no new hot-read guard needed; v060 (T15040): pending_uploads.last_part_at, column_exists-guarded in prepare_upload (select/resume stamp/insert stamp) and save_upload_parts -- a below-v060 DB reads every session as not-live (old resume behavior); v059 (T13210): play_suggestions, a new TABLE not a column on an existing one; audited: no existing hot read names it (login/load/list_games/list_projects untouched), its only reads are the dedicated /api/games/{id}/suggestions + /api/suggestions/{id} endpoints (own fetch, not in /load) and clips.py's delete-play UPDATE (an explicit gesture handler that runs after run_profile_seam has migrated to head synchronously), so no column_exists-style guard applies; v058 (T13280): game_videos.preferred, column_exists-guarded in _get_game_videos_response; v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
+HEAD_VERSION_AUDITED = 62  # v062 (T11185): drops the quest `achievements` table -- no column added, and nothing reads the table any more, so a below-head DB that still has it is harmless; v061 (T16090): deletes orphaned archived projects (archived_at IS NOT NULL AND final_video_id IS NULL) and nulls raw_clips.auto_project_id for them -- no new column, nothing to add to POST_V023_COLUMNS; the migration only removes rows an already-migrated DB would otherwise keep, so a below-head DB just sees the orphan a bit longer until its own JIT run, no new hot-read guard needed; v060 (T15040): pending_uploads.last_part_at, column_exists-guarded in prepare_upload (select/resume stamp/insert stamp) and save_upload_parts -- a below-v060 DB reads every session as not-live (old resume behavior); v059 (T13210): play_suggestions, a new TABLE not a column on an existing one; audited: no existing hot read names it (login/load/list_games/list_projects untouched), its only reads are the dedicated /api/games/{id}/suggestions + /api/suggestions/{id} endpoints (own fetch, not in /load) and clips.py's delete-play UPDATE (an explicit gesture handler that runs after run_profile_seam has migrated to head synchronously), so no column_exists-style guard applies; v058 (T13280): game_videos.preferred, column_exists-guarded in _get_game_videos_response; v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
 
 
 def _cleanup(user_id: str) -> None:
@@ -293,7 +293,6 @@ def _seed_rows(user_id: str, n: int = 2) -> dict:
                 "VALUES (?, ?, 'overlay', 'complete', ?)",
                 (f"job{i}", project_id, b"{}"),
             )
-        cur.execute("INSERT OR IGNORE INTO achievements (key) VALUES ('watched_annotate_tutorial')")
         conn.commit()
     return {"game_id": game_id, "project_id": project_id}
 
@@ -347,14 +346,6 @@ def _run(coro_or_value):
     if inspect.iscoroutine(coro_or_value):
         return asyncio.run(coro_or_value)
     return coro_or_value
-
-
-def test_quests_check_all_steps(below_head):
-    from app.routers.quests import _check_all_steps
-
-    with get_db_connection() as conn:
-        steps = _check_all_steps(below_head["user_id"], conn)
-    assert isinstance(steps, dict)  # games.shared_by (v026) tolerated
 
 
 def test_games_list(below_head):
@@ -462,10 +453,9 @@ def test_collections_summary(below_head):
 
 
 def test_exports_lists(below_head):
-    from app.routers.exports import list_active_exports, list_recent_exports
+    from app.routers.exports import list_active_exports
 
     _run(list_active_exports())
-    _run(list_recent_exports())  # export_jobs.stage/output_key (v028)
 
 
 def test_upsert_working_video_v046_window(monkeypatch):

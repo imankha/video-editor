@@ -24,7 +24,6 @@ from ..services.user_db import (
     get_all_intro_full_names,
     get_all_intro_photo_keys,
     get_profiles,
-    get_quest_panel_collapsed,
     get_selected_profile_id,
 )
 from ..storage import generate_presigned_url_global
@@ -37,11 +36,10 @@ router = APIRouter(prefix="/api", tags=["bootstrap"])
 
 
 def _read_user_scoped(user_id: str) -> dict:
-    """Read everything sourced from user.sqlite (profiles, credits, settings,
-    quests). Pure synchronous reads — run on a worker thread so they overlap the
+    """Read everything sourced from user.sqlite (profiles, credits, settings).
+    Pure synchronous reads — run on a worker thread so they overlap the
     profile.sqlite reads (see bootstrap()). No writes: safe to run concurrently
-    with the profile-scoped reads (different DB file; quests' read of
-    profile.sqlite is a concurrent WAL reader, which SQLite allows)."""
+    with the profile-scoped reads (different DB file)."""
     t0 = time.perf_counter()
 
     profiles_raw = get_profiles(user_id)
@@ -85,46 +83,10 @@ def _read_user_scoped(user_id: str) -> dict:
     stored = get_all_preferences()
     settings = _to_nested({**DEFAULTS, **stored})
 
-    # Quest progress
-    from ..quest_config import QUEST_DEFINITIONS
-    from ..routers.quests import _check_all_steps
-    from ..services.user_db import get_completed_and_claimed_quest_ids
-
-    # T1536: single user.sqlite open for completed + claimed (was two).
-    completed_quest_ids, claimed_quest_ids = get_completed_and_claimed_quest_ids(user_id)
-    with get_db_connection() as conn:
-        all_steps = _check_all_steps(user_id, conn, skip_quest_ids=completed_quest_ids)
-
-    quests_progress = []
-    for qdef in QUEST_DEFINITIONS:
-        quest_id = qdef["id"]
-        if quest_id in completed_quest_ids:
-            quests_progress.append({
-                "id": quest_id,
-                "steps": {sid: True for sid in qdef["step_ids"]},
-                "completed": True,
-                "reward_claimed": True,
-            })
-        else:
-            quest_steps = {sid: all_steps.get(sid, False) for sid in qdef["step_ids"]}
-            quests_progress.append({
-                "id": quest_id,
-                "steps": quest_steps,
-                "completed": all(quest_steps.values()),
-                "reward_claimed": quest_id in claimed_quest_ids,
-            })
-
-    # T8120: collapsed state of the onboarding quest (Help) panel, so the panel
-    # renders in its persisted state on first paint (no expand-flash before a
-    # follow-up fetch).
-    quest_panel_collapsed = get_quest_panel_collapsed(user_id)
-
     return {
         "profiles": profiles,
         "credits": credits,
         "settings": settings,
-        "quests_progress": quests_progress,
-        "quest_panel_collapsed": quest_panel_collapsed,
         "_ms": int((time.perf_counter() - t0) * 1000),
     }
 
@@ -229,7 +191,7 @@ async def bootstrap():
     """Single GET that replaces 9+ page-load fetches.
 
     T4771: the two independent read groups run concurrently instead of serially.
-    The user.sqlite group (profiles/credits/settings/quests) runs on a worker
+    The user.sqlite group (profiles/credits/settings) runs on a worker
     thread while the profile.sqlite group (projects/games/downloads/exports/
     pending) runs on the event loop; wall-clock becomes ~max(group) instead of
     the sum. Still a single logical read path -- one endpoint, one response,
@@ -267,8 +229,6 @@ async def bootstrap():
         "profiles": user_scoped["profiles"],
         "credits": user_scoped["credits"],
         "settings": user_scoped["settings"],
-        "quests_progress": user_scoped["quests_progress"],
-        "quest_panel_collapsed": user_scoped["quest_panel_collapsed"],
         "projects": projects_response,
         "games": games_response,
         "downloads": misc["downloads"],

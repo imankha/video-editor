@@ -2564,6 +2564,15 @@ class SkippedRecheckTest(AutolandBase):
         final = json.loads((self.tasks_root / "waves" / "w1" / "verify-round-2.json").read_text())
         self.assertEqual([c["status"] for c in final["criteria"]], ["pass", "pass"])
 
+class Utf8SubprocessTest(unittest.TestCase):
+    def test_a_text_call_decodes_utf8_whatever_the_code_page(self):
+        # g-t11180-4, 2026-11-15: container_run's output was undecodable in cp1252 and the loop crashed.
+        result = dotask_cli.run_cmd([dotask_cli.sys.executable, "-c",
+                                     "import sys; sys.stdout.buffer.write('\\u2713 \\ufeff ok'.encode('utf-8'))"],
+                                    capture_output=True, text=True)
+        self.assertEqual(result.stdout, "✓ ﻿ ok")
+
+
 class CiFailureReportTest(unittest.TestCase):
     def test_a_log_gh_could_not_decode_does_not_kill_the_loop(self):
         # PR #739 (2026-11-10): `gh run view --log-failed` output with unicode made subprocess hand back

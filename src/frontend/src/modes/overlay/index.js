@@ -3,18 +3,11 @@
 export { OverlayMode } from './OverlayMode';
 export { default as OverlayModeDefault } from './OverlayMode';
 
-// Timeline
-export { OverlayTimeline } from './OverlayTimeline';
-export { default as OverlayTimelineDefault } from './OverlayTimeline';
-
 // Hooks
 export { default as useHighlightRegions } from './hooks/useHighlightRegions';
 export { default as usePlayerDetection } from './hooks/usePlayerDetection';
 export { default as useOverlayState } from './hooks/useOverlayState';
 export { default as useTextOverlays } from './hooks/useTextOverlays';
-
-// Layers
-export { default as HighlightLayer } from './layers/HighlightLayer';
 
 // Overlays
 export { default as HighlightOverlay } from './overlays/HighlightOverlay';

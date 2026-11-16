@@ -1,0 +1,16 @@
+{
+  "criteria": {
+    "T4440:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/utils/deadEditorCode.test.js -t 'deletes the unused files|leaves no caller|container twins|unwritten fields' --testTimeout=120000"
+    },
+    "T4440:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/utils/deadEditorCode.test.js src/containers/OverlayContainer.test.jsx -t 'OverlayContainer' --testTimeout=120000"
+    },
+    "T4440:C3": {
+      "kind": "code",
+      "command": "cd src/frontend && node --input-type=module -e \"import {build} from 'vite'; import {readdirSync} from 'node:fs'; const input=Object.fromEntries(readdirSync('.').filter(f=>f.endsWith('.html')).map(f=>[f.slice(0,-5),f])); await build({logLevel:'error',build:{outDir:'/tmp/t4440-check-dist',emptyOutDir:true,rollupOptions:{input}}}); console.log('built', Object.keys(input).length, 'pages');\" && npx vitest run src/containers/OverlayContainer.test.jsx src/screens/__tests__/overlayVideoSource.test.jsx src/screens/__tests__/overlayScreenLoadTrace.test.jsx src/screens/__tests__/overlayCompletionPlayerProps.test.jsx src/screens/__tests__/focusScreenClipRestore.characterization.test.jsx src/screens/__tests__/focusCompletionPlayerProps.test.jsx src/modes/overlay/hooks/useOverlayState.test.js"
+    }
+  }
+}

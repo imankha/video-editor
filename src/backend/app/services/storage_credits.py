@@ -27,7 +27,7 @@ AUTO_EXPORT_SURCHARGE = 1
 # T11170: the "welcome" credit grant, moved off the quest system. A new user gets
 # NEW_ACCOUNT_CREDITS (8) + WELCOME_CREDITS (80) = 88 total, the number advertised
 # on the landing page (src/landing/src/site.ts `freeCredits: 88`). This replaces
-# the old quest-chain grant (quest_config.QUEST_CHAIN_CREDIT_TOTAL) so removing the
+# the old quest-chain grant (the deleted QUEST_CHAIN_CREDIT_TOTAL) so removing the
 # quest system never silently drops new signups to 8 credits. Amount frozen at 80
 # by owner ruling G1 (docs/plans/tasks/quest-removal/EPIC.md).
 WELCOME_CREDITS = 80
@@ -54,7 +54,7 @@ def storage_expires_at(from_dt: datetime | None = None, days: int = STORAGE_DURA
 # ---------------------------------------------------------------------------
 # T11170: welcome credit grant. Moved here verbatim from
 # credit_ledger.grant_quest_chain_credits so the grant no longer depends on the
-# quest system (quest_config). Same logic, same remainder calculation, same ONE
+# quest system (deleted in T11185). Same logic, same remainder calculation, same ONE
 # write site through session_init. The ledger SOURCE and KEY strings
 # (`quest_upfront` / `questbank:`) are DELIBERATELY UNCHANGED -- see the frozen-
 # string comments in credit_ledger.py. Renaming either would make the remainder

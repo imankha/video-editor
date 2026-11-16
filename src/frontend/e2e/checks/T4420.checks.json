@@ -1,0 +1,6 @@
+{
+  "criteria": {
+    "T4420:C1": {"kind": "code", "command": "cd src/backend && python -m pytest tests/test_t4420_spotlight_follows_curved_crop.py -q -p no:cacheprovider"},
+    "T4420:C2": {"kind": "code", "command": "cd src/backend && python -m pytest tests/test_t4420_crop_spline_parity.py -q -p no:cacheprovider"}
+  }
+}

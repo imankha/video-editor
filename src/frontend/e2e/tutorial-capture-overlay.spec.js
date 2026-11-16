@@ -187,7 +187,7 @@ test('capture overlay tutorial footage @tutorial-capture', async ({ browser }) =
 
   // --- line 12: click Create Reel (the overlay reel-completion action, T7580) -----------------------------------
   step('create reel');
-  const addSpot = page.getByRole('button', { name: 'Create Reel', exact: true }).first();
+  const addSpot = page.locator('[data-testid="primary-cta"]:visible').first();
   await ring(addSpot, 8);
   await dwell(1);
   await mark(12, 'click');

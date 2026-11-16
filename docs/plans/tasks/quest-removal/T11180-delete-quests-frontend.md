@@ -1,6 +1,6 @@
 # T11180: Remove quests from the app
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-09-24

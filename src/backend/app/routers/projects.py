@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from app.database import column_exists, get_db_connection
 from app.queries import default_game_name, derive_clip_name, latest_working_clips_subquery
 from app.services.collection_metadata import compute_unified_clip_start
+from app.services.game_display import game_display_name
 from app.services.state_log import log_state
 from app.storage import (
     R2_ENABLED,
@@ -80,48 +81,6 @@ def _get_season_for_month(month: int) -> str:
         return "Spring"
     else:  # Jun-Aug
         return "Summer"
-
-
-def _generate_game_display_name(
-    opponent_name: str | None,
-    game_date: str | None,
-    game_type: str | None,
-    tournament_name: str | None,
-    fallback_name: str
-) -> str:
-    """
-    Generate a display name for a game based on its details.
-
-    Format:
-    - Home: "Vs <Opponent> <Date>"
-    - Away: "at <Opponent> <Date>"
-    - Tournament: "<Tournament>: Vs <Opponent> <Date>"
-    """
-    if not opponent_name:
-        return fallback_name
-
-    # Format date as "Mon D" (e.g., "Dec 6")
-    date_str = ""
-    if game_date:
-        try:
-            dt = datetime.strptime(game_date, "%Y-%m-%d")
-            date_str = dt.strftime("%b %d").lstrip("0").replace(" 0", " ")  # Remove leading zeros
-        except (ValueError, Exception):
-            date_str = game_date
-
-    # Build the name based on game type
-    if game_type == 'tournament' and tournament_name:
-        prefix = f"{tournament_name}: Vs"
-    elif game_type == 'away':
-        prefix = "at"
-    else:  # home or default
-        prefix = "Vs"
-
-    parts = [prefix, opponent_name]
-    if date_str:
-        parts.append(date_str)
-
-    return " ".join(parts)
 
 
 def _generate_group_key(game_names: list[str], game_dates: list[str]) -> str | None:
@@ -534,7 +493,7 @@ def _read_projects_list():
             if game_row['game_id'] not in project_games[project_id]['game_ids']:
                 project_games[project_id]['game_ids'].append(game_row['game_id'])
                 # Generate display name from game details (not stored name which may be filename)
-                display_name = _generate_game_display_name(
+                display_name = game_display_name(
                     game_row['opponent_name'],
                     game_row['game_date'],
                     game_row['game_type'],

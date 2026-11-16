@@ -670,6 +670,7 @@ export default function CropOverlay({
 
       {/* Crop rectangle */}
       <div
+        data-testid="crop-rect"
         className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'} ${showCoach ? `${guideCropBox} rounded-sm` : ''}`}
         style={{
           left: `${screenCrop.x}px`,

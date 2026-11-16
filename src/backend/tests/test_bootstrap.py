@@ -95,7 +95,7 @@ class TestBootstrapContract:
     def test_returns_all_top_level_keys(self):
         data = _run_bootstrap()
         for key in (
-            "profiles", "credits", "settings", "quests_progress",
+            "profiles", "credits", "settings",
             "projects", "games", "downloads", "exports", "pending_uploads",
         ):
             assert key in data, f"missing key: {key}"
@@ -103,7 +103,6 @@ class TestBootstrapContract:
     def test_shapes(self):
         data = _run_bootstrap()
         assert isinstance(data["profiles"], list)
-        assert isinstance(data["quests_progress"], list)
         assert isinstance(data["pending_uploads"], list)
         assert isinstance(data["settings"], dict)
         assert {"count", "unwatched_count"}.issubset(data["downloads"].keys())

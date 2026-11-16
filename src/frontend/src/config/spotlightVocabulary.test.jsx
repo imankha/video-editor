@@ -68,8 +68,6 @@ const renderView = (overrides = {}) => render(
 const RETIRED = {
   'modes/OverlayModeView.jsx': ['Focus export', 'Re-run Focus', 'Generate required', 'adding overlays', 'text region', 'playhead"', ' Mode\n'],
   'modes/overlay/OverlayMode.jsx': ['highlight region', 'text layer', 'player boxes', 'highlight notice'],
-  'modes/overlay/OverlayTimeline.jsx': ['highlight layer'],
-  'modes/overlay/layers/HighlightLayer.jsx': ['highlight layer', 'highlight ellipse', 'Highlight keyframe', '[SELECTED]'],
   'modes/overlay/layers/DetectionMarkerLayer.jsx': ['Click to', 'detected at frame', 'assigned at frame'],
   'modes/overlay/layers/PosterMarkerLayer.jsx': ['Cover frame', 'cover frame', 'cover-image marker', 'marker is inactive'],
   'modes/overlay/overlays/PlayerDetectionOverlay.jsx': ['Click to highlight', 'detected</span>'],

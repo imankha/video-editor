@@ -10,15 +10,11 @@ Root cause (verified against code): account deletion left the R2 copy of user.sq
 profile.sqlite (and the in-process init/version caches) intact, so a same-email login
 RESTORED the old user.sqlite. get_selected_profile_id then returned the old profile ->
 `is_new_user` stayed False -> the NEW_ACCOUNT_CREDITS seed block in session_init was
-skipped (33p). The restored user-scoped quest state (completed_quests / quest_reward
-transactions, re-materialised by backfill_completed_quests) then disagreed with the fresh
-profile's step data, so GET /progress reported quest_1 complete while POST /claim-reward
-re-derived the steps and 400'd (34p/35p).
+skipped (33p). The restored user-scoped quest state then disagreed with the fresh
+profile's step data (34p/35p; the quest system itself was deleted in T11185).
 
 Fix: deletion is now complete + cache-safe (auth.delete_user, privacy.delete_account share
-`_purge_user_data`), so a reregister is a genuinely fresh new user; and claim-reward honors
-the same user-scoped completed/claimed set that /progress uses before re-checking steps, so
-the two endpoints never disagree.
+`_purge_user_data`), so a reregister is a genuinely fresh new user.
 
 Hermetic: R2 is disabled and per-user SQLite lives under a tmp dir. No real R2/Postgres writes.
 """
@@ -27,7 +23,6 @@ import asyncio
 import uuid
 
 import pytest
-from fastapi import HTTPException
 
 # T11170: the welcome grant is decoupled from the quest system -- its amount is
 # storage_credits.WELCOME_CREDITS, no longer quest_config.QUEST_CHAIN_CREDIT_TOTAL.
@@ -49,7 +44,7 @@ def _uid(prefix: str) -> str:
 def _fresh_event_loop():
     """asyncio.run() here (and user_session_init's internal recovery scheduler) closes the
     loop it created and leaves no current loop. Reinstall a usable loop after each test so
-    other modules relying on asyncio.get_event_loop() (e.g. test_tutorial_quest_steps) still
+    other modules relying on asyncio.get_event_loop() still
     find an open loop when the suite runs them after this file."""
     yield
     asyncio.set_event_loop(asyncio.new_event_loop())
@@ -106,61 +101,7 @@ def _make_account(uid: str, pid: str):
     ensure_user_database(uid)
     create_profile(uid, pid, "", "#6366f1", is_default=True)
     set_selected_profile_id(uid, pid)
-    ensure_database()  # fresh profile.sqlite: NO achievements rows
-
-
-# ---------------------------------------------------------------------------
-# Bugs 34p / 35p — GET /progress and POST /claim-reward must agree
-# ---------------------------------------------------------------------------
-
-def test_progress_and_claim_agree_for_user_scoped_completed_quest(hermetic):
-    """quest_1 is 'done' in the user-scoped record (completed_quests + quest_reward tx) but the
-    active profile has no achievements. /progress reports it complete; /claim-reward must not 400.
-
-    Pre-fix RED: claim-reward re-derives steps and raises 400
-    'Quest not complete: step 'watch_annotate_tutorial' is incomplete'.
-    """
-    from app.routers.quests import claim_reward, get_progress
-    from app.services.credit_ledger import grant_credits
-    from app.services.user_db import mark_quest_completed
-
-    uid = _uid("zombie")
-    pid = "aaaa1111"
-    _make_account(uid, pid)
-
-    # Model the restored/backfilled user-scoped state: a real prior quest_reward grant.
-    grant_credits(uid, 15, "quest_reward", "quest_1")  # -> claimed set has quest_1
-    mark_quest_completed(uid, "quest_1")               # -> completed set has quest_1
-
-    prog = asyncio.run(get_progress())
-    q1 = next(q for q in prog["quests"] if q["id"] == "quest_1")
-    assert q1["completed"] is True, "/progress should report quest_1 complete (user-scoped record)"
-    assert q1["reward_claimed"] is True
-
-    # Must NOT raise — the two endpoints agree.
-    res = asyncio.run(claim_reward("quest_1"))
-    assert res["already_claimed"] is True
-    assert res["credits_granted"] == 0
-
-
-def test_claim_still_blocked_for_unearned_quest(hermetic):
-    """Guard against loosening: a quest that is neither claimed nor step-complete still 400s.
-
-    T9410: the block now lands on the first REAL user-facing step (upload_game) —
-    the hidden `watch_annotate_tutorial` step is vacuously satisfied while tutorial
-    videos are disabled, so it is no longer the rejecting step. The detail is now a
-    structured object carrying the step id for diagnostics.
-    """
-    from app.routers.quests import claim_reward
-
-    uid = _uid("fresh")
-    pid = "bbbb2222"
-    _make_account(uid, pid)  # no achievements, no completed_quests, no quest_reward tx
-
-    with pytest.raises(HTTPException) as ei:
-        asyncio.run(claim_reward("quest_1"))
-    assert ei.value.status_code == 400
-    assert ei.value.detail["step_id"] == "upload_game"
+    ensure_database()  # fresh profile.sqlite
 
 
 # ---------------------------------------------------------------------------
@@ -169,10 +110,9 @@ def test_claim_still_blocked_for_unearned_quest(hermetic):
 
 def test_reregister_after_purge_is_new_user_and_seeded(hermetic):
     """A returning account is not seeded; after a complete purge, reregister is is_new_user
-    with NEW_ACCOUNT_CREDITS and a clean quest slate."""
+    with NEW_ACCOUNT_CREDITS."""
     from app.routers.auth import _purge_user_data
     from app.services.credit_ledger import get_credit_balance, set_balance
-    from app.services.user_db import get_completed_quest_ids
     from app.session_init import _init_cache, user_session_init
 
     uid = _uid("delreg")
@@ -192,11 +132,10 @@ def test_reregister_after_purge_is_new_user_and_seeded(hermetic):
     _purge_user_data(uid)
 
     # Reregister: genuinely fresh new user, seeded (signup bonus + upfront quest
-    # total), clean quest slate.
+    # total).
     after = user_session_init(uid)
     assert after["is_new_user"] is True
     assert get_credit_balance(uid)["balance"] == FRESH_SIGNUP_BALANCE
-    assert get_completed_quest_ids(uid) == set()
 
 
 def test_purge_then_reregister_re_grants_signup_bonus_under_same_key(hermetic):
@@ -264,34 +203,6 @@ def test_returning_user_not_reseeded(hermetic):
     _init_cache.pop(uid, None)
     user_session_init(uid)
     assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS + WELCOME_CREDITS
-
-
-def test_returning_user_keeps_quest_progress(hermetic):
-    """Regression: a normal returning user (no delete) keeps their completed/claimed quest
-    state across a session re-init — the fix must not reset anyone's progress."""
-    from app.routers.quests import get_progress
-    from app.services.credit_ledger import grant_credits
-    from app.services.user_db import get_completed_and_claimed_quest_ids, mark_quest_completed
-    from app.session_init import _init_cache, user_session_init
-
-    uid = _uid("progressed")
-    pid = "cdef1234"
-    _make_account(uid, pid)
-    grant_credits(uid, 15, "quest_reward", "quest_1")
-    mark_quest_completed(uid, "quest_1")
-
-    _init_cache.pop(uid, None)
-    result = user_session_init(uid)
-    assert result["is_new_user"] is False
-
-    completed, claimed = get_completed_and_claimed_quest_ids(uid)
-    assert completed == {"quest_1"}
-    assert claimed == {"quest_1"}
-
-    prog = asyncio.run(get_progress())
-    q1 = next(q for q in prog["quests"] if q["id"] == "quest_1")
-    assert q1["completed"] is True
-    assert q1["reward_claimed"] is True
 
 
 def test_reregister_with_different_email_is_an_independent_fresh_account(hermetic):

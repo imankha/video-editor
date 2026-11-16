@@ -14,7 +14,6 @@
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { GameCreateStatus } from '../constants/gameConstants';
-import { useQuestStore } from '../stores/questStore';
 import { useEditorStore } from '../stores/editorStore';
 import { analyzeMp4Faststart, getReorderedSlice } from '../utils/mp4Faststart';
 import { getWarmingDiag } from '../utils/cacheWarming';
@@ -1381,7 +1380,6 @@ export async function uploadGame(file, onProgress, options = {}) {
     await activateGame(gameResult.game_id);
     activated = true;
 
-    useQuestStore.getState().fetchProgress({ force: true });
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
       useGamesDataStore.getState().invalidateGames()
     );
@@ -1513,8 +1511,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       await activateGame(gameResult.game_id);
       activated = true;
 
-      useQuestStore.getState().fetchProgress({ force: true });
-      import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
+        import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
         useGamesDataStore.getState().invalidateGames()
       );
       notify(UPLOAD_PHASE.COMPLETE, 100, UPLOAD_PROGRESS_COPY.COMPLETE);
@@ -1601,7 +1598,6 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       }
     }
 
-    useQuestStore.getState().fetchProgress({ force: true });
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
       useGamesDataStore.getState().invalidateGames()
     );
@@ -1726,12 +1722,10 @@ export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress)
   // Step 4 (success only): re-load the game via /load so AnnotateContainer
   // re-derives gameVideos and buildFullVideoTimeline runs (single->multi). Also
   // refresh the games list so its aggregate duration/size pick up the new
-  // footage, and the quest progress in case a milestone fired. A throw in any
-  // per-file step above skips this entirely — no reload on failure.
+  // footage. A throw in any per-file step above skips this entirely — no reload on failure.
   const { useGamesDataStore } = await import('../stores/gamesDataStore');
   await useGamesDataStore.getState().loadGame(gameId);
   useGamesDataStore.getState().invalidateGames();
-  useQuestStore.getState().fetchProgress({ force: true });
 
   notify(UPLOAD_PHASE.COMPLETE, 100, total > 1 ? UPLOAD_PROGRESS_COPY.VIDEOS_ADDED : UPLOAD_PROGRESS_COPY.VIDEO_ADDED);
 

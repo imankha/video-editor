@@ -513,14 +513,16 @@ keyframes are covered where they diverge from crop — they are the "one refacto
   `src/frontend/src/components/timeline/RegionLayer.jsx` (highlight — forked, stale rules).
 - **Persistence helper**: `src/frontend/src/utils/persistKeyframeEdit.js` (T3800 single path);
   transport `src/frontend/src/api/focusActions.js`.
-- **Spline math**: `src/frontend/src/utils/splineInterpolation.js`; backend mirror
-  `src/backend/app/interpolation.py`.
+- **Spline math**: `src/frontend/src/utils/splineInterpolation.js`; backend copies in
+  `ai_upscaler/keyframe_interpolator.py` and the Modal `video_processing.py` (the unused
+  app/interpolation module went with `POST /api/export/crop`, T16500).
 - **Backend actions**: `POST /api/clips/projects/{project_id}/clips/{clip_id}/actions` →
   `framing_action` in `src/backend/app/routers/clips.py:326`. Overlay:
   `POST .../projects/{project_id}/overlay/actions` → `overlay_action` in
   `src/backend/app/routers/export/overlay.py:347`.
-- **Store**: `src/frontend/src/stores/focusStore.js` — export dirty tracking is hash-based
-  (`markExported`/`hasChangedSinceExport` L38-50).
+- **Store**: `src/frontend/src/stores/focusStore.js` — export dirty tracking is the boolean
+  `framingChangedSinceExport` (the never-called hash pair and the never-written per-clip
+  state/video-file fields were deleted, T4440).
 
 ## Data flow
 ```
@@ -838,7 +840,7 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   restore) or exclude the restore fixup from the export read path.
 - **Empty list → default centered crop**: frontend `useCrop.js:293-307` (`?? defaultCropData`);
   backend export applies `default_crop_keyframes` when crop_data empty (`export/framing.py:565-573`,
-  `export/multi_clip.py:2205-2217`); shapes mirrored: `DEFAULT_CROP_SIZES` in useCrop.js:17-20 ≡
+  `export/multi_clip.py:2205-2217`); shapes mirrored: `DEFAULT_CROP_SIZES` in `modes/focus/defaultCropSizes.js` (T10990; also read by the ratio-switch preview `utils/refitCropKeyframes.js`) ≡
   `src/backend/app/services/default_crop.py:12-15`. Keep these in sync.
 - **Trim is virtual**: `segments_data.trimRange` never drops crop keyframes. CropLayer filters
   out-of-window keyframes for display only (CropLayer.jsx:49-60); useCrop end boundary is full
@@ -987,8 +989,7 @@ opacity/radii between the region bounds. **ALWAYS-ON: standard behavior, no sett
   - Backend local path: `overlay._process_frames_to_ffmpeg` computes reveal from
     `_region_bounds(active_region)` + `current_time` and passes `reveal_opacity`/
     `reveal_scale` (optional params, default 1.0) to
-    `KeyframeInterpolator.render_highlight_on_frame`. `processor_local.py` render loop
-    wired the same way. Modal path: `_render_highlight` computes it internally. No
+    `KeyframeInterpolator.render_highlight_on_frame`. Modal path: `_render_highlight` computes it internally. No
     settings/flag read — always applied.
   - Applied AFTER `_normalize_region_keys` (T5120) — the envelope sits ON TOP of whatever
     the interpolator yields; no bare-key access added to the spline helpers.
@@ -1704,14 +1705,14 @@ keyframed** — camera tilt is constant for a recording.
   frame / overlay moves to clicked frame) get decided there.
 - **Backend crop geometry fallback** (clips.py:401-408): `x or 0, width or 640...` fabricates
   geometry into the DB — flagged by audit A10 → T4280 sweep. Don't imitate.
-- **Backend interpolation divergence**: `interpolation.interpolate_crop` is Catmull-Rom
-  (interpolation.py:51-87) but `generate_crop_filter` builds a LINEAR FFmpeg expression (L188-195).
-  Plus 4 Catmull-Rom copies across local/Modal paths → T4420.
+- **Backend interpolation**: Spotlight mapping (`highlight_transform.interpolate_crop_at_frame`) uses the renderers'
+  Catmull-Rom curve via `KeyframeInterpolator.interpolate_crop` (was linear until T4420: ~56 px off at a mid frame with
+  3 keyframes). `interpolation.generate_crop_filter` (LINEAR FFmpeg expr) only serves dead `POST /api/export/crop` (T16500).
 - **fps `|| 30` fallback landscape**: FocusScreen.jsx:219/541/623, useClipManager.js:46,
   projectDataStore.js:402, FocusContainer.jsx:238, overlay chain OverlayContainer.jsx:162/196/250;
   `videoUtils.timeToFrame/frameToTime` default 30. One canonical source is T4540 (audit C7).
-- **getFilteredKeyframesForExport duplicated verbatim**: FocusContainer.jsx:862-896 (the wired
-  one) ≡ FocusScreen.jsx:750-784 (audit D7).
+- **getFilteredKeyframesForExport**: one copy, in `FocusScreen.jsx` (the FocusContainer twin,
+  plus its unconsumed `hasFramingEdits`/`currentCropState` returns, was deleted, T4440).
 - **FocusContainer hand-mirrors** hook→store per gesture at 8 sites (~L352-835) to dodge React
   batch ordering → T4470 (audit D1).
 
@@ -1838,8 +1839,13 @@ the numbers below are the answer.
 - **T4250**: replace both spline specializations with `interpolateGenericSpline`; fixes
   strokeOpacity/fillOpacity snapping; characterization tests pin crop behavior.
 - **Keyframe System Unification epic (STRICT order)**:
-  - **T4440** dead-code sweep (dead OverlayTimeline/HighlightLayer/components-Timeline,
-    useHighlight, focusStore corpses).
+  - **T4440** dead-code sweep (done): old Spotlight timeline (OverlayTimeline,
+    HighlightLayer, components/Timeline.jsx), useCurrentVideoState, useTimeline,
+    the container FocusTimeline/OverlayVideoOverlays wrappers, focusStore corpses, initializeFromClipMetadata.
+    `OverlayContainer` takes the screen's `effectiveOverlayVideoUrl` and has NO Frame params and
+    no video-source derivation of its own; `OverlayScreen.deriveOverlayVideoSource` is the only
+    picker. Guard: `src/frontend/src/utils/deadEditorCode.test.js`. `syncSegmentsToStore` kept
+    (unused) for T4470.
   - **T4450** shared KeyframeTrack — unify delete gating to the flat-list rule; the gating change
     is the single intended diff.
   - **T4460** overlay onto keyframe controller (**Stage 2 design gate**): region-scoped tracks;

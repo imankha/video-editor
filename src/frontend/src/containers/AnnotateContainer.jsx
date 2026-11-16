@@ -1028,13 +1028,7 @@ export function AnnotateContainer({
   const { dismissExportCompleteToast } = useExportStore();
 
   const requireAuth = useAuthStore((s) => s.requireAuth);
-  const setAnnotateHasSelectedClip = useEditorStore((s) => s.setAnnotateHasSelectedClip);
   const setActiveAnnotateGameId = useEditorStore((s) => s.setActiveAnnotateGameId);
-
-  // Sync clip selection state to editorStore for quest panel auto-collapse
-  useEffect(() => {
-    setAnnotateHasSelectedClip(!!annotateSelectedRegionId);
-  }, [annotateSelectedRegionId, setAnnotateHasSelectedClip]);
 
   // T8180: mirror the game the user is annotating into editorStore so the
   // uploadManager failure-cleanup path (a service, blind to hook state) can skip the
@@ -1979,7 +1973,7 @@ export function AnnotateContainer({
       // T14370: /load still in flight (reproduced on staging: 5-6s on a phone,
       // with the card already on screen). There is no duration yet, or no game
       // id to save against, and a region created now would be wiped by
-      // applyGameData under the open editor. Refuse LOUDLY, before the quest
+      // applyGameData under the open editor. Refuse LOUDLY, before the funnel
       // records a tap that marked nothing. The card is also disabled in
       // AnnotateModeView; this covers the keyboard (A) and fullscreen paths.
       if (isGameDataLoading) {
@@ -1997,7 +1991,7 @@ export function AnnotateContainer({
         // T11040: inside the try — a throw here used to leave the in-flight guard
         // latched true for the life of the mount, so every later Mark Play tap
         // returned early and marked nothing, with no request and no error.
-        // Quest 1 step: completes "Find an Amazing Play" at the TAP, unchanged.
+        // add_clip_opened is recorded at the TAP.
         recordFunnelEvent(FUNNEL_EVENTS.ADD_CLIP_OPENED);
         const t = effectiveCurrentTime;
         const rawStart = t - DEFAULT_CLIP_BEFORE;
@@ -3199,8 +3193,7 @@ export function AnnotateContainer({
       // T14370: see applyGameData — regions and selection reset together.
       closeOverlay();
       deselectClip();
-      setAnnotateHasSelectedClip(false);
-    }, [annotateVideoUrl, resetAnnotate, closeOverlay, deselectClip, setAnnotateHasSelectedClip]),
+    }, [annotateVideoUrl, resetAnnotate, closeOverlay, deselectClip]),
   };
 }
 

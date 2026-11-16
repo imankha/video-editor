@@ -748,9 +748,8 @@ re-introduced it; the testid string is the same one the old T8700 test already p
 **Honest fallback title (the S11 core fix):** the date input no longer defaults to today and the
 `OPPONENT_PLACEHOLDER='Unnamed opponent'` was DELETED — an untouched opponent/date now submits
 EMPTY (`opponentName.trim()`, `gameDate=''`; `uploadManager.createGame` maps `''`->null). Backend
-`games.py` gained pure helpers `format_short_date()` (extracted verbatim from
-`generate_game_display_name`'s inline strftime — Windows `%-d` fallback preserved) and
-`upload_fallback_name()`; `create_game`'s fallback changed `"New Game"` -> `"Game uploaded <today>"`
+`games.py` gained the pure helper
+`upload_fallback_name()` (its date comes from `queries.short_game_date()`; T4660 retired `format_short_date()`); `create_game`'s fallback changed `"New Game"` -> `"Game uploaded <today>"`
 (uses TODAY's server date, never `request.game_date` — a date typed without an opponent is still a
 claimed match date). So a metadata-skipped game now titles "Game uploaded Sep 12" instead of the
 false "Vs Unnamed opponent Sep 12". `localTodayISO` export deleted (was only the today-default).
@@ -816,7 +815,7 @@ subject, always possessive/singular ("your athlete", "My athlete" — `ANNOTATE.
 makes the UI agree with the persisted `my_athlete` column instead of diverging from it. **Destination
 noun (D1):** `SECTION_NAMES.LIBRARY` ("Highlight Reels") deleted; the published destination is now
 `SECTION_NAMES.PUBLISHED` ("Published") everywhere, including the quest step `move_to_my_reels`
-(now `LIBRARY_ACTIONS.PUBLISH_CLIP`, FE+BE `quest_config.py` mirror updated together).
+(now `LIBRARY_ACTIONS.PUBLISH_CLIP`, FE+BE quest_config.py mirror updated together).
 **Publish-audience copy (D5, safety-critical):** every publish caption/toast that claimed "anyone with
 the link can watch it" was FALSE (T9670/T9710 verified publishing grants no audience by itself —
 sharing is a separate gesture) — replaced with `STAGE_REASONS.PUBLISH` ("Nobody else can see this
@@ -845,7 +844,7 @@ Prior:)
 updated: 2026-09-14 (T9850 — first-result onboarding guidance now completes on saved playable VALUE,
 not a mandatory Preview-plays click. **The defect (B05·R4):** quest_1's last step
 `playback_annotations` gated SOLELY on the `played_annotations` achievement
-(`routers/quests.py` `_check_all_steps`), which fires ONLY from entering Preview-plays mode inside
+(routers/quests.py `_check_all_steps`), which fires ONLY from entering Preview-plays mode inside
 Annotate (`modes/annotate/hooks/useAnnotationPlayback.js:284`). A user who saved a clip and moved to
 Focus/Spotlight/Library was pinned at "4/5" while the guide pointed at Preview plays — a control that
 exists ONLY on the Annotate screen. **The fix (1 line + copy):** OR-satisfy the step with
@@ -854,18 +853,18 @@ exists ONLY on the Annotate screen. **The fix (1 line + copy):** OR-satisfy the 
 completes it; Preview plays stays a SUFFICIENT path so nothing that already completed regresses. Because
 completion derives in `_check_all_steps` — the ONE choke point `/progress` and `/claim-reward` share —
 displayed-complete and claim-rejected can never disagree (the T9410 invariant holds; adding an OR only
-makes completion EASIER). **Copy:** `config/questDefinitions.jsx`'s `playback_annotations` DESCRIPTION
+makes completion EASIER). **Copy:** config/questDefinitions.jsx's (deleted with the quest system, T11180) `playback_annotations` DESCRIPTION
 no longer instructs a required Preview-plays click — it points at the persistent T9580 next actions
 (`ANNOTATE.FRAME_THIS_CLIP` / `ANNOTATE.KEEP_MARKING_PLAYS`); removed the now-unused `Play` lucide
 import. **Left ALONE (deliberate):** the step TITLE stays `ANNOTATE.PREVIEW_PLAYS` (T9860 owns final
-vocabulary; the FE/BE STEP_TITLES sync test still passes); `data/questDefinitions.js` needs NO change
+vocabulary; the FE/BE STEP_TITLES sync test still passes); data/questDefinitions.js needs NO change
 (it carries only `step_ids`, not completion — OR-satisfy keeps the id); no other quest_1 step
 hard-requires rating/tag/source-preview (`rate_clip` was already OR'd with `reels>=1`). The already-
 shipped stageCta/keepMarkingCta persistent-next-action UI (T9580) was NOT rebuilt — brief's core ask
 was already met by existing code; only the guide's completion PREDICATE + description were wrong.
-Tests: new `tests/test_t9850_playback_step_gating.py` (3 — saved-clip completes step without the
+Tests: new tests/test_t9850_playback_step_gating.py (3 — saved-clip completes step without the
 achievement, achievement still sufficient, router-seam claim succeeds via saved-value path) +
-`config/questDefinitions.test.jsx` T9850 assertion (desc names Frame-this-clip/Keep-marking, never
+config/questDefinitions.test.jsx T9850 assertion (desc names Frame-this-clip/Keep-marking, never
 Preview plays). QA: container has no browser (same limit as T9830/T9820/T9630) — no live e2e drive;
 `new-user-flow.spec.js` left intact (its Create-Reel step already sets auto_project_id, so the step
 completes earlier but every assertion still holds). Prior:)
@@ -3291,7 +3290,7 @@ The full checklist for an 11th→Nth sport:
 
 - **The Games tab organizes by MATCH date (`game_date`), never upload date (T7290).** Month headers,
   cross-group order and within-group order all key off `game_date` — the date the user thinks in and
-  the one already baked into the tile title by `generate_game_display_name`. Two halves that must stay
+  the one already baked into the tile title by `game_display_name` (`services/game_display.py`). Two halves that must stay
   in agreement: `groupGamesByMonth` (ProjectManager.jsx, exported for tests) and
   `GAMES_MATCH_DATE_ORDER_BY` (games.py, the `_read_games_for_list` ORDER BY). Invariants: `game_date`
   is date-only TEXT `YYYY-MM-DD`, so the frontend parses it as a **local calendar date** — `new
@@ -3316,7 +3315,7 @@ The full checklist for an 11th→Nth sport:
   match date ("Sat, Mar 21") from `game_date`. T7290's reasoning for removing it (already the
   title suffix) was wrong in practice: the name is `truncate`d in ~120px and the suffix sits at
   the truncation end, so it is the FIRST thing lost — and a game with no `opponent_name` gets no
-  suffix at all from `generate_game_display_name`. Empty when there is no match date; NEVER an
+  suffix at all from `game_display_name` (`services/game_display.py`). Empty when there is no match date; NEVER an
   upload-date fallback. (2) **`groupGamesByMonth` is gone**, replaced by `groupGamesForTab`,
   which returns ONE ORDERED ARRAY of `{key, kind: 'month'|'tournament', label, sublabel,
   sortDate, games}` instead of `{groups, order}`.
@@ -3623,7 +3622,7 @@ AnnotateMode instances (only the inline one gets amber/segments).
 
 ## T13246 - Veo "make a game" details step
 - `VeoZipPickList` (gameMode) shows the Upload dialog's "Game details (optional)" via the shared `GameDetailsFields` (also used by `GameDetailsModal`, `EditGameModal`). Prefill = `veoGameDetails(zipName, profileTeam)` in `veoHighlights/clipImport.js` (reuses `parseGameFilename(..., {ourTeamFromMatchup: true})`; date only if the NAME holds one, short M_D_YY only when the numbers force a reading). Entry/mvhd times are never a match date.
-- Payload keeps `name` = zip title; the server's `GET /api/games` rebuilds the title as "Vs/at X Mon D" whenever an opponent is set, so the preview and AnnotateContainer's local name both use `utils/gameDisplayTitle.js` (mirror of `generate_game_display_name`). Keep the two in step.
+- Payload keeps `name` = zip title; the server's `GET /api/games` rebuilds the title as "Vs/at X Mon D" whenever an opponent is set, so the preview and AnnotateContainer's local name both use `utils/gameDisplayTitle.js` (mirror of `game_display_name` (`services/game_display.py`)). Keep the two in step.
 - `parseGameFilename` takes the extension off at the LAST dot: a title like "A vs. B" needs a fake extension appended or it is cut at "vs.".
 
 - **T13600 (2026-10-26) picker truth:** `VeoZipPickList` rows/chips are built from the UPLOADED entry per moment (its stamp/length, `labels[0]` as the one label): chip counts sum to the rows, a chip filters to those rows, and `veoSuggestions` carry only that label, so the game shows no chip without a suggestion. Payload `name` = `gameDisplayTitle(details, zipTitle)` (the promised title; the server stores an explicit `name` as-is). Game videos are renamed `{Label} {h}m{ss}s.mp4` (`VEO_CLIP_IMPORT.gameVideoName`) because the Videos lane shows the file name. Game mode shows `CreditCostRow` (cost = `calculateUploadCost` over the picked entries' sizes). The details disclosure lives inside the scrolling body (no nested scroller).

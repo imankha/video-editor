@@ -33,6 +33,13 @@ class V005QuestRestructure(BaseMigration):
     def up(self, conn) -> None:
         cur = conn.cursor()
 
+        # T11185: completed_quests is dropped at v008 and no longer in the fresh
+        # schema, so a DB that lacks it has nothing to reconcile.
+        if cur.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='completed_quests'"
+        ).fetchone() is None:
+            return
+
         old_q2_completed = cur.execute(
             "SELECT 1 FROM completed_quests WHERE quest_id = 'quest_2'"
         ).fetchone() is not None

@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T11905:C1": {"kind": "browser"},
+    "T11905:C2": {"kind": "code", "command": "cd src/frontend && EMAIL=$(curl -fsS -X POST -H 'X-Test-Mode: true' http://localhost:8000/api/auth/dev-accounts/full | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"email\"])') && E2E_REAL_EMAIL=$EMAIL npx playwright test e2e/T4880-mobile-editor-reachable.spec.js --project=chromium --grep 'Overlay: primary CTA reachable' --reporter=line"},
+    "T11905:C3": {"kind": "code", "command": "! grep -rnE \"Open in Spotlight|Create Reel\" src/frontend/e2e/helpers src/frontend/e2e/manifests"}
+  }
+}

@@ -105,10 +105,6 @@ async function enterAnnotateMode(page) {
     useAuthStore.setState({ isAuthenticated: true, email: 'test@e2e.local', showAuthModal: false });
   });
 
-  await page.evaluate(() => {
-    document.querySelectorAll('.quest-overlay').forEach(el => el.remove());
-  });
-
   // Every test in this file assumes a virgin account (see newTestUserId) - a
   // leaked shared account would auto-select a pre-existing clip under the
   // playhead and silently flip Mark play into Edit play. Fail fast and legibly
