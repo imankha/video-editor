@@ -1,0 +1,6 @@
+{"criteria": {
+  "T16510:C1": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16510_record_finish.py -p no:cacheprovider -q -k c1_"},
+  "T16510:C2": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16510_record_finish.py -p no:cacheprovider -q -k c2_"},
+  "T16510:C3": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16510_record_finish.py -p no:cacheprovider -q -k c3_"},
+  "T16510:C4": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16510_record_finish.py -p no:cacheprovider -q -k c4_"}
+}}

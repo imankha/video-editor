@@ -37,6 +37,7 @@ from app.queries import (
     latest_final_videos_subquery,
 )
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
+from app.services.finish_highlight import mark_published, record_finish
 from app.services.game_display import game_display_name
 from app.services.intro_cards import (
     load_profile_cards,
@@ -2597,36 +2598,21 @@ async def publish_to_my_reels(
         # T5260: the name is frozen once at render time (overlay.py INSERT), but the
         # draft stays renameable in Reel Drafts right up until this gesture. Publish
         # is the correct freeze point (post-publish rename goes through the gallery
-        # endpoint at /{download_id}/name instead) -- re-read the CURRENT project name
-        # here so a rename-after-render isn't silently lost in My Reels.
-        cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
-        project_row = cursor.fetchone()
-        current_name = project_row['name'] if project_row else None
-
-        if current_name:
-            cursor.execute(
-                "UPDATE final_videos SET published_at = CURRENT_TIMESTAMP, watched_at = NULL, "
-                "name = ? WHERE id = ?",
-                (current_name, row['id']),
-            )
-        else:
-            # No silent NULL over an existing name (CLAUDE.md: no silent fallbacks for
-            # internal data) -- keep the render-time frozen name and surface why.
-            cursor.execute(
-                "UPDATE final_videos SET published_at = CURRENT_TIMESTAMP, watched_at = NULL WHERE id = ?",
-                (row['id'],),
-            )
-            logger.info(
-                f"[Publish] project name missing or empty for project={project_id} "
-                f"final_video_id={row['id']} user={user_id} req_id={req_id} - keeping "
-                f"existing frozen final_video name, not overwriting with NULL"
-            )
+        # endpoint at /{download_id}/name instead). T16520: the single publish writer,
+        # shared with the server finish and the spotlight render.
+        mark_published(cursor, row['id'], project_id)
         conn.commit()
         logger.info(
             f"[Publish] published_at committed LOCALLY project={project_id} "
             f"final_video_id={row['id']} user={user_id} req_id={req_id} "
             f"(durable_sync will await the R2 push before this request returns)"
         )
+
+    # T16510: the Journey's Finished stage counts this event, once per highlight
+    # finished. A repeat tap on an already-finished latest version adds none.
+    # record_milestone is impersonation-guarded.
+    if newly_published:
+        record_finish(user_id, get_current_profile_id(), row['id'])
 
     # T5410: REVERSED T5280 -- poster capture no longer happens at publish. It
     # now runs at overlay EXPORT (generate_poster_at_export, routers/export/

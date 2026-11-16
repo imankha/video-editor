@@ -37,19 +37,24 @@ class ExportStage(str, Enum):
     the task's 7th `synced` checkpoint — sync is a gate between `persisting` and
     `complete`, never a persisted state we branch on):
 
-        queued -> rendering -> rendered -> detecting -> persisting -> complete   (| error)
+        queued -> rendering -> rendered -> detecting -> persisting -> finishing -> complete   (| error)
 
     - rendering:  dispatched, modal_call_id stored (render maybe in flight).
     - rendered:   the video exists in R2; output_key persisted -> finalize no
                   longer depends on Modal being reachable.
     - detecting / persisting / complete: the post-render stages the unified
                   finalizer owns. `error` is tracked by `status`, not `stage`.
+    - finishing:  (T16520) the working video is persisted and synced; the server
+                  finish (services/finish_highlight.py) is putting it in Highlights.
+                  A job left here by a crash is resumed by the next session's
+                  startup recovery (export_finalize.resume_interrupted_finishes).
     """
     QUEUED = "queued"
     RENDERING = "rendering"
     RENDERED = "rendered"
     DETECTING = "detecting"
     PERSISTING = "persisting"
+    FINISHING = "finishing"
     COMPLETE = "complete"
 
 

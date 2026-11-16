@@ -105,7 +105,7 @@ class TestEndpoint:
 
     def test_conservation_over_http_and_implied_reach(self, journey_client):
         _user("test-user")
-        for a in ("session_started", "export_completed", "overlay_exported"):
+        for a in ("session_started", "export_completed", "highlight_finished"):
             record_milestone("test-user", a)
         _age("test-user", action_days=30, active_days=0)
         data = _get(journey_client)
@@ -183,22 +183,22 @@ class TestEndpoint:
         _age("ancient-signup", acquired_days=_days_ago(d_from_target), active_days=1000)
 
         _user("old-watcher")
-        for a in ("overlay_exported", "result_viewed"):
+        for a in ("highlight_finished", "result_viewed"):
             record_milestone("old-watcher", a)
         _age("old-watcher", action_days=30, active_days=20, acquired_days=_days_ago(old_signup))
 
         _user("new-gone")
-        for a in ("overlay_exported", "result_viewed"):
+        for a in ("highlight_finished", "result_viewed"):
             record_milestone("new-gone", a)
         _age("new-gone", action_days=30, active_days=20, acquired_days=_days_ago(new_signup))
 
         _user("new-stuck")
-        for a in ("overlay_exported", "result_viewed"):
+        for a in ("highlight_finished", "result_viewed"):
             record_milestone("new-stuck", a)
         _age("new-stuck", action_days=30, active_days=5, acquired_days=_days_ago(new_signup))
 
         _user("new-finished-only")
-        record_milestone("new-finished-only", "overlay_exported")
+        record_milestone("new-finished-only", "highlight_finished")
         _age("new-finished-only", action_days=30, active_days=20, acquired_days=_days_ago(new_signup))
 
         resp = journey_client.get("/api/admin/analytics/journey",
@@ -215,10 +215,10 @@ class TestEndpoint:
         assert (watched_cohort["reached"], watched_cohort["continued"],
                 watched_cohort["stuck"], watched_cohort["gone"]) == (2, 0, 1, 1)
 
-        # "finished" isn't itself partial (overlay_exported predates the window), but it still
-        # carries a cohort at the SAME cutoff, since the other end of a step needs it too.
+        # "finished" carries a cohort at the watched cutoff, since the other end of a step needs
+        # it too (T16510: its own event is younger, so it is also partial from that date).
         finished = nodes["finished"]
-        assert finished["partial_from"] is None
+        assert finished["partial_from"] == "2026-11-16"
         assert (finished["reached"], finished["continued"], finished["gone"]) == (4, 3, 1)
         finished_cohort = finished["cohort_at"][cutoff.isoformat()]
         assert (finished_cohort["reached"], finished_cohort["continued"],

@@ -1,0 +1,8 @@
+{"criteria": {
+  "T16520:C1": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16520_server_finish.py -p no:cacheprovider -q -k c1_"},
+  "T16520:C2": {"kind": "human", "why": "Owner ruling 2026-11-16 split the parent-facing message (told the highlight is in Highlights, Spotlight offered) into frontend task T16525; this backend task changes no screen, so there is nothing to observe until T16525 ships."},
+  "T16520:C3": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16520_server_finish.py -p no:cacheprovider -q -k c3_"},
+  "T16520:C4": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16520_server_finish.py -p no:cacheprovider -q -k c4_"},
+  "T16520:C5": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16520_server_finish.py -p no:cacheprovider -q -k c5_"},
+  "T16520:C6": {"kind": "human", "why": "A post-release production metric: finished out of sharpened on the admin Journey for at least 100 sign-ups after release; it can only be read once real parents have used the shipped build."}
+}}

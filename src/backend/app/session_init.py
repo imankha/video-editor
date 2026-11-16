@@ -436,6 +436,18 @@ async def _run_startup_recovery(user_id: str) -> None:
         )
 
     try:
+        # T16520: a server finish cut off by a crash/deploy (export_jobs.stage
+        # 'finishing') is retried here, its only retry point.
+        from .services.export_finalize import resume_interrupted_finishes
+        resumed = await resume_interrupted_finishes()
+        if resumed:
+            logger.info(f"[SessionInit] resumed {resumed} interrupted finish(es) for {user_id}")
+    except Exception as e:
+        logger.warning(
+            f"[SessionInit] resume_interrupted_finishes failed for {user_id}: {e}"
+        )
+
+    try:
         result = await process_modal_queue()
         if result.get("processed", 0) > 0:
             logger.info(
