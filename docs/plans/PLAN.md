@@ -87,6 +87,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T16620 | [copy-link staging gate test fails in strict mode: the 'Copy link' locator matches 9 buttons](tasks/T16620-copy-link-staging-gate-test-fails.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
