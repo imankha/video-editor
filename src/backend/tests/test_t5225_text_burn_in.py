@@ -199,6 +199,16 @@ class TestTextFadeOut:
         assert peak < 200
 
 
+_FAKE_PRESIGNED_URL = "https://example.invalid/fake-presigned-url"
+
+
+def _fake_remote_probe(source, timeout=None):
+    """Stands in for ffprobe reading the presigned R2 URL (T4430: the overlay
+    dims probe goes through services.video_probe.probe_video)."""
+    assert source == _FAKE_PRESIGNED_URL, f"unexpected probe source {source!r}"
+    return {"width": 640, "height": 360}
+
+
 class TestRasterizeTextLayersDimsProbe:
     def test_no_local_copy_and_no_r2_raises_loudly_never_silent_default(self, tmp_path, monkeypatch):
         """O3: if dims can't be probed via EITHER tier (local cv2 nor the R2
@@ -223,11 +233,10 @@ class TestRasterizeTextLayersDimsProbe:
         )
         monkeypatch.setattr(
             "app.routers.export.overlay.generate_presigned_url",
-            lambda user_id, path, **kw: "https://example.invalid/fake-presigned-url",
+            lambda user_id, path, **kw: _FAKE_PRESIGNED_URL,
         )
         monkeypatch.setattr(
-            "app.routers.export.overlay._ffprobe_remote_dims",
-            lambda url: (640, 360),
+            "app.routers.export.overlay.probe_video", _fake_remote_probe,
         )
         text_overlays = [_region("txt1")]
         layers = _rasterize_text_layers("test-user", text_overlays, "does_not_exist.mp4")
@@ -259,11 +268,10 @@ class TestRasterizeTextLayersDimsProbe:
         )
         monkeypatch.setattr(
             "app.routers.export.overlay.generate_presigned_url",
-            lambda user_id, path, **kw: "https://example.invalid/fake-presigned-url",
+            lambda user_id, path, **kw: _FAKE_PRESIGNED_URL,
         )
         monkeypatch.setattr(
-            "app.routers.export.overlay._ffprobe_remote_dims",
-            lambda url: (640, 360),
+            "app.routers.export.overlay.probe_video", _fake_remote_probe,
         )
         spec = {
             "text": "GOAL", "font": "anton", "size": 0.08, "color": "#FFFFFF",
