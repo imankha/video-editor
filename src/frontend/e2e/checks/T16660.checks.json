@@ -2,6 +2,6 @@
   "criteria": {
     "T16660:C1": {"kind": "browser"},
     "T16660:C2": {"kind": "browser"},
-    "T16660:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/admin/AdminGate.test.jsx -t 'T16660:C3'"}
+    "T16660:C3": {"kind": "browser"}
   }
 }
