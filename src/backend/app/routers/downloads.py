@@ -2628,6 +2628,15 @@ async def publish_to_my_reels(
             f"(durable_sync will await the R2 push before this request returns)"
         )
 
+    # T16510: the Journey's Finished stage counts this event, once per highlight
+    # finished. A repeat tap on an already-finished latest version adds none.
+    # record_milestone is impersonation-guarded.
+    if newly_published:
+        from app.analytics import SPORT_PROFILE_ID_CONTEXT_KEY, record_milestone
+        record_milestone(user_id, "highlight_finished", {
+            "final_video_id": row['id'], SPORT_PROFILE_ID_CONTEXT_KEY: get_current_profile_id(),
+        })
+
     # T5410: REVERSED T5280 -- poster capture no longer happens at publish. It
     # now runs at overlay EXPORT (generate_poster_at_export, routers/export/
     # overlay.py), so by the time a reel reaches publish the poster object
