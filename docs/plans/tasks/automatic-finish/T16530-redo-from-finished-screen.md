@@ -10,6 +10,7 @@ Finished is the screen that shows a highlight (a finished short clip) once it is
 **Created:** 2026-11-14
 **Updated:** 2026-11-14
 **Milestone:** Automatic finish (see [EPIC.md](EPIC.md)). Task 3 of 4.
+**Depends on:** T16520, T16535
 
 ## How we got here
 
@@ -53,3 +54,12 @@ Keeping the redo choices only on the panel shown at the end of sharpening would 
 - Design review required before build (two new actions on a phone-width Finished screen; coordinate with T15810 if it has landed).
 - Restore-for-edit unpublishes today. In design, decide how a redo keeps the published version live until the replacement is ready (criterion 4 requires it).
 - Sport-neutral strings.
+
+## Ruling
+
+Owner rulings on the design page (owner, 2026-11-16):
+1. Layout: Add or Redo spotlight and Edit zoom are two more buttons beside Download and Share on the phone Finished screen.
+2. Old version during a redo: the new version replaces the old one when it is ready. The old one stays in Highlights, playable and shareable, until then; name, place and share link carry over.
+3. Source data for redo: archiving must not delete the clips (the crop and spotlight data); it removes only the game video. So redo reads the clip data that is still there, and no restore step is needed unless the game video itself has expired (then Edit zoom says it is unavailable). The archive change is its own task, T16535, which this task depends on.
+4. Home: a finished highlight appears under Highlights only; tapping it opens the Finished screen.
+5. Edit zoom shows a confirmation sheet with the credit cost and balance before it sharpens; Add or Redo spotlight is free and needs none.
