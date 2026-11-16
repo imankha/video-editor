@@ -1,0 +1,20 @@
+{
+  "criteria": {
+    "T16535:C1": {
+      "kind": "code",
+      "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16535_archive_keeps_clips.py -p no:cacheprovider -q -k test_c1_"
+    },
+    "T16535:C2": {
+      "kind": "code",
+      "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16535_archive_keeps_clips.py -p no:cacheprovider -q -k test_c2_"
+    },
+    "T16535:C3": {
+      "kind": "code",
+      "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16535_archive_keeps_clips.py -p no:cacheprovider -q -k test_c3_"
+    },
+    "T16535:C4": {
+      "kind": "code",
+      "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16535_archive_keeps_clips.py -p no:cacheprovider -q -k test_c4_"
+    }
+  }
+}

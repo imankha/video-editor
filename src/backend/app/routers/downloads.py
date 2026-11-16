@@ -55,6 +55,7 @@ from app.services.poster import poster_basename, poster_rel_path
 from app.services.project_archive import (
     archive_project,
     delete_archived_project,
+    is_old_style_archive,
     is_project_archived,
     restore_project,
 )
@@ -2644,15 +2645,15 @@ async def publish_to_my_reels(
         mark_user_archived(user_id)
         logger.info(
             f"[Publish] archived LOCALLY project={project_id} user={user_id} "
-            f"req_id={req_id} - archive/{project_id}.msgpack uploaded to R2, working "
-            f"data deleted locally; durable_sync will push profile.sqlite before return"
+            f"req_id={req_id} - archived_at set, working data kept (T16535); "
+            f"durable_sync will push profile.sqlite before return"
         )
     else:
         logger.warning(
             f"[Publish] archive FAILED project={project_id} "
             f"(user={user_id}, final_video_id={row['id']}, req_id={req_id}) - working "
             f"data retained, card stays in Drafts with In My Reels badge; see preceding "
-            f"archive/R2 errors for root cause"
+            f"archive errors for root cause"
         )
 
     logger.info(
@@ -2748,10 +2749,11 @@ async def restore_project_from_archive(
                        "be re-edited. You can still view, download, and share it.",
             )
 
-        # Check if project is in DB and not archived (has working data)
+        # T16535: only a project archived before T16535 (working data moved to its
+        # R2 msgpack) needs a restore; a newer archive kept its rows in the DB.
         cursor.execute("SELECT id, name, archived_at FROM projects WHERE id = ?", (project_id,))
         project_row = cursor.fetchone()
-        needs_archive_restore = bool(not project_row or project_row['archived_at'])
+        needs_archive_restore = is_old_style_archive(cursor, project_id)
 
         logger.info(
             f"[Restore] download_id={download_id} project_id={project_id} "
@@ -2786,10 +2788,17 @@ async def restore_project_from_archive(
 
     # T13870: unpublish only AFTER the project is back in the DB, so a 404/500 above
     # leaves the reel published (no half-changed DB). Moving back to draft removes
-    # it from My Reels.
+    # it from My Reels. T16535: a project archived with its rows kept is back in
+    # Drafts once archived_at clears (restore_project clears it for an old archive).
     with get_db_connection() as conn:
-        conn.cursor().execute(
+        cursor = conn.cursor()
+        cursor.execute(
             "UPDATE final_videos SET published_at = NULL WHERE project_id = ?",
+            (project_id,),
+        )
+        cursor.execute(
+            "UPDATE projects SET restored_at = CURRENT_TIMESTAMP, archived_at = NULL "
+            "WHERE id = ? AND archived_at IS NOT NULL",
             (project_id,),
         )
         conn.commit()

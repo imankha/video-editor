@@ -2519,11 +2519,11 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   orphan: `_delete_auto_project` used to KEEP any project with `working_video_id OR final_video_id`,
   so an exported auto-reel survived clip-delete with 0 clips.
 - **Clip-level deletes do NOT archive.** `DELETE /raw/{id}` and `remove_clip_from_project`
-  hard-delete rows. R2 archiving is project-level only:
-  `src/backend/app/services/project_archive.py:archive_project` serializes project + ALL
-  working_clips versions to msgpack on R2, then deletes rows (L47-122); `restore_project`
-  re-inserts (L244-251). R2 archives are therefore the only place deleted working_clips state
-  survives.
+  hard-delete rows. Archiving is project-level only. **T16535: `archive_project` only sets
+  `projects.archived_at`; working_clips/working_videos and `working_video_id` stay in the DB
+  and no msgpack is written.** Projects archived before T16535 still have rows deleted and an
+  R2 `archive/{id}.msgpack`; `restore_project` re-inserts those (`is_old_style_archive` tells
+  them apart).
 - **Recap clips ARE raw_clips** (T4130): `RecapPlayerModal.jsx` — "a recap clip's id IS its
   raw_clip id" (L133-136); `handleCreateRecapClip` (L145-160) is a gesture-driven
   `updateClip(clipId, {create_project: true})` → `PUT /clips/raw/{id}`, optimistically flips

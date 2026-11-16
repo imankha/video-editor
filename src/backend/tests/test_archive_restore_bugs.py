@@ -127,6 +127,37 @@ def project_with_overlay_and_framing():
         conn.commit()
 
 
+def _archive_and_reopen(project_id):
+    """Archive the project, then reopen it the way My Reels does.
+
+    T16535: archive keeps the working clips and video in the DB, so reopening
+    (POST /api/downloads/{id}/restore-project) needs no R2 restore.
+    """
+    from app.services.project_archive import archive_project
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO final_videos (project_id, filename, version, published_at)
+            VALUES (?, 'final_test.mp4', 1, CURRENT_TIMESTAMP)
+        """, (project_id,))
+        final_video_id = cursor.lastrowid
+        conn.commit()
+
+    assert archive_project(project_id, TEST_USER_ID) is True
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM working_videos WHERE project_id = ?", (project_id,))
+        assert cursor.fetchone()[0] == 1, "archive must keep the working video"
+        cursor.execute("SELECT COUNT(*) FROM working_clips WHERE project_id = ?", (project_id,))
+        assert cursor.fetchone()[0] == 1, "archive must keep the working clip"
+
+    response = client.post(f"/api/downloads/{final_video_id}/restore-project")
+    assert response.status_code == 200, response.text
+    assert response.json() == {"project_id": project_id, "restored": False}
+
+
 class TestOverlayDataAfterRestore:
     """Bug: Overlay is missing when reopening draft of reel from My Reels."""
 
@@ -134,7 +165,6 @@ class TestOverlayDataAfterRestore:
         """GET /api/export/projects/{id}/overlay-data should return highlights after restore."""
         project_id, clip_id, working_video_id = project_with_overlay_and_framing
 
-        from app.services.project_archive import archive_project, restore_project
         from app.storage import R2_ENABLED
 
         if not R2_ENABLED:
@@ -150,17 +180,7 @@ class TestOverlayDataAfterRestore:
         assert before["effect_type"] == "brightness_boost"
         assert before["highlight_color"] == "#ff0000"
 
-        # Archive
-        assert archive_project(project_id, TEST_USER_ID) is True
-
-        # Verify data deleted from DB
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM working_videos WHERE project_id = ?", (project_id,))
-            assert cursor.fetchone()[0] == 0
-
-        # Restore
-        assert restore_project(project_id, TEST_USER_ID) is True
+        _archive_and_reopen(project_id)
 
         # Verify overlay data endpoint returns data after restore
         response_after = client.get(f"/api/export/projects/{project_id}/overlay-data")
@@ -179,7 +199,6 @@ class TestOverlayDataAfterRestore:
         """Highlight region keyframes (time, x, y, radius, opacity) must survive archive/restore."""
         project_id, clip_id, working_video_id = project_with_overlay_and_framing
 
-        from app.services.project_archive import archive_project, restore_project
         from app.storage import R2_ENABLED
 
         if not R2_ENABLED:
@@ -189,8 +208,7 @@ class TestOverlayDataAfterRestore:
         response_before = client.get(f"/api/export/projects/{project_id}/overlay-data")
         before_regions = response_before.json()["highlights_data"]
 
-        archive_project(project_id, TEST_USER_ID)
-        restore_project(project_id, TEST_USER_ID)
+        _archive_and_reopen(project_id)
 
         # Compare after
         response_after = client.get(f"/api/export/projects/{project_id}/overlay-data")
@@ -211,14 +229,12 @@ class TestOverlayDataAfterRestore:
         """After restore, highlights_data should be msgpack bytes in DB, not JSON string."""
         project_id, clip_id, working_video_id = project_with_overlay_and_framing
 
-        from app.services.project_archive import archive_project, restore_project
         from app.storage import R2_ENABLED
 
         if not R2_ENABLED:
             pytest.skip("R2 not enabled")
 
-        archive_project(project_id, TEST_USER_ID)
-        restore_project(project_id, TEST_USER_ID)
+        _archive_and_reopen(project_id)
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -247,7 +263,6 @@ class TestKeyframesAfterRestore:
         """GET /api/clips/projects/{id}/clips should return crop_data after restore."""
         project_id, clip_id, working_video_id = project_with_overlay_and_framing
 
-        from app.services.project_archive import archive_project, restore_project
         from app.storage import R2_ENABLED
 
         if not R2_ENABLED:
@@ -260,9 +275,7 @@ class TestKeyframesAfterRestore:
         assert isinstance(clip_before["crop_data"], list)
         assert len(clip_before["crop_data"]) == 2
 
-        # Archive + restore
-        assert archive_project(project_id, TEST_USER_ID) is True
-        assert restore_project(project_id, TEST_USER_ID) is True
+        _archive_and_reopen(project_id)
 
         # Verify after
         response_after = client.get(f"/api/clips/projects/{project_id}/clips")
@@ -283,15 +296,12 @@ class TestKeyframesAfterRestore:
         """GET /api/clips/projects/{id}/clips should return segments_data after restore."""
         project_id, clip_id, working_video_id = project_with_overlay_and_framing
 
-        from app.services.project_archive import archive_project, restore_project
         from app.storage import R2_ENABLED
 
         if not R2_ENABLED:
             pytest.skip("R2 not enabled")
 
-        # Archive + restore
-        archive_project(project_id, TEST_USER_ID)
-        restore_project(project_id, TEST_USER_ID)
+        _archive_and_reopen(project_id)
 
         response = client.get(f"/api/clips/projects/{project_id}/clips")
         clips = response.json()
@@ -307,14 +317,12 @@ class TestKeyframesAfterRestore:
         """Project.working_video_id FK should point to a valid working_video after restore."""
         project_id, clip_id, working_video_id = project_with_overlay_and_framing
 
-        from app.services.project_archive import archive_project, restore_project
         from app.storage import R2_ENABLED
 
         if not R2_ENABLED:
             pytest.skip("R2 not enabled")
 
-        archive_project(project_id, TEST_USER_ID)
-        restore_project(project_id, TEST_USER_ID)
+        _archive_and_reopen(project_id)
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
