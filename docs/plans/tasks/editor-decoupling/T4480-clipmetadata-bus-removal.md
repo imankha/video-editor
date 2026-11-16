@@ -1,6 +1,6 @@
 # T4480: One loader for Spotlight data
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-03

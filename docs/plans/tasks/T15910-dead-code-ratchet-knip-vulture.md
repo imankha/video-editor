@@ -1,6 +1,6 @@
 # T15910: Dead-code ratchet
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-09

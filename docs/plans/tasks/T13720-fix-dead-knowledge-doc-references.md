@@ -1,6 +1,6 @@
 # T13720: Knowledge docs name only real code
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-10-27

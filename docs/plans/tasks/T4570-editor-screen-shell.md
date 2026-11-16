@@ -1,6 +1,6 @@
 # T4570: Same arrow keys in Frame and Spotlight
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-07-03
