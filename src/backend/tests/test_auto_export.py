@@ -843,7 +843,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_generates_concat(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         from app.services.auto_export import _generate_recap
 
@@ -866,7 +866,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_multi_video(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         from app.services.auto_export import _generate_recap
 
@@ -892,7 +892,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_skips_inverted_range_clip(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """Bug 23p: a clip with end_time < start_time (inverted range) must be
         skipped so it doesn't fail the whole recap. The valid clips still export."""
@@ -927,7 +927,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_all_clips_invalid_raises(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """If every clip has an invalid range, nothing is extracted and recap raises."""
         from app.services.auto_export import _generate_recap
@@ -951,7 +951,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_partial_url_failure_continues(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """If one video hash fails to get URL, others still process."""
         from app.services.auto_export import _generate_recap
@@ -979,7 +979,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_clip_mapping_includes_tags_and_notes(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """Verify clip_mapping JSON contains correct metadata."""
         import json
@@ -1012,7 +1012,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_timing_logged(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db, caplog):
         import logging
 
@@ -1037,7 +1037,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_encodes_native_resolution_master_quality(
         self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db
     ):
@@ -1084,7 +1084,7 @@ class TestGenerateRecap:
     @patch(f"{M}.upload_bytes_to_r2", return_value=True)
     @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
-    @patch(f"{M}.ffmpeg")
+    @patch("app.services.recap_encode.ffmpeg")
     def test_recap_mixed_resolution_normalizes_minority_segment(
         self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db
     ):

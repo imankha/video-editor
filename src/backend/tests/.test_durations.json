@@ -227,6 +227,7 @@
   "tests/test_t15140_upload_release.py": 0.45,
   "tests/test_t15150_durable_sync_off_lock.py": 8.34,
   "tests/test_t1690_stream_proxy_probe.py": 0.1,
+  "tests/test_t2650_recap_encode_off_server.py": 13.53,
   "tests/test_t2930_migrations.py": 2.35,
   "tests/test_t3950_branded_outro.py": 24.44,
   "tests/test_t3970_expired_share_block.py": 2.56,
