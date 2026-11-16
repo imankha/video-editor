@@ -106,6 +106,11 @@ __TASK_LIST__
   or weak check is a finding that comes back to a fix round.
 - Persistence: gesture-based only; no `useEffect` that writes to a store/backend. No silent
   fallbacks for internal data.
+- Nobody to ask in a headless run: when only the owner can unblock you (a product choice, a
+  criterion that reads two ways, a missing credential, a result only a person can see), append
+  `<UTC yyyy-mm-ddTHH:MM> NEEDS_USER <ruling|clarification|access|human_check> "<one question>"`
+  as the last status line and stop. The owner's answer arrives as the next message in this same
+  conversation; carry on from there. Use `BLOCKED <reason>` only when no answer would help.
 - Headless run: every command in the foreground (a backgrounded command or ScheduleWakeup ends
   the dispatch).
 - Other tasks in this group: before you commit, re-read the `## Acceptance Criteria` of every

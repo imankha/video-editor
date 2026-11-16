@@ -19,6 +19,7 @@ Worker dispatch (task.sh drive runs this inside the container):
       --model sonnet --effort medium --max-turns 120 -- [-c] "<instruction>"
 """
 import argparse
+import contextlib
 from collections import Counter
 import datetime as dt
 import hashlib
@@ -26,8 +27,10 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
@@ -74,6 +77,8 @@ CHECKPOINTS = {
     "implementation": "Implement the next task of the kickoff (the first without a `STAGE_DONE <task> commit` "
                       "line in .dotask-status) with targeted red/green checks. End with that commit line, "
                       "`PUSHREADY <branch> <sha>` after the LAST task's commit line, or `BLOCKED <reason>`, "
+                      "or `NEEDS_USER <kind> \"<question>\"` (kind: ruling, clarification, access or human_check) "
+                      "when an owner's answer would let you finish (the answer comes back into this conversation), "
                       "then stop. Do not run your own code review; it is captured at landing."
                       + HEADLESS_RUN_NOTE,
     "qa": "Perform QA/evidence only against the task criteria. Write qa/proof.json per the schema in the "
@@ -81,6 +86,13 @@ CHECKPOINTS = {
 }
 DESIGN_WRITABLE = ("docs/", ".dotask")
 QUOTA_TEXT = re.compile(r"usage limit|session limit|rate limit|limit reached|out of (extra )?usage", re.I)
+# A passing fault between the container and the API: a redispatch later is the whole fix (T12600).
+TRANSIENT_TEXT = re.compile(r"connection error|connection refused|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|"
+                            r"fetch failed|network error|request timed out|overloaded|internal server error|"
+                            r"bad gateway|service unavailable|api error: 5\d\d", re.IGNORECASE)
+# No stream event for this long means the worker hangs: it is killed and recorded as blocked:hang (T12600).
+# A Bash call can run 10 minutes without an event (the tool's own cap), so the default leaves room for two.
+HANG_MINUTES_DEFAULT = 25.0
 SAFE_ID = re.compile(r"[A-Za-z0-9._-]+")
 
 
@@ -186,9 +198,12 @@ def classify(results, events):
     codes = " ".join(str(e.get("error") or "") for e in synthetic)
     synthetic_text = " ".join(b["text"] for e in synthetic for b in blocks(e.get("message")) if isinstance(b.get("text"), str))
     if QUOTA_TEXT.search(text) or (errored and (QUOTA_TEXT.search(synthetic_text) or "rate_limit" in codes)):
-        return subtype, False, "quota_exhausted"
+        return subtype, False, "blocked:quota"
     if errored and "authentication" in codes:
         return subtype, False, "auth_failed"
+    if errored and (TRANSIENT_TEXT.search(text) or TRANSIENT_TEXT.search(synthetic_text)
+                    or "overloaded" in codes or "server_error" in codes):
+        return subtype, False, "blocked:transient"
     if subtype == "error_max_turns":
         return subtype, False, "budget_stop"
     return subtype, not errored, "error" if errored else "success"
@@ -672,6 +687,40 @@ def finish(record, root, timed, malformed):
         write_json(root / (child["run_id"] + ".json"), child)
 
 
+def hang_minutes():
+    return float(os.environ.get("DOTASK_HANG_MINUTES") or HANG_MINUTES_DEFAULT)
+
+
+def watch_for_hang(process, last_event, hung, limit_seconds):
+    """Kill `process` once no stream event arrived for `limit_seconds` (last_event[0] is updated by the reader)."""
+    while process.poll() is None:
+        if time.time() - last_event[0] > limit_seconds:
+            hung.set()
+            # The whole group: a tool subprocess the CLI started keeps stdout open past the CLI's own death.
+            if os.name == "nt":
+                process.kill()
+            else:
+                with contextlib.suppress(OSError):
+                    os.killpg(process.pid, signal.SIGKILL)
+            return
+        time.sleep(min(5.0, max(0.2, limit_seconds / 10)))
+
+
+def worker_env():
+    """The worker's environment without a stray ANTHROPIC_API_KEY, which would make the CLI bill the API
+    instead of the signed-in subscription. Returns (env, whether a key was removed)."""
+    env = dict(os.environ)
+    return env, env.pop("ANTHROPIC_API_KEY", None) is not None
+
+
+def new_status_lines(status, size):
+    if not status or not status.exists() or status.stat().st_size <= size:
+        return []
+    with status.open("rb") as stream:
+        stream.seek(size)
+        return [line for line in stream.read().decode("utf-8", "replace").splitlines() if line.strip()]
+
+
 def run(args):
     passthrough = validate_passthrough(args.passthrough)
     claude = json.loads(args.claude_json)
@@ -689,10 +738,18 @@ def run(args):
               "outcome_class": "running", "subagent_text_forwarding": forwarding, "raw_log": raw.name}
     best_effort("start record", write_json, record_path, record)  # a killed wrapper still leaves a record
     code, timed, malformed, process = 1, [], 0, None
+    env, record["stray_api_key_removed"] = worker_env()
+    if record["stray_api_key_removed"]:
+        print("[wave_profile] WARNING: removed a stray ANTHROPIC_API_KEY from the worker's environment", file=sys.stderr)
+    hung, last_event = threading.Event(), [time.time()]
     try:
         with raw.open("w", encoding="utf-8") as log:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                                       env=env, start_new_session=os.name != "nt")
+            threading.Thread(target=watch_for_hang, args=(process, last_event, hung, hang_minutes() * 60),
+                             daemon=True).start()
             for line in process.stdout:
+                last_event[0] = time.time()
                 log.write(line)
                 log.flush()
                 event = parse_line(line)
@@ -717,6 +774,12 @@ def run(args):
         record["profiling_error"] = repr(exc)
         record["outcome"], record["outcome_class"] = "profiling_error", "unknown"
         print(f"[wave_profile] WARNING: profiling failed: {exc!r}", file=sys.stderr)
+    if hung.is_set():
+        record.update(outcome="no_progress", outcome_class="blocked:hang", complete=False)
+        code = code or 1
+    elif record.get("outcome_class") == "success" and any(
+            len(line.split()) > 1 and line.split()[1] == "NEEDS_USER" for line in new_status_lines(status, status_size)[-1:]):
+        record["outcome_class"] = "needs_user"  # the worker asked the owner a question and stopped
     if snapshot is not None:
         try:
             violations = design_violations(snapshot)

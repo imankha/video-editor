@@ -37,8 +37,19 @@ read. Format:
   QA evidence complete) or `BLOCKED <reason>`. Never end a dispatch silently.
 - **Wrapper lines** (written by `task.sh run`/`drive`'s profiler, not the worker, only when the
   worker left no new line): `DISPATCH_FAILED phase= exit= outcome=` (`budget_stop`,
-  `quota_exhausted`, `auth_failed`, `error`, or `interrupted`), `ENDED_WITHOUT_STATUS phase=`
+  `blocked:quota` (out of usage), `blocked:transient` (a network/API fault; redispatch later),
+  `blocked:hang` (no stream event for `DOTASK_HANG_MINUTES`, default 25: the profiler killed it),
+  `auth_failed`, `error`, or `interrupted`), `ENDED_WITHOUT_STATUS phase=`
   (exit 0 but no line), `PHASE_VIOLATION` (a design dispatch changed files outside `docs/`).
+  The profiler also strips a stray `ANTHROPIC_API_KEY` from the worker's environment
+  (`stray_api_key_removed` in the run record), so a dispatch never bills the API by accident.
+- **`NEEDS_USER <kind> "<question>"`** (T12600): a headless worker that cannot go on without the
+  owner appends this as its last line and stops. `<kind>` is one of `ruling` (a product or design
+  choice), `clarification` (a criterion reads two ways), `access` (a credential or account it lacks),
+  `human_check` (only a person can observe the result). `status` shows the question; the owner
+  answers with `dotask.sh resume <slug> --answer "<text>"`, which writes `ANSWERED <kind> "<text>"`
+  and sends the answer into the SAME conversation (`claude --resume <session>`), which carries on.
+  Prefer it to `BLOCKED` whenever an answer would let you finish.
 - **`AUTH_DEAD`** is written automatically by `task.sh drive`/`run`, not the worker: it means
   the read-only auth status probe failed even after re-seeding from the host's credentials.
 
@@ -55,7 +66,7 @@ After the LAST task's commit line the final line is `PUSHREADY <branch> <sha>`.
 
 `dotask.sh start --headless` runs one `task.sh drive` (a fresh `claude -p`, implementation
 checkpoint) per task, for the first task without a commit line. Each dispatch must end on that
-task's `STAGE_DONE <task> commit` line or on `PUSHREADY`; any other last line (`BLOCKED`,
+task's `STAGE_DONE <task> commit` line or on `PUSHREADY`; any other last line (`BLOCKED`, `NEEDS_USER`,
 `CONFLICT <task> <other>:C<n> "<why>"` when your change makes another group task's criterion
 literally false, a wrapper line) stops the run for the user. A dispatch that ran out of turns is
 not a stop: the loop appends a `## <task> handoff` section to `.dotask-notes.md` and dispatches

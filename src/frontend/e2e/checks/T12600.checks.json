@@ -1,0 +1,5 @@
+{"criteria": {
+  "T12600:C1": {"kind": "code", "command": "cd scripts && timeout 300 python -m pytest test_dotask_cli.py -p no:cacheprovider -q -k 'worker_question or answer'"},
+  "T12600:C2": {"kind": "code", "command": "cd scripts && timeout 300 python -m pytest test_wave_profile.py -p no:cacheprovider -q -k 'outcome_class or budget_and_quota'"},
+  "T12600:C3": {"kind": "code", "command": "cd scripts && timeout 300 python -m pytest test_dotask_cli.py -p no:cacheprovider -q -k counts_recent_runs_by_outcome"}
+}}

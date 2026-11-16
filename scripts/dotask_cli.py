@@ -17,6 +17,7 @@ Commands (see scripts/dotask.sh, the thin bash entry point):
   python scripts/dotask_cli.py nextup [--limit N]          # TODO tasks bundled by shared code area
 """
 import argparse
+from collections import Counter
 import contextlib
 import datetime as dt
 import json
@@ -1213,17 +1214,19 @@ def stop_dispatch(slug, process):
                        capture_output=True, check=False, timeout=60)
 
 
-def dispatch(slug, group, phase, instruction, task_ids=None, cap_minutes=None):
+def dispatch(slug, group, phase, instruction, task_ids=None, cap_minutes=None, resume_session=None):
     """One fresh `claude -p` in the group's container. True only if it ended on PUSHREADY. `task_ids`
     names the task(s) this dispatch is for (the profile records it; default: the whole group).
-    `cap_minutes` overrides the phase's wall-clock cap (the reviewer gets what is left of the budget)."""
+    `cap_minutes` overrides the phase's wall-clock cap (the reviewer gets what is left of the budget).
+    `resume_session` continues that conversation instead of starting a fresh one (an answered question)."""
     env = {**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
            "DOTASK_WAVE_ID": group["wave_id"], "DOTASK_PHASE": phase,
            "DOTASK_TASK_IDS": ",".join(task_ids or group["tasks"])}
     if "DOTASK_MAX_TURNS" not in os.environ and phase in PHASE_MAX_TURNS:
         env["DOTASK_MAX_TURNS"] = str(PHASE_MAX_TURNS[phase])
-    process = subprocess.Popen([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "drive", slug, instruction],
-                               env=env)
+    resume_args = ["--resume", resume_session] if resume_session else []
+    process = subprocess.Popen([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "drive", slug, *resume_args,
+                                instruction], env=env)
     cap = cap_minutes if cap_minutes is not None else PHASE_TIMEOUT_MINUTES.get(phase)
     try:
         returncode = process.wait(timeout=cap * 60 if cap else None)
@@ -1363,7 +1366,7 @@ def build_loop(slug, group, checkout):
         if f" STAGE_DONE {task} commit" in last:
             continue
         why = ("needs the user's ruling (another task's criterion would become false)" if " CONFLICT " in last
-               else "stopped")
+               else "needs the user's answer to its question" if worker_question(last) else "stopped")
         print(f"[dotask] headless {why} after {task}: {last}", file=sys.stderr)
         return 1
 
@@ -1477,6 +1480,46 @@ def loop_not_running(checkout):
     return time.time() - newest > LOOP_GRACE_SECONDS
 
 
+# A worker with nobody to ask stops on `NEEDS_USER <kind> "<question>"` (T12600). The kinds are a closed
+# list so `status` can say what sort of help a task waits on; the owner answers with `resume --answer`,
+# which continues the SAME conversation (`claude --resume <session>`) with the answer as its next message.
+NEEDS_USER_KINDS = ("ruling", "clarification", "access", "human_check")
+ANSWER_INSTRUCTION = ("The owner answered your NEEDS_USER {kind} question ({question}): {answer}\n"
+                      "Continue the task from where you stopped, with the same rules and status lines as before.")
+
+
+def worker_question(line):
+    """(kind, question) when `line` is a worker's NEEDS_USER status line, else None."""
+    parts = line.split(None, 3)
+    if len(parts) < 3 or parts[1] != "NEEDS_USER":
+        return None
+    return parts[2], (parts[3] if len(parts) > 3 else "").strip().strip('"')
+
+
+def answer_command(slug):
+    return f'bash scripts/dotask.sh resume {slug} --answer "<your answer>"'
+
+
+def answer_question(slug, group, checkout, question, answer):
+    """Send the owner's answer into the conversation that asked. 0 when that dispatch ended on its task's
+    commit line or PUSHREADY (the build loop carries on), else 1."""
+    kind, text = question
+    run = latest_run(checkout)
+    sessions = run.get("sessions") or []
+    if not sessions:
+        die(f"{slug}: the dispatch that asked recorded no session id, so its conversation cannot be resumed; "
+            f"add the answer under the task file's `## Ruling` and run `bash scripts/dotask.sh resume {slug}`")
+    task_ids = run.get("task_ids") or [next_task(checkout, group)[0]]
+    append_status(checkout, f'ANSWERED {kind} "{answer}"')
+    dispatch(slug, group, "implementation", ANSWER_INSTRUCTION.format(kind=kind, question=text, answer=answer),
+             task_ids=task_ids, resume_session=sessions[-1])
+    last = last_status(checkout)
+    if " PUSHREADY " in last or any(f" STAGE_DONE {t} commit" in last for t in task_ids):
+        return 0
+    print(f"[dotask] stopped after the answer to {' '.join(task_ids)}: {last}", file=sys.stderr)
+    return 1
+
+
 def resume(args):
     """Continue a headless group from wherever it stopped: the build loop for every task without a
     commit line, then autoland (which itself resumes a fix round's focused re-check). `start --headless`
@@ -1487,6 +1530,16 @@ def resume(args):
     if not group_path.is_file():
         die(f"no group file at {group_path}; is {slug} a live /dotask group?")
     group = json.loads(group_path.read_text(encoding="utf-8"))
+    question = worker_question(last_status(checkout))
+    answer = getattr(args, "answer", None)
+    if question and not answer:
+        die(f"{slug} waits on a worker question ({question[0]}): {question[1]}\n  answer it: {answer_command(slug)}")
+    if answer and not question:
+        die(f"{slug} has no question waiting (last status: {last_status(checkout)[:120]}); resume it without --answer")
+    if question:
+        code = answer_question(slug, group, checkout, question, answer)
+        if code:
+            return code
     task, _text = next_task(checkout, group)
     done = len(group["tasks"]) - len([t for t in group["tasks"] if f"STAGE_DONE {t} commit" not in _text])
     print(f"[dotask] resume {slug}: {done} of {len(group['tasks'])} task(s) committed"
@@ -2425,8 +2478,8 @@ def nextup(args):
 # them as they accumulate. The estimate is for the PR, not the merge: merging stays with the user.
 DEFAULT_MINUTES = {"implementation": 25, "qa": 35, "ci": 8}
 ETA_SHIFT_MINUTES = 15
-STOP_WORDS = ("VERIFY_BLOCKED", "VERIFY_EXHAUSTED", "VERIFY_NEEDS_USER", "BLOCKED", "CONFLICT", "DISPATCH_FAILED",
-              "ENDED_WITHOUT_STATUS", "AUTH_DEAD", "PHASE_VIOLATION", "LOOP_CRASHED")
+STOP_WORDS = ("VERIFY_BLOCKED", "VERIFY_EXHAUSTED", "VERIFY_NEEDS_USER", "NEEDS_USER", "BLOCKED", "CONFLICT",
+              "DISPATCH_FAILED", "ENDED_WITHOUT_STATUS", "AUTH_DEAD", "PHASE_VIOLATION", "LOOP_CRASHED")
 
 
 def run_records(slug):
@@ -2475,6 +2528,9 @@ def estimate(group, checkout, now=None):
     if "VERIFY_PASS" in last or " APPROVED " in last:
         minutes, verify_ahead = ci, False
         parts.append(f"CI {ci:.0f} min")
+    elif worker_question(last):
+        kind, question = worker_question(last)
+        return None, None, f"waiting on your answer ({kind}): {question[:140]}; {answer_command(group['slug'])}"
     elif status_word(last) == "AUTH_DEAD":
         return None, None, (f"stopped: sign-in failed after every wait, needs a person; "
                             f"`bash scripts/dotask.sh resume {group['slug']}` continues it: {last[:140]}")
@@ -2574,10 +2630,37 @@ class EtaReporter:
 
 
 # --- status ----------------------------------------------------------------------
+RECENT_RUNS = 30  # how many dispatches `status` counts by outcome
+
+
+def outcome_counts(limit=RECENT_RUNS):
+    """(runs counted, [(outcome_class, count)] most frequent first) over the newest `limit` worker dispatch
+    records of every group (task.sh archives them to profiles/<slug>/). Nested-agent records are excluded."""
+    records = []
+    for path in (TASKS_ROOT / "profiles").glob("*/*.json"):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(record, dict) and record.get("schema_version") == 2 and record.get("outcome_class") \
+                and "parent_run_id" not in record:
+            records.append(record)
+    recent = sorted(records, key=lambda r: str(r.get("started_at") or ""))[-limit:]
+    counts = Counter(r["outcome_class"] for r in recent)
+    return len(recent), sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+
+
+def print_outcome_counts():
+    runs, counts = outcome_counts()
+    if runs:
+        print(f"outcomes over the last {runs} run(s): " + ", ".join(f"{name} {n}" for name, n in counts))
+
+
 def status(args):
     groups = sorted(TASKS_ROOT.glob(f"*/{GROUP_FILE}"))
     if not groups:
         print("no live /dotask groups")
+        print_outcome_counts()
         return 0
     for group_path in groups:
         try:
@@ -2592,6 +2675,11 @@ def status(args):
             lines = [line for line in status_file.read_text(encoding="utf-8").splitlines() if line.strip()]
             last = lines[-1] if lines else ""
         print(f"{slug}\t{','.join(group.get('tasks', []))}\t{running}\t{last}")
+        question = worker_question(last)
+        if question:
+            kind, text = question
+            named = kind if kind in NEEDS_USER_KINDS else f"{kind}, not one of {', '.join(NEEDS_USER_KINDS)}"
+            print(f"  question ({named}): {text}\n  answer it: {answer_command(slug)}")
         if not group.get("tasks"):
             continue
         # An estimate only means something for a group that is moving: a merged PR is done (its
@@ -2616,6 +2704,7 @@ def status(args):
                   f"continues it: {last_status(group_path.parent)[:100]})")
         else:
             print(f"  {eta_line({**group, 'slug': slug}, group_path.parent)}")
+    print_outcome_counts()
     return 0
 
 
@@ -2802,6 +2891,8 @@ def main(argv=None):
     carry_on = sub.add_parser("resume", help="continue a headless group: build what has no commit line, then autoland")
     carry_on.add_argument("slug")
     carry_on.add_argument("--no-land", action="store_true", help="stop after a clean verdict; push nothing")
+    carry_on.add_argument("--answer", help="the answer to the worker's NEEDS_USER question; it goes to the same "
+                                           "conversation, which then carries on")
 
     finish = sub.add_parser("land")
     finish.add_argument("slug")

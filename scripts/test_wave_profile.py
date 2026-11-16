@@ -171,7 +171,7 @@ class Dispatch(unittest.TestCase):
         self.assertEqual((code, parent["complete"], parent["outcome_class"]), (1, False, "budget_stop"))
         self.assertIn("DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop", self.status_lines()[-1])
         _, parent, _ = self.dispatch([result("success", text="Claude AI usage limit reached|1760000000")])
-        self.assertEqual(parent["outcome_class"], "quota_exhausted")
+        self.assertEqual(parent["outcome_class"], "blocked:quota")
         # Shape observed from CLI 2.1.280 without credentials: subtype success + is_error.
         auth = {"type": "assistant", "error": "authentication_failed", "is_api_error_message": True, "session_id": "S",
                 "message": {"id": "4d42", "model": "<synthetic>", "content": [{"type": "text", "text": "Not logged in"}],
@@ -181,6 +181,48 @@ class Dispatch(unittest.TestCase):
         code, parent, _ = self.dispatch([auth, cli_result], FAKE_EXIT="1")
         self.assertEqual((parent["outcome_class"], parent["requests"], parent["models"]), ("auth_failed", 0, {}))
         self.assertEqual(parent["terminal_reason"], "api_error")
+
+    def test_quota_network_fault_and_hang_each_get_their_own_outcome_class(self):
+        # T12600: the three ways a dispatch stops that no worker can fix are told apart in the run record.
+        _, parent, _ = self.dispatch([result("success", text="Claude AI usage limit reached|1760000000")])
+        self.assertEqual(parent["outcome_class"], "blocked:quota")
+        network = {"type": "assistant", "error": "unknown", "is_api_error_message": True, "session_id": "S",
+                   "message": {"id": "n1", "model": "<synthetic>",
+                               "content": [{"type": "text", "text": "API Error: Connection error."}],
+                               "usage": {"input_tokens": 0, "output_tokens": 0}}}
+        code, parent, _ = self.dispatch([assistant("m1", 3), network,
+                                         {**result(text="API Error: Connection error."), "is_error": True}],
+                                        FAKE_EXIT="1")
+        self.assertEqual(parent["outcome_class"], "blocked:transient")
+        self.assertIn("outcome=blocked:transient", self.status_lines()[-1])
+        # A worker that goes silent (no stream event) past DOTASK_HANG_MINUTES is killed and recorded as a hang.
+        script = ("import json, sys, time; print(json.dumps({'type': 'system', 'session_id': 'S'}), flush=True); "
+                  "time.sleep(60)")
+        started = __import__("time").time()
+        with patch.object(profile, "build_command", return_value=[sys.executable, "-c", script]):
+            code, parent, _ = self.dispatch([], DOTASK_HANG_MINUTES="0.03")
+        self.assertLess(__import__("time").time() - started, 30)
+        self.assertEqual((parent["outcome_class"], parent["complete"]), ("blocked:hang", False))
+        self.assertNotEqual(code, 0)
+        self.assertIn("outcome=blocked:hang", self.status_lines()[-1])
+
+    def test_a_stray_api_key_never_reaches_the_worker(self):
+        # A leftover ANTHROPIC_API_KEY makes the CLI bill the API instead of the signed-in subscription.
+        seen = self.root / "key.txt"
+        script = (f"import os, json; open({str(seen)!r}, 'w').write(os.environ.get('ANTHROPIC_API_KEY', 'absent')); "
+                  "print(json.dumps({'type': 'result', 'subtype': 'success', 'session_id': 'S', 'result': 'ok'}))")
+        with patch.object(profile, "build_command", return_value=[sys.executable, "-c", script]):
+            _, parent, _ = self.dispatch([], ANTHROPIC_API_KEY="sk-stray")
+        self.assertEqual(seen.read_text(), "absent")
+        self.assertTrue(parent["stray_api_key_removed"])
+
+    def test_a_worker_question_is_recorded_with_its_session(self):
+        script = (f"import json; open({str(self.status)!r}, 'a').write('2026-11-16T10:00 NEEDS_USER ruling \"Keep it?\"\\n'); "
+                  "print(json.dumps({'type': 'result', 'subtype': 'success', 'session_id': 'sess-9', 'result': 'asked'}))")
+        with patch.object(profile, "build_command", return_value=[sys.executable, "-c", script]):
+            _, parent, _ = self.dispatch([])
+        self.assertEqual((parent["outcome_class"], parent["sessions"]), ("needs_user", ["sess-9"]))
+        self.assertTrue(self.status_lines()[-1].endswith('NEEDS_USER ruling "Keep it?"'))
 
     def test_worker_status_line_suppresses_wrapper_line(self):
         self.status.write_text("2026-10-08T10:00 STAGE_DONE plan\n")

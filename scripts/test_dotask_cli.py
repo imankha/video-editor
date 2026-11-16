@@ -729,6 +729,71 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("eta: none (stopped: sign-in failed after every wait, needs a person; "
                       "`bash scripts/dotask.sh resume g-x` continues it", out)
 
+    # --- T12600: a worker can ask the owner a question and resume in the same conversation ---
+    def test_build_loop_stops_on_a_worker_question(self):
+        code, calls, err = self._loop(lambda task, n: ('t NEEDS_USER ruling "Keep the old label?"\n', "needs_user"))
+        self.assertEqual((code, calls), (1, ["implementation g-x T1"]))
+        self.assertIn("needs the user's answer", err)
+
+    def test_status_shows_the_worker_question_and_the_answer_command(self):
+        group, checkout = self._group_for_eta('t NEEDS_USER ruling "Keep the old label?"\n')
+        out = self._status_out(group, checkout)
+        self.assertIn("  question (ruling): Keep the old label?", out)
+        self.assertIn('bash scripts/dotask.sh resume g-x --answer "<your answer>"', out)
+        self.assertIn("eta: none (waiting on your answer", out)
+        group, checkout = self._group_for_eta('t NEEDS_USER whim "Pizza?"\n')
+        self.assertIn("not one of " + ", ".join(dotask_cli.NEEDS_USER_KINDS), self._status_out(group, checkout))
+
+    def _question_group(self):
+        group, checkout = self._group_for_eta('t STAGE_DONE T1 commit x\nt NEEDS_USER clarification "Which page?"\n',
+                                              tasks=("T1", "T2"))
+        (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        (checkout / ".dotask-profile").mkdir()
+        (checkout / ".dotask-profile" / "r1.json").write_text(json.dumps(
+            {"schema_version": 2, "started_at": "2026-11-16T10:00:00+00:00", "outcome_class": "needs_user",
+             "sessions": ["sess-42"], "task_ids": ["T2"]}))
+        return group, checkout
+
+    def test_resume_with_an_answer_continues_the_asking_conversation(self):
+        _group, checkout = self._question_group()
+        calls = []
+
+        def dispatch(slug, group, phase, instruction, task_ids=None, resume_session=None, **_kw):
+            calls.append((task_ids, resume_session, instruction))
+            with (checkout / ".dotask-status").open("a") as stream:
+                stream.write("t STAGE_DONE T2 commit x\nt PUSHREADY feature/x abc\n")
+            return True
+        with patch.object(dotask_cli, "dispatch", dispatch), \
+                patch.object(dotask_cli, "autoland", lambda args: 0), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(dotask_cli.main(["resume", "g-x", "--answer", "The settings page"]), 0)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][:2], (["T2"], "sess-42"))
+        self.assertIn("The settings page", calls[0][2])
+        self.assertIn('ANSWERED clarification "The settings page"', (checkout / ".dotask-status").read_text())
+
+    def test_resume_of_a_question_needs_an_answer_and_an_answer_needs_a_question(self):
+        _group, checkout = self._question_group()
+        with patch.object(dotask_cli, "dispatch", side_effect=AssertionError("dispatched")), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit):
+                dotask_cli.main(["resume", "g-x"])
+            (checkout / ".dotask-status").write_text("t STAGE_DONE T1 commit x\n")
+            with self.assertRaises(SystemExit):
+                dotask_cli.main(["resume", "g-x", "--answer", "x"])
+        self.assertIn("--answer", err.getvalue())
+        self.assertIn("no question", err.getvalue())
+
+    def test_status_counts_recent_runs_by_outcome(self):
+        group, checkout = self._group_for_eta("")
+        profiles = self.tasks_root / "profiles" / "g-x"
+        for i, outcome in enumerate(["success", "blocked:quota", "success", "blocked:hang", "needs_user"]):
+            (profiles / f"o{i}.json").write_text(json.dumps(
+                {"schema_version": 2, "started_at": f"2026-11-16T0{i}:00:00+00:00", "outcome_class": outcome,
+                 "duration_seconds": 60}))
+        out = self._status_out(group, checkout)
+        self.assertIn("outcomes over the last 5 run(s): success 2, blocked:hang 1, blocked:quota 1, needs_user 1", out)
+
     def test_build_loop_gives_up_after_two_restarts(self):
         body = "t DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop\n"
         code, calls, _ = self._loop(lambda task, n: (body, "budget_stop"), tasks=("T1",))
