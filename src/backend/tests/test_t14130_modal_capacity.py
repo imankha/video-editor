@@ -1,8 +1,8 @@
 """T14130 -- Modal capacity limits and the single local compose fallback.
 
   1. Every `@app.function` in the DEPLOYED Modal app (`video_processing.py`) sets an
-     explicit `max_containers`, and the framing orchestrator's cap times the largest
-     framing fan-out fits inside the documented GPU concurrency limit.
+     explicit `max_containers`, and every GPU function's cap fits inside the
+     documented GPU concurrency limit.
   2. At most ONE local compose fallback runs at a time: while one Modal-failed
      download is composing locally, a second Modal-failed download is REFUSED (its
      local compose is never started) and degrades visibly, never OOM-stacking a
@@ -19,7 +19,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.services import serve_time_video as S
-from app.services.modal_client import get_framing_ai_gpu_config
 
 MODAL_APP = Path(__file__).resolve().parent.parent / "app" / "modal_functions" / "video_processing.py"
 
@@ -54,29 +53,21 @@ def _app_functions(tree: ast.Module) -> dict:
 def test_every_modal_function_sets_max_containers():
     tree = ast.parse(MODAL_APP.read_text(encoding="utf-8"))
     fns = _app_functions(tree)
-    assert len(fns) >= 10, "AST walk found too few @app.function decorators"
+    assert len(fns) >= 6, "AST walk found too few @app.function decorators"
     missing = sorted(name for name, kws in fns.items() if "max_containers" not in kws)
     assert missing == [], f"@app.function without max_containers: {missing}"
 
 
-def test_framing_fanout_fits_gpu_limit():
+def test_gpu_functions_fit_gpu_limit():
     tree = ast.parse(MODAL_APP.read_text(encoding="utf-8"))
     consts = _module_constants(tree)
     limit = consts["MODAL_GPU_CONCURRENCY_LIMIT"]
-    # The Modal-side copy of the largest fan-out must match the client's real one.
-    largest_fanout = get_framing_ai_gpu_config(10_000.0)[0]
-    assert consts["FRAMING_MAX_CHUNKS"] == largest_fanout
-
     fns = _app_functions(tree)
     env = dict(consts)
 
     def cap(name: str) -> int:
         return eval(compile(ast.Expression(fns[name]["max_containers"]), name, "eval"), {}, env)
 
-    # Whole framing exports queue at the orchestrator instead of chunks of many
-    # exports interleaving: orchestrators x largest fan-out never exceeds the limit.
-    assert cap("process_framing_ai_parallel") * largest_fanout <= limit
-    assert cap("process_framing_ai_parallel") >= 1
     for name, kws in fns.items():
         gpu = kws.get("gpu")
         if isinstance(gpu, ast.Constant) and gpu.value is not None:

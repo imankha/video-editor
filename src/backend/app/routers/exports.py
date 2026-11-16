@@ -1,8 +1,9 @@
 """
 Export Jobs Router - Durable export job management.
 
-This router provides endpoints for starting, monitoring, and managing
-background export jobs. Exports run asynchronously and persist their
+This router provides endpoints for monitoring and managing background
+export jobs (started by POST /api/export/render and /api/export/render-overlay).
+Exports run asynchronously and persist their
 state to the database, allowing users to close their browser and
 return later to find completed exports.
 
@@ -12,36 +13,24 @@ Key design principles:
 - Only state transitions are persisted (pending -> processing -> complete/error)
 """
 
-import json
 import logging
-import uuid
 from datetime import datetime
-from pathlib import Path
 
 import anyio.to_thread
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
 from ..analytics import record_milestone
 from ..constants import ExportStatus
-from ..database import get_db_connection, get_user_data_path
-from ..highlight_transform import round_credits_half_up
+from ..database import get_db_connection
 from ..profile_context import get_current_profile_id
 from ..services import export_job_repository
 from ..storage import file_exists_in_r2
 from ..user_context import get_current_user_id
-from ..utils.encoding import encode_data
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/exports", tags=["exports"])
-
-
-def get_export_staging_path() -> Path:
-    """Get the staging directory for export input files."""
-    path = get_user_data_path() / "export_staging"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def _has_stage_columns(conn) -> bool:
@@ -56,13 +45,6 @@ def _has_stage_columns(conn) -> bool:
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-class ExportJobCreate(BaseModel):
-    """Request model for creating an export job."""
-    project_id: int
-    type: str  # 'framing' | 'overlay' | 'multi_clip'
-    config: dict  # Export configuration (clips, keyframes, etc.)
-
 
 class ExportJobResponse(BaseModel):
     """Response model for export job status."""
@@ -94,19 +76,6 @@ class ExportJobListResponse(BaseModel):
 # Database Operations
 # ============================================================================
 
-def create_export_job(project_id: int, job_type: str, config: dict) -> str:
-    """Create a new export job in the database. Returns job_id."""
-    job_id = f"export_{uuid.uuid4().hex[:12]}"
-    input_data = encode_data(config)
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        export_job_repository.create(cursor, job_id=job_id, project_id=project_id, job_type=job_type, input_data=input_data)
-        conn.commit()
-
-    return job_id
-
-
 def get_export_job(job_id: str) -> dict | None:
     """Get an export job by ID, including project name."""
     with get_db_connection() as conn:
@@ -130,22 +99,6 @@ def get_export_job(job_id: str) -> dict | None:
     return None
 
 
-def update_job_started(job_id: str):
-    """Mark job as processing (started)."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        export_job_repository.start(cursor, job_id)
-        conn.commit()
-
-
-def update_job_complete(job_id: str, output_video_id: int, output_filename: str):
-    """Mark job as complete with output references."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        export_job_repository.complete(cursor, job_id, output_video_id=output_video_id, output_filename=output_filename)
-        conn.commit()
-
-
 def update_job_error(job_id: str, error_message: str):
     """Mark job as failed with error message, and refund what it charged.
 
@@ -160,15 +113,6 @@ def update_job_error(job_id: str, error_message: str):
         conn.commit()
     from ..services.export_helpers import refund_failed_export
     refund_failed_export(job_id)
-
-
-def delete_export_job(job_id: str) -> bool:
-    """Delete an export job. Returns True if deleted."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM export_jobs WHERE id = ?", (job_id,))
-        conn.commit()
-        return cursor.rowcount > 0
 
 
 async def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
@@ -193,7 +137,6 @@ async def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> 
     Returns:
         Dict with finalization result (finalized/working_video_id/output_filename/error).
     """
-    from ..profile_context import get_current_profile_id
     from ..services.export_finalize import finalize_export
 
     # Prefer the durably-persisted render key; fall back to the Modal result for
@@ -497,214 +440,6 @@ def get_exports_by_status(statuses: list[str]) -> list[dict]:
 # ============================================================================
 # API Endpoints
 # ============================================================================
-
-@router.post("", response_model=dict)
-async def start_export(
-    request: ExportJobCreate,
-    background_tasks: BackgroundTasks
-):
-    """
-    Start a new export job (JSON config only, no file upload).
-
-    Use this for exports where the video is already on the server
-    (e.g., working_video_id reference).
-
-    The job is created immediately and processing begins in the background.
-    Returns the job_id which can be used to:
-    - Connect to WebSocket for real-time progress
-    - Poll GET /exports/{job_id} for status
-    """
-    from ..services.export_worker import process_export_job
-
-    # Validate project exists
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM projects WHERE id = ?", (request.project_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
-
-    # Create job in database
-    job_id = create_export_job(request.project_id, request.type, request.config)
-    record_milestone(get_current_user_id(), "export_started", {"export_id": job_id, "type": request.type})
-
-    # Start background processing
-    background_tasks.add_task(process_export_job, job_id)
-
-    return {
-        "job_id": job_id,
-        "status": "pending",
-        "message": "Making your highlight..."
-    }
-
-
-@router.post("/framing", response_model=dict)
-async def start_framing_export(
-    background_tasks: BackgroundTasks,
-    video: UploadFile = File(...),
-    project_id: int = Form(...),
-    keyframes_json: str = Form(...),
-    target_fps: int = Form(30),
-    export_mode: str = Form("quality"),
-    segment_data_json: str = Form(None),
-    include_audio: str = Form("true"),
-):
-    """
-    Start a framing export job with video file upload.
-
-    This is the async version of /api/export/upscale. The video is
-    staged to disk and processing happens in the background.
-
-    Returns job_id immediately - use WebSocket or polling for progress.
-    """
-    from ..services.export_worker import process_export_job
-
-    # Validate project exists
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
-
-        # T8310: refuse up front if any source game for this project's clips has
-        # been reclaimed, rather than staging/reserving credits and failing
-        # mid-pipeline. Reuses the same gate as the clip playback seams.
-        from app.routers.games import assert_clip_source_available
-        cursor.execute("""
-            SELECT DISTINCT g.id AS game_id,
-                   COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
-                   g.auto_export_status, g.status AS game_status
-            FROM working_clips wc
-            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            JOIN games g ON rc.game_id = g.id
-            LEFT JOIN game_videos gv
-                ON gv.game_id = rc.game_id
-                AND gv.sequence = COALESCE(rc.video_sequence, 1)
-            -- T13300: a linked upload clip plays its own file, not the game
-            WHERE wc.project_id = ? AND wc.raw_clip_id IS NOT NULL
-              AND rc.source IS NOT 'upload'
-        """, (project_id,))
-        for src in cursor.fetchall():
-            assert_clip_source_available(
-                cursor,
-                game_id=src['game_id'],
-                blake3_hash=src['blake3_hash'],
-                auto_export_status=src['auto_export_status'],
-                game_status=src['game_status'],
-            )
-
-    # Parse keyframes
-    try:
-        keyframes = json.loads(keyframes_json)
-    except json.JSONDecodeError as e:
-        logger.warning(f"Invalid keyframes JSON: {e}")
-        raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from e
-
-    if not keyframes:
-        raise HTTPException(status_code=400, detail="Set a box position first.")
-
-    # Parse segment data
-    segment_data = None
-    if segment_data_json:
-        try:
-            segment_data = json.loads(segment_data_json)
-        except json.JSONDecodeError as e:
-            logger.warning(f"Invalid segment data JSON: {e}")
-            raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from e
-
-    # Generate job ID
-    job_id = f"export_{uuid.uuid4().hex[:12]}"
-
-    # Stage the video file
-    staging_dir = get_export_staging_path()
-    video_ext = Path(video.filename).suffix or '.mp4'
-    staged_video_path = staging_dir / f"{job_id}{video_ext}"
-
-    try:
-        with open(staged_video_path, 'wb') as f:
-            content = await video.read()
-            f.write(content)
-        logger.info(f"[Exports] Staged video for job {job_id}: {staged_video_path}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="We couldn't make your highlight. Try again.") from e
-
-    # T890: Credit reservation — reserve before job creation, confirm after
-    from ..services.credit_ledger import CreditsUnavailable, confirm_reservation, release_reservation, reserve_credits
-    from ..services.ffmpeg_service import get_video_duration
-
-    user_id = get_current_user_id()
-    video_seconds = get_video_duration(str(staged_video_path))
-    # T9750: round-half-up + 1-credit floor via the SAME shared helper the
-    # framing/multi-clip charge sites use (highlight_transform.compute_export_credits),
-    # so both charge sites state ONE rounding rule. Was math.ceil(video_seconds).
-    credits_required = round_credits_half_up(video_seconds)
-    credits_deducted = 0
-
-    # Step 1: Reserve credits (atomic in Postgres)
-    if credits_required > 0:
-        try:
-            result = reserve_credits(
-                user_id, credits_required, job_id, video_seconds,
-                profile_id=get_current_profile_id(),
-            )
-        except CreditsUnavailable:
-            staged_video_path.unlink(missing_ok=True)
-            raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
-        if not result["success"]:
-            staged_video_path.unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "error": "insufficient_credits",
-                    "required": credits_required,
-                    "available": result["balance"],
-                    "video_seconds": video_seconds,
-                },
-            )
-        credits_deducted = credits_required
-
-    # Build config
-    config = {
-        "video_path": str(staged_video_path),
-        "keyframes": keyframes,
-        "target_fps": target_fps,
-        "export_mode": export_mode,
-        "segment_data": segment_data,
-        "include_audio": include_audio.lower() == "true",
-        "credits_deducted": credits_deducted,
-        "video_seconds": video_seconds,
-        "credit_user_id": user_id,
-        "profile_id": get_current_profile_id(),
-    }
-
-    # Step 2: Create job in database (atomic in profile.sqlite)
-    input_data = encode_data(config)
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            export_job_repository.create(cursor, job_id=job_id, project_id=project_id, job_type='framing', input_data=input_data)
-            conn.commit()
-
-        # Step 3: Confirm reservation (atomic in user.sqlite)
-        if credits_deducted > 0:
-            confirm_reservation(user_id, job_id)
-    except Exception:
-        # Job creation failed — release the reservation
-        if credits_deducted > 0:
-            release_reservation(user_id, job_id)
-        raise
-
-    logger.info(f"[Exports] Created framing job {job_id} for project {project_id}")
-
-    # Start background processing
-    background_tasks.add_task(process_export_job, job_id)
-
-    return {
-        "job_id": job_id,
-        "status": "pending",
-        "message": "Making your highlight..."
-    }
-
-
 
 # ============================================================================
 # Global Export Discovery Endpoints (for recovery on page load)

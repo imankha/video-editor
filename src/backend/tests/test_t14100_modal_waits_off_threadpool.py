@@ -87,21 +87,15 @@ class _HeldModalFn:
 
 
 def _start_exports(n: int, progress_callback=None) -> list:
-    """Mix of the three export wait paths (multi-clip, framing, overlay)."""
+    """Mix of the two export wait paths (multi-clip, overlay)."""
     tasks = []
     for i in range(n):
-        if i % 3 == 0:
+        if i % 2 == 0:
             coro = modal_client.call_modal_clips_ai(
                 job_id=f"t14100-clips-{i}", user_id="t14100-user",
                 source_keys=["temp/source_0.mp4"], output_key="working_videos/w.mp4",
                 clips_data=[{"keyframes": [], "segment_data": {}, "clipIndex": 0, "duration": 5.0}],
                 progress_callback=progress_callback,
-            )
-        elif i % 3 == 1:
-            coro = modal_client.call_modal_framing_ai(
-                job_id=f"t14100-framing-{i}", user_id="t14100-user",
-                input_key="raw_clips/c.mp4", output_key="working_videos/w.mp4",
-                keyframes=[], video_duration=5.0, progress_callback=progress_callback,
             )
         else:
             coro = modal_client.call_modal_overlay(
@@ -124,8 +118,6 @@ def held_modal(monkeypatch):
     fn = _HeldModalFn(release)
     monkeypatch.setattr(modal_client, "_modal_enabled", True)
     monkeypatch.setattr(modal_client, "_get_process_clips_ai_fn", lambda: fn)
-    monkeypatch.setattr(modal_client, "_get_process_framing_ai_fn", lambda: fn)
-    monkeypatch.setattr(modal_client, "_get_process_framing_ai_parallel_fn", lambda: fn)
     monkeypatch.setattr(modal_client, "_get_render_overlay_fn", lambda: fn)
     yield fn, release
     release.set()
