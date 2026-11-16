@@ -226,7 +226,7 @@ if (editorMode.canExport) ...  // Behavior attached to type
 |------|----------|
 | Editor modes | `EDITOR_MODES` in `src/frontend/src/stores/editorStore.js` |
 | Export status | `src/frontend/src/constants/exportStatus.js` |
-| Keyframe origins | `src/frontend/src/constants/keyframeOrigins.js` |
+| Keyframe origins | plain strings `permanent`, `user`, `trim` (the old constants file was deleted as dead code, T15910) |
 | Backend enums | `src/backend/app/constants/` |
 
 ---
