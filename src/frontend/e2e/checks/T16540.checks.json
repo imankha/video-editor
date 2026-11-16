@@ -1,0 +1,7 @@
+{"criteria": {
+  "T16540:C1": {"kind": "human", "why": "Needs a real stranded production account copied to staging (scripts/copy_user_between_envs.py) with its real R2 working video, then a look at Highlights to see it plays and downloads; no staging test account is stranded. The backend half is proven by tests/test_t16540_finish_stranded.py -k c1_ (session start puts it in Highlights, marked new)."},
+  "T16540:C2": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16540_finish_stranded.py -p no:cacheprovider -q -k c2_"},
+  "T16540:C3": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16540_finish_stranded.py -p no:cacheprovider -q -k c3_"},
+  "T16540:C4": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16540_finish_stranded.py -p no:cacheprovider -q -k c4_"},
+  "T16540:C5": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16540_finish_stranded.py -p no:cacheprovider -q -k c5_"}
+}}

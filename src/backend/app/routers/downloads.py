@@ -2786,11 +2786,17 @@ async def restore_project_from_archive(
 
     # T13870: unpublish only AFTER the project is back in the DB, so a 404/500 above
     # leaves the reel published (no half-changed DB). Moving back to draft removes
-    # it from My Reels.
+    # it from My Reels. T16540: restored_at marks the move back as the parent's choice
+    # (restore_project sets it only when the project was archived), so the stranded
+    # finish never re-publishes it.
     with get_db_connection() as conn:
-        conn.cursor().execute(
+        cursor = conn.cursor()
+        cursor.execute(
             "UPDATE final_videos SET published_at = NULL WHERE project_id = ?",
             (project_id,),
+        )
+        cursor.execute(
+            "UPDATE projects SET restored_at = CURRENT_TIMESTAMP WHERE id = ?", (project_id,),
         )
         conn.commit()
 

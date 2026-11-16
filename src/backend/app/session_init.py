@@ -375,6 +375,11 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
     except Exception as e:
         logger.error(f"T3080: Failed to backfill user activity: {e}")
 
+    # T16540: finish highlights stranded before the server finish (T16520), BEFORE the
+    # archive sweep below so they settle (finished, then archived) in this one session.
+    from .services.finish_highlight import finish_stranded_highlights_for_session
+    finish_stranded_highlights_for_session()
+
     # 8. Cleanup tasks (moved from ensure_database lines 922-938)
     try:
         from .services.project_archive import archive_completed_projects

@@ -933,6 +933,13 @@ it logs `[Finish] FAILED project= step=` and the highlight keeps the old manual 
 - Frontend unchanged until T16525: the panel still offers Finish. A tap re-renders and replaces the
   already-published version (harmless; no extra event).
 - Follow-up: the overlay and POST /publish paths still delete the prior R2 object before the sync is durable.
+- Stranded backfill (T16540): `finish_stranded_highlights()` finishes pre-T16520 highlights (non-archived,
+  `restored_at IS NULL`, latest final missing or unpublished, no live export job) from `session_init._init_slow_path`
+  BEFORE the step-8 archive sweep (blocking worker thread, 30s cap, gated by one SELECT). A spotlight final not older
+  than the working video is published as is; otherwise `finish_highlight(..., record_event=False)`. No event, no
+  credits; logs `[FinishStranded] finished= failed= skipped_active=`. NOT a migration (R2 I/O in the seam lock).
+- Re-edit (`POST /downloads/{id}/restore-project`) now stamps `projects.restored_at` in BOTH branches: it is the
+  "parent moved it back to drafts" marker the stranded finish respects. Never clear it to re-publish.
 
 ## Invariants & rules
 - **One video probe (T4430).** App code asks a video for its size/frame rate/duration only through `services/video_probe.py::probe_video(path|url|bytes)`, which raises `VideoProbeError` on an unreadable file or an unknown rate (`parse_frame_rate` refuses `0/0`/`N/A`; nothing assumes 30 fps). Callers probing an external dependency (R2 URL) catch it and say so (`probe_r2_video`, `publish_final_video._probe_output_dims`, overlay `_probe_dims`). `ffmpeg_concat.probe_media` builds on it. Only `modal_functions/` keeps its own copy (policy). `test_t4430_video_probe.py` bans other `r_frame_rate`/`CAP_PROP_FPS`/`CAP_PROP_FRAME_WIDTH`/`ffmpeg.probe(` reads and `'30/1'` in `app/`. Duration-only probes (`get_video_duration`, `poster._probe_duration`) are separate.
