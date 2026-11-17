@@ -4,6 +4,9 @@ import { DETECTION, SPOTLIGHT_COPY } from '../../../config/displayNames';
 import { useGuidePulse } from '../../../components/instructions/GuideScope';
 import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
+// Width of the "Tap to add spotlight" hover label (the 12px copy is ~100px wide).
+const TAP_LABEL_WIDTH = 112;
+
 /**
  * PlayerDetectionOverlay - Renders clickable bounding boxes around detected players
  *
@@ -153,6 +156,12 @@ export default function PlayerDetectionOverlay({
           );
 
           const isHovered = hoveredIndex === index;
+          // T16790: centred on the box, but shifted inward so the label never spills
+          // past the video's left/right edge (a box at the edge clipped the copy).
+          const labelCenterX = Math.min(
+            Math.max(screenBox.x + screenBox.width / 2, videoDisplayRect.offsetX + TAP_LABEL_WIDTH / 2),
+            videoDisplayRect.offsetX + videoDisplayRect.width - TAP_LABEL_WIDTH / 2
+          );
 
           // Dimmed styling when layer is disabled
           const boxStroke = isDisabled ? '#6b7280' : (isHovered ? '#3b82f6' : '#22c55e');
@@ -181,16 +190,16 @@ export default function PlayerDetectionOverlay({
               {isHovered && !isDisabled && (
                 <>
                   <rect
-                    x={screenBox.x + screenBox.width / 2 - 50}
+                    x={labelCenterX - TAP_LABEL_WIDTH / 2}
                     y={screenBox.y + screenBox.height / 2 - 12}
-                    width={100}
+                    width={TAP_LABEL_WIDTH}
                     height={24}
                     fill="rgba(0, 0, 0, 0.8)"
                     rx={4}
                     className="pointer-events-none"
                   />
                   <text
-                    x={screenBox.x + screenBox.width / 2}
+                    x={labelCenterX}
                     y={screenBox.y + screenBox.height / 2 + 4}
                     textAnchor="middle"
                     fill="white"
