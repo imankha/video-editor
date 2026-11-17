@@ -15,8 +15,9 @@
  */
 
 import { useExportStore } from '../stores';
-import { ExportStatus } from '../constants/exportStatus';
+import { ExportStatus, EXPORT_LOST_CODE } from '../constants/exportStatus';
 import { EXPORT_PROGRESS } from '../config/displayNames';
+import { exportFailureCopy } from '../utils/userError';
 
 // Reconnection configuration
 const RECONNECT_CONFIG = {
@@ -31,6 +32,13 @@ const KEEPALIVE_INTERVAL = 30000; // 30 seconds
 
 // Status polling is only used as fallback when WebSocket fails, not during normal operation
 
+// T16830: a job lost to a server restart (deploy, crash) leaves no export row, and the new
+// process never sends anything for it over the socket. After this long without a message,
+// ask GET /api/exports/{id}; this many 404s in a row mean the server has no record of it.
+// Two, not one: the socket connects before the render request writes the row.
+const LOST_JOB_CHECK_MS = 15000;
+const LOST_JOB_MISSES = 2;
+
 class ExportWebSocketManager {
   constructor() {
     // Map of exportId -> WebSocket connection info
@@ -39,6 +47,9 @@ class ExportWebSocketManager {
 
     // Callbacks for external listeners (e.g., components that want to know about events)
     this.eventListeners = new Map();
+
+    // T16830: exportId -> { timer, misses }. Outlives reconnects; stops on a terminal state.
+    this.jobWatches = new Map();
   }
 
   /**
@@ -88,6 +99,7 @@ class ExportWebSocketManager {
         callbacks,
       };
       this.connections.set(exportId, connectionInfo);
+      this._watchJob(exportId);
 
       // Connection timeout
       const timeout = setTimeout(() => {
@@ -191,6 +203,8 @@ class ExportWebSocketManager {
 
     try {
       const message = JSON.parse(trimmedData);
+      // The server is sending about this job, so it still knows it.
+      this._watchJob(exportId, { rearm: true });
 
       // Extract all fields from the message - backend sends projectId, type, projectName, phase
       // T12: Also extract gameId and gameName for annotate exports
@@ -348,6 +362,7 @@ class ExportWebSocketManager {
    * @param {boolean} permanent - If true, don't attempt reconnection
    */
   _closeConnection(exportId, permanent = false) {
+    if (permanent) this._stopJobWatch(exportId);
     const connectionInfo = this.connections.get(exportId);
     if (!connectionInfo) return;
 
@@ -539,6 +554,7 @@ class ExportWebSocketManager {
       if (!response.ok) {
         if (response.status === 404) {
           console.warn(`[ExportWSManager] Export ${exportId} not found in database`);
+          this._noteJobMissing(exportId);
           return null;
         }
         throw new Error(`HTTP ${response.status}`);
@@ -597,6 +613,81 @@ class ExportWebSocketManager {
       console.warn(`[ExportWSManager] Failed to poll status for ${exportId}:`, e);
       return null;
     }
+  }
+
+  /**
+   * T16830: check the server still has this job after LOST_JOB_CHECK_MS without a message.
+   * Starts the watch if absent; `rearm` restarts its clock and clears the 404 count.
+   */
+  _watchJob(exportId, { rearm = false } = {}) {
+    const existing = this.jobWatches.get(exportId);
+    if (existing?.timer && !rearm) return;
+    if (existing?.timer) clearTimeout(existing.timer);
+    const watch = { timer: null, misses: rearm ? 0 : (existing?.misses || 0) };
+    this.jobWatches.set(exportId, watch);
+    watch.timer = setTimeout(() => this._checkJobStillKnown(exportId, watch), LOST_JOB_CHECK_MS);
+  }
+
+  _stopJobWatch(exportId) {
+    const watch = this.jobWatches.get(exportId);
+    if (!watch) return;
+    clearTimeout(watch.timer);
+    this.jobWatches.delete(exportId);
+  }
+
+  async _checkJobStillKnown(exportId, watch) {
+    watch.timer = null;
+    const exportState = useExportStore.getState().activeExports[exportId];
+    if (!exportState || (exportState.status !== 'pending' && exportState.status !== 'processing')) {
+      this._stopJobWatch(exportId);
+      return;
+    }
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE || '';
+      const response = await fetch(`${apiBase}/api/exports/${exportId}`);
+      // A message re-armed the watch (or it stopped) while we asked: that one owns the clock.
+      if (this.jobWatches.get(exportId) !== watch) return;
+      if (response.status === 404) {
+        if (this._noteJobMissing(exportId)) return;
+      } else if (response.ok) {
+        watch.misses = 0;
+      }
+    } catch (e) {
+      // Server unreachable (mid-restart): no verdict either way, ask again next round.
+      console.warn(`[ExportWSManager] Lost-job check failed for ${exportId}:`, e);
+    }
+    if (this.jobWatches.get(exportId) === watch) {
+      watch.timer = setTimeout(() => this._checkJobStillKnown(exportId, watch), LOST_JOB_CHECK_MS);
+    }
+  }
+
+  /**
+   * Count a 404 for this job; at LOST_JOB_MISSES fail it as interrupted so Frame stops
+   * waiting and tells the parent to sharpen again. Returns true when it failed the job.
+   */
+  _noteJobMissing(exportId) {
+    const watch = this.jobWatches.get(exportId) || { timer: null, misses: 0 };
+    watch.misses += 1;
+    this.jobWatches.set(exportId, watch);
+    if (watch.misses < LOST_JOB_MISSES) return false;
+
+    const store = useExportStore.getState();
+    const exportState = store.activeExports[exportId];
+    const callbacks = this.connections.get(exportId)?.callbacks || {};
+    console.warn(`[ExportWSManager] Export ${exportId} is unknown to the server (lost to a restart); failing it`);
+    const message = exportFailureCopy({ code: EXPORT_LOST_CODE, type: exportState?.type });
+    store.failExport(exportId, message, { code: EXPORT_LOST_CODE });
+    if (callbacks.onError) {
+      try {
+        callbacks.onError(message, { retryable: false, code: EXPORT_LOST_CODE });
+      } catch (e) {
+        console.warn(`[ExportWSManager] onError callback error:`, e);
+      }
+    }
+    this._emitEvent(exportId, 'error', { error: message, code: EXPORT_LOST_CODE });
+    this._closeConnection(exportId, true);
+    this._stopJobWatch(exportId);
+    return true;
   }
 
   /**

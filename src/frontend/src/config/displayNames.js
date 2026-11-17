@@ -1856,6 +1856,9 @@ export const ERROR_COPY = {
   MAKE_HIGHLIGHT: "We couldn't sharpen your highlight. Try again.",
   ADD_SPOTLIGHT: "We couldn't add your spotlight. Try again.",
   SAVE_HIGHLIGHT: "We couldn't save your highlight. Try again.",
+  // T16830: the server restarted mid-job and has no record of it.
+  SHARPEN_INTERRUPTED: `Sharpening was interrupted. Tap ${EXPORT_JOBS.framing.action} to try again.`,
+  SPOTLIGHT_INTERRUPTED: `Adding your spotlight was interrupted. Tap ${EXPORT_JOBS.overlay.action} to try again.`,
   MAKE_HIGHLIGHT_REFUNDED: `We couldn't sharpen your highlight. ${CREDITS.REFUNDED} Try again.`,
   SAVE_EDITS: "We couldn't save your edits. Try again.",
   EDITS_RETRYING: "Some edits didn't save. We're trying again, so tap again in a moment.",

@@ -4,6 +4,7 @@
 // to the console and the parent reads the caller's fallback. UserFacingError marks text
 // written for a parent: our own copy, or the reason the server wrote in `detail`.
 import { ERROR_COPY } from '../config/displayNames';
+import { EXPORT_LOST_CODE } from '../constants/exportStatus';
 
 export class UserFacingError extends Error {
   constructor(message) {
@@ -37,6 +38,10 @@ export function userErrorMessage(err, fallback) {
 
 // A failed export's stored `error` is raw server text, so every surface shows this.
 export function exportFailureCopy(failure) {
+  // T16830: the server lost the job (restart), so the parent has to start it again.
+  if (failure?.code === EXPORT_LOST_CODE) {
+    return failure.type === 'overlay' ? ERROR_COPY.SPOTLIGHT_INTERRUPTED : ERROR_COPY.SHARPEN_INTERRUPTED;
+  }
   if (failure?.retryable) return ERROR_COPY.SAVE_HIGHLIGHT;
   return failure?.type === 'overlay' ? ERROR_COPY.ADD_SPOTLIGHT : ERROR_COPY.MAKE_HIGHLIGHT;
 }
