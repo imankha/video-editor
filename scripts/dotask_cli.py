@@ -1845,6 +1845,9 @@ def check_location(task_id, entry):
     return "declared human"
 
 
+NO_REPORT = "no Playwright report"
+
+
 def run_browser_checks(slug, task_id, ids, timeout, staging=None):
     """{id: (status, detail)} for one task's browser checks, run in one Playwright process inside the
     container: against the group's stack via dev-verify.sh, or against `staging` ({"url", "api", "email"})."""
@@ -1865,7 +1868,7 @@ def run_browser_checks(slug, task_id, ids, timeout, staging=None):
     try:
         outcomes = playwright_outcomes(json.loads(raw))
     except ValueError:
-        return {i: ("fail", f"no Playwright report (exit {code}): {output[-600:]}") for i in ids}
+        return {i: ("fail", f"{NO_REPORT} (exit {code}): {output[-600:]}") for i in ids}
     results = {}
     for criterion in ids:
         mine = [(ok, err) for title, (ok, err) in outcomes.items()
@@ -2035,12 +2038,15 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
                                 f"{'verification skipped by the owner' if owner_skip else 'verify budget spent'}; "
                                 f"{' '.join(wanted)} not verified")
     else:
+        # T16860: the budget pays for running and reviewing checks only. Starting and warming the stack took
+        # 223-229 s on 2026-11-17 and ate whole 3-minute budgets; task.sh caps the start on its own (300 s).
         try:
-            try:
-                bring_up_stack(slug)
-            except subprocess.CalledProcessError as exc:
-                raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
-            warm_stack(slug)
+            bring_up_stack(slug)
+        except subprocess.CalledProcessError as exc:
+            raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
+        warm_stack(slug)
+        started = time.time()
+        try:
             results = run_checks(slug, checkout, group, wanted, started + left * 60)
             remaining = left - (time.time() - started) / 60
             review = None
@@ -2824,6 +2830,27 @@ def staging_redeploy_since(started):
     return newest[1]
 
 
+FRONTEND_READY = ("test -f /workspace/src/frontend/node_modules/.ready && "
+                  "test -d /workspace/src/frontend/node_modules/@playwright/test")
+
+
+def wait_for_frontend_deps(slug, cap_minutes=10, interval=15):
+    """Empty once the group's container is running with its frontend packages installed, else why not.
+
+    T16870: `task.sh up` on a stopped container runs npm ci in the background and touches node_modules/.ready
+    when it finishes. PR #805's staging re-run (2026-11-17) started Playwright before that, crashed on a
+    missing module and filed two bugs for checks that never ran."""
+    started = time.time()
+    while True:
+        running = container_running(slug)
+        if running and container_run(slug, FRONTEND_READY, 30)[0] == 0:
+            return ""
+        if (time.time() - started) / 60 > cap_minutes:
+            return (f"frontend packages not installed after {cap_minutes} minutes" if running
+                    else f"container not running after {cap_minutes} minutes")
+        time.sleep(interval)
+
+
 def staging_check(args):
     """Run a merged group's browser checks against staging and file each failure as a bug task, then free
     the group's container."""
@@ -2840,6 +2867,11 @@ def staging_check(args):
                                 f"Re-run: python scripts/dotask_cli.py staging-check {slug}")
         return 1
     task_sh("up", slug)
+    not_ready = wait_for_frontend_deps(slug)
+    if not_ready:
+        append_status(checkout, f"STAGING_CHECK_BLOCKED PR #{pr}: {not_ready}; checks not run. "
+                                f"Re-run: python scripts/dotask_cli.py staging-check {slug}")
+        return 1
     ran, failed, skipped, filed, rerun = [], [], [], [], []
     for task_id in group["tasks"]:
         ids = [c for c, entry in check_manifest(checkout, task_id).items() if entry.get("kind") == "browser"]
@@ -2857,6 +2889,13 @@ def staging_check(args):
             else:
                 note = f"a staging deploy of {redeploy[:9]} ran during the check and then {after}; not re-run"
                 results.update({c: (results[c][0], f"{results[c][1]} ({note})") for c in failing})
+        crashed = next((d for state, d in results.values() if state == "fail" and d.startswith(NO_REPORT)), "")
+        if crashed:
+            # The harness failed, not the app: filing it would be a false bug (T16870).
+            append_status(checkout, f"STAGING_CHECK_BLOCKED PR #{pr}: Playwright produced no report for {task_id}; "
+                                    f"nothing filed for it ({crashed[:300]}). "
+                                    f"Re-run: python scripts/dotask_cli.py staging-check {slug}")
+            return 1
         for criterion, (state, detail) in results.items():
             ran.append(criterion)
             if state == "skipped":
