@@ -4,7 +4,7 @@
 
 A highlight is a finished short clip, and it can only be downloaded or shared once it is in the Highlights tab. On 2026-11-14, 38 parents had 42 highlights they had paid to sharpen that never got there: 31 were sharpened and went no further, and 11 had a spotlight rendered but Finish was never pressed. The automatic finish (T16520) only helps highlights made after it ships. We will finish the stranded ones too, so each of those parents finds their highlight in Highlights the next time they open the app, marked as new. Done when a copy of a stranded production account, opened on staging, shows its highlight in Highlights and it plays.
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-11-14
