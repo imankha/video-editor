@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T16740:C1": {"kind": "browser"},
+    "T16740:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/containers/OverlayContainer.boxTapAnchor.test.jsx"},
+    "T16740:C3": {"kind": "browser"}
+  }
+}

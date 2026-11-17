@@ -318,7 +318,8 @@ export function OverlayContainer({
         detections: clickedDetection.boxes,
         videoWidth: clickedDetection.videoWidth || 0,
         videoHeight: clickedDetection.videoHeight || 0,
-        hasDetections: true
+        hasDetections: true,
+        timestamp: clickedDetection.timestamp,
       };
     }
 
@@ -376,7 +377,10 @@ export function OverlayContainer({
       detections: selectedDetection.boxes || [],
       videoWidth: currentRegion.videoWidth || 0,
       videoHeight: currentRegion.videoHeight || 0,
-      hasDetections: true
+      hasDetections: true,
+      // T16740: the drawn boxes may come from a detection away from the playhead
+      // (selectRegionDetection's nearest-with-boxes fallback, e.g. 0:00 on entry).
+      timestamp: selectedDetection.timestamp,
     };
   }, [clickedDetection, playerDetectionEnabled, highlightRegions, currentTime, highlightRegionsFramerate]);
 
@@ -441,11 +445,12 @@ export function OverlayContainer({
    * Handle player selection from detection overlay
    */
   const handlePlayerSelect = useCallback((playerData) => {
-    // When a detection marker is parked, the browser's seek lands NEAR but not
-    // exactly on the detection frame. Anchoring the keyframe to the detection's
-    // exact timestamp (not the imprecise currentTime) guarantees it falls within
-    // ASSIGN_TOLERANCE_S so the marker counts as assigned.
-    const assignTime = clickedDetection?.timestamp ?? currentTime;
+    // A tapped box belongs to the detection whose boxes are drawn, so the keyframe
+    // lands on THAT detection's exact timestamp, not the playhead: a parked seek
+    // lands only NEAR the frame, and unparked (e.g. 0:00 on entry from Finished,
+    // T16740) the boxes drawn may come from a later detection. Either way the
+    // keyframe falls within ASSIGN_TOLERANCE_S so the marker counts as assigned.
+    const assignTime = regionDetectionData.timestamp;
     const region = getRegionAtTime(assignTime);
     if (!region) {
       console.warn('[OverlayContainer] No highlight region at assignment time');
@@ -477,7 +482,7 @@ export function OverlayContainer({
     // Guided walk: brief "Got it" confirm, then auto-advance to the next
     // unpicked marker. Scheduled synchronously in this gesture handler.
     guidedPick.scheduleGuidedAdvance(region.id, assignTime);
-  }, [currentTime, clickedDetection, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor, maybeEmitPlayersAssigned, guidedPick]);
+  }, [currentTime, regionDetectionData, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor, maybeEmitPlayersAssigned, guidedPick]);
 
   /**
    * Handle highlight changes during drag/resize

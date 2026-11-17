@@ -1435,6 +1435,11 @@ keyframed** — camera tilt is constant for a recording.
   PlayerDetectionOverlay all consume it (their local copies deleted). `videoToScreen` returns
   `{x,y,width,height}`; Highlight maps width/height→radiusX/radiusY at its call site. Drag handlers
   still hand-roll the inverse (`delta/scaleX`); `screenToVideo` is available if they migrate.
+- **Box hover label is clamped to the picture (T16790, 2026-11-17).** PlayerDetectionOverlay's
+  "Tap to add spotlight" label (`TAP_LABEL_WIDTH` 112) centres on the box but its x is clamped into
+  `videoDisplayRect` (`offsetX`..`offsetX+width`, same screen space as `videoToScreen`), so a box at
+  a portrait video's edge no longer clips the copy. Injected e2e detections must be in the working
+  video's OWN pixels (read `video.videoWidth/Height`); 1280x720 boxes miss a portrait clip.
 - **Overlay stage is aspect-fit, not fixed-height (T5676, 2026-07-22).** `VideoPlayer` got an
   opt-in `fitToAspect` prop: when true (Overlay, `!isFullscreen && !mobileFs`) the
   `.video-player-container` + `.video-container` are `w-full h-full` (fill their parent) instead of
