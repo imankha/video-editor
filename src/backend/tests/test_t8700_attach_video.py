@@ -213,7 +213,7 @@ async def test_attach_charges_credits(profile_db):
 
 @pytest.mark.asyncio
 async def test_attach_reference_id_distinct_from_activate_charge(profile_db):
-    """activate_game charges source='game_upload', reference_id=str(game_id).
+    """activate_game charges source='game_upload', reference_id=f"{profile_id}:{game_id}".
     Attach MUST use a distinct (source, reference_id) or deduct_credits would
     be a silent no-op (idempotent on that pair) -- proving the debit actually
     applies to the game_video_add charge."""

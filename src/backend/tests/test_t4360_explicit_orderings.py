@@ -421,7 +421,7 @@ def _activate_ref_count(db_path, h=ACTIVATE_HASH):
 async def test_activate_happy_path_ready_ref_and_single_credit_deduction(activate_profile_db):
     """Decision 3 happy path: after activate_game, status == ready, >=1
     game_storage ref exists for the game's video hash, and exactly one credit
-    deduction occurred (source='game_upload', reference_id=str(game_id))."""
+    deduction occurred (source='game_upload', reference_id=f"{profile_id}:{game_id}", T16690)."""
     from app.routers import games as games_router
 
     game_id = _seed_activate_game(activate_profile_db, status="pending")
@@ -440,7 +440,7 @@ async def test_activate_happy_path_ready_ref_and_single_credit_deduction(activat
     assert _activate_status(activate_profile_db, game_id) == "ready"
     assert _activate_ref_count(activate_profile_db) >= 1
     assert len(deduct_calls) == 1
-    assert deduct_calls[0] == {"source": "game_upload", "reference_id": str(game_id)}
+    assert deduct_calls[0] == {"source": "game_upload", "reference_id": f"{PROFILE_ID}:{game_id}"}
 
 
 @pytest.mark.asyncio
@@ -489,7 +489,7 @@ async def test_activate_crash_between_credits_and_status_is_recoverable_on_retry
         await games_router.activate_game(game_id)
 
     assert len(deduct_calls) == 1
-    assert deduct_calls[0] == ("game_upload", str(game_id))
+    assert deduct_calls[0] == ("game_upload", f"{PROFILE_ID}:{game_id}")
     assert _activate_status(activate_profile_db, game_id) == "pending"
 
     # Retry without the fault: completes to ready, and deduct_credits is
@@ -507,7 +507,7 @@ async def test_activate_crash_between_credits_and_status_is_recoverable_on_retry
     assert result["status"] == "ready"
     assert _activate_status(activate_profile_db, game_id) == "ready"
     assert len(deduct_calls) == 2  # original + retry call into deduct_credits
-    assert deduct_calls[1] == ("game_upload", str(game_id))
+    assert deduct_calls[1] == ("game_upload", f"{PROFILE_ID}:{game_id}")
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,8 @@ game is filtered out of readyGames), and NOTHING in the profile.sqlite alone pro
 it was charged.
 
 The ONLY durable evidence a reverted game was charged is a Postgres
-`credit_transactions` debit with source='game_upload' and reference_id = str(game_id).
+`credit_transactions` debit with source='game_upload' and reference_id = str(game_id)
+(before T16690) or f"{profile_id}:{game_id}" (since T16690).
 This probe intersects that with the pending games in a profile.sqlite to surface the
 victims. It is READ-ONLY: it reports, it never writes. Repair (flip the paid game
 back to 'ready', or refund) is a separate, deliberate decision per victim.
@@ -27,10 +28,10 @@ A `games` row where BOTH hold:
   - a Postgres `credit_transactions` row exists for this user with
     source='game_upload' and reference_id = str(game.id) and amount < 0 (a real debit).
 
-NOTE on ambiguity: game_id is a per-profile SQLite autoincrement, so a user with
-multiple profiles can have the same game_id in two profiles, both charging with the
-same reference_id. Pass --profile-id for logging context; treat a hit as a STRONG
-candidate to review, not a proven single victim, when the user has >1 profile.
+NOTE on ambiguity: game_id is a per-profile SQLite autoincrement. Before T16690 the
+reference was the bare game_id, so a legacy hit is a STRONG candidate to review, not a
+proven single victim, when the user has >1 profile. Since T16690 the reference names
+the profile; pass --profile-id to match those rows.
 
 Usage (dry-run / read-only always)
 ----------------------------------
@@ -119,8 +120,13 @@ def main():
     finally:
         pg_conn.close()
 
+    def is_charged(gid):
+        return str(gid) in charged or (
+            args.profile_id is not None and f"{args.profile_id}:{gid}" in charged
+        )
+
     victims = [(gid, name, blake3, created) for (gid, name, blake3, created) in pending
-               if str(gid) in charged]
+               if is_charged(gid)]
 
     print(
         f"{len(pending)} pending game(s) in profile={args.profile_id or '?'} "
@@ -130,7 +136,7 @@ def main():
     for gid, name, blake3, created in victims:
         print(f"  [VICTIM] id={gid} name={name!r} hash={(blake3 or '')[:12]} created_at={created}")
     for gid, name, _blake3, created in pending:
-        if str(gid) not in charged:
+        if not is_charged(gid):
             print(f"  [uncharged-pending] id={gid} name={name!r} created_at={created}")
 
     print(
