@@ -55,6 +55,21 @@ async function frameVideoStaysPaused() {
   return { ok, samples: samples.map((all) => all.map((v) => `${v.inFrame ? 'frame' : 'other'} ${v.size} paused=${v.paused} t=${v.time.toFixed(2)}`)) };
 }
 
+/**
+ * Wait for the app to finish loading. On a cold stack the first session request can time out
+ * and the loading screen shows "Still connecting" with a Retry button (T16400), which waits for
+ * a press: press it, as a parent would, until the app is up.
+ */
+async function waitForAppLoaded(timeout = 150000) {
+  const deadline = Date.now() + timeout;
+  while (await page.locator('#preloader').count()) {
+    expect(Date.now(), 'app still on the loading screen').toBeLessThan(deadline);
+    const retry = page.locator('#preloader-retry');
+    if (await retry.isVisible()) await retry.click();
+    await page.waitForTimeout(1000);
+  }
+}
+
 test.beforeAll(async ({ browser }, testInfo) => {
   testInfo.setTimeout(600000);
   context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -62,12 +77,14 @@ test.beforeAll(async ({ browser }, testInfo) => {
   page = await context.newPage();
 
   await page.goto('/home');
+  await waitForAppLoaded();
   await disableGuidanceForCheck(page);
   const projects = await listProjects();
   const draft = projects.find((p) => (p.clip_count || 0) === 1 && !p.has_working_video && !p.has_final_video);
   if (!draft) return; // each test skips loudly below
   await page.goto(`/focus/p/${draft.id}`);
-  await page.getByTestId('focus-video-stage').waitFor({ timeout: 90000 });
+  await waitForAppLoaded();
+  await page.getByTestId('focus-video-stage').waitFor({ timeout: 150000 });
   const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
   await expect(sharpen).toBeEnabled({ timeout: 60000 });
 
