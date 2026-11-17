@@ -1,6 +1,6 @@
 # T16850: One Sport filter at the top of Admin that filters every section
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-11-17

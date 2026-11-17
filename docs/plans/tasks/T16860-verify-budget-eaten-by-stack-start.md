@@ -1,6 +1,6 @@
 # T16860: The verify budget is spent starting the stack, so criteria go unchecked
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-17

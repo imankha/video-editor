@@ -1,6 +1,6 @@
 # T16870: The staging check runs before the container has its packages, and files false bugs
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-17

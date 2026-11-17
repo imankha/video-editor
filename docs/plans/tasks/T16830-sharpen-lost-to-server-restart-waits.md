@@ -1,6 +1,6 @@
 # T16830: Sharpen lost to a server restart waits forever
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-11-17
