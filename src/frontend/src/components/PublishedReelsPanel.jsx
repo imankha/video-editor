@@ -29,6 +29,7 @@ import { recordFunnelEvent, FUNNEL_EVENTS, viewedThresholdSeconds } from '../uti
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { canReEditReel } from '../utils/reelReEditable';
+import { openFinishedReel } from '../utils/finishedReelNav';
 import { formatGameClock, formatLength, PRECISION } from '../utils/timeFormat';
 import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
 import { ERROR_COPY, SHARE_COPY, RANKING_COPY, INTRO_COPY } from '../config/displayNames';
@@ -190,6 +191,19 @@ export function PublishedReelsPanel({
   // panel is still on screen holding the member cache, so it applies the same
   // member change events delete does -- drop the tile now, refresh the summary
   // aggregate. A navigating restore unmounts the panel; a failed one changed nothing.
+  // T16530: the story player's edit button opens the Finished screen for this
+  // highlight (Add or Redo spotlight, Edit zoom). A redo keeps it in Highlights until
+  // the new version replaces it, so this path no longer unpublishes it as a draft.
+  const openFinished = useCallback((reel) => {
+    closeStoryPlayer();
+    openFinishedReel({
+      id: reel.project_id,
+      final_video_id: reel.id,
+      name: reel.name,
+      aspect_ratio: reel.aspect_ratio,
+      clip_count: reel.clip_count,
+    }, { alreadyPublished: true });
+  }, [closeStoryPlayer]);
   const openAsDraft = useCallback(async (download) => {
     const outcome = await openReelAsProject(download);
     if (outcome.restored && !outcome.navigated) {
@@ -976,8 +990,7 @@ export function PublishedReelsPanel({
             toast.error(ERROR_COPY.DOWNLOAD_HIGHLIGHT);
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
-          onReEdit={onOpenProject ? openAsDraft : undefined}
-          reEditLoadingId={restoringId}
+          onReEdit={openFinished}
           onReRank={handleReRank}
           reRankLoadingId={reRankingId}
           handleGlyph={storyPlayerHandleGlyph}

@@ -74,6 +74,49 @@ def record_finish(user_id: str, profile_id, final_video_id: int) -> None:
     })
 
 
+def final_filenames(project_id: int) -> list[str]:
+    """Filenames of every final video of this project. Read BEFORE a new version is
+    inserted, so the version the insert replaces (and deletes) is included (T16530)."""
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            "SELECT filename FROM final_videos WHERE project_id = ?", (project_id,)
+        ).fetchall()
+    return [r["filename"] for r in rows]
+
+
+def repoint_replaced_shares(user_id: str, profile_id, project_id: int, final_video_id: int,
+                            old_filenames: list[str]) -> None:
+    """T16530: a redo replaces the highlight in place, so share links made for an older
+    version move to `final_video_id`. Callers run this only AFTER the DB sync to R2
+    succeeded (a refused sync leaves the links on the old version and the manual
+    "Update shared version" button). Never raises: a failure is logged and leaves
+    the links where they were."""
+    from app.services.sharing_db import repoint_shares_by_filename
+    try:
+        with get_db_connection() as conn:
+            row = conn.execute(
+                "SELECT fv.filename, fv.name, fv.duration, p.final_video_id FROM final_videos fv "
+                "JOIN projects p ON p.id = fv.project_id WHERE fv.id = ? AND p.id = ?",
+                (final_video_id, project_id),
+            ).fetchone()
+        if row is None or row["final_video_id"] != final_video_id:
+            # A later render already replaced this one; it moves the links itself.
+            logger.info(f"[Redo] project={project_id} final_video={final_video_id} is no longer "
+                        f"current - share links left for the newer version")
+            return
+        moved = repoint_shares_by_filename(
+            user_id, profile_id, [f for f in old_filenames if f != row["filename"]], final_video_id,
+            row["filename"], row["name"], row["duration"],
+        )
+        if moved:
+            logger.info(f"[Redo] project={project_id} moved {moved} share link(s) to "
+                        f"final_video={final_video_id} user={user_id}")
+    except Exception as e:
+        logger.error(f"[Redo] FAILED moving share links project={project_id} "
+                     f"final_video={final_video_id} user={user_id}: {e} - links keep the old version",
+                     exc_info=True)
+
+
 def _linked_final_video(cursor, project_id: int, working_video_id: int):
     # Deploy->v063 window: a below-head DB has no link column, so nothing is linked.
     if not column_exists(cursor, "final_videos", "source_working_video_id"):
@@ -108,6 +151,7 @@ async def finish_highlight(user_id: str, profile_id, project_id: int, working_vi
                 "SELECT aspect_ratio FROM projects WHERE id = ?", (project_id,)
             ).fetchone()
             linked = _linked_final_video(cursor, project_id, working_video_id)
+        old_filenames = final_filenames(project_id)
 
         published = None  # publish_final_video result, when this call inserted the row
         if linked:
@@ -187,6 +231,9 @@ async def finish_highlight(user_id: str, profile_id, project_id: int, working_vi
 
         if published and published["prior_filename"] and not published["keep_prior"]:
             pfv.delete_prior_final_object(user_id, published["prior_filename"], output_filename)
+        step = "share_links"
+        await asyncio.to_thread(repoint_replaced_shares, user_id, profile_id, project_id,
+                                final_video_id, old_filenames)
 
         logger.info(f"[Finish] project={project_id} working_video={working_video_id} "
                     f"final_video={final_video_id} in Highlights (newly={newly}) user={user_id}")

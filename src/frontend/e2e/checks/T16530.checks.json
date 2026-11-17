@@ -1,0 +1,7 @@
+{"criteria": {
+  "T16530:C1": {"kind": "browser"},
+  "T16530:C2": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16530_redo_finished.py -p no:cacheprovider -q -k c2_"},
+  "T16530:C3": {"kind": "browser"},
+  "T16530:C4": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_t16530_redo_finished.py -p no:cacheprovider -q -k c4_"},
+  "T16530:C5": {"kind": "code", "command": "cd src/frontend && timeout 300 npx vitest run src/components/ProjectManager.finishedNotInPlays.test.jsx"}
+}}

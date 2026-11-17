@@ -934,6 +934,18 @@ it logs `[Finish] FAILED project= step=` and the highlight keeps the old manual 
   already-published version (harmless; no extra event).
 - Follow-up: the overlay and POST /publish paths still delete the prior R2 object before the sync is durable.
 
+## Redo from the Finished screen (T16530, 2026-11-17)
+- Finished screen = `DraftReelPreview` via `openFinishedReel`; `FinishedRedoActions` adds Add/Redo spotlight
+  (free) and Edit zoom (`EditZoomSheet`: cost + balance, or "unavailable" when the game video expired).
+- `GET /api/downloads/{id}/redo-info` -> `{project_id, reframe_credits, game_video_available}`;
+  `POST /api/downloads/{id}/open-for-redo` restores an old-style archive if needed and NEVER unpublishes
+  (the old version stays playable/shareable until the replacement publishes).
+- Share links follow the replacement: `finish_highlight.repoint_replaced_shares` runs AFTER the durable sync
+  (finish_highlight + the 3 `_finalize_overlay_export` callers); prior filenames are collected BEFORE publish;
+  skipped if `projects.final_video_id` moved again; a failed sync leaves shares on the old version.
+- Home Plays tab filters `isPlayInProgress` (auto-created and not published): a finished highlight is
+  under Highlights only, even before the archive sweep hides its project.
+
 ## Invariants & rules
 - **One video probe (T4430).** App code asks a video for its size/frame rate/duration only through `services/video_probe.py::probe_video(path|url|bytes)`, which raises `VideoProbeError` on an unreadable file or an unknown rate (`parse_frame_rate` refuses `0/0`/`N/A`; nothing assumes 30 fps). Callers probing an external dependency (R2 URL) catch it and say so (`probe_r2_video`, `publish_final_video._probe_output_dims`, overlay `_probe_dims`). `ffmpeg_concat.probe_media` builds on it. Only `modal_functions/` keeps its own copy (policy). `test_t4430_video_probe.py` bans other `r_frame_rate`/`CAP_PROP_FPS`/`CAP_PROP_FRAME_WIDTH`/`ffmpeg.probe(` reads and `'30/1'` in `app/`. Duration-only probes (`get_video_duration`, `poster._probe_duration`) are separate.
 1. **Sync-then-announce (T4110 + T4200, DONE 2026-07-11):** the R2 DB sync must succeed BEFORE the export is announced complete. **ALL THREE overlay completion paths gate COMPLETE on `sync_export_db_to_r2`** (T5300 verified): the no-keyframes copy path (`overlay.py:2043`) and the test-mode copy path (`:2110`) run inline and return **503** + a retryable `sync_failed` progress event on failure; the real-render **background** path (`_run_overlay_export_background:1817-1833`, the one that returns **202** and finishes async) gates the same way but — having already returned 202 — emits the retryable `_export_sync_failed_data` event over the WS/`export_progress` dict INSTEAD of a 503 (there is no live HTTP response to fail). Also gated: framing (`framing.py:718-722`) and multi-clip (`multi_clip.py:2298-2301` + COMPLETE sites `:1440-1448/:1737`). DB-save failure is terminal — no phantom export announces success. The `export_sync_failed_data` helper lives in `export_helpers.py:379` (no router→router imports); it sets `code='sync_failed'`, `retryable=True`, `phase='error'`.
