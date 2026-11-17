@@ -1,0 +1,4 @@
+{"criteria": {
+  "T16870:C1": {"kind": "code", "command": "cd scripts && timeout 300 python3 -m pytest test_dotask_cli.py -p no:cacheprovider -q -k 'test_checks_wait_until_the_restarted_container_has_its_frontend_packages or test_packages_still_missing_at_the_cap_block_the_check_and_keep_the_container'"},
+  "T16870:C2": {"kind": "code", "command": "cd scripts && timeout 300 python3 -m pytest test_dotask_cli.py -p no:cacheprovider -q -k test_a_playwright_run_with_no_report_blocks_and_files_nothing"}
+}}

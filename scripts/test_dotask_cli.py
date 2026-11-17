@@ -2823,7 +2823,10 @@ class StagingCheckTest(AutolandBase):
                             ("wait_for_staging_deploy", lambda sha: "deployed"),
                             ("free_group", lambda slug, pr: self.downs.append(slug) or "freed"),
                             ("task_sh", lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr="")),
-                            ("git_paths_dirty", lambda repo, paths: False)):
+                            ("git_paths_dirty", lambda repo, paths: False),
+                            # A restarted container with its frontend packages installed (T16870).
+                            ("container_running", lambda slug: True),
+                            ("container_run", lambda *a, **k: (0, ""))):
             patcher = patch.object(dotask_cli, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -2901,6 +2904,59 @@ class StagingCheckTest(AutolandBase):
             self.assertEqual(dotask_cli.staging_check(SimpleNamespace(slug="g-t1-1")), 1)
         run.assert_not_called()
         self.assertIn("STAGING_CHECK_BLOCKED PR #731: staging deploy failed", self._last())
+        self.assertEqual(self.downs, [])
+
+    def test_checks_wait_until_the_restarted_container_has_its_frontend_packages(self):
+        # T16870: PR #805's re-run started Playwright while `task.sh up`'s background npm ci was still going;
+        # it crashed on a missing module and filed two bugs for checks that never ran.
+        polls, events = [], []
+
+        def fake_container_run(slug, command, timeout, env=None, keep=2000):
+            polls.append(command)
+            events.append("poll")
+            return (0 if len(polls) >= 3 else 1), ""
+
+        def checks(slug, task, ids, timeout, staging=None):
+            events.append("checks")
+            return {i: ("pass", "ok") for i in ids}
+
+        with patch.object(dotask_cli, "container_running", lambda slug: True), \
+                patch.object(dotask_cli, "container_run", fake_container_run), \
+                patch.object(dotask_cli.time, "sleep", lambda s: None), \
+                patch.object(dotask_cli, "run_browser_checks", checks), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(dotask_cli.staging_check(SimpleNamespace(slug="g-t1-1")), 0)
+        self.assertEqual(events, ["poll", "poll", "poll", "checks"])
+        self.assertIn("node_modules/.ready", polls[0])
+        self.assertIn("@playwright/test", polls[0])
+
+    def test_packages_still_missing_at_the_cap_block_the_check_and_keep_the_container(self):
+        clock = [0.0]
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        with patch.object(dotask_cli, "container_running", lambda slug: True), \
+                patch.object(dotask_cli, "container_run", lambda *a, **k: (1, "")), \
+                patch.object(dotask_cli.time, "time", lambda: clock[0]), \
+                patch.object(dotask_cli.time, "sleep", sleep), \
+                patch.object(dotask_cli, "run_browser_checks", MagicMock()) as run:
+            self.assertEqual(dotask_cli.staging_check(SimpleNamespace(slug="g-t1-1")), 1)
+        run.assert_not_called()
+        self.assertIn("STAGING_CHECK_BLOCKED PR #731: frontend packages not installed", self._last())
+        self.assertEqual(self.downs, [])
+
+    def test_a_playwright_run_with_no_report_blocks_and_files_nothing(self):
+        crash = "no Playwright report (exit 1): Error [ERR_MODULE_NOT_FOUND] internal/modules/esm/resolve"
+        with patch.object(dotask_cli, "run_browser_checks",
+                             lambda slug, task, ids, timeout, staging=None: {i: ("fail", crash) for i in ids}), \
+                patch.object(dotask_cli, "staging_redeploy_since", lambda started: ""), \
+                patch.object(dotask_cli, "commit_filed_bug", MagicMock()) as filed, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(dotask_cli.staging_check(SimpleNamespace(slug="g-t1-1")), 1)
+        filed.assert_not_called()
+        self.assertFalse(list((self.main_repo / "docs" / "plans" / "tasks").glob("T1240-*.md")))
+        self.assertIn("STAGING_CHECK_BLOCKED PR #731: Playwright produced no report for T1", self._last())
         self.assertEqual(self.downs, [])
 
     def test_on_merge_starts_the_staging_check_once_and_frees_after_it(self):
