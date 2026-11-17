@@ -66,5 +66,7 @@ export function openFinishedReel(project, { alreadyPublished = false } = {}) {
     // Rides the already-fetched project row -- see GET /api/projects
     // stale_share (projects.py ProjectListItem) -- no separate fetch here.
     staleShare: project.stale_share ?? null,
+    // T16530: the Finished screen offers Redo spotlight (not Add) when one exists.
+    hasSpotlight: !!project.has_overlay_edits,
   });
 }

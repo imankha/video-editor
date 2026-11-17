@@ -108,10 +108,12 @@ export default function FrameShapeChoice({ aspectRatio, hasPositions, onChange, 
       data-testid="focus-shape-choice"
       role="group"
       aria-label={ANNOTATE.SHARE_WHERE_TITLE}
-      className={`rounded-xl border border-white/10 bg-slate-950/55 p-3 ${pulseClass}`}
+      // T16640: one row on desktop (lg) -- title beside the options, each option a single
+      // line -- so the chooser takes ~50px instead of ~130px of a 1280x800 laptop's height.
+      className={`rounded-xl border border-white/10 bg-slate-950/55 p-3 lg:flex lg:items-center lg:gap-3 lg:py-2 ${pulseClass}`}
     >
-      <p className="text-sm font-bold text-white mb-2">{ANNOTATE.SHARE_WHERE_TITLE}</p>
-      <div className="flex gap-2">
+      <p className="text-sm font-bold text-white mb-2 lg:mb-0 lg:shrink-0">{ANNOTATE.SHARE_WHERE_TITLE}</p>
+      <div className="flex gap-2 lg:flex-1">
         {RATIO_ORDER.map((ratio) => {
           const Icon = OPTION_ICON[ratio];
           const selected = ratio === aspectRatio;
@@ -122,7 +124,7 @@ export default function FrameShapeChoice({ aspectRatio, hasPositions, onChange, 
               data-testid={`focus-shape-option-${ratio === RATIO.PORTRAIT ? 'portrait' : 'landscape'}`}
               onClick={() => choose(ratio)}
               aria-pressed={selected}
-              className={`flex-1 flex flex-col items-center gap-1 rounded-lg p-2.5 transition-colors ${selected ? 'bg-cyan-600 ring-2 ring-cyan-300' : 'bg-slate-800 hover:bg-slate-700 border border-white/10'}`}
+              className={`flex-1 flex flex-col items-center gap-1 rounded-lg p-2.5 lg:flex-row lg:justify-center lg:gap-2 lg:py-1.5 transition-colors ${selected ? 'bg-cyan-600 ring-2 ring-cyan-300' : 'bg-slate-800 hover:bg-slate-700 border border-white/10'}`}
             >
               <Icon size={18} aria-hidden="true" />
               <span className="text-xs font-semibold text-white">{ratioLabel(ratio)}</span>

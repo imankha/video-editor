@@ -70,7 +70,12 @@ export function ProfileSportButton() {
   // instead of staying suppressed for the session.
   // Scope note: this only hides the broken thumbnail. The user-visible "photo
   // missing" state, and repairing the dangling key, belong to T6650.
-  const showPhoto = !!photoUrl && failedPhotoUrl !== photoUrl && !scrolledPastTop;
+  const photoLoads = !!photoUrl && failedPhotoUrl !== photoUrl;
+  const showPhoto = photoLoads && !scrolledPastTop;
+  const onPhotoError = () => {
+    console.warn(`[ProfileSportButton] intro photo failed to load, hiding thumbnail: ${photoUrl}`);
+    setFailedPhotoUrl(photoUrl);
+  };
 
   return (
     <>
@@ -90,6 +95,18 @@ export function ProfileSportButton() {
           ) : (
             <span className="text-2xl leading-none" aria-hidden>{sportEmoji(sport)}</span>
           )}
+          {/* T16680: on a phone the hanging photo below would sit over the centered
+              "ReelBallers" title and tagline, so below `sm` the photo is a small 9:16
+              thumbnail inside the button instead. */}
+          {photoLoads && (
+            <img
+              src={photoUrl}
+              alt=""
+              aria-hidden
+              onError={onPhotoError}
+              className="sm:hidden w-5 h-9 rounded object-cover ring-1 ring-white/20 pointer-events-none"
+            />
+          )}
           {currentProfile?.name && sport !== NO_SPORT && (
             <span className="hidden sm:inline text-sm text-white font-medium max-w-[120px] truncate">
               {currentProfile.name}
@@ -102,11 +119,8 @@ export function ProfileSportButton() {
             src={photoUrl}
             alt=""
             aria-hidden
-            onError={() => {
-              console.warn(`[ProfileSportButton] intro photo failed to load, hiding thumbnail: ${photoUrl}`);
-              setFailedPhotoUrl(photoUrl);
-            }}
-            className="absolute top-full right-0 mt-1.5 w-14 h-[100px] rounded-lg object-cover ring-2 ring-white/20 shadow pointer-events-none"
+            onError={onPhotoError}
+            className="hidden sm:block absolute top-full right-0 mt-1.5 w-14 h-[100px] rounded-lg object-cover ring-2 ring-white/20 shadow pointer-events-none"
           />
         )}
       </div>

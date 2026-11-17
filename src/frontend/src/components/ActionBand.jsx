@@ -1,6 +1,11 @@
 import { useRef } from 'react';
 import useCtaBarHeight from './shared/useCtaBarHeight';
 
+// T16640: lg-only shape of the `above` grid and its ActionCards (see the grid below).
+const BAND_ROW_CARDS = 'lg:order-2 lg:flex-none lg:w-[56rem] lg:max-w-[64%] lg:mx-0 lg:p-0 '
+  + 'lg:[&_button]:!min-h-[56px] lg:[&_button]:flex-row lg:[&_button]:!py-2 '
+  + 'lg:[&_[data-cta-disc]]:h-9 lg:[&_[data-cta-disc]]:w-9 lg:[&_[data-cta-desc]]:hidden';
+
 /**
  * ActionBand (T9270) — the full-width page-level action band that anchors the
  * primary CTA on Focus and Overlay.
@@ -35,7 +40,7 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
     <div
       ref={ref}
       data-testid="action-band"
-      className={`flex-none w-full ${className}`}
+      className={`flex-none w-full ${above ? 'lg:flex lg:items-center lg:gap-4 lg:px-4 lg:py-2' : ''} ${className}`}
       style={{
         background: '#0b1220',
         borderTop: '1px solid rgba(255,255,255,0.14)',
@@ -48,12 +53,16 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
         // T12020: Generate is FIRST (left on desktop, top on mobile), Trim and Preview
         // are the secondary row beside it; the preview disclosure (order-last,
         // col-span-full) sits under them. Same column shape as CtaBar's band grid.
-        <div data-testid="action-band-above" className="grid grid-cols-2 sm:[grid-template-columns:minmax(0,1.4fr)_repeat(2,minmax(0,1fr))] gap-2 px-3 sm:px-4 pt-3 max-w-4xl mx-auto">
+        // T16640: on desktop (lg) the band is ONE row -- status | cards | cost -- of short
+        // row cards (icon beside title, description in the tooltip), so a 1280x800 laptop
+        // keeps the video, play controls and crop track above it without scrolling. The
+        // stacked tall cards + separate cost row were ~233px. Below lg nothing changes.
+        <div data-testid="action-band-above" className={`grid grid-cols-2 sm:[grid-template-columns:minmax(0,1.4fr)_repeat(2,minmax(0,1fr))] gap-2 px-3 sm:px-4 pt-3 max-w-4xl mx-auto ${BAND_ROW_CARDS}`}>
           <div className="col-span-2 sm:col-span-1">{cta}</div>
           {above}
         </div>
       )}
-      <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:min-h-[76px]">
+      <div className={`flex flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:min-h-[76px]${above ? ' lg:contents' : ''}`}>
         {/* Status cell — progress, failed/retry, disabled reason (T8510). */}
         <div className="order-2 sm:order-1 flex-1 min-w-0 w-full sm:w-auto flex flex-col justify-center gap-1 text-center sm:text-left">
           {status}

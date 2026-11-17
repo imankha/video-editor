@@ -5,6 +5,8 @@ import { API_BASE } from '../config';
 import { withTabProfile } from '../utils/sessionInit';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { PublishLinkFlow } from './PublishLinkFlow';
+import { FinishedRedoActions } from './FinishedRedoActions';
+import { EditZoomSheet } from './EditZoomSheet';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -12,6 +14,8 @@ import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useWebShare, ShareCapability } from '../hooks/useWebShare';
 import { useDownloads } from '../hooks/useDownloads';
+import { useRedoHighlight } from '../hooks/useRedoHighlight';
+import { useCreditStore } from '../stores/creditStore';
 import { toast } from './shared/Toast';
 import { setPendingGame, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import Guide from './instructions/Guide';
@@ -102,6 +106,12 @@ function DraftReelPreviewInner({ payload }) {
   const { copyLink, shareVideoFile, shareLink, createShareLink, repointShareLink, isMobile, capability } = useWebShare();
   const canShareFile = capability === ShareCapability.FULL;
   const { downloadFile, downloadingId } = useDownloads();
+  // T16530: redo from the Finished screen. The highlight stays in Highlights while
+  // the redo is made; the redo's render replaces it (and moves its share links).
+  const { loadRedoInfo, openForRedo, openingMode } = useRedoHighlight(payload.finalVideoId);
+  const creditBalance = useCreditStore((s) => s.balance);
+  const [editZoomInfo, setEditZoomInfo] = useState(null);
+  const [checkingEditZoom, setCheckingEditZoom] = useState(false);
 
   // T10860 (design §3.3): a pre-existing share token whose snapshot is stale
   // (points at a filename older than this project's current final video).
@@ -280,6 +290,30 @@ function DraftReelPreviewInner({ payload }) {
     }
   }, [downloadFile]);
 
+  // Add / Redo spotlight click: free, so it opens Spotlight straight away.
+  const handleRedoSpotlight = useCallback(() => {
+    openForRedo(EDITOR_MODES.OVERLAY);
+  }, [openForRedo]);
+
+  // Edit zoom click: read what sharpening again costs (and whether the game video
+  // is still there) and show it before the parent commits. Read-only requests.
+  const handleEditZoom = useCallback(async () => {
+    setCheckingEditZoom(true);
+    try {
+      const [info] = await Promise.all([loadRedoInfo(), useCreditStore.getState().fetchCredits()]);
+      setEditZoomInfo(info);
+    } catch (err) {
+      toast.error(userErrorMessage(err, ERROR_COPY.OPEN_HIGHLIGHT));
+    } finally {
+      setCheckingEditZoom(false);
+    }
+  }, [loadRedoInfo]);
+
+  const handleConfirmEditZoom = useCallback(() => {
+    setEditZoomInfo(null);
+    openForRedo(EDITOR_MODES.FRAMING);
+  }, [openForRedo]);
+
   // "Update shared version" click — the single re-point write gesture, inside
   // this onClick chain (never reactive). On success the token is unchanged
   // (same distributed URL) so there is nothing new to show/copy, just a
@@ -395,6 +429,21 @@ function DraftReelPreviewInner({ payload }) {
         onGetLink={handleGetLinkCapable}
       />
       </div>
+      <FinishedRedoActions
+        hasSpotlight={!!payload.hasSpotlight}
+        onSpotlight={handleRedoSpotlight}
+        onEditZoom={handleEditZoom}
+        spotlightBusy={openingMode === EDITOR_MODES.OVERLAY}
+        editZoomBusy={checkingEditZoom || openingMode === EDITOR_MODES.FRAMING}
+      />
+      {editZoomInfo && (
+        <EditZoomSheet
+          info={editZoomInfo}
+          balance={creditBalance}
+          onConfirm={handleConfirmEditZoom}
+          onClose={() => setEditZoomInfo(null)}
+        />
+      )}
       {staleShare && (
         <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300">
           <span className="min-w-0">{RESULT_PUBLISH.UPDATE_SHARED_HINT}</span>

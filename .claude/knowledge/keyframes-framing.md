@@ -639,6 +639,14 @@ estimate ticks the instant a speed/trim/split gesture lands — no save/export.
   `/api/credits` zero-balance so no real render fires, responsive 375/desktop).
 
 ## Invariants & rules
+- **Phone Frame stage holds its Controls (T16640/T16650, 2026-11-16).** Below lg the fixed-height
+  `focus-video-stage` is `flex flex-col` so the player shrinks and `Controls` fit inside; at lg it is
+  `lg:block` and the Controls hang under the box (the timeline's `lg:mt-6` is that clearance, and
+  `SHORT_DESKTOP_*` reserve 30rem for header + controls + crop track). Desktop Frame fits 1280x800 at
+  scrollTop 0 with a one-row lg ActionBand; never fix fit by an on-load scroll (T16630 removed those).
+  On a phone the empty-timeline hint is a `timeline-empty-caption` above the timeline (gated on
+  `focusPointCount === 0`); the in-track copy (`[data-crop-empty-hint]`) is hidden below lg only
+  inside `trim-guide-scope`, so mobile fullscreen and the cockpit keep the in-track hint.
 - **Focus never loads a clip from ANOTHER project (T10740, 2026-09-20).** `FocusScreen`'s clip
   loaders call `isClipFromAnotherProject(clip, projectId)` (`screens/clipVideoResolution.js`) and
   bail when it is true. **Why this is needed:** `App.handleModeChange` fires `invalidateClips`
