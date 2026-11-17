@@ -141,6 +141,14 @@ From the same review. Deletions come first, because less false code makes every 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 
+### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
+
+**Why this section exists.** Owner asked on 2026-11-17 for a full QA pass of every feature at phone, iPad and desktop sizes. The new parent journey reached a downloaded highlight and share link, with checkout tested at phone and desktop viewports. Screenshots: `qa/qa-pass-2026-11-17/` (local, gitignored). Rows marked possible need a repro first.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T16890 | [Checkout payment button is unreachable](tasks/T16890-checkout-pay-button-offscreen.md) | 8 | 2 | 4.0 | TODO | [ ] | A parent opens the smallest credit pack and expands Card. The form becomes taller than the screen, leaving Pay below the bottom and the heading above the top. Scrolling does not expose the button, and this repeated on all three attempts at phone width and also appeared on desktop. Done when the entire checkout and its payment and close controls are reachable at supported sizes. |
+
 ### Staging QA 2026-11-16: bugs and possible bugs (owner-requested, BUGS FIRST)
 
 **Why this section exists.** Owner asked on 2026-11-16 for a full Playwright QA pass on staging and to file everything found. The pass walked upload, Annotate, Frame with a real sharpen, Spotlight with a real render, share link (signed out, phone size, link preview), download, Home tabs, credits and account menus, on desktop and a phone-sized screen, as the staging test account. Everything not listed here worked. Rows marked possible need a repro first.
