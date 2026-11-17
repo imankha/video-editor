@@ -1,6 +1,6 @@
 # T16730: Staging check failed: T16525:C2 A parent who returns later sees the same message and
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-17

@@ -95,6 +95,7 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T16530 | [Redo from the Finished screen](tasks/automatic-finish/T16530-redo-from-finished-screen.md) | 8 | 5 | 1.6 | STAGING | [ ] | Today the choices to redo a highlight, Edit zoom and Add or Redo spotlight, sit on the panel that comes before Finish. They are used: 9 of 68 highlights were sharpened a second time and 11 of 37 spotlights rendered again. Once highlights finish on their own that panel is no longer a stop, so we will put both choices on the Finished screen and make a finished highlight's Home tile open that screen. A redo replaces the video in place and keeps its share link. Done when a parent can change the crop or the spotlight of a finished highlight on a phone and the new version replaces the old one. |
 | T16700 | [Staging check failed: T16660:C3 C3: An admin account still sees the Admin Panel as](tasks/T16700-staging-check-failed-t16660-c3-c3.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T16710 | [Staging check failed: T16640:C2 C2: In Trim mode the Normal speed track is fully](tasks/T16710-staging-check-failed-t16640-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T16730 | [Staging check failed: T16525:C2 A parent who returns later sees the same message and](tasks/T16730-staging-check-failed-t16525-c2-a.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 
 ### Bugs found by /dotask verify
 
@@ -103,7 +104,6 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T16730 | [Staging check failed: T16525:C2 A parent who returns later sees the same message and](tasks/T16730-staging-check-failed-t16525-c2-a.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
