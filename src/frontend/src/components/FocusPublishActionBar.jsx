@@ -1,7 +1,7 @@
 import { FolderInput, Sparkles, Pencil, ArrowLeft, Loader } from 'lucide-react';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 import CtaBar from './shared/CtaBar';
-import { FOCUS_PUBLISH } from '../config/displayNames';
+import { FOCUS_PUBLISH, FOCUS_FINISHED } from '../config/displayNames';
 
 /**
  * FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles T10670,
@@ -11,7 +11,8 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  *
  *   PRIMARY   Add spotlight        — first CtaBar card (solid cyan), opens the Spotlight
  *                                    editor and never starts an export on its own.
- *   SECONDARY Finish without spotlight — publishes the framed reel as-is; carries
+ *   SECONDARY Finish without spotlight — only when the server's finish failed (T16525);
+ *                                    publishes the framed reel as-is; carries
  *                                    `loading` (disabled + spinning icon) and the
  *                                    guided-tutorial anchor (data-tutorial-target).
  *   SECONDARY Edit framing         — caption carries the paid-re-export ("uses credits").
@@ -28,6 +29,10 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  * @param {boolean=} publishLoading  - disables + spins the Publish card only.
  * @param {Function} onRefocus       - required. Edit framing.
  * @param {Function} onSaveDraft     - required. Quiet "Done for now" exit.
+ * @param {boolean|null=} finished   - T16525: the server finished this sharpen (T16520).
+ *   true: headline says it is in Highlights, no Finish card, exit reads "Done".
+ *   false: the automatic finish failed, today's panel with its Finish card.
+ *   null: not known yet (the project refresh is in flight), so no Finish card flashes up.
  */
 export function FocusPublishActionBar({
   onAddSpotlight,
@@ -35,16 +40,29 @@ export function FocusPublishActionBar({
   publishLoading = false,
   onRefocus,
   onSaveDraft,
+  finished = false,
 }) {
+  const publishCard = {
+    icon: publishLoading ? Loader : FolderInput,
+    title: FOCUS_PUBLISH.PUBLISH_LABEL,
+    description: FOCUS_PUBLISH.PUBLISH_CAPTION,
+    onClick: onPublish,
+    loading: publishLoading,
+    testId: 'focus-choice-publish',
+    tutorialTarget: 'focus-publish',
+  };
   return (
     <div
       data-testid="focus-publish-action-bar"
       className="border-t border-gray-800 bg-gray-900 px-4 py-4 sm:px-6 sm:py-6"
     >
-      <div className="mx-auto mb-4 flex max-w-md items-center justify-center lg:max-w-4xl">
+      <div className="mx-auto mb-4 flex max-w-md flex-col items-center justify-center text-center lg:max-w-4xl">
         <h2 className="text-lg font-semibold text-white sm:text-xl motion-safe:animate-[readyIn_320ms_ease-out_both]">
-          {FOCUS_PUBLISH.HEADLINE}
+          {finished === true ? FOCUS_FINISHED.HEADLINE : FOCUS_PUBLISH.HEADLINE}
         </h2>
+        {finished === true && (
+          <p data-testid="focus-finished-note" className="mt-1 text-sm text-gray-400">{FOCUS_FINISHED.NOTE}</p>
+        )}
       </div>
 
       <div className="mx-auto w-full max-w-4xl">
@@ -59,15 +77,7 @@ export function FocusPublishActionBar({
             testId: 'focus-choice-primary',
           }}
           secondary={[
-            {
-              icon: publishLoading ? Loader : FolderInput,
-              title: FOCUS_PUBLISH.PUBLISH_LABEL,
-              description: FOCUS_PUBLISH.PUBLISH_CAPTION,
-              onClick: onPublish,
-              loading: publishLoading,
-              testId: 'focus-choice-publish',
-              tutorialTarget: 'focus-publish',
-            },
+            ...(finished === false ? [publishCard] : []),
             {
               icon: Pencil,
               title: FOCUS_PUBLISH.EDIT_FRAMING_LABEL,
@@ -78,7 +88,7 @@ export function FocusPublishActionBar({
           ]}
           exit={{
             icon: ArrowLeft,
-            title: FOCUS_PUBLISH.SAVE_DRAFT_LABEL,
+            title: finished === true ? FOCUS_FINISHED.DONE_LABEL : FOCUS_PUBLISH.SAVE_DRAFT_LABEL,
             onClick: onSaveDraft,
             testId: 'focus-save-draft',
           }}

@@ -1,0 +1,7 @@
+{"criteria": {
+  "T16525:C1": {"kind": "browser"},
+  "T16525:C2": {"kind": "browser"},
+  "T16525:C3": {"kind": "browser"},
+  "T16525:C4": {"kind": "code", "command": "cd src/frontend && timeout 300 npx vitest run src/screens/__tests__/t16525FinishedMessages.test.jsx -t \"automatic finish failed\" && cd ../backend && timeout 300 python -m pytest tests/test_t16525_finished_flags.py tests/test_t16520_server_finish.py -p no:cacheprovider -q -k \"failed_finish\""},
+  "T16525:C5": {"kind": "browser"}
+}}

@@ -930,8 +930,18 @@ it logs `[Finish] FAILED project= step=` and the highlight keeps the old manual 
   `publish_final_video(...)["prior_published"]` is false, so a re-sharpen or spotlight replacement adds none.
 - No archive at finish: `archive_completed_projects` (session start) archives it on the next session,
   so Spotlight keeps its working data now. POST /publish still archives.
-- Frontend unchanged until T16525: the panel still offers Finish. A tap re-renders and replaces the
-  already-published version (harmless; no extra event).
+- Frontend (T16525): the browser learns "finished" from `is_finished` on GET /api/projects/{id} and
+  `finished` on GET /api/exports/unacknowledged (both = a PUBLISHED final_videos row whose
+  `source_working_video_id` is the CURRENT/this job's working video; an older published version does
+  not count). Focus ready panel (`FocusPublishActionBar finished`, tri-state: null while the post-render
+  refresh is in flight): "It's in your Highlights", no Finish card, exit "Done" (`leaveFocusForLater
+  finished`: Highlights tab / Annotate, no "is framed" banner). The recovery card says
+  `EXPORT_JOBS.framing.finished`; `resumeFocusCompletion` reopens the panel for a finished project (the
+  T15420 OVERLAY route stays only for has_final_video && !is_finished). Spotlight render:
+  `spotlightCompletionOutcome` -> 'finished' lands on the reel (`openFinishedReel`, alreadyPublished),
+  no Overlay panel. A failed finish (`is_finished` false) keeps the old Finish path unchanged.
+  The live framing completion toast (GlobalExportIndicator) still says "ready": the WS frame has no
+  `finished` field.
 - Follow-up: the overlay and POST /publish paths still delete the prior R2 object before the sync is durable.
 - Stranded backfill (T16540): `finish_stranded_highlights()` finishes pre-T16520 highlights (non-archived,
   `restored_at IS NULL`, latest final missing or unpublished, no live export job) from `session_init._init_slow_path`

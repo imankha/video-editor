@@ -160,7 +160,9 @@ export function FocusCompletionRecovery() {
     <div ref={cardRef} className="fixed bottom-24 right-4 z-40" style={clearSpot ? { left: clearSpot.left, top: clearSpot.top, right: 'auto', bottom: 'auto' } : undefined}
       data-testid="focus-completion-recovery" data-guide-transient="true">
       <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl px-4 py-3 w-64">
-        <div className="text-sm font-medium text-white">{EXPORT_JOBS.framing.completed}</div>
+        <div className="text-sm font-medium text-white">
+          {recovered.finished ? EXPORT_JOBS.framing.finished : EXPORT_JOBS.framing.completed}
+        </div>
         <div className="text-xs text-gray-400 truncate mb-3">{recovered.projectName || 'Your highlight'}</div>
         <div className="flex gap-2">
           <button
