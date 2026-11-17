@@ -15,8 +15,8 @@ group's container if it was stopped and runs the browser checks there against st
 
 **The problem.** On 2026-11-17 the re-run of PR #805's staging check started Playwright before that install
 finished. Playwright crashed on a missing module (`internal/modules/esm/resolve`), and the check filed two bug
-tasks (T16830, T16840) for checks that never ran, with "no Playwright report (exit 1)" as the failure. They were
-deleted by hand. An earlier attempt failed the other way: `docker exec` on a container that was still stopping.
+tasks for checks that never ran (both deleted by hand), with "no Playwright report (exit 1)" as the failure.
+An earlier attempt failed the other way: `docker exec` on a container that was still stopping.
 
 **What we will do.** Before running checks, wait until the container is running and its frontend packages are
 installed (for example `@playwright/test` present and no install still running), with a time cap. If the cap
