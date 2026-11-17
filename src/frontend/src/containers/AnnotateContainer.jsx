@@ -2340,15 +2340,12 @@ export function AnnotateContainer({
     if (highlightChoiceInFlightRef.current) return;
     highlightChoiceInFlightRef.current = true;
     try {
-      const result = await updateClipRegionWithSync(choice.regionId, { createProject: true, silent: true });
-      if (result?.saveOk && result.projectId) {
-        announceReelCreated(result.projectId, {
-          onOpenReelInFocus,
-          fetchProjects,
-          message: ANNOTATE.HIGHLIGHT_MOVED_TO_CLIPS,
-          withAction: false,
-        });
-      }
+      // T16770: return to Mark Play and nudge the playhead BEFORE awaiting the
+      // save. Done after the await, a slow PUT let the nudge land seconds late
+      // and overwrite a seek the user had made meanwhile (staging: a play
+      // marked at 0:45 was saved just past the first play instead). The card
+      // closed after a failed save before too; the write queue's Retry toast
+      // stays the failure surface.
       setHighlightChoice(null);
       // T10610 § D.3 pattern: closeOverlay() only steps EDITING -> SELECTED
       // (which renders the "Edit play" / Highlights-from-this-play panel, not
@@ -2384,6 +2381,15 @@ export function AnnotateContainer({
           seekTarget += fullTimeline.getVideoOffset(region.videoSequence);
         }
         effectiveSeek(seekTarget);
+      }
+      const result = await updateClipRegionWithSync(choice.regionId, { createProject: true, silent: true });
+      if (result?.saveOk && result.projectId) {
+        announceReelCreated(result.projectId, {
+          onOpenReelInFocus,
+          fetchProjects,
+          message: ANNOTATE.HIGHLIGHT_MOVED_TO_CLIPS,
+          withAction: false,
+        });
       }
     } finally {
       highlightChoiceInFlightRef.current = false;

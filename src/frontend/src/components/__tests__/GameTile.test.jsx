@@ -20,6 +20,7 @@ import { GameTile } from '../GameTile';
 const baseGame = {
   id: 42,
   name: 'vs Rivals',
+  status: 'ready',
   created_at: '2026-07-01T12:00:00Z',
   clip_count: 3,
   recap_video_url: 'recaps/42.mp4',

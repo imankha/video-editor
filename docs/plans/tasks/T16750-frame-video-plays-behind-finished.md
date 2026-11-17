@@ -1,6 +1,6 @@
 # T16750: Frame video plays behind Finished
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-16

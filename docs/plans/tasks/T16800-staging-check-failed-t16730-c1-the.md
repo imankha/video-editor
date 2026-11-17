@@ -49,7 +49,7 @@ backend deploy, and that sharpen also left no job. Runs on a quiet staging passe
   (`staging_redeploy_since`); when one was, it waits for that deploy and re-runs only the failed criteria.
   It files a bug only if a criterion fails again. The status line says `re-ran <ids> after a deploy during the check`.
 - The product gap this exposed (a sharpen lost to a server restart leaves Frame waiting with no message,
-  because a 404 from `GET /api/exports/{id}` keeps the poll going) is filed as T16810.
+  because a 404 from `GET /api/exports/{id}` keeps the poll going) is filed as T16830.
 
 - The criterion's check is a browser check, `src/frontend/e2e/checks/T16800.check.spec.js`, that runs the
   T16730:C1 steps (shared with T16730's check in `src/frontend/e2e/helpers/returnAfterSharpen.js`). On

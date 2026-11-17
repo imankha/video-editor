@@ -1,6 +1,6 @@
 # T16760: Frame portrait preview too tall
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-11-16

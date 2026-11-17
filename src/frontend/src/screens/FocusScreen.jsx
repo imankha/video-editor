@@ -242,6 +242,7 @@ export function FocusScreen({
     loadVideoFromUrl,
     loadVideoFromStreamingUrl,
     togglePlay,
+    pause,
     seek,
     stepForward,
     stepBackward,
@@ -252,6 +253,13 @@ export function FocusScreen({
     isUrlExpiredError,
     handlers,
   } = useVideo(getSegmentAtTime, clampToVisibleRange);
+
+  // T16750: the Finished panel is a full-screen player over Frame; it takes over
+  // playback, so the Frame video stops (it kept looping, unmuted, behind it).
+  // Playback state only, nothing is persisted. Closing the panel leaves it paused.
+  useEffect(() => {
+    if (previewOpen) pause();
+  }, [previewOpen, pause]);
 
   // Helper: get a clip merged with its metadata cache
   const getClipWithMeta = useCallback((clip) => {

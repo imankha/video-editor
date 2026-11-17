@@ -204,4 +204,72 @@ describe('AnnotateContainer "Keep marking plays" (T15550)', () => {
     const lastSeekTarget = seek.mock.calls.at(-1)[0];
     expect(lastSeekTarget).toBeLessThan(startTime - 0.15);
   });
+  it('T16770:C2 a seek made while the highlight save is in flight is not overridden when it lands', async () => {
+    // Staging QA 2026-11-16: "Keep marking plays" tapped, playhead moved to 0:45
+    // 1.2 s later, "Mark play" 0.8 s after that -> the second play was saved
+    // just past the FIRST play (16.5-24.5), not around 0:45. The nudge-past-
+    // the-play seek ran only after the createProject PUT resolved, so a slow
+    // save clobbered the user's own seek. Hold the PUT open to reproduce.
+    let resolveCreate;
+    apiFetch.mockImplementation((url, opts) => {
+      if (url.includes('/clips/raw/save')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1 }) });
+      }
+      if (opts?.method === 'PUT') {
+        const body = JSON.parse(opts.body);
+        if (body.create_project) {
+          return new Promise((resolve) => {
+            resolveCreate = () => resolve({
+              ok: true, status: 200,
+              json: async () => ({ success: true, project_created: true, project_id: 999 }),
+            });
+          });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+    });
+
+    const seek = vi.fn();
+    const { result } = renderHook(() => AnnotateContainer(baseProps({ seek })));
+
+    act(() => {
+      result.current.handleAddClipFromButton();
+    });
+    await act(async () => { await flushMicrotasks(); });
+    const regionId = result.current.clipRegions[0].id;
+    const { endTime } = result.current.clipRegions[0];
+
+    act(() => {
+      result.current.updateClipRegion(regionId, { rating: 5 });
+    });
+    await act(async () => { await flushMicrotasks(); });
+    act(() => {
+      result.current.handleOverlayClose();
+    });
+    expect(result.current.highlightChoice).toEqual({ regionId });
+
+    // Tap "Keep marking plays"; the highlight PUT stays in flight.
+    let later;
+    await act(async () => {
+      later = result.current.handleHighlightChoiceLater();
+      await flushMicrotasks();
+    });
+    expect(resolveCreate).toBeTypeOf('function');
+
+    // The user is back on Mark Play at once, already past the marked play.
+    expect(result.current.highlightChoice).toBeNull();
+    expect(result.current.annotateSelectedRegionId).toBeNull();
+    expect(seek).toHaveBeenCalledWith(expect.closeTo(endTime + 0.25, 5));
+
+    // The user now scrubs to 0:45 (outside the container). When the save
+    // finally lands, nothing may seek the playhead back to the old play.
+    const seeksBeforeSaveLanded = seek.mock.calls.length;
+    await act(async () => {
+      resolveCreate();
+      await later;
+      await flushMicrotasks();
+    });
+    expect(seek.mock.calls.length).toBe(seeksBeforeSaveLanded);
+  });
 });

@@ -1,0 +1,6 @@
+{
+  "criteria": {
+    "T16760:C1": {"kind": "browser"},
+    "T16760:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/FocusModeView.previewStageSize.test.jsx"}
+  }
+}

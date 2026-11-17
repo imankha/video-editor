@@ -3614,6 +3614,7 @@ The full checklist for an 11th→Nth sport:
 - Finished card (`collections/JustPublishedCard.jsx`): Copy link / Download keep `aria-label` and show their text only from `sm` up (`hidden sm:inline`).
 
 **T12510:** the HighlightChoiceCard "Keep Marking Plays" button (`handleHighlightChoiceLater`) DOES create the highlight (createProject, no navigation); its subtext (`ANNOTATE.BACK_TO_EDITING_SUBTEXT`) must say so. Don't reword it as "waits in Clips" unless the create is removed.
+**T16770:** `handleHighlightChoiceLater` closes the card, deselects and nudges the playhead past the play SYNCHRONOUSLY at the tap, THEN awaits the createProject save. Never move UI/playhead steps after that await: a slow save let the nudge land seconds late and overwrite a seek the user made meanwhile (second play saved just past the first). Testing trap: in a multi-video game a write to `<video>.currentTime` while paused never reaches the app playhead (`useMultiVideoScrub` reads the element only while playing); drive seeks with the transport.
 
 **T13280 per-video labels:** sequential (angle-free) multi-video games render one name chip per video on the
 main track (`AnnotateTimeline` `videoSegments`, from `deriveVideoSegments` in footageLanding.js; container

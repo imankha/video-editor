@@ -1,0 +1,4 @@
+{"criteria": {
+  "T16770:C1": {"kind": "code", "command": "grep -q '^\\*\\*Reproduced (2026-11-17' docs/plans/tasks/T16770-second-play-lands-after-first.md"},
+  "T16770:C2": {"kind": "browser"}
+}}
