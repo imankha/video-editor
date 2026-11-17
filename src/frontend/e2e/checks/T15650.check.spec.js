@@ -39,6 +39,24 @@ async function firstClipProject(page) {
   return projects.find((p) => p.clip_count > 0);
 }
 
+/**
+ * T16630: the editor opens at the top (nothing scrolls it on load), so at a short viewport
+ * the parent scrolls the stage up clear of the action band. Do the same: scroll App's
+ * editor scroller just far enough that `testId`'s bottom edge sits above the band.
+ */
+async function scrollClearOfBand(page, testId) {
+  // Polled: the stage keeps growing until its video has loaded, so re-scroll until clear.
+  await expect.poll(() => page.getByTestId(testId).first().evaluate((el) => {
+    const scroller = el.closest('.flex-1.overflow-auto');
+    const band = document.querySelector('[data-testid="action-band"]');
+    if (!scroller || !band) return 'no scroller or action band';
+    const deficit = el.getBoundingClientRect().bottom - band.getBoundingClientRect().top + 8;
+    if (deficit > 0) scroller.scrollTop += deficit;
+    return el.getBoundingClientRect().bottom <= band.getBoundingClientRect().top + 0.5;
+  }), { message: `scroll ${testId} clear of the action band`, timeout: 60000 }).toBe(true);
+  await page.waitForTimeout(150);
+}
+
 test('T15650:C1 - Frame preview is at least half the editor width with a readable time', async ({ context, page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginForCheck(context);
@@ -93,6 +111,7 @@ test('T15650:C2 - the timeline zoom pill is fully visible on iPad portrait', asy
 
   const zoomChip = page.getByTestId('timeline-zoom-chip');
   await expect(zoomChip).toBeVisible();
+  await scrollClearOfBand(page, 'timeline-zoom-chip');
   const zoomBox = await zoomChip.boundingBox();
   const band = await page.getByTestId('action-band').boundingBox();
   expect(band, 'action band present').not.toBeNull();
