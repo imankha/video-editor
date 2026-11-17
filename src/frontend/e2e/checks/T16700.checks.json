@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T16700:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && E2E_BASE_URL=https://staging.reelballers.com E2E_API_BASE=https://api-staging.reelballers.com/api E2E_CHECK_EMAIL=e2e-gate@test.local npx playwright test e2e/checks/T16660.check.spec.js --grep 'T16660:C3' --reporter=line"
+    }
+  }
+}
