@@ -66,6 +66,13 @@ const SHORT_DESKTOP_BOX_HEIGHT_CLASS = '[@media(min-width:1024px)]:!h-[max(200px
 // `aspect-ratio` style; any resulting overflow is reached by scrolling, same as any other tall
 // stage box (T16630: the screen opens at the top, nothing scrolls it on load).
 const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(200px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-30rem)))*var(--preview-ar))))]';
+// T16760: a PORTRAIT preview (ratio < 1) skips that 50% floor -- at 1440x900 half the column
+// made a 9:16 stage 890px tall, its lower part and play controls under the action band. It is
+// sized by height instead: the space between the stage top (289px, measured at 1440x900 and
+// 1366x768) and the band, less the ~42px of controls hanging past the aspect box = 22rem
+// (the box-state 30rem also covers the crop track, which preview hides). Landscape is unchanged.
+const PORTRAIT_PREVIEW_WIDTH_CLASS = 'lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))] [@media(min-width:1024px)]:!w-[min(100%,calc(max(200px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]';
+const LANDSCAPE_PREVIEW_WIDTH_CLASS = `lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-30rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`;
 
 /**
  * Scroll `el`'s nearest scrolling ancestor until el's bottom plus its scroll-margin-bottom
@@ -912,7 +919,7 @@ export function FocusModeView({
               (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
-                  ? `rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-30rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`
+                  ? `rounded-lg mx-auto w-full max-w-full ${previewStageRatio < 1 ? PORTRAIT_PREVIEW_WIDTH_CLASS : LANDSCAPE_PREVIEW_WIDTH_CLASS}`
                   : `rounded-lg flex flex-col lg:block h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-30rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
             }`}
             style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}

@@ -434,6 +434,12 @@ requires `!isFullscreen && !mobileFs` — a fullscreen or mobile-expand tap mid-
 a transform sized for the small stage box onto a viewport no longer constrained to the output
 aspect (a reviewer finding fixed before the slice-3 commit). The approximation disclosure
 (`EDITOR_PANELS.PREVIEW_DISCLOSURE`/`PREVIEW_MULTI_CLIP_DISCLOSURE`) shows only while previewing.
+**T16760 (2026-11-17): portrait preview width is height-driven.** `FocusModeView` picks
+`PORTRAIT_PREVIEW_WIDTH_CLASS` when `previewStageRatio < 1`: width = (100dvh - --cta-bar-h - 22rem)
+* ratio, NO 50%-of-column floor (that T15650 floor made a 9:16 stage 890px tall at 1440x900, under
+the action band). 22rem = stage top 289px + ~42px controls hanging past the aspect box (measured
+1440x900/1366x768). Landscape keeps `LANDSCAPE_PREVIEW_WIDTH_CLASS` (30rem + 50% floor) byte-identical.
+Check: `e2e/checks/T16760.check.spec.js`.
 No GPU or real-browser environment was available in this task's container to run the R1 GPU-cost
 measurement or the design doc's real-browser QA spec (`e2e/T9950-framing-preview.qa.spec.js`, since removed,
 not written — both left for T10160 / a real dev-stack environment respectively, per the task's
