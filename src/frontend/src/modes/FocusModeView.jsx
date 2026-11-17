@@ -68,6 +68,25 @@ const SHORT_DESKTOP_BOX_HEIGHT_CLASS = '[@media(min-width:1024px)]:!h-[max(200px
 const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(200px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-30rem)))*var(--preview-ar))))]';
 
 /**
+ * Scroll `el`'s nearest scrolling ancestor until el's bottom plus its scroll-margin-bottom
+ * (the fixed action band, --cta-bar-h) is in view, keeping el's top in view.
+ * T16710: replaces scrollIntoView({ block: 'nearest' }), which Chromium skips while el's box
+ * is inside the scroller's viewport even when the band drawn over that viewport covers it
+ * (1280x800 staging: the speed track opened 1px under the band and nothing scrolled).
+ */
+function scrollClearOfBand(el) {
+  let scroller = el.parentElement;
+  while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+  const isPage = !scroller;
+  if (isPage) scroller = document.scrollingElement;
+  const view = isPage ? { top: 0, bottom: window.innerHeight } : scroller.getBoundingClientRect();
+  const box = el.getBoundingClientRect();
+  const covered = box.bottom + parseFloat(getComputedStyle(el).scrollMarginBottom) - view.bottom;
+  if (covered <= 0) return;
+  scroller.scrollBy({ top: Math.min(covered, Math.max(0, box.top - view.top)), behavior: 'smooth' });
+}
+
+/**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
  *
  * The playback timer intentionally shows source-timeline position, so a 6s clip with
@@ -490,7 +509,7 @@ export function FocusModeView({
     setAdvancedOverride(opening);
     if (opening) {
       requestAnimationFrame(() => {
-        trimScopeRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+        if (trimScopeRef.current) scrollClearOfBand(trimScopeRef.current);
       });
     }
   };
