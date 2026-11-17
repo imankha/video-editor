@@ -67,7 +67,9 @@ test('T16730:C1 - a parent who returns later sees the same message and finds the
     });
     await page.goto('/home');
     await expect(card, 'return 4 (unacknowledged fallback path)').toContainText(RETURNED, { timeout: 60000 });
-    await page.unroute('**/api/bootstrap**');
+    // Let the held request finish before moving on: a handler still sleeping when the page
+    // navigates would find its route already settled and throw.
+    await page.unroute('**/api/bootstrap**', { behavior: 'wait' });
 
     await card.getByRole('button', { name: 'View' }).click();
     const bar = page.getByTestId('focus-publish-action-bar');
