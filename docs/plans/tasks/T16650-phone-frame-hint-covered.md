@@ -1,6 +1,6 @@
 # T16650: On a phone the Frame screen hides the rotate hint and the empty-timeline message overlaps the playhead
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-16

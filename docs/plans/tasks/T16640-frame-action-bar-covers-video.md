@@ -1,6 +1,6 @@
 # T16640: On a desktop the Frame action bar covers the video and the timeline
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-16
