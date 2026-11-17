@@ -1172,6 +1172,26 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
 // link is a second, separate gesture (T9860 D5). REAPPLY_FOCUS_CAPTION keeps the
 // honest "uses credits" warning, verbatim with Focus's so the two read as one
 // system.
+// T16530: redo a finished highlight from the Finished screen. Same labels and
+// captions as the ready panel's choices; the redo replaces the highlight in place.
+export const FINISHED_REDO = {
+  ADD_SPOTLIGHT_LABEL: 'Add spotlight',
+  ADD_SPOTLIGHT_CAPTION: 'Show everyone watching which athlete is yours.',
+  REDO_SPOTLIGHT_LABEL: 'Redo spotlight',
+  REDO_SPOTLIGHT_CAPTION: 'Go back and change the spotlight.',
+  EDIT_ZOOM_LABEL: 'Edit zoom',
+  EDIT_ZOOM_CAPTION: EDIT_FRAMING_CAPTION_TEXT,
+  CONFIRM_TITLE: 'Sharpen it again?',
+  CONFIRM_BODY: 'Change the zoom, then sharpen it again. This highlight stays in Highlights until the new one is ready.',
+  CONFIRM_NOTE: 'Charged when you sharpen it.',
+  CONFIRM_CANCEL: 'Cancel',
+  CONFIRM_CONTINUE: 'Edit zoom',
+  UNAVAILABLE_TITLE: 'Edit zoom is unavailable',
+  UNAVAILABLE_BODY: "The game video for this highlight has expired, so the zoom can't be changed. You can still redo the spotlight.",
+  UNAVAILABLE_CLOSE: 'OK',
+  LOADING: 'Checking the cost...',
+};
+
 export const OVERLAY_PUBLISH = {
   HEADLINE: 'Your highlight is ready',
   PUBLISH_LABEL: 'Finish',

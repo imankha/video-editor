@@ -248,7 +248,8 @@ def _archived_at(db_path, project_id):
 @pytest.mark.asyncio
 async def test_publish_survives_machine_replacement(dur_env):
     """Durable publish, then simulate a machine swap leaving only R2. The reel
-    must STILL be published + archived and archive/{id}.msgpack must be present."""
+    must STILL be published + archived. Since T16535 archive keeps the working
+    clips in place and writes no archive/{id}.msgpack."""
     app, fake, db_path = dur_env
     project_id, final_video_id = _seed_published_reel(db_path)
     # Un-publish the seed so the publish gesture is the thing under test.
@@ -268,7 +269,13 @@ async def test_publish_survives_machine_replacement(dur_env):
     assert _published_row(db_path, final_video_id)["published_at"] is not None, \
         "publish reverted after machine replacement — durable sync did not reach R2"
     assert _archived_at(db_path, project_id) is not None, "archived_at reverted"
-    assert fake.has(_archive_key(project_id)), "archive msgpack missing from R2"
+    assert not fake.has(_archive_key(project_id)), "archive must not upload a msgpack (T16535)"
+    conn = _connect(db_path)
+    wc = conn.execute(
+        "SELECT COUNT(*) c FROM working_clips WHERE project_id = ?", (project_id,)
+    ).fetchone()["c"]
+    conn.close()
+    assert wc > 0, "archive dropped the working clips (T16535 keeps them)"
 
 
 @pytest.mark.asyncio

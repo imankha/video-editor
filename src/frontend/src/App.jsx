@@ -42,6 +42,7 @@ const OverlayScreen = lazyWithReload(() => import('./screens/OverlayScreen').the
 const AdminScreen = lazyWithReload(() => import('./screens/AdminScreen').then(m => ({ default: m.AdminScreen })));
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AccountSettings } from './components/AccountSettings';
+import { AdminGate } from './components/admin/AdminGate';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
 import { SignInScreen } from './components/SignInScreen';
@@ -855,9 +856,11 @@ function App() {
     return (
       <>
         <ImpersonationBanner />
-        <Suspense fallback={null}>
-          <AdminScreen onBack={() => setEditorMode(EDITOR_MODES.PROJECT_MANAGER)} />
-        </Suspense>
+        <AdminGate onHome={() => setEditorMode(EDITOR_MODES.PROJECT_MANAGER)}>
+          <Suspense fallback={null}>
+            <AdminScreen onBack={() => setEditorMode(EDITOR_MODES.PROJECT_MANAGER)} />
+          </Suspense>
+        </AdminGate>
       </>
     );
   }

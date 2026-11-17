@@ -35,6 +35,7 @@ from app.queries import (
     default_game_name,
     downloads_counts,
     latest_final_videos_subquery,
+    latest_working_clips_subquery,
 )
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.finish_highlight import mark_published, record_finish
@@ -55,7 +56,9 @@ from app.services.poster import poster_basename, poster_rel_path
 from app.services.project_archive import (
     archive_project,
     delete_archived_project,
+    is_old_style_archive,
     is_project_archived,
+    load_archive,
     restore_project,
 )
 from app.services.state_log import log_state
@@ -2644,15 +2647,15 @@ async def publish_to_my_reels(
         mark_user_archived(user_id)
         logger.info(
             f"[Publish] archived LOCALLY project={project_id} user={user_id} "
-            f"req_id={req_id} - archive/{project_id}.msgpack uploaded to R2, working "
-            f"data deleted locally; durable_sync will push profile.sqlite before return"
+            f"req_id={req_id} - archived_at set, working data kept (T16535); "
+            f"durable_sync will push profile.sqlite before return"
         )
     else:
         logger.warning(
             f"[Publish] archive FAILED project={project_id} "
             f"(user={user_id}, final_video_id={row['id']}, req_id={req_id}) - working "
             f"data retained, card stays in Drafts with In My Reels badge; see preceding "
-            f"archive/R2 errors for root cause"
+            f"archive errors for root cause"
         )
 
     logger.info(
@@ -2748,10 +2751,11 @@ async def restore_project_from_archive(
                        "be re-edited. You can still view, download, and share it.",
             )
 
-        # Check if project is in DB and not archived (has working data)
+        # T16535: only a project archived before T16535 (working data moved to its
+        # R2 msgpack) needs a restore; a newer archive kept its rows in the DB.
         cursor.execute("SELECT id, name, archived_at FROM projects WHERE id = ?", (project_id,))
         project_row = cursor.fetchone()
-        needs_archive_restore = bool(not project_row or project_row['archived_at'])
+        needs_archive_restore = is_old_style_archive(cursor, project_id)
 
         logger.info(
             f"[Restore] download_id={download_id} project_id={project_id} "
@@ -2789,6 +2793,8 @@ async def restore_project_from_archive(
     # it from My Reels. T16540: restored_at marks the move back as the parent's choice
     # (restore_project sets it only when the project was archived), so the stranded
     # finish never re-publishes it.
+    # T16535: a project archived with its rows kept is back in
+    # Drafts once archived_at clears (restore_project clears it for an old archive).
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -2796,7 +2802,9 @@ async def restore_project_from_archive(
             (project_id,),
         )
         cursor.execute(
-            "UPDATE projects SET restored_at = CURRENT_TIMESTAMP WHERE id = ?", (project_id,),
+            "UPDATE projects SET restored_at = CURRENT_TIMESTAMP, archived_at = NULL "
+            "WHERE id = ? AND archived_at IS NOT NULL",
+            (project_id,),
         )
         conn.commit()
 
@@ -2812,4 +2820,110 @@ async def restore_project_from_archive(
 
     logger.info(f"[Restore] Complete: project_id={project_id} restored={needs_archive_restore} user={user_id} req_id={req_id}")
     log_state("restore", project_id, outcome="ok")
+    return {"project_id": project_id, "restored": needs_archive_restore}
+
+
+def _redo_project_id(cursor, download_id: int) -> int:
+    """The project of a finished highlight that can be redone (T16530); 404/400 otherwise."""
+    row = cursor.execute(
+        "SELECT project_id, clip_count FROM final_videos WHERE id = ?", (download_id,)
+    ).fetchone()
+    if not row or not row['project_id']:
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
+    if row['clip_count'] is not None and row['clip_count'] > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="This highlight was made from multiple plays and can no longer "
+                   "be re-edited. You can still view, download, and share it.",
+        )
+    return row['project_id']
+
+
+@router.get("/{download_id}/redo-info")
+async def redo_info(download_id: int):
+    """What Edit zoom on the Finished screen needs before the parent commits (T16530).
+
+    `reframe_credits` is what sharpening this play again costs with its current trim
+    and speed (the same formula the framing render charges); `game_video_available`
+    is False once the game video has expired, when Edit zoom cannot run. Read-only.
+    """
+    from app.highlight_transform import canonicalize_segments_data, compute_export_credits, get_output_duration
+    from app.routers.games import resolve_game_source_status
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        project_id = _redo_project_id(cursor, download_id)
+        clip = cursor.execute(f"""
+            SELECT wc.segments_data, wc.raw_clip_id FROM working_clips wc
+            WHERE wc.project_id = ? AND wc.id IN ({latest_working_clips_subquery()})
+            ORDER BY wc.sort_order
+        """, (project_id, project_id)).fetchone()
+        if clip is None and is_old_style_archive(cursor, project_id):
+            # Archived before T16535: the clip is in the R2 archive until open-for-redo
+            # restores it. Read it from there (read-only).
+            archive = load_archive(project_id, get_current_user_id()) or {}
+            clips = sorted(archive.get("working_clips", []),
+                           key=lambda c: (c.get("version") or 0, c.get("id") or 0))
+            clip = clips[-1] if clips else None
+        if clip is None:
+            logger.warning(f"[Redo] no working clip for project={project_id} download_id={download_id}")
+            raise HTTPException(status_code=404, detail="We couldn't find the play for this highlight.")
+
+        source = cursor.execute("""
+            SELECT rc.source, (rc.end_time - rc.start_time) AS raw_duration,
+                   COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
+                   g.id AS game_id, g.auto_export_status, g.status AS game_status
+            FROM raw_clips rc
+            LEFT JOIN games g ON rc.game_id = g.id
+            LEFT JOIN game_videos gv ON gv.game_id = rc.game_id
+                AND gv.sequence = COALESCE(rc.video_sequence, 1)
+            WHERE rc.id = ?
+        """, (clip['raw_clip_id'],)).fetchone()
+        if source is None:
+            logger.warning(f"[Redo] no raw clip {clip['raw_clip_id']} for project={project_id}")
+            raise HTTPException(status_code=404, detail="We couldn't find the play for this highlight.")
+
+        source_duration = source['raw_duration'] or 0
+        segments = None
+        if clip['segments_data']:
+            segments = canonicalize_segments_data(decode_data(clip['segments_data']), source_duration)
+        seconds = get_output_duration(segments, source_duration) if source_duration else 0
+        credits = compute_export_credits(seconds, 30)
+
+        available = True
+        if source['game_id'] is not None and source['source'] != 'upload':
+            status, _ = resolve_game_source_status(
+                cursor, source['blake3_hash'], source['auto_export_status'], game_status=source['game_status'],
+            )
+            available = status != 'expired'
+
+    return {"project_id": project_id, "reframe_credits": credits, "game_video_available": available}
+
+
+@router.post("/{download_id}/open-for-redo")
+async def open_for_redo(
+    download_id: int,
+    _durable: None = Depends(durable_sync),
+):
+    """Open a finished highlight in Frame or Spotlight to redo it (T16530).
+
+    Unlike restore-project ("open as draft"), this never unpublishes: the highlight
+    stays in Highlights, playable and shareable, until the redo's render replaces it.
+    Archiving keeps the clip data (T16535), so only a project archived before that
+    needs its working data restored from its R2 archive first.
+    """
+    user_id = get_current_user_id()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        project_id = _redo_project_id(cursor, download_id)
+        needs_archive_restore = is_old_style_archive(cursor, project_id)
+
+    if needs_archive_restore and not (
+            is_project_archived(project_id, user_id) and restore_project(project_id, user_id)):
+        logger.error(f"[Redo] could not restore archived project={project_id} "
+                     f"download_id={download_id} user={user_id} - highlight left as it is")
+        raise HTTPException(status_code=500, detail="We couldn't open this highlight. Try again.")
+
+    logger.info(f"[Redo] open project={project_id} download_id={download_id} "
+                f"restored={needs_archive_restore} user={user_id} (stays published)")
     return {"project_id": project_id, "restored": needs_archive_restore}

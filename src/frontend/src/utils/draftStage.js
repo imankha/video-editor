@@ -95,6 +95,13 @@ const DRAFT_RUNG_INFO = {
   [DRAFT_RUNG.PUBLISHED]: { label: 'Finished', short: 'Finished' },
 };
 
+// T16530: the Plays tab lists highlights still being made. A finished (published)
+// highlight lives under Highlights only, even before the session's archive sweep
+// hides its project from the drafts list (the server finishes it, T16520).
+export function isPlayInProgress(project) {
+  return !!project.is_auto_created && !project.is_published;
+}
+
 export function getDraftRung(project) {
   switch (getDraftStage(project)) {
     case DRAFT_STAGE.READY:

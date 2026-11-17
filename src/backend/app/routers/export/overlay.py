@@ -45,7 +45,7 @@ from ...profile_context import get_current_profile_id
 from ...schemas import TextSpec
 from ...services import export_job_repository
 from ...services.ffmpeg_service import get_encoding_command_parts
-from ...services.finish_highlight import mark_published, record_finish
+from ...services.finish_highlight import final_filenames, mark_published, record_finish, repoint_replaced_shares
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
 from ...services.poster import (
     first_slowmo_section,
@@ -2478,6 +2478,8 @@ async def _run_overlay_export_background(
         parallel_used = result.get("parallel", False)
         logger.info(f"[Overlay Background] Processing complete (parallel={parallel_used})")
 
+        # T16530: read the versions this render replaces before it deletes one.
+        old_filenames = await asyncio.to_thread(final_filenames, project_id)
         _t0 = time_module.monotonic()
         final_video_id, slowmo_section, final_duration, poster_marker_time = await asyncio.to_thread(
             _finalize_overlay_export,
@@ -2505,6 +2507,8 @@ async def _run_overlay_export_background(
         from app.services.export_helpers import sync_export_db_to_r2
         synced = await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id)
         if synced:
+            await asyncio.to_thread(repoint_replaced_shares, user_id, profile_id, project_id,
+                                    final_video_id, old_filenames)
             complete_data = {
                 "progress": 100,
                 "message": "Your highlight is ready",
@@ -2782,6 +2786,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 'overlay', project_id=project_id, project_name=project_name
             )
 
+            old_filenames = await asyncio.to_thread(final_filenames, project_id)  # T16530
             _t0 = time_module.monotonic()
             final_video_id, slowmo_section, final_duration, poster_marker_time = await asyncio.to_thread(
                 _finalize_overlay_export, project_id, output_filename, export_id, user_id,
@@ -2804,6 +2809,8 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 export_progress[export_id] = sync_failed
                 await manager.send_progress(export_id, sync_failed)
                 return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
+            await asyncio.to_thread(repoint_replaced_shares, user_id, profile_id, project_id,
+                                    final_video_id, old_filenames)
 
             # Send final completion
             completion_data = {
@@ -2858,6 +2865,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 'overlay', project_id=project_id, project_name=project_name
             )
 
+            old_filenames = await asyncio.to_thread(final_filenames, project_id)  # T16530
             _t0 = time_module.monotonic()
             final_video_id, slowmo_section, final_duration, poster_marker_time = await asyncio.to_thread(
                 _finalize_overlay_export, project_id, output_filename, export_id, user_id,
@@ -2880,6 +2888,8 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 export_progress[export_id] = sync_failed
                 await manager.send_progress(export_id, sync_failed)
                 return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
+            await asyncio.to_thread(repoint_replaced_shares, user_id, profile_id, project_id,
+                                    final_video_id, old_filenames)
 
             # Send final completion via WebSocket
             completion_data = {

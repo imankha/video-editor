@@ -6,7 +6,7 @@ import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { parseEditorPath, dropSeekParam } from '../stores/editorStore';
-import { forwardRef, useRef, useState, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
+import { forwardRef, useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
@@ -14,7 +14,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import useVideoDisplayRect from '../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../utils/outputPreviewTransform';
-import { FRAME_COPY } from '../config/displayNames';
+import { FOCUS_HINTS, FRAME_COPY } from '../config/displayNames';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
@@ -52,15 +52,20 @@ import { useExportJobStatus } from '../components/instructions/exportJob';
 // floor below nor the T15650 width floor ever took effect in the browser; the un-floored `lg:`
 // formula silently won every time (confirmed via DOM/CSSOM inspection against the live dev
 // stack, not just reasoning about the string).
-const SHORT_DESKTOP_BOX_HEIGHT_CLASS = '[@media(min-width:1024px)]:!h-[max(320px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]';
-// The 320px floor above is a HEIGHT-proxy, multiplied by `--preview-ar` to get WIDTH -- for a
+// T16640: the reservation is MEASURED at 1280x800, not estimated: the stage starts ~289px
+// down (header, clip strip, card padding, one-row shape chooser) and the crop track ends
+// ~178px below it (controls hanging under the stage, zoom row, video + crop tracks) = 30rem.
+// The old 22rem + 320px floor put the play controls and crop track under the band on a
+// 1280x800 laptop. The floor is 200px so 1280x768 still fits; shorter screens scroll.
+const SHORT_DESKTOP_BOX_HEIGHT_CLASS = '[@media(min-width:1024px)]:!h-[max(200px,min(60vh,calc(100dvh-var(--cta-bar-h,0px)-30rem)))]';
+// The 200px floor above is a HEIGHT-proxy, multiplied by `--preview-ar` to get WIDTH -- for a
 // portrait (9:16, ratio 0.5625) output that only floors width at 180px, far below a usable
 // size, once a taller ActionBand (T15400/T15470) shrinks the available-height term enough to
 // hit that floor. Add an explicit WIDTH floor (half the column) so a narrow output aspect
 // can't collapse the preview below a usable size; height still follows via the element's
-// `aspect-ratio` style and any resulting overflow is handled by the existing scroll-fit effect
-// (stageRef useLayoutEffect below), same as any other tall stage box.
-const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(320px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar))))]';
+// `aspect-ratio` style; any resulting overflow is reached by scrolling, same as any other tall
+// stage box (T16630: the screen opens at the top, nothing scrolls it on load).
+const SHORT_DESKTOP_PREVIEW_WIDTH_CLASS = '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(200px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-30rem)))*var(--preview-ar))))]';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -480,59 +485,6 @@ export function FocusModeView({
   // T13580: on a phone the lane opens below the fixed action band; the Trim
   // button gesture scrolls it into view (scroll-margin keeps it clear of the band).
   const trimScopeRef = useRef(null);
-  // T15400: at a short desktop viewport (e.g. 1366x660) the header/chip content
-  // above the stage plus the sticky ActionBand leave no room for the stage to
-  // be fully visible at scrollTop=0 -- no height floor or padding can fix that,
-  // since it's a space problem, not a sizing problem (see T15400 investigation).
-  // Scroll it into view once per clip load, same scroll-margin pattern as
-  // trim-guide-scope above, so the stage (and its crop box) land above the band
-  // without the user having to find the scroll position themselves.
-  const stageRef = useRef(null);
-  useLayoutEffect(() => {
-    const stage = stageRef.current;
-    if (!videoUrl || isFullscreen || mobileFs || !stage) return undefined;
-    const scroller = stage.closest('.overflow-auto');
-    const band = document.querySelector('[data-testid="action-band"]');
-    if (!scroller || !band) {
-      console.warn('[T15400] focus stage fit: missing scroller or action band');
-      return undefined;
-    }
-    let active = true;
-    const stop = () => { active = false; };
-    // T15650: the timeline block (trim-guide-scope, incl. its zoom chip) renders as a
-    // SIBLING below this stage, not inside it -- the stage alone clearing the band left
-    // the timeline (and the zoom chip at its top) still sitting behind the band on load,
-    // even though plenty of scroll room existed (the `s.top - c.top` cap below is a header-
-    // room ceiling, not the actual constraint here). Measure the deficit from whichever of
-    // the stage or the timeline block sits lower, so the fit scrolls far enough to clear both.
-    const fit = () => {
-      if (!active) return;
-      const s = stage.getBoundingClientRect();
-      const b = band.getBoundingClientRect();
-      const c = scroller.getBoundingClientRect();
-      const scope = trimScopeRef.current;
-      const scopeBottom = scope ? scope.getBoundingClientRect().bottom : s.bottom;
-      const deficit = Math.max(s.bottom, scopeBottom) - b.top + 8;
-      if (deficit <= 0) return;
-      const delta = Math.min(deficit, s.top - c.top);
-      const room = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
-      if (delta > room) {
-        console.warn('[T15400] focus stage fit: insufficient scroll room', { delta, room });
-      }
-      scroller.scrollTop += Math.min(delta, room);
-    };
-    const ro = new ResizeObserver(fit);
-    ro.observe(stage);
-    ro.observe(band);
-    ro.observe(scroller);
-    if (trimScopeRef.current) ro.observe(trimScopeRef.current);
-    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
-    events.forEach((evt) => scroller.addEventListener(evt, stop, { passive: true, once: true }));
-    return () => {
-      ro.disconnect();
-      events.forEach((evt) => scroller.removeEventListener(evt, stop));
-    };
-  }, [videoUrl, isFullscreen, mobileFs]);
   const handleToggleTrim = () => {
     const opening = !advancedOpen;
     setAdvancedOverride(opening);
@@ -930,18 +882,19 @@ export function FocusModeView({
               matching OverlayModeView's stageBoxStyle for the identical case.
               T12020: the 70vh cap also leaves room for the sticky ActionBand
               (--cta-bar-h, set by useCtaBarHeight) so the video's bottom edge and
-              its controls never sit under the bar. The 22rem term (T12440; 12rem under-reserved) is the estimated
-              header + stage-controls height, not measured: verify it in the
-              cta-consistency Focus row before trusting it. */}
+              its controls never sit under the bar. The 30rem term (T16640, measured; T12440's
+              22rem estimate under-reserved) is the header + controls + crop-track height.
+              T16650: below lg the fixed-height box is a flex column so the player shrinks
+              and the Controls fit INSIDE it; they used to hang ~50px under the box and sat
+              on top of the RotateNudge right below. Desktop (lg:block) keeps them hanging. */}
           <div
-            ref={stageRef}
             data-testid="focus-video-stage"
             className={`relative bg-gray-900 ${
               (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
-                  ? `rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`
-                  : `rounded-lg h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
+                  ? `rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-30rem)*var(--preview-ar)))] ${SHORT_DESKTOP_PREVIEW_WIDTH_CLASS}`
+                  : `rounded-lg flex flex-col lg:block h-[40vh] sm:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-25rem))] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-30rem))] ${SHORT_DESKTOP_BOX_HEIGHT_CLASS}`
             }`}
             style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}
             onClick={mobileFs ? togglePlay : undefined}
@@ -1109,11 +1062,21 @@ export function FocusModeView({
             </div>
           )}
 
+          {/* T16650: on a phone the 32px crop track is too narrow for the empty-timeline
+              hint (it wrapped out of the track and across the playhead), so below lg it
+              shows here as a caption above the timeline and the in-track copy is hidden. */}
+          {!mobileFs && videoUrl && focusPointCount === 0 && (
+            <p data-testid="timeline-empty-caption" className="lg:hidden mt-1 px-2 text-xs text-gray-400">
+              {FOCUS_HINTS.TIMELINE_EMPTY}
+            </p>
+          )}
+
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && (
             <div
               data-testid="trim-guide-scope"
               ref={trimScopeRef}
+              className="max-lg:[&_[data-crop-empty-hint]]:hidden"
               style={{ scrollMarginBottom: 'calc(var(--cta-bar-h, 0px) + 0.5rem)' }}
             >
               {focusTimelineBlock}

@@ -64,7 +64,7 @@ import { EmptyTabGuide, TabGuideHeader } from './shared/EmptyTabGuide';
 import { GameTile } from './GameTile';
 import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
-import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, DRAFT_RUNG_ORDER, getDraftRung, getDraftRungShortLabel, getDraftStage, getDraftStatus, stageRowsFor, phaseRowsFor } from '../utils/draftStage';
+import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, DRAFT_RUNG_ORDER, getDraftRung, getDraftRungShortLabel, getDraftStage, getDraftStatus, stageRowsFor, phaseRowsFor, isPlayInProgress } from '../utils/draftStage';
 import { deriveDraftSourceExpiry, computeStorageExpiryRisk } from '../utils/draftSourceExpiry';
 import { StorageExpiryBanner } from './StorageExpiryBanner';
 
@@ -687,7 +687,8 @@ export function ProjectManager({
   // T8360: the In Progress Clips tab shows single-clip auto-drafts ONLY.
   // is_auto_created (the raw_clips.auto_project_id link) is the routing key, not
   // clip_count -- see T8360-design.md "The signal we can trust".
-  const clipDrafts = useMemo(() => projects.filter(p => p.is_auto_created), [projects]);
+  // T16530: a finished highlight is under Highlights only (isPlayInProgress).
+  const clipDrafts = useMemo(() => projects.filter(isPlayInProgress), [projects]);
   // T8555: multi-clip in-progress drafts (is_auto_created === false). T11230 removed
   // the In Progress Reels tab these used to populate; they now surface only in the
   // Clips tab's Legacy reels group (T11220) so existing users' drafts stay reachable.
@@ -1708,8 +1709,9 @@ export function ProjectManager({
         <ProfileDropdown />
       </div>
 
-      {/* Header — pt-10 clears the fixed top-right controls on mobile */}
-      <div className="text-center pt-10 coarse-pointer:pt-12 lg:pt-0 mb-4">
+      {/* Header — pt-14 clears the fixed top-right controls (44px tall at top-4) on
+          phones and tablets; T16680: pt-10 let the Guidance switch cover the logo. */}
+      <div className="text-center pt-14 lg:pt-0 mb-4">
         <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
         <p className="text-gray-400 text-sm">Transform game film into high-quality highlights using AI upscaling</p>
       </div>

@@ -43,6 +43,24 @@ async function scrollEditorToBottom(page) {
   await page.waitForTimeout(150);
 }
 
+/**
+ * T16630: the editor opens at the top (nothing scrolls it on load), so at a short viewport
+ * the parent scrolls the stage up clear of the action band. Do the same: scroll App's
+ * editor scroller just far enough that `testId`'s bottom edge sits above the band.
+ */
+async function scrollClearOfBand(page, testId) {
+  // Polled: the stage keeps growing until its video has loaded, so re-scroll until clear.
+  await expect.poll(() => page.getByTestId(testId).first().evaluate((el) => {
+    const scroller = el.closest('.flex-1.overflow-auto');
+    const band = document.querySelector('[data-testid="action-band"]');
+    if (!scroller || !band) return 'no scroller or action band';
+    const deficit = el.getBoundingClientRect().bottom - band.getBoundingClientRect().top + 8;
+    if (deficit > 0) scroller.scrollTop += deficit;
+    return el.getBoundingClientRect().bottom <= band.getBoundingClientRect().top + 0.5;
+  }), { message: `scroll ${testId} clear of the action band`, timeout: 60000 }).toBe(true);
+  await page.waitForTimeout(150);
+}
+
 function rectBelow(rectA, rectB) {
   // true when rectA's bottom edge is at or above rectB's top edge (no vertical overlap).
   return rectA.y + rectA.height <= rectB.y + 0.5;
@@ -94,10 +112,10 @@ for (const vp of VIEWPORTS) {
     test(`T15400:C1 - Frame video and crop box fully visible and draggable above the action bar @ ${vp.label}`, async ({ context, page }) => {
       await loginForCheck(context);
       await openFrameProject(page);
-      // The T15400 scroll-fit effect (ResizeObserver-driven) can still be settling the
-      // stage into position right after the crop handle first appears -- measure once
-      // the layout has stopped moving, or `before`/`stage` below read a transient position.
+      // Let the layout settle after the crop handle first appears, then scroll the stage
+      // clear of the band the way a parent would (T16630: the screen opens at the top).
       await page.waitForTimeout(400);
+      await scrollClearOfBand(page, 'focus-video-stage');
 
       const band = await page.getByTestId('action-band').boundingBox();
       expect(band, 'action band present').not.toBeNull();
@@ -172,6 +190,8 @@ for (const vp of VIEWPORTS) {
     test(`T15400:C3 - Spotlight/Overlay video and timeline not clipped by the action bar @ ${vp.label}`, async ({ context, page }) => {
       await loginForCheck(context);
       await openOverlayProject(page);
+      await page.waitForTimeout(400);
+      await scrollClearOfBand(page, 'overlay-video-stage');
 
       const band = await page.getByTestId('action-band').boundingBox();
       expect(band, 'action band present').not.toBeNull();
@@ -204,6 +224,8 @@ for (const vp of C4_VIEWPORTS) {
     test(`T15400:C4 - Spotlight transport buttons pass a hit test @ ${vp.label}`, async ({ context, page }) => {
       await loginForCheck(context);
       await openOverlaySpotlightProject(page);
+      await page.waitForTimeout(400);
+      await scrollClearOfBand(page, 'play-button');
 
       // Primary "Play spotlight" button (Controls.jsx data-testid="play-button";
       // loops when highlight regions exist, which openOverlaySpotlightProject requires).
