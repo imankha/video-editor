@@ -229,6 +229,8 @@
   "tests/test_t16510_record_finish.py": 12.72,
   "tests/test_t16520_server_finish.py": 10.91,
   "tests/test_t16535_archive_keeps_clips.py": 1.0,
+  "tests/test_t16540_finish_stranded.py": 36.48,
+  "tests/test_t16540_reedit_stays_draft.py": 12.46,
   "tests/test_t1690_stream_proxy_probe.py": 0.1,
   "tests/test_t2650_recap_encode_off_server.py": 13.53,
   "tests/test_t2930_migrations.py": 2.35,
