@@ -50,6 +50,7 @@ test.describe('T16770:C2 second play lands at the new playhead', () => {
     // Two plays need a free window: play 1 (8 s) at its start, play 2 (8 s)
     // well past it. Use the largest gap between existing clips.
     const { duration, clips } = await readClips();
+    const initialIds = new Set(clips.map((c) => c.id));
     const sorted = [...clips].sort((a, b) => a.start - b.start);
     const gaps = [];
     let cursor = 0;
@@ -112,9 +113,17 @@ test.describe('T16770:C2 second play lands at the new playhead', () => {
       await route.continue();
     });
 
-    const { clips: clipsWithPlay1 } = await readClips();
+    // The card can show before play 1's save has committed: wait for play 1
+    // itself rather than taking the highest id (a read that raced the save
+    // took an older clip as play 1 and play 1 as the "second" play).
+    let clipsWithPlay1;
+    let play1;
+    await expect.poll(async () => {
+      clipsWithPlay1 = (await readClips()).clips;
+      play1 = clipsWithPlay1.find((c) => !initialIds.has(c.id));
+      return Boolean(play1);
+    }, { timeout: 30000, message: 'play 1 saved' }).toBe(true);
     const before = new Set(clipsWithPlay1.map((c) => c.id));
-    const play1 = [...clipsWithPlay1].sort((x, y) => y.id - x.id)[0];
 
     await later.click();
     // Back on Mark Play while the save is still held, and the playhead moves
