@@ -14,7 +14,9 @@ import { useFocusCompletionStore } from '../stores/focusCompletionStore';
  */
 const reportedJobIds = new Set();
 
-export function reportRecoveredCompletion({ jobId, projectId, projectName, type }) {
+// T16525: `finished` = the server finished this sharpen (GET /exports/unacknowledged); the
+// card then says it is in Highlights. Absent (a live recovery WS) reads as not known: false.
+export function reportRecoveredCompletion({ jobId, projectId, projectName, type, finished = false }) {
   if (!jobId || reportedJobIds.has(jobId)) return false;
   reportedJobIds.add(jobId);
 
@@ -25,7 +27,7 @@ export function reportRecoveredCompletion({ jobId, projectId, projectName, type 
     return false;
   }
 
-  useFocusCompletionStore.getState().noteRecovered({ jobId, projectId, projectName });
+  useFocusCompletionStore.getState().noteRecovered({ jobId, projectId, projectName, finished });
   return true;
 }
 

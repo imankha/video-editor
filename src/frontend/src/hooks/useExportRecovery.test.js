@@ -52,7 +52,7 @@ describe('useExportRecovery (T9285 recovery-path completion routing)', () => {
 
     await waitFor(() => {
       expect(useFocusCompletionStore.getState().recovered).toEqual({
-        jobId: 'job-framing-1', projectId: 42, projectName: 'My Reel',
+        jobId: 'job-framing-1', projectId: 42, projectName: 'My Reel', finished: false,
       });
     });
 
@@ -126,7 +126,7 @@ describe('useExportRecovery (T9285 recovery-path completion routing)', () => {
     });
 
     expect(useFocusCompletionStore.getState().recovered).toEqual({
-      jobId: 'job-newest', projectId: 42, projectName: 'Newest Reel',
+      jobId: 'job-newest', projectId: 42, projectName: 'Newest Reel', finished: false,
     });
   });
 
@@ -148,7 +148,7 @@ describe('useExportRecovery (T9285 recovery-path completion routing)', () => {
 
     await waitFor(() => {
       expect(useFocusCompletionStore.getState().recovered).toEqual({
-        jobId: 'job-modal-1', projectId: 44, projectName: 'Modal Reel',
+        jobId: 'job-modal-1', projectId: 44, projectName: 'Modal Reel', finished: false,
       });
     });
     // A still-running/complete-on-Modal job never went through the
@@ -186,7 +186,7 @@ describe('useExportRecovery (T9285 recovery-path completion routing)', () => {
 
     await waitFor(() => {
       expect(useFocusCompletionStore.getState().recovered).toEqual({
-        jobId: 'job-ws-1', projectId: 45, projectName: 'WS Reel',
+        jobId: 'job-ws-1', projectId: 45, projectName: 'WS Reel', finished: false,
       });
     });
   });

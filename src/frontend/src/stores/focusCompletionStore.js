@@ -34,8 +34,9 @@ export const useFocusCompletionStore = create((set) => ({
   // First-write-wins: useExportRecovery's unacknowledged-jobs loop iterates
   // newest-first (per the backend's ORDER BY completed_at DESC), so an
   // unconditional set would let the LAST (oldest) job clobber the newest.
-  noteRecovered: ({ jobId, projectId, projectName }) => set((state) =>
-    state.recovered ? state : { recovered: { jobId, projectId, projectName } }
+  // T16525: `finished` (the server finished this sharpen) picks the card's wording.
+  noteRecovered: ({ jobId, projectId, projectName, finished = false }) => set((state) =>
+    state.recovered ? state : { recovered: { jobId, projectId, projectName, finished } }
   ),
   clearRecovered: () => set({ recovered: null }),
 

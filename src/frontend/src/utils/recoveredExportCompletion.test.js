@@ -21,7 +21,7 @@ describe('reportRecoveredCompletion (T9285)', () => {
 
     expect(result).toBe(true);
     expect(useFocusCompletionStore.getState().recovered).toEqual({
-      jobId: 'job-1', projectId: 42, projectName: 'My Reel',
+      jobId: 'job-1', projectId: 42, projectName: 'My Reel', finished: false,
     });
   });
 
@@ -59,7 +59,7 @@ describe('reportRecoveredCompletion (T9285)', () => {
     reportRecoveredCompletion({ jobId: 'job-6', projectId: 2, projectName: 'B', type: 'framing' });
 
     expect(useFocusCompletionStore.getState().recovered).toEqual({
-      jobId: 'job-5', projectId: 1, projectName: 'A',
+      jobId: 'job-5', projectId: 1, projectName: 'A', finished: false,
     });
   });
 

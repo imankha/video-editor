@@ -141,6 +141,7 @@ export function useExportRecovery() {
                 projectId: exp.project_id,
                 projectName: exp.project_name,
                 type: exp.type,
+                finished: exp.finished, // T16525: the server finished it while they were away
               });
               // T9285 §6a: a completed FRAMING job's acknowledge is deferred to
               // the View/Dismiss gesture (resumeFocusCompletion /

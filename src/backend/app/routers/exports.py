@@ -24,6 +24,7 @@ from ..analytics import record_milestone
 from ..constants import ExportStatus
 from ..database import get_db_connection
 from ..profile_context import get_current_profile_id
+from ..queries import framing_job_finished_column
 from ..services import export_job_repository
 from ..storage import file_exists_in_r2
 from ..user_context import get_current_user_id
@@ -65,6 +66,9 @@ class ExportJobResponse(BaseModel):
     # T5630: durable finalize stage (payload-only hook for a future progress panel;
     # None on a below-head profile DB during the deploy->v028 window).
     stage: str | None = None
+    # T16525: a framing job whose sharpen the server finished (a published final video
+    # was made from this job's working video). Set only by /unacknowledged.
+    finished: bool = False
 
 
 class ExportJobListResponse(BaseModel):
@@ -513,7 +517,8 @@ def list_unacknowledged_exports():
             SELECT e.id, e.project_id, p.name as project_name, e.type, e.status, e.error,
                    e.output_video_id, e.output_filename,
                    e.created_at, e.started_at, e.completed_at,
-                   e.game_id, e.game_name{extra}
+                   e.game_id, e.game_name{extra},
+                   {framing_job_finished_column()}
             FROM export_jobs e
             LEFT JOIN projects p ON e.project_id = p.id
             WHERE e.status IN ('complete', 'error')
@@ -541,6 +546,7 @@ def list_unacknowledged_exports():
                 game_id=e.get('game_id'),
                 game_name=e.get('game_name'),
                 stage=e.get('stage'),
+                finished=bool(e['finished']),
             )
             for e in exports
         ]

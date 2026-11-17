@@ -96,6 +96,8 @@ const PLAYER_VIDEO = tid('collection-player-video');
 const PLAYER_DOWNLOAD = tid('player-download');
 const FOCUS_READY_PRIMARY = tid('focus-choice-primary');
 const FOCUS_READY_CTAS = [FOCUS_READY_PRIMARY, tid('focus-choice-publish'), tid('focus-choice-edit-framing'), tid('focus-save-draft')];
+// T16525: the server already finished it, so the panel has no Finish card.
+const FOCUS_FINISHED_CTAS = [FOCUS_READY_PRIMARY, tid('focus-choice-edit-framing'), tid('focus-save-draft')];
 const OVERLAY_READY_PRIMARY = tid('overlay-choice-primary');
 const OVERLAY_READY_CTAS = [OVERLAY_READY_PRIMARY, tid('overlay-choice-reapply-overlay'), tid('overlay-choice-reapply-focus'), tid('overlay-save-draft')];
 const readyPanel = (rule, ctas) => ({ ...rule, side: 'beside', keepClear: ctas, shadeClear: [PLAYER_VIDEO] });
@@ -255,6 +257,7 @@ export const GUIDE_RULES = [
   jobRule('focus.failed', 'focus', 'failed', { title: GUIDE.focus.failed, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'strong', GUIDE_PULSE.EXPORT),
   jobRule('focus.progress.export', 'focus', 'processing', { title: GUIDE.focus.progressExport, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress', null, NO_PROGRESS),
   jobRule('focus.finishing', 'focus', 'finishing', { title: GUIDE.focus.finishing, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress', null, NO_PROGRESS),
+  readyPanel({ ...jobRule('focus.ready.finished', 'focus', 'ready', { title: GUIDE.focus.readyFinished, body: '' }, FOCUS_READY_PRIMARY, READY_PANEL, 'coach', GUIDE_PULSE.FOCUS_ADD_SPOTLIGHT), when: (f) => job(f) === 'ready' && f.job?.finished === true }, FOCUS_FINISHED_CTAS),
   readyPanel(jobRule('focus.ready', 'focus', 'ready', { title: GUIDE.focus.ready, body: '' }, FOCUS_READY_PRIMARY, READY_PANEL, 'coach', GUIDE_PULSE.FOCUS_ADD_SPOTLIGHT), FOCUS_READY_CTAS),
   // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
   // T12770: the landscape cockpit has no guide sentence, only the crop-box cue; it is gated by Guidance like every pulse.
@@ -440,6 +443,7 @@ export const GUIDE_STATES = [
   { name: 'focus: export error', expectId: 'focus.failed', facts: { screen: 'focus', job: { status: 'failed' }, local: fl() } },
   { name: 'focus: needs credits', expectId: 'focus.credits', facts: { screen: 'focus', job: { status: 'credits' }, local: fl() } },
   { name: 'focus: ready panel', expectId: 'focus.ready', facts: { screen: 'focus', job: { status: 'ready' }, local: fl() } },
+  { name: 'focus: ready panel, server finished it', expectId: 'focus.ready.finished', facts: { screen: 'focus', job: { status: 'ready', finished: true }, local: fl() } },
   { name: 'pick: first moment', expectId: 'overlay.pick.first', facts: { screen: 'overlay', local: { pick: { phase: 'parked', step: 1, total: 4, assigned: 0, boxed: true } } } },
   { name: 'pick: just tapped', expectId: 'overlay.pick.next', facts: { screen: 'overlay', local: { pick: { phase: 'confirm', step: 1, total: 4, assigned: 1, boxed: true } } } },
   { name: 'pick: away, back at the marker', expectId: 'overlay.pick.at-marker', facts: { screen: 'overlay', local: { pick: { phase: 'parked', step: 2, total: 4, assigned: 1, boxed: true, atMarker: true } } } },

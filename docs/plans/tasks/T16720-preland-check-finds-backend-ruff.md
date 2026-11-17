@@ -1,6 +1,6 @@
 # T16720: The pre-land check says ruff is missing when the backend has it
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-11-17

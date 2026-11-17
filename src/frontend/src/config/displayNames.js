@@ -715,6 +715,8 @@ export const EXPORT_JOBS = {
     action: 'Sharpen my highlight',
     inProgress: 'Sharpening your highlight...',
     completed: 'Your highlight is ready',
+    // T16525: the server finished it (T16520), so it is already in Highlights.
+    finished: 'Your highlight is in Highlights',
     jobNoun: 'Highlight',
   },
   overlay: {
@@ -823,6 +825,22 @@ export const FOCUS_PUBLISH = {
   EDIT_FRAMING_LABEL: 'Edit zoom',
   EDIT_FRAMING_CAPTION: EDIT_FRAMING_CAPTION_TEXT,
   SAVE_DRAFT_LABEL: 'Done for now',
+};
+
+// T16525: the ready panel once the server has finished the highlight (T16520): it is
+// already in Highlights, so there is no Finish tap. The note is the audience rule.
+export const FOCUS_FINISHED = {
+  HEADLINE: 'It’s in your Highlights',
+  NOTE: STAGE_REASONS.PUBLISH,
+  DONE_LABEL: 'Done',
+  // "Add spotlight" toast once it is already in Highlights (FOCUS_ADD_SPOTLIGHT_TOAST otherwise).
+  ADD_SPOTLIGHT_TOAST_MESSAGE: 'Now add a spotlight. The version with the spotlight replaces the one in your Highlights.',
+};
+
+// T16525: "Done" on a finished highlight, and a spotlight render that finished it.
+export const FINISHED_TOAST = {
+  title: FOCUS_FINISHED.HEADLINE,
+  message: STAGE_REASONS.PUBLISH,
 };
 
 // T10650: Focus's "Back to preview" affordance. When the current framing is
@@ -989,10 +1007,12 @@ export const GUIDE = {
     experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Preview when it looks right.`,
     generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
     credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then sharpen it.`,
-    progressExport: 'Sharpening your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
+    progressExport: 'Sharpening your highlight. When it’s done it goes to your Highlights, even if you leave this screen.',
     finishing: 'Your highlight is done. Opening it now.',
     failed: `Your highlight didn’t finish. Tap ${EXPORT_JOBS.framing.action} to try again.`,
     ready: 'Your highlight is ready. Add a spotlight so people know which athlete is yours, or tap Finish without spotlight.',
+    // T16525: the server already put it in Highlights; Spotlight is still offered.
+    readyFinished: 'Your highlight is in your Highlights. Add a spotlight so people know which athlete is yours, or tap Done.',
     trimSplit: 'Tap the timeline to split your play where you want to trim or slow it.',
     trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
     // T12790: video load failure, fullscreen hand-off, and the landscape cockpit's own controls.

@@ -21,7 +21,7 @@ import { GuideScope } from '../components/instructions/GuideScope';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
-import { FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW, FRAME_COPY } from '../config/displayNames';
+import { EXPORT_JOBS, FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_FINISHED, FOCUS_PREVIEW, FRAME_COPY } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { deriveFramingCtaState } from '../utils/framingCtaState';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
@@ -45,6 +45,8 @@ import { startLoadTrace } from '../utils/loadTrace';
 
 // T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Add spotlight card.
 const FOCUS_READY_GUIDE = resolveGuide({ screen: 'focus', job: { status: 'ready' }, local: {} });
+// T16525: the same panel once the server has finished the highlight (no Finish card).
+const FOCUS_FINISHED_GUIDE = resolveGuide({ screen: 'focus', job: { status: 'ready', finished: true }, local: {} });
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -113,6 +115,10 @@ export function FocusScreen({
   // bar reads 'Opening your highlight...' instead of a stale 'Generate highlight'.
   // Ephemeral, never persisted.
   const [openingHighlight, setOpeningHighlight] = useState(false);
+  // T16525: did the server finish THIS sharpen (T16520)? Read from the refreshed project
+  // (GET /projects/{id} is_finished). null while the post-render refresh is in flight,
+  // so the panel never flashes a Finish card that is about to disappear.
+  const panelFinished = openingHighlight ? null : project?.is_finished === true;
   // T8390: post-export preview + publish-exit action bar (overlay is an offer,
   // not a stage; the preview mounts BEFORE any choice, replacing T8520's
   // choose-then-preview card with preview-first per the approved design).
@@ -1040,9 +1046,13 @@ export function FocusScreen({
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     // 2026-09-08: confirm what happened before leaving the screen (product
     // owner: every action-bar choice should say what happened + what's next).
-    toast.success(FOCUS_ADD_SPOTLIGHT_TOAST.title, { message: FOCUS_ADD_SPOTLIGHT_TOAST.message });
+    if (panelFinished === true) {
+      toast.success(EXPORT_JOBS.framing.finished, { message: FOCUS_FINISHED.ADD_SPOTLIGHT_TOAST_MESSAGE });
+    } else {
+      toast.success(FOCUS_ADD_SPOTLIGHT_TOAST.title, { message: FOCUS_ADD_SPOTLIGHT_TOAST.message });
+    }
     setEditorMode('overlay');
-  }, [setEditorMode, projectId, closePreview, acknowledgeCompletionJob]);
+  }, [setEditorMode, projectId, closePreview, acknowledgeCompletionJob, panelFinished]);
 
   const handleAddSpotlightLater = useCallback(() => {
     acknowledgeCompletionJob();
@@ -1050,7 +1060,9 @@ export function FocusScreen({
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     recordFunnelEvent(FUNNEL_EVENTS.OVERLAY_DEFERRED);
     // T10010 activation funnel: "Save draft"/defer is a real user gesture. IDs only.
-    recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
+    // T16525: a highlight the server finished is not a saved draft.
+    const finished = panelFinished === true;
+    if (!finished) recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
     // Navigation: back to the exact Annotate spot this play came from, if this
     // session got here via Annotate -> Focus; otherwise the drafts surface as
     // before. Persists NOTHING else; the draft stays at its current stage and
@@ -1060,8 +1072,9 @@ export function FocusScreen({
       setEditorMode: useEditorStore.getState().setEditorMode,
       goToProjectManager: useEditorStore.getState().goToProjectManager,
       toastSuccess: toast.success,
+      finished,
     });
-  }, [projectId, closePreview, acknowledgeCompletionJob]);
+  }, [projectId, closePreview, acknowledgeCompletionJob, panelFinished]);
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually
   // watched the preview before deciding. ONE tap, TRUE publish: this fires the
@@ -1446,9 +1459,10 @@ export function FocusScreen({
           onClose={handleRefocus}
           onBackToGame={focusCompletionGameId != null ? handleBackToGame : undefined}
           actionBar={(
-            <GuideScope guides={[FOCUS_READY_GUIDE]}>
-              <Guide testId="focus-ready-guide" guide={FOCUS_READY_GUIDE} />
+            <GuideScope guides={[panelFinished === true ? FOCUS_FINISHED_GUIDE : FOCUS_READY_GUIDE]}>
+              <Guide testId="focus-ready-guide" guide={panelFinished === true ? FOCUS_FINISHED_GUIDE : FOCUS_READY_GUIDE} />
               <FocusPublishActionBar
+                finished={panelFinished}
                 onPublish={handlePublish}
                 publishLoading={publishLoading}
                 onAddSpotlight={handleAddSpotlight}

@@ -259,6 +259,10 @@ class ProjectDetailResponse(BaseModel):
     final_video_id: int | None
     has_final_video: bool = False
     final_video_created_at: str | None = None
+    # T16525: the server finished THIS sharpen (T16520): a published final video was
+    # made from the current working video. False when the automatic finish failed,
+    # so the ready panel keeps its Finish button.
+    is_finished: bool = False
     clips: list[WorkingClipResponse]
     created_at: str
     is_auto_created: bool = False  # True if auto-created from 5-star clips
@@ -769,7 +773,12 @@ async def get_project(project_id: int):
                    p.is_auto_created, p.archived_at,
                    wv.filename as working_video_filename,
                    wv.created_at as working_video_created_at,
-                   (SELECT MAX(fv.created_at) FROM final_videos fv WHERE fv.project_id = p.id) as final_video_created_at
+                   (SELECT MAX(fv.created_at) FROM final_videos fv WHERE fv.project_id = p.id) as final_video_created_at,
+                   EXISTS (
+                       SELECT 1 FROM final_videos fv
+                       WHERE fv.project_id = p.id AND fv.source_working_video_id = p.working_video_id
+                         AND fv.published_at IS NOT NULL
+                   ) as is_finished
             FROM projects p
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
@@ -844,6 +853,7 @@ async def get_project(project_id: int):
             final_video_id=project['final_video_id'],
             has_final_video=project['final_video_created_at'] is not None,
             final_video_created_at=project['final_video_created_at'],
+            is_finished=bool(project['is_finished']),
             clips=clips,
             created_at=project['created_at'],
             is_auto_created=bool(project['is_auto_created']),

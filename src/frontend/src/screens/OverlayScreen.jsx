@@ -35,12 +35,13 @@ import { track } from '../utils/analytics';
 import { clipGameClock } from '../utils/timeFormat';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
+import { spotlightCompletionOutcome } from '../utils/spotlightCompletionOutcome';
 import { openFinishedReel } from '../utils/finishedReelNav';
 import { allowEnterFraming } from '../utils/reelReEditable';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
-import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, SPOTLIGHT_COPY } from '../config/displayNames';
+import { FINISHED_TOAST, FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, SPOTLIGHT_COPY } from '../config/displayNames';
 
 // T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Finish card.
 const OVERLAY_READY_GUIDE = resolveGuide({ screen: 'overlay', job: { status: 'ready' }, local: {} });
@@ -1444,13 +1445,20 @@ export function OverlayScreen({
     // one-tap Publish render — App.handleExportComplete owns that path
     // (auto-publish + land on the reel), so we must NOT also show this preview.
     const isFocusOneTapPublish = usePublishIntentStore.getState().projectId === projectId;
-    if (!isFocusOneTapPublish && refreshed?.final_video_id) {
+    const outcome = spotlightCompletionOutcome(refreshed, { isFocusOneTapPublish });
+    if (outcome === 'panel') {
       setShowExportCompletePreview(true);
+    } else if (outcome === 'finished') {
+      // T16525: the render already put it in Highlights (T16520), so there is no
+      // second Finish tap: land on the finished highlight, as a Finish tap did.
+      toast.success(FINISHED_TOAST.title, { message: FINISHED_TOAST.message });
+      // The list row carries the game header fields the detail lacks.
+      openFinishedReel({ ...projectListItem, ...refreshed }, { alreadyPublished: true });
     }
     if (onExportComplete) {
       onExportComplete(completed);
     }
-  }, [refreshProject, setOverlayChangedSinceExport, onExportComplete, projectId]);
+  }, [refreshProject, setOverlayChangedSinceExport, onExportComplete, projectId, projectListItem]);
 
   // T9110: the four post-preview gesture handlers, mirroring FocusScreen's
   // T8390 handlers. Each fires from a click (never a reactive watcher).
