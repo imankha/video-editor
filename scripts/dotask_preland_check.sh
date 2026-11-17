@@ -43,21 +43,32 @@ done < <(git diff --no-renames --diff-filter=d --name-only origin/master...HEAD 
 # 3. ruff on changed backend files (new files must be clean; existing ones may not gain findings)
 backend=$(git diff --no-renames --diff-filter=d --name-only origin/master...HEAD -- 'src/backend/*.py')
 if [ -n "$backend" ]; then
-  if ! python3 -m ruff --version >/dev/null 2>&1; then
-    fail "ruff is not installed but backend files changed (pip install ruff): $(echo $backend)"
+  # The Windows host keeps ruff in the backend venv, not in python3 (as .claude/hooks/lint-changed.cjs finds it)
+  ruff=()
+  if python3 -m ruff --version >/dev/null 2>&1; then
+    ruff=(python3 -m ruff)
+  else
+    for cand in "$checkout/src/backend/.venv/bin/ruff" "$checkout/src/backend/.venv/Scripts/ruff.exe" \
+                "$here/../src/backend/.venv/bin/ruff" "$here/../src/backend/.venv/Scripts/ruff.exe"; do
+      [ -x "$cand" ] && { ruff=("$cand"); break; }
+    done
+    [ ${#ruff[@]} -eq 0 ] && command -v ruff >/dev/null 2>&1 && ruff=(ruff)
+  fi
+  if [ ${#ruff[@]} -eq 0 ]; then
+    fail "ruff is not installed (python3 -m ruff, src/backend/.venv, PATH) but backend files changed (pip install ruff): $(echo $backend)"
   else
     finding_re='^.+:[0-9]+:[0-9]+: '
     while IFS= read -r path; do
       rel=${path#src/backend/}
-      head_n=$( (cd src/backend && python3 -m ruff check --output-format=concise "$rel" 2>&1) | grep -cE "$finding_re")
+      head_n=$( (cd src/backend && "${ruff[@]}" check --output-format=concise "$rel" 2>&1) | grep -cE "$finding_re")
       if git cat-file -e "$base:$path" 2>/dev/null; then
-        base_n=$(git show "$base:$path" | (cd src/backend && python3 -m ruff check --output-format=concise --stdin-filename "$rel" - 2>&1) | grep -cE "$finding_re")
+        base_n=$(git show "$base:$path" | (cd src/backend && "${ruff[@]}" check --output-format=concise --stdin-filename "$rel" - 2>&1) | grep -cE "$finding_re")
       else
         base_n=0
       fi
       if [ "$head_n" -gt "$base_n" ]; then
         fail "$path: ruff findings $base_n -> $head_n"
-        (cd src/backend && python3 -m ruff check --output-format=concise "$rel" 2>&1 | grep -E "$finding_re")
+        (cd src/backend && "${ruff[@]}" check --output-format=concise "$rel" 2>&1 | grep -E "$finding_re")
       fi
     done <<< "$backend"
   fi

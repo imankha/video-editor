@@ -1,0 +1,4 @@
+{"criteria": {
+  "T16720:C1": {"kind": "code", "command": "cd scripts && python3 -m pytest test_dotask_cli.py -k test_ruff_in_the_backend_venv_is_used_when_python3_has_no_ruff_module -q"},
+  "T16720:C2": {"kind": "code", "command": "cd scripts && python3 -m pytest test_dotask_cli.py -k test_no_ruff_anywhere_fails_naming_the_backend_files -q"}
+}}
