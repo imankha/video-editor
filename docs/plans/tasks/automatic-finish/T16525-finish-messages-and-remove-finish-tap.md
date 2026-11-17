@@ -4,7 +4,7 @@
 
 Today, after the parent pays to sharpen a highlight, a "Your highlight is ready" panel waits for them to tap Finish before it reaches the Highlights tab. T16520 makes the server finish the highlight on its own the moment sharpening ends. This task is the part the parent sees: the screens and messages that say "your highlight is in Highlights" (whether they waited or came back later), and removing the Finish tap, including the second Finish tap after a spotlight render. If the automatic finish failed, the panel keeps a working Finish button as it does today. Done when a parent who sharpens a highlight is told it is in Highlights without tapping anything, on phone and desktop.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-11-16
