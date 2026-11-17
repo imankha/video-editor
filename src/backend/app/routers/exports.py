@@ -24,6 +24,7 @@ from ..analytics import record_milestone
 from ..constants import ExportStatus
 from ..database import get_db_connection
 from ..profile_context import get_current_profile_id
+from ..queries import framing_job_finished_column
 from ..services import export_job_repository
 from ..storage import file_exists_in_r2
 from ..user_context import get_current_user_id
@@ -517,11 +518,7 @@ def list_unacknowledged_exports():
                    e.output_video_id, e.output_filename,
                    e.created_at, e.started_at, e.completed_at,
                    e.game_id, e.game_name{extra},
-                   EXISTS (
-                       SELECT 1 FROM final_videos fv
-                       WHERE e.type = 'framing' AND fv.source_working_video_id = e.output_video_id
-                         AND fv.published_at IS NOT NULL
-                   ) as finished
+                   {framing_job_finished_column()}
             FROM export_jobs e
             LEFT JOIN projects p ON e.project_id = p.id
             WHERE e.status IN ('complete', 'error')
