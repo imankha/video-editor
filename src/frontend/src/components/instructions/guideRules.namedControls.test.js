@@ -15,7 +15,7 @@ const CONTROL_PHRASES = [
   { name: 'Pick how good', re: /\bPick how good\b/, keepClear: ['rating-input'] },
   { name: 'Rate the play', re: /\bRate the play\b/, keepClear: ['rating-input'] },
   { name: 'Add tags and notes', re: /\badd tags and notes\b/, keepClear: ['add-details-button'] },
-  { name: 'Done', re: /\btap Done\b/, pulse: [P.PLAY_EDITOR_DONE] },
+  { name: 'Done', re: /\btap Done\b/, pulse: [P.PLAY_EDITOR_DONE], keepClear: ['focus-save-draft'] },
   { name: 'Share game', re: /\bTap Share game\b/, pulse: [P.SHARE_PLAYS] },
   { name: 'tap a play', re: /\btap a play\b/, pulse: [P.FIRST_PLAY] },
   { name: 'tap a clip', re: /\bTap a (clip|play)\b/, pulse: [P.FIRST_CLIP] },
