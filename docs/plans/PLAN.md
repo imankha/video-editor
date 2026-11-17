@@ -103,6 +103,8 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T16770 | [Second play lands after first](tasks/T16770-second-play-lands-after-first.md) | 5 | 3 | 1.7 | STAGING | [ ] | Possible, seen once. After a new account's first play, choosing "Keep marking plays" while that play looped, then moving to 0:45 and marking, saved the second play right after the first (16.5 to 24.5 seconds). The prompt appears only on an account's first play, so it was not reproduced. We will reproduce it on a fresh account and, if real, end the loop when the prompt closes. |
 | T16780 | [Posters requested for failed uploads](tasks/T16780-posters-requested-for-failed-uploads.md) | 2 | 1 | 2.0 | STAGING | [ ] | Home asks the server for a poster picture for every game whose upload did not finish, and each one fails, so the test account logs 8 errors on every Home load. The parent sees nothing wrong, but the errors hide real ones. We will skip the request for unfinished uploads. Done when Home loads with no poster errors. |
 | T16800 | [Staging check failed: T16730:C1 The steps above give the expected result.](tasks/T16800-staging-check-failed-t16730-c1-the.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T16810 | [Staging check failed: T16750:C1 With Preview playing, Sharpen, then Finished opens: the Frame video](tasks/T16810-staging-check-failed-t16750-c1-with.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T16820 | [Staging check failed: T16760:C1 Portrait preview and its controls fully visible above the action](tasks/T16820-staging-check-failed-t16760-c1-portrait.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 
 ### Bugs found by /dotask verify
 
@@ -111,8 +113,6 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T16810 | [Staging check failed: T16750:C1 With Preview playing, Sharpen, then Finished opens: the Frame video](tasks/T16810-staging-check-failed-t16750-c1-with.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T16820 | [Staging check failed: T16760:C1 Portrait preview and its controls fully visible above the action](tasks/T16820-staging-check-failed-t16760-c1-portrait.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
