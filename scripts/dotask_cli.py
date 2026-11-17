@@ -2035,12 +2035,15 @@ def verify_once(slug, group, checkout, head, round_number, focus=None):
                                 f"{'verification skipped by the owner' if owner_skip else 'verify budget spent'}; "
                                 f"{' '.join(wanted)} not verified")
     else:
+        # T16860: the budget pays for running and reviewing checks only. Starting and warming the stack took
+        # 223-229 s on 2026-11-17 and ate whole 3-minute budgets; task.sh caps the start on its own (300 s).
         try:
-            try:
-                bring_up_stack(slug)
-            except subprocess.CalledProcessError as exc:
-                raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
-            warm_stack(slug)
+            bring_up_stack(slug)
+        except subprocess.CalledProcessError as exc:
+            raise UntrustedVerdict(f"stack did not start (exit {exc.returncode})") from exc
+        warm_stack(slug)
+        started = time.time()
+        try:
             results = run_checks(slug, checkout, group, wanted, started + left * 60)
             remaining = left - (time.time() - started) / 60
             review = None

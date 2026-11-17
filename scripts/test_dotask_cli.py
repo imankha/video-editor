@@ -2034,6 +2034,42 @@ class AutolandTest(AutolandBase):
         spent = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())["verify_spent_s"]
         self.assertGreater(spent, (30 - 6) * 60)
 
+    def test_stack_start_and_warm_up_are_not_charged_to_the_verify_budget(self):
+        # T16860: a 229 s warm-up ate a 3-minute budget, so every criterion landed "not verified".
+        clock = [time.time()]
+
+        def slow_start(slug):
+            clock[0] += 4 * 60
+            return "http://x"
+
+        def slow_warm(slug):
+            clock[0] += 4 * 60
+        deadlines = []
+        original_checks = self._run_checks
+
+        def run_checks(slug, checkout, group, wanted, deadline):
+            deadlines.append(deadline - clock[0])
+            return original_checks(slug, checkout, group, wanted, deadline)
+        self.verdicts = [self._verdict()]
+        with patch.object(dotask_cli, "bring_up_stack", slow_start), patch.object(dotask_cli, "warm_stack", slow_warm), \
+                patch.object(dotask_cli, "run_checks", run_checks), patch.object(dotask_cli.time, "time", lambda: clock[0]):
+            self.assertEqual(self._run(no_land=True), 0)
+        self.assertEqual(self.checks_run, [["T1:C1", "T1:C2"]])
+        self.assertEqual(self._phases(), ["qa"])  # the reviewer ran too
+        self.assertAlmostEqual(deadlines[0], 2 * dotask_cli.VERIFY_MINUTES_PER_CRITERION * 60)
+        self.assertIn("VERIFY_PASS", self._pass_line())
+        spent = json.loads((self.checkout / dotask_cli.GROUP_FILE).read_text())["verify_spent_s"]
+        self.assertLess(spent, 60)
+
+    def test_a_stack_that_does_not_start_still_blocks_the_loop(self):
+        def failed_start(slug):
+            raise subprocess.CalledProcessError(124, ["task.sh", "stack"])
+        with patch.object(dotask_cli, "bring_up_stack", failed_start):
+            self.assertEqual(self._run(), 1)
+        self.assertIn("VERIFY_BLOCKED round 1: stack did not start (exit 124)", self._last())
+        self.assertEqual((self.checks_run, self.dispatches), ([], []))
+        self.land.assert_not_called()
+
     def test_a_fix_round_that_runs_out_of_turns_is_restarted_with_a_handoff(self):
         (self.checkout / ".dotask-profile").mkdir()
         self.verdicts = [self._verdict(("fail", "pass"))]
