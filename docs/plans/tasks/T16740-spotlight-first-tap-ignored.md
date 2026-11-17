@@ -1,6 +1,6 @@
 # T16740: Spotlight first tap ignored
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-16
