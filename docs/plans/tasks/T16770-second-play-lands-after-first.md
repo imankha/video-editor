@@ -1,0 +1,34 @@
+# T16770: Second play lands after first (possible)
+
+**Status:** TODO
+**Impact:** 5
+**Complexity:** 3
+**Created:** 2026-11-16
+**Updated:** 2026-11-16
+
+## In plain words
+
+**Today.** In Annotate a parent watches the game and taps "Mark play", which saves the last 6 seconds and the next 2 as a play. After the first play on a new account, a prompt asks "Make this a highlight now?" with "Keep marking plays" underneath.
+
+**The problem (possible, needs a repro).** Seen once in the staging QA pass on 2026-11-16. The first play (14 to 22 seconds) was looping in its play view when "Keep marking plays" was tapped. The playhead was then moved to 0:45 and "Mark play" tapped a second later, but the second play was saved at 16.5 to 24.5 seconds, just after the first, not around 0:45. That suggests the first play's loop was still holding the playhead after the prompt closed. Later tries could not reproduce it, because the prompt only appears on an account's very first play. A Done from "Edit play" while the play looped returned to normal game playback correctly. If real, a new parent's second play lands in the wrong place without any warning.
+
+**What we will do.** First reproduce with a fresh account: mark a play, press Play so it loops, press Done, choose "Keep marking plays", then scrub elsewhere and mark again. If the second play is misplaced, end the first play's loop when the prompt is dismissed.
+
+**Why this and not something else.** The other exit (Edit play then Done) already returns to game playback correctly, so the fix is local to the prompt's path.
+
+**How we will know it worked.** On a fresh account, after "Keep marking plays", a play marked at 0:45 is saved at 0:39 to 0:47.
+
+## Evidence (staging, build 94928afa1, account e2e@test.local)
+
+- Game 16 "qa-game-2026-11-16". Play 1 saved at 14 to 22 s (marked at 20 s). Play 1 was playing in its looped view; "Keep marking plays" tapped; `video.currentTime = 45` set 1.2 s later; "Mark play" 0.8 s after that. Play 2 saved at 16.5 to 24.5 s.
+- Console showed the loop seeking back to 14.0 every 8 s before the prompt.
+- Not reproduced on games 17 and 18: the prompt did not appear again for this account.
+
+## Implementer notes
+
+- Annotate mode, first-play prompt ("Make this a highlight now?" / "Keep marking plays") and the play-loop playback in `src/frontend/src/modes/` (annotate). See `.claude/knowledge/annotate.md`.
+
+## Acceptance Criteria
+
+- [ ] Reproduced (or ruled out) on a fresh account with the exact steps above; result recorded here.
+- [ ] If reproduced: after "Keep marking plays", seeking and marking saves the play around the new playhead (browser check).
