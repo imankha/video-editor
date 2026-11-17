@@ -1,10 +1,10 @@
 import { RefreshCw } from 'lucide-react';
 import { fmtPct } from './formatNumber';
 
-// T10270: pure view -- receives rows+rates as props, does no fetching, does
-// no null-guarding of the rate halves (the backend contract ships
-// attempts+succeeded+failed together, always -- see design doc §3.6's
-// honesty rules / feedback_tries_vs_success_must_both_show).
+// T10270: pure view -- receives rows+rates as props, does no fetching. The backend
+// ships attempts+succeeded+failed together (design doc §3.6's honesty rules /
+// feedback_tries_vs_success_must_both_show), except under a Sport filter (T16850),
+// where a rate with no per-user successes ships only failures and its note says why.
 
 function RateCard({ label, rate }) {
   const displayPct = rate.rate_pct == null ? '--' : fmtPct(rate.rate_pct);
@@ -13,7 +13,8 @@ function RateCard({ label, rate }) {
       <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">{label}</div>
       <div className="text-2xl font-bold text-white">{displayPct}</div>
       <div className="text-xs mt-0.5 text-gray-400">
-        {rate.succeeded}/{rate.attempts} succeeded ({rate.failed} failed)
+        {/* T16850: under a Sport filter, successes with no per-user record are null. */}
+        {rate.succeeded == null ? `${rate.failed} failed` : `${rate.succeeded}/${rate.attempts} succeeded (${rate.failed} failed)`}
       </div>
       {rate.denominator_note && (
         <div className="text-[10px] mt-1 text-gray-500">{rate.denominator_note}</div>

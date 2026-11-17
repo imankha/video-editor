@@ -259,16 +259,12 @@ def _add_country(conds: list[str], params: dict[str, Any], country: str | None) 
 
 
 def _add_sport(conds: list[str], params: dict[str, Any], sport: str | None) -> None:
-    """Named-param twin of admin._append_sport (T14930): `unknown` is an ad's own
-    utm_content OR none at all, never inferred."""
-    from ..analytics import ARRIVAL_SPORT_KEYS
+    """The arrival-sport condition (T14930) for a named-param query: the shared
+    param-free sport_predicate (T16850), so it takes no params."""
+    from .analytics import sport_predicate
 
-    if sport == "unknown":
-        conds.append("(s.utm_content IS NULL OR s.utm_content != ALL(%(sport_keys)s))")
-        params["sport_keys"] = list(ARRIVAL_SPORT_KEYS)
-    elif sport:
-        conds.append("s.utm_content = %(sport)s")
-        params["sport"] = sport
+    if sport:
+        conds.append(sport_predicate(sport))
 
 
 def _bucket_arrival_sport(utm_content: str | None) -> str:

@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 import { UserTable } from '../components/admin/UserTable';
 import { PulseCards } from '../components/admin/PulseCards';
 import { JourneyTab } from '../components/admin/JourneyTab';
+import { PillGroup } from '../components/admin/PillGroup';
 import { ChannelsTable } from '../components/admin/ChannelsTable';
 import { CountrySelect } from '../components/admin/CountrySelect';
 import { CohortGrid } from '../components/admin/CohortGrid';
@@ -21,9 +22,14 @@ import { RetentionView } from '../components/admin/RetentionView';
 import { ActivationReport } from '../components/admin/ActivationReport';
 import { BySportTable } from '../components/admin/BySportTable';
 import { CampaignsModal } from '../components/admin/CampaignsModal';
+import { SUPPORTED_SPORTS } from '../modes/annotate/constants/tagRegistry';
+
+// T16850: shown beside a section the Sport filter cannot split.
+const NO_SPORT_SPLIT = 'Sport filter does not apply';
 
 // Pass `open` + `onToggle` when the screen must open the section itself (T14740: Users).
-function CollapsibleSection({ title, defaultOpen = false, open: controlledOpen, onToggle, sectionRef, children }) {
+// `note` is a short caption beside the title (T16850).
+function CollapsibleSection({ title, note, defaultOpen = false, open: controlledOpen, onToggle, sectionRef, children }) {
   const [localOpen, setLocalOpen] = useState(defaultOpen);
   const open = controlledOpen ?? localOpen;
   return (
@@ -34,11 +40,21 @@ function CollapsibleSection({ title, defaultOpen = false, open: controlledOpen, 
       >
         {open ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
         <span className="text-gray-300 text-sm font-medium">{title}</span>
+        {note && <span className="text-[11px] text-gray-500">{note}</span>}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
     </div>
   );
 }
+
+// T14930/T16850: "arrival sport (landing page)" -- the landing page the visitor came from,
+// never the profile's own sport. SUPPORTED_SPORTS is the same tagRegistry id list the
+// landing site mirrors into sportTags.json (src/landing/src/data/sports.ts).
+const SPORT_OPTIONS = [
+  { value: 'all', label: 'All sports' },
+  ...SUPPORTED_SPORTS.map(s => ({ value: s.id, label: s.name })),
+  { value: 'unknown', label: 'Unknown' },
+];
 
 const JOURNEY_OUTCOME_WORDS = { in_window: 'in window', stuck: 'stuck', gone: 'gone', lost: 'lost' };
 
@@ -73,6 +89,8 @@ export function AdminScreen({ onBack }) {
   const segmentTo = useAdminStore(s => s.segmentTo);
   const segmentBuild = useAdminStore(s => s.segmentBuild);
   const segmentCountry = useAdminStore(s => s.segmentCountry);
+  const segmentSport = useAdminStore(s => s.segmentSport);
+  const setSegmentSport = useAdminStore(s => s.setSegmentSport);
   const setSegmentFilter = useAdminStore(s => s.setSegmentFilter);
   const setSegmentCountry = useAdminStore(s => s.setSegmentCountry);
   const dimension = useAdminStore(s => s.dimension);
@@ -150,7 +168,7 @@ export function AdminScreen({ onBack }) {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  const hasFilter = segmentOrigin || segmentFrom || segmentTo || segmentBuild !== null || segmentCountry || userFilter || journeyUserFilter;
+  const hasFilter = segmentOrigin || segmentFrom || segmentTo || segmentBuild !== null || segmentCountry || segmentSport || userFilter || journeyUserFilter;
   // A Journey list keeps users with no email: the map counts them, and the rows must equal
   // the number clicked.
   const knownUsers = journeyUserFilter ? users : users.filter(u => u.email);
@@ -245,6 +263,19 @@ export function AdminScreen({ onBack }) {
 
         {/* Filters -- one dimension at a time (T13990) */}
         <div className="bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden">
+          {/* T16850: arrival sport, over every section below (moved out of Journey). */}
+          <div data-testid="admin-sport-filter" className="flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap">
+            <PillGroup
+              label="Sport"
+              options={SPORT_OPTIONS}
+              value={segmentSport || 'all'}
+              onChange={v => {
+                const next = v === 'all' ? null : v;
+                if (next !== segmentSport) setSegmentSport(next);
+              }}
+            />
+          </div>
+
           {/* User type pills */}
           <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap">
             <span className="text-gray-500 text-xs uppercase tracking-wider mr-1">Filter</span>
@@ -314,6 +345,7 @@ export function AdminScreen({ onBack }) {
                 {d.label}
               </button>
             ))}
+            <span className="text-[11px] text-gray-500">{NO_SPORT_SPLIT} to these tables</span>
           </div>
 
           <div className="px-5 py-3">
@@ -433,7 +465,7 @@ export function AdminScreen({ onBack }) {
 
         {/* T14950: total exports by sport, from T7400's analytics.sqlite rollup.
             Collapsed, on-demand fetch -- reads the existing rollup, never triggers one. */}
-        <CollapsibleSection title="By Sport">
+        <CollapsibleSection title="By Sport" note={`${NO_SPORT_SPLIT}: already split by sport`}>
           <BySportTable
             data={bySportData}
             loading={bySportLoading}
@@ -457,7 +489,7 @@ export function AdminScreen({ onBack }) {
         </CollapsibleSection>
 
         {/* T13931: R2 operations by source vs the free tier. Collapsed, on-demand fetch. */}
-        <CollapsibleSection title="R2 Usage">
+        <CollapsibleSection title="R2 Usage" note={`${NO_SPORT_SPLIT}: storage, not people`}>
           <R2UsagePanel
             data={r2UsageData}
             loading={r2UsageLoading}

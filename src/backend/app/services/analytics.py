@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 
 from ..analytics import (
+    ARRIVAL_SPORT_KEYS,
     EVENT_INSTRUMENTED_AT,
     RETRY_BURST_ACTIONS,
 )
@@ -26,6 +27,31 @@ def _append_country(where_parts: list, params: list, country: str | None) -> Non
     elif country:
         where_parts.append("s.country = %s")
         params.append(country)
+
+SPORT_UNKNOWN = "unknown"
+
+
+def sport_predicate(sport: str | None, seg: str = "s") -> str:
+    """T16850: THE arrival-sport condition (T14930), param-free so it composes like
+    _test_exclusion into any WHERE, including the `excl` string the retention/activation
+    builders take. Arrival sport is `{seg}.utm_content` when it is a known sport key;
+    anything else -- an ad's own utm_content, none at all, or no segment row under a
+    LEFT JOIN -- is "unknown". '' when no sport is chosen. The keys are inlined as
+    literals, so a value outside ARRIVAL_SPORT_KEYS is refused, never inlined."""
+    if not sport:
+        return ""
+    keys = ", ".join(f"'{k}'" for k in sorted(ARRIVAL_SPORT_KEYS))
+    if sport == SPORT_UNKNOWN:
+        return f"({seg}.utm_content IS NULL OR {seg}.utm_content NOT IN ({keys}))"
+    if sport not in ARRIVAL_SPORT_KEYS:
+        raise ValueError(f"not an arrival sport: {sport!r}")
+    return f"{seg}.utm_content = '{sport}'"
+
+
+def and_predicates(*parts: str) -> str:
+    """Join param-free WHERE fragments with AND, skipping empty ones ('' when none)."""
+    return " AND ".join(p for p in parts if p)
+
 
 def _test_exclusion(exclude_test: bool, seg: str = "s") -> str:
     """WHERE fragment excluding internal/test accounts, or '' when off.
