@@ -82,14 +82,6 @@ describe('FocusModeView preview-highlight stage sizing (T10310)', () => {
     expect(stage.className).not.toMatch(/lg:h-\[70vh\]/);
   });
 
-  it('caps height (and derives width) once Preview highlight is on, for a portrait reel', () => {
-    renderView({ globalAspectRatio: '9:16' });
-    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
-
-    const stage = screen.getByTestId('focus-video-stage');
-    expectWidthDerivedStage(stage, '9 / 16', 9 / 16);
-  });
-
   it('sizes a landscape reel to exactly 16:9 instead of a fixed 70vh height', () => {
     renderView({ globalAspectRatio: '16:9' });
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
@@ -136,12 +128,51 @@ describe('FocusModeView short-desktop viewport floor (T14850)', () => {
 
   // T15650: widened with an outer `max(50%, ...)` floor -- the plain 320px-equivalent
   // floor still let the preview shrink to a sliver on a wide/short desktop viewport.
-  it('T14850/T15400/T15650:C1 floors the preview-state derived width at 200px-equivalent (T16640; was 320px), and at 50% of the column, at every min-width:1024px height', () => {
-    renderView({ globalAspectRatio: '9:16' });
+  // T16760: landscape only -- the 50% floor made a portrait preview ~890px tall at 1440x900.
+  it('T14850/T15400/T15650:C1 floors the landscape preview-state derived width at 200px-equivalent (T16640; was 320px), and at 50% of the column, at every min-width:1024px height', () => {
+    renderView({ globalAspectRatio: '16:9' });
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
     const stage = screen.getByTestId('focus-video-stage');
     expect(stage.className).toContain(
       '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(200px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-30rem)))*var(--preview-ar))))]',
     );
+  });
+});
+
+describe('FocusModeView portrait preview fits above the action band (T16760)', () => {
+  // Measured at 1440x900 (dev stack): the stage starts 289px down (header, clip strip, shape
+  // chooser) and the play controls hang ~42px past the aspect box, so a portrait preview gets
+  // 100dvh - band - 22rem of height, with no 50%-of-column width floor (that floor made it 890px tall).
+  const PORTRAIT_LG = 'lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))]';
+  const PORTRAIT_FLOOR = '[@media(min-width:1024px)]:!w-[min(100%,calc(max(200px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))*var(--preview-ar)))]';
+
+  it('T16760:C1 sizes a portrait preview by the height between header and band, without the 50% width floor', () => {
+    renderView({ globalAspectRatio: '9:16' });
+    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
+    const stage = screen.getByTestId('focus-video-stage');
+    expect(stage.className).toContain(PORTRAIT_LG);
+    expect(stage.className).toContain(PORTRAIT_FLOOR);
+    expect(stage.className).not.toContain('max(50%');
+    expect(stage.className).toContain('mx-auto w-full max-w-full');
+    expect(stage.style.aspectRatio).toBe('9 / 16');
+    expect(Number(stage.style.getPropertyValue('--preview-ar'))).toBeCloseTo(9 / 16, 4);
+  });
+
+  it('T16760:C2 leaves the landscape preview stage classes exactly as before', () => {
+    renderView({ globalAspectRatio: '16:9' });
+    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
+    const stage = screen.getByTestId('focus-video-stage');
+    expect(stage.className).toBe(
+      'relative bg-gray-900 rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-30rem)*var(--preview-ar)))] '
+      + '[@media(min-width:1024px)]:!w-[max(50%,min(100%,calc(max(200px,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-30rem)))*var(--preview-ar))))]',
+    );
+  });
+
+  it('T16760:C2 keeps every portrait-preview width rule desktop-only (phone/tablet layout unchanged)', () => {
+    renderView({ globalAspectRatio: '9:16' });
+    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
+    const stage = screen.getByTestId('focus-video-stage');
+    const unprefixed = stage.className.split(' ').filter((c) => !c.startsWith('lg:') && !c.startsWith('[@media(min-width:1024px)]'));
+    expect(unprefixed).toEqual(['relative', 'bg-gray-900', 'rounded-lg', 'mx-auto', 'w-full', 'max-w-full']);
   });
 });
