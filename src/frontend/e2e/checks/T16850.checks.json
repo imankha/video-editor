@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T16850:C1": {"kind": "browser"},
+    "T16850:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16850_sport_every_section.py -q"},
+    "T16850:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16850_all_sports_unchanged.py -q"},
+    "T16850:C4": {"kind": "browser"}
+  }
+}

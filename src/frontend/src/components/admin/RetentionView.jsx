@@ -304,6 +304,9 @@ export function RetentionView({ data, loading, error, onRefresh, action, onActio
           {action && data.action?.available === false && (
             <p className="text-gray-500 text-xs">Run the action rollup first (Analytics &gt; Run rollup).</p>
           )}
+          {action && data.action?.sport_applied === false && (
+            <p className="text-gray-500 text-xs">The {action} curve comes from the rollup, so the Sport filter does not apply to it.</p>
+          )}
           {action && data.action?.available && !data.action.cohorts.length && (
             <p className="text-gray-500 text-xs">No cohorts yet for {action}.</p>
           )}

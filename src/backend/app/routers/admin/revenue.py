@@ -5,10 +5,10 @@ Split out of routers/admin.py by T5940; every URL is unchanged."""
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ...services.pg import get_pg
-from . import _deletions_for, require_admin
+from . import SPORT_PATTERN, SportFilter, _deletions_for, require_admin, sport_predicate
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,19 @@ def _emails_for(user_ids: list[str]) -> dict:
         return {r["user_id"]: r["email"] for r in cur.fetchall()}
 
 
-def _compute_reconciliation(exclude_test: bool = True) -> tuple[list, dict]:
+def _sport_user_ids(user_ids: list[str], sport: str) -> set:
+    """T16850: which of `user_ids` arrived from `sport` (no segment row = "unknown")."""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT x.user_id FROM unnest(%s::text[]) AS x(user_id)
+            LEFT JOIN user_segments s ON s.user_id = x.user_id
+            WHERE {sport_predicate(sport)}
+        """, (user_ids,))
+        return {r["user_id"] for r in cur.fetchall()}
+
+
+def _compute_reconciliation(exclude_test: bool = True, sport: str | None = None) -> tuple[list, dict]:
     """Return (rows, stripe_agg). Fetches Stripe once; pure classification after.
 
     Covers only users with local spend > 0 OR live Stripe history — aligned rows for
@@ -144,6 +156,12 @@ def _compute_reconciliation(exclude_test: bool = True) -> tuple[list, dict]:
             local = {k: v for k, v in local.items() if k not in excluded}
             stripe_agg = {k: v for k, v in stripe_agg.items() if k not in excluded}
 
+    # T16850: the Sport filter, applied to both sides the same way.
+    if sport:
+        kept = _sport_user_ids(sorted(local.keys() | stripe_agg.keys()), sport)
+        local = {k: v for k, v in local.items() if k in kept}
+        stripe_agg = {k: v for k, v in stripe_agg.items() if k in kept}
+
     rows = classify_users(local, stripe_agg)
 
     # Decision D: attach deletion context to id-only (deleted-account) rows.
@@ -163,7 +181,7 @@ def _require_stripe_configured():
 
 
 @router.get("/revenue-reconciliation")
-async def revenue_reconciliation(exclude_test: bool = True):
+async def revenue_reconciliation(exclude_test: bool = True, sport: SportFilter = None):
     """Per-user local vs Stripe-net revenue with delta + cause. Admin only, on-demand.
 
     T8640: honours the SAME test-account filter the rest of the admin panel uses
@@ -173,7 +191,7 @@ async def revenue_reconciliation(exclude_test: bool = True):
 
     from ...services.revenue_reconciliation import GO_LIVE_DATE
 
-    rows, _ = _compute_reconciliation(exclude_test)
+    rows, _ = _compute_reconciliation(exclude_test, sport)
     drifted = [r for r in rows if r["drifted"]]
     summary = {
         "total_users": len(rows),
@@ -194,6 +212,8 @@ class RevenueHealRequest(BaseModel):
     user_ids: list[str] | None = None
     all_drifted: bool = False
     exclude_test: bool = True
+    # T16850: heal exactly the report the admin sees (same pattern as SportFilter).
+    sport: str | None = Field(None, pattern=SPORT_PATTERN)
 
 
 @router.post("/revenue-reconciliation/heal")
@@ -223,7 +243,7 @@ async def heal_revenue_reconciliation(request: RevenueHealRequest):
     from ...analytics import set_total_spent
     from ...services.revenue_reconciliation import DriftCause
 
-    rows, stripe_agg = _compute_reconciliation(request.exclude_test)
+    rows, stripe_agg = _compute_reconciliation(request.exclude_test, request.sport)
     row_by_uid = {r["user_id"]: r for r in rows}
 
     if request.all_drifted:

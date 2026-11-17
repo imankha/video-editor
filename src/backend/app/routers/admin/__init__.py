@@ -29,8 +29,11 @@ from ...analytics import ARRIVAL_SPORT_KEYS
 from ...services.analytics import (  # noqa: F401 -- re-exported to the sub-modules
     _LEDGER_REVENUE_BY_USER,
     COUNTRY_UNKNOWN,
+    SPORT_UNKNOWN,
     _append_country,
     _test_exclusion,
+    and_predicates,
+    sport_predicate,
 )
 from ...services.auth_db import is_admin
 from ...services.pg import get_pg
@@ -67,18 +70,15 @@ CountryFilter = Annotated[str | None, Query(pattern="^([A-Z]{2}|unknown)$")]
 # T14930: "arrival sport (landing page)" -- a predicate on user_segments.utm_content
 # restricted to ARRIVAL_SPORT_KEYS. `unknown` covers BOTH an ad's own utm_content and no
 # utm_content at all: there is no inference between the two, only the known/unknown split.
-SPORT_UNKNOWN = "unknown"
-SportFilter = Annotated[str | None, Query(pattern=f"^({'|'.join(sorted(ARRIVAL_SPORT_KEYS))}|unknown)$")]
+# T16850: the predicate itself is services.analytics.sport_predicate (one definition).
+SPORT_PATTERN = f"^({'|'.join(sorted(ARRIVAL_SPORT_KEYS))}|{SPORT_UNKNOWN})$"
+SportFilter = Annotated[str | None, Query(pattern=SPORT_PATTERN)]
 
 
 def _append_sport(where_parts: list, params: list, sport: str | None) -> None:
     """The segment condition for a SportFilter value, on alias `s`."""
-    if sport == SPORT_UNKNOWN:
-        where_parts.append("(s.utm_content IS NULL OR s.utm_content != ALL(%s))")
-        params.append(list(ARRIVAL_SPORT_KEYS))
-    elif sport:
-        where_parts.append("s.utm_content = %s")
-        params.append(sport)
+    if sport:
+        where_parts.append(sport_predicate(sport))
 
 
 # ---------------------------------------------------------------------------

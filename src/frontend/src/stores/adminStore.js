@@ -151,11 +151,28 @@ export const useAdminStore = create((set, get) => ({
     if (state.buildsData) state.fetchBuilds();
   },
 
-  // T14930: unlike country, sport has no Channels/Cohorts/Builds breakdown dependency yet
-  // (T14940/T14950 are siblings) -- only the users list follows it directly here.
+  // T16850: the top-of-page Sport filter reaches every section that counts people. The
+  // Channels/Cohorts/Builds tables are not split by sport (AdminScreen notes it); Journey
+  // re-reads from its own filters.
   setSegmentSport: (sport) => {
     set({ segmentSport: sport, journeyUserFilter: null });
-    get().fetchUsers(1);
+    const state = get();
+    state.fetchUsers(1);
+    state.fetchPulse();
+    state.fetchPlatforms();
+    state.reloadSportSections();
+  },
+
+  // T16850: an on-demand section already on screen reloads with the new sport; one nobody
+  // opened stays unloaded. The Stripe report is dropped instead (its pass runs only on its
+  // own click), so no number for the old sport stays on screen.
+  reloadSportSections: () => {
+    const state = get();
+    if (state.packMixData) state.fetchPackMix();
+    if (state.retentionChartData) state.fetchRetentionChart();
+    if (state.activationData) state.fetchActivation();
+    if (state.uploadFailuresData) state.fetchUploadFailures();
+    if (state.reconciliationData) set({ reconciliationData: null, reconciliationHealResults: {} });
   },
 
   // T13990: pill click. Shows that dimension's table and loads its data if the
@@ -260,11 +277,13 @@ export const useAdminStore = create((set, get) => ({
   clearSegmentFilter: () => {
     const hadBuild = get().segmentBuild !== null;
     const hadCountry = get().segmentCountry !== null;
+    const hadSport = get().segmentSport !== null;
     const hadWindow = get().segmentFrom !== null || get().segmentTo !== null;
     set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, segmentCountry: null, segmentSport: null, userFilter: null, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
-    if (hadBuild) get().fetchPlatforms();
+    if (hadBuild || hadSport) get().fetchPlatforms();
+    if (hadSport) get().reloadSportSections();
     if (hadWindow) get().fetchCountries();
     if (hadCountry) {
       get().fetchChannels();
@@ -339,6 +358,7 @@ export const useAdminStore = create((set, get) => ({
       // dashboard opens on real users -- users list AND aggregates.
       const params = new URLSearchParams({ exclude_test: get().excludeTest });
       if (get().segmentCountry) params.set('country', get().segmentCountry);
+      if (get().segmentSport) params.set('sport', get().segmentSport);
       const res = await apiFetch(`${API_BASE}/api/admin/dashboard?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -725,6 +745,7 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
       if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
       if (state.segmentCountry) params.set('country', state.segmentCountry);
+      if (state.segmentSport) params.set('sport', state.segmentSport);
       if (state.userFilter) params.set('filter', state.userFilter);
       params.set('exclude_test', state.excludeTest);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/pulse?${params}`);
@@ -774,6 +795,7 @@ export const useAdminStore = create((set, get) => ({
       // T14000: same population as the dashboard's section (Real pill + build pick).
       const params = new URLSearchParams({ exclude_test: String(state.excludeTest) });
       if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
+      if (state.segmentSport) params.set('sport', state.segmentSport);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/platforms?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ platformsData: await res.json(), platformsLoading: false });
@@ -807,6 +829,7 @@ export const useAdminStore = create((set, get) => ({
     set({ packMixLoading: true, packMixError: null });
     try {
       const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      if (get().segmentSport) params.set('sport', get().segmentSport);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/pack-mix?${params}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -828,8 +851,9 @@ export const useAdminStore = create((set, get) => ({
   fetchRetentionChart: async () => {
     set({ retentionChartLoading: true, retentionChartError: null });
     try {
-      const { excludeTest, dimension, retentionChartBin } = get();
+      const { excludeTest, dimension, retentionChartBin, segmentSport } = get();
       const params = new URLSearchParams({ exclude_test: excludeTest, group: dimension, cohort_bin: retentionChartBin });
+      if (segmentSport) params.set('sport', segmentSport);
       const action = get().retentionChartAction;
       if (action) params.set('action', action);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/retention-chart?${params}`);
@@ -848,8 +872,9 @@ export const useAdminStore = create((set, get) => ({
   fetchActivation: async () => {
     set({ activationLoading: true, activationError: null });
     try {
-      const { excludeTest, dimension } = get();
+      const { excludeTest, dimension, segmentSport } = get();
       const params = new URLSearchParams({ exclude_test: excludeTest, group: dimension });
+      if (segmentSport) params.set('sport', segmentSport);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/activation?${params}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -901,6 +926,7 @@ export const useAdminStore = create((set, get) => ({
         }
       }
       if (filters.includeImpersonated) params.set('include_impersonated', 'true');
+      if (get().segmentSport) params.set('sport', get().segmentSport);
       const res = await apiFetch(`${API_BASE}/api/admin/upload-failures?${params}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -921,6 +947,7 @@ export const useAdminStore = create((set, get) => ({
     set({ reconciliationLoading: true, reconciliationError: null, reconciliationHealResults: {} });
     try {
       const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      if (get().segmentSport) params.set('sport', get().segmentSport);
       const res = await apiFetch(`${API_BASE}/api/admin/revenue-reconciliation?${params}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -943,7 +970,10 @@ export const useAdminStore = create((set, get) => ({
       const res = await apiFetch(`${API_BASE}/api/admin/revenue-reconciliation/heal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_ids: userIds, all_drifted: allDrifted, exclude_test: get().excludeTest }),
+        body: JSON.stringify({
+          user_ids: userIds, all_drifted: allDrifted, exclude_test: get().excludeTest,
+          ...(get().segmentSport ? { sport: get().segmentSport } : {}),
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

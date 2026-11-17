@@ -46,7 +46,9 @@ from . import (
     _ledger_positive_revenue_total,
     _ledger_revenue_total,
     _test_exclusion,
+    and_predicates,
     require_admin,
+    sport_predicate,
 )
 from .users import list_users
 
@@ -326,11 +328,12 @@ _PACK_MIX_WINDOWS = {"30d": 30, "90d": 90, "all": None}
 
 @router.get("/analytics/pack-mix")
 # sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
-def analytics_pack_mix(exclude_test: bool = True):
+def analytics_pack_mix(exclude_test: bool = True, sport: SportFilter = None):
     """Purchases by pack from the payments ledger (kind='purchase' only: refunds
     are not packs sold). Same test-account predicate as the ledger revenue total,
-    so a deleted test payer stays excluded."""
-    excl = _test_exclusion(exclude_test)
+    so a deleted test payer stays excluded. T16850: `sport` keeps the payers whose
+    arrival sport it is (a payer with no segment row is "unknown")."""
+    excl = and_predicates(_test_exclusion(exclude_test), sport_predicate(sport))
     excl_and = f" AND {excl}" if excl else ""
     windows: dict[str, list[dict]] = {}
     with get_pg() as conn:
@@ -528,6 +531,7 @@ def analytics_cohorts(
 def analytics_activation(
     exclude_test: bool = True,
     group: Literal["cohorts", "campaigns", "builds"] = "cohorts",
+    sport: SportFilter = None,
 ):
     """T7420: export_completed <=14d (primary, scored vs the 40% scorecard target) and
     share_completed <=14d (value-moment) per group, with benchmark annotations. `group`
@@ -539,7 +543,8 @@ def analytics_activation(
     from ...analytics import segment_has_signup_build
     from ...services.analytics_activation import SIGNUP_MONTH_EXPR, compute_activation_report
 
-    excl = _test_exclusion(exclude_test)
+    # T16850: the arrival-sport filter rides the builder's param-free population predicate.
+    excl = and_predicates(_test_exclusion(exclude_test), sport_predicate(sport))
     with get_pg() as conn:
         cur = conn.cursor()
         group_expr, group_join = SIGNUP_MONTH_EXPR, ""
@@ -581,6 +586,7 @@ def analytics_retention_chart(
     action: str | None = None,
     group: Literal["cohorts", "campaigns", "builds"] = "cohorts",
     cohort_bin: Literal["week", "month"] = "week",
+    sport: SportFilter = None,
 ):
     """T7430: the investor-grade retention chart -- weekly cohort triangle
     (classic + unbounded), WAU/MAU series with low-volume-week shading, and the
@@ -608,7 +614,10 @@ def analytics_retention_chart(
         detect_low_volume_weeks,
     )
 
-    excl = _test_exclusion(exclude_test)
+    # T16850: the arrival-sport filter rides every builder's param-free population
+    # predicate (each joins user_segments s). The action curve reads a rollup with no
+    # per-user grain, so it is not split by sport (`action.sport_applied`).
+    excl = and_predicates(_test_exclusion(exclude_test), sport_predicate(sport))
     today = datetime.now(UTC).date()
     with get_pg() as conn:
         cur = conn.cursor()
@@ -667,13 +676,15 @@ def analytics_retention_chart(
 
         rollup, partial = load_newest_action_rollup(tables=("rollup_action_weekly",))
         if rollup is None:
-            result["action"] = {"action": action, "cohorts": [], "available": False, "partial": partial}
+            result["action"] = {"action": action, "cohorts": [], "available": False, "partial": partial,
+                                "sport_applied": False}
         else:
             result["action"] = {
                 **compute_action_retention(rollup["rollup_action_weekly"], action),
                 "available": True,
                 "partial": partial,
                 "computed_at": rollup["meta"]["computed_at"],
+                "sport_applied": False,
             }
     return result
 
@@ -1023,6 +1034,7 @@ def analytics_pulse(
     build: int | None = None,  # plain default, not Query(None): direct callers may omit it
     exclude_test: bool = True,
     country: CountryFilter = None,
+    sport: SportFilter = None,
 ):
     # T7990: "today" is the UTC calendar day. This is DELIBERATE, not an accident: the
     # daily_counters and user_actions rows this endpoint reads are stamped CURRENT_DATE in
@@ -1041,7 +1053,7 @@ def analytics_pulse(
     start = today - timedelta(days=days - 1)
 
     filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter, build=build,
-                                                        country=country)
+                                                        country=country, sport=sport)
     # T8650: does the admin have a REAL segment filter active (origin/date/paying/...),
     # as opposed to only the default test-account exclusion? This decides whether the
     # Revenue headline is the platform-wide ledger grand total (no real filter -> deleted
@@ -1126,7 +1138,7 @@ def analytics_pulse(
 
             # The origin-only daily_counters shortcut can't honor a per-user
             # exclusion, so skip it when excluding test accounts (T8110).
-            if origin and not acquired_from and not acquired_to and not filter and not excl:
+            if origin and not acquired_from and not acquired_to and not filter and not excl and not sport:
                 cur.execute("""
                     SELECT counter_date AS d, sessions_started AS cnt
                     FROM daily_counters
@@ -1402,6 +1414,7 @@ def analytics_platforms(
     action: str | None = Query(None),
     build: int | None = None,  # plain default, not Query(None): direct callers may omit it
     exclude_test: bool = True,
+    sport: SportFilter = None,
 ):
     """Platform breakdown: % of users and actions on mobile/desktop/pwa."""
     from ...services.pg import get_pg
@@ -1428,6 +1441,11 @@ def analytics_platforms(
             excl_join = " LEFT JOIN user_segments s ON s.user_id = ua.user_id"
         seg_conds.append("s.signup_build = %s")
         seg_params.append(build)
+    # T16850: arrival sport; an action row with no segment row is "unknown".
+    if sport:
+        if not excl_join:
+            excl_join = " LEFT JOIN user_segments s ON s.user_id = ua.user_id"
+        seg_conds.append(sport_predicate(sport))
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -1510,7 +1528,8 @@ def analytics_platforms(
 # /api/bootstrap. Every callee is now a plain sync def (list_users joined that set in T8020),
 # so this stays sync all the way down -- do NOT make it `async def` and call these inline,
 # which would re-block the single event loop (the exact bug T8000/T8010/T8020 just fixed).
-def get_admin_dashboard(build: int | None = None, exclude_test: bool = True, country: CountryFilter = None):
+def get_admin_dashboard(build: int | None = None, exclude_test: bool = True, country: CountryFilter = None,
+                        sport: SportFilter = None):
     """Combined admin-dashboard read: users + pulse + channels + cohorts + platforms in one
     response, so AdminScreen fires ONE request on mount instead of five (T8020).
 
@@ -1531,20 +1550,21 @@ def get_admin_dashboard(build: int | None = None, exclude_test: bool = True, cou
     # T14000: `build` narrows the population sections (users, pulse, platforms); the
     # dimension tables (channels, cohorts) stay unfiltered so every row stays clickable.
     # T15100: `country` is a standing filter over everything here but platforms, which
-    # takes no country.
+    # takes no country. T16850: `sport` narrows users, pulse and platforms; the dimension
+    # tables (channels, cohorts) are not split by sport.
     return {
         "users": list_users(page=1, page_size=DEFAULT_PAGE_SIZE, origin=None,
                             acquired_from=None, acquired_to=None, filter=None, build=build,
                             sort="last_active_at", sort_dir="desc", exclude_test=exclude_test,
-                            country=country),
+                            country=country, sport=sport),
         "pulse": analytics_pulse(days=30, origin=None, acquired_from=None,
                                  acquired_to=None, filter=None, build=build, exclude_test=exclude_test,
-                                 country=country),
+                                 country=country, sport=sport),
         "channels": analytics_channels(date_from=None, date_to=None, exclude_test=exclude_test,
                                        country=country),
         "cohorts": analytics_cohorts(granularity="week", origin="all",
                                      date_from=None, date_to=None, exclude_test=exclude_test,
                                      country=country),
-        "platforms": analytics_platforms(action=None, build=build, exclude_test=exclude_test),
+        "platforms": analytics_platforms(action=None, build=build, exclude_test=exclude_test, sport=sport),
         "countries": analytics_countries(date_from=None, date_to=None, exclude_test=exclude_test)["countries"],
     }

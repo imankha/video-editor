@@ -9,9 +9,10 @@ from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, Query
 
+from ...analytics import usage_daily_has_upload_outcomes
 from ...services.pg import get_pg
 from ...version import APP_BUILD, APP_VERSION
-from . import require_admin
+from . import SportFilter, require_admin, sport_predicate
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ def list_upload_failures(
     reason: str = Query(None),
     user_id: str = Query(None),
     origin: str = Query(None),
+    sport: SportFilter = None,
     include_impersonated: bool = False,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -62,6 +64,11 @@ def list_upload_failures(
     without both attempts and successes -- feedback_tries_vs_success_must_both_show),
     excluding impersonated rows regardless of `include_impersonated` (that
     flag only controls whether admin reproductions show up in the LIST).
+
+    T16850: `sport` keeps the failures of users whose arrival sport it is (a row with
+    no user_id belongs to no sport). Game successes then come from the per-user
+    user_usage_daily instead of daily_counters; clip successes have no per-user record,
+    so the clip rate under a sport carries the failures alone and says why.
     """
 
     with get_pg() as conn:
@@ -113,6 +120,11 @@ def list_upload_failures(
             params.append(origin)
         if not include_impersonated:
             filters.append("impersonated = FALSE")
+        sport_users = ""
+        if sport:
+            sport_users = (" AND user_id IN (SELECT f.user_id FROM upload_failures f "
+                           f"LEFT JOIN user_segments s ON s.user_id = f.user_id WHERE {sport_predicate(sport)})")
+            filters.append(sport_users.removeprefix(" AND "))
         where_clause = "WHERE " + " AND ".join(filters)
 
         cur.execute(f"SELECT COUNT(*) AS cnt FROM upload_failures {where_clause}", params)
@@ -132,21 +144,35 @@ def list_upload_failures(
         # timestamps, terminal=true) -- both bounded to the SAME [since_date,
         # until_date] window, but a day-vs-exact-timestamp ceiling remains
         # (the same one T7467 documented for the pulse cards).
-        cur.execute(
-            "SELECT COALESCE(SUM(game_uploads_succeeded), 0) AS succeeded, "
-            "COALESCE(SUM(clips_uploaded), 0) AS clip_succeeded "
-            "FROM daily_counters WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s",
-            (since_date, until_date),
-        )
-        succ = cur.fetchone()
-        game_succeeded, clip_succeeded = succ["succeeded"], succ["clip_succeeded"]
+        if not sport:
+            cur.execute(
+                "SELECT COALESCE(SUM(game_uploads_succeeded), 0) AS succeeded, "
+                "COALESCE(SUM(clips_uploaded), 0) AS clip_succeeded "
+                "FROM daily_counters WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s",
+                (since_date, until_date),
+            )
+            succ = cur.fetchone()
+            game_succeeded, clip_succeeded = succ["succeeded"], succ["clip_succeeded"]
+        else:
+            clip_succeeded = None
+            game_succeeded = None
+            if usage_daily_has_upload_outcomes(cur):
+                cur.execute(
+                    "SELECT COALESCE(SUM(d.game_uploads_succeeded), 0) AS succeeded "
+                    "FROM user_usage_daily d LEFT JOIN user_segments s ON s.user_id = d.user_id "
+                    f"WHERE d.day BETWEEN %s AND %s AND {sport_predicate(sport)}",
+                    (since_date, until_date),
+                )
+                game_succeeded = cur.fetchone()["succeeded"]
+            else:
+                logger.error("[T16850] no per-user upload successes: run postgres migration v042")
 
         cur.execute(
             "SELECT "
             "COUNT(*) FILTER (WHERE kind = 'game') AS game_failed, "
             "COUNT(*) FILTER (WHERE kind = 'clip') AS clip_failed "
             "FROM upload_failures WHERE terminal = TRUE AND impersonated = FALSE "
-            "AND occurred_at::date BETWEEN %s AND %s",
+            f"AND occurred_at::date BETWEEN %s AND %s{sport_users}",
             (since_date, until_date),
         )
         fail = cur.fetchone()
@@ -161,13 +187,18 @@ def list_upload_failures(
             cur.execute(
                 "SELECT COUNT(*) AS checked, "
                 "COUNT(*) FILTER (WHERE NOT index_at_front) AS not_at_front "
-                "FROM upload_index_checks WHERE checked_at::date BETWEEN %s AND %s",
+                "FROM upload_index_checks WHERE checked_at::date BETWEEN %s AND %s"
+                + (" AND user_id IN (SELECT c.user_id FROM upload_index_checks c LEFT JOIN user_segments s "
+                   f"ON s.user_id = c.user_id WHERE {sport_predicate(sport)})" if sport else ""),
                 (since_date, until_date),
             )
             row = cur.fetchone()
             index_checks = {"checked": row["checked"], "not_at_front": row["not_at_front"]}
 
     def _rate(succeeded, failed):
+        if succeeded is None:
+            # T16850: successes not recorded per user, so no attempts or rate either.
+            return {"attempts": None, "succeeded": None, "failed": failed, "rate_pct": None}
         attempts = succeeded + failed
         return {
             "attempts": attempts,
@@ -183,6 +214,10 @@ def list_upload_failures(
     # per-build windows remain comparable across the change -- disclosed rather
     # than silently presented as a true attempt count.
     clip_rate["denominator_note"] = "outcome-based (succeeded+failed), not the clip_upload_attempted count"
+    if sport and clip_succeeded is None:
+        clip_rate["denominator_note"] = "clip successes are not recorded per user, so only failures follow the Sport filter"
+    if sport and game_succeeded is None:
+        game_rate["denominator_note"] = "per-user upload successes not migrated yet (v042)"
 
     return {
         "window": {
