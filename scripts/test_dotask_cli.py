@@ -1449,6 +1449,28 @@ class PrelandCheckTest(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("src/backend/tests/test_new.py", out)
 
+    def test_ruff_in_the_backend_venv_is_used_when_python3_has_no_ruff_module(self):
+        # fix round 2: the Windows host keeps ruff in src/backend/.venv (as lint-changed.cjs finds it),
+        # not in its python3, so the land step failed with "ruff is not installed"
+        real_ruff = shutil.which("ruff") or self.skipTest("no ruff binary")
+        shims = self.root / "shims"
+        shims.mkdir()
+        real_python = shutil.which("python3")
+        (shims / "python3").write_text(f'#!/bin/sh\n[ "$1" = "-m" ] && [ "$2" = "ruff" ] && exit 1\nexec {real_python} "$@"\n')
+        (shims / "python3").chmod(0o755)
+        venv_bin = self.repo / "src/backend/.venv/bin"
+        venv_bin.mkdir(parents=True)
+        (venv_bin / "ruff").write_text(f'#!/bin/sh\nexec {real_ruff} "$@"\n')
+        (venv_bin / "ruff").chmod(0o755)
+        self._commit("src/backend/tests/test_new.py", "import sys\nimport os\n\nprint(os, sys)\n")  # I001
+        env = {**os.environ, "PATH": f"{shims}{os.pathsep}{os.environ['PATH']}"}
+        result = subprocess.run([dotask_cli.bash(), PRELAND.as_posix(), self.repo.as_posix()],
+                                capture_output=True, text=True, check=False, env=env)
+        out = result.stdout + result.stderr
+        self.assertNotIn("ruff is not installed", out)
+        self.assertEqual(result.returncode, 1, out)
+        self.assertIn("src/backend/tests/test_new.py: ruff findings 0 -> 1", out)
+
     def test_committed_proof_json_fails_naming_the_path(self):
         # T14260: proof.json stays in the checkout; tracked, every group PR conflicts with the last one
         for relpath in ("qa/proof.json", "src/frontend/qa/proof.json"):
