@@ -457,7 +457,8 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
     return (
       <GuideScope guides={[guide]}>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">
+        {/* T16890: the Stripe card form is taller than a phone (and many laptop) screens; scroll inside the dialog. */}
+        <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10 max-h-[90vh] overflow-y-auto">
           <Guide guide={guide} inline testId="modal-guide" />
           <Elements
             stripe={stripePromise}
