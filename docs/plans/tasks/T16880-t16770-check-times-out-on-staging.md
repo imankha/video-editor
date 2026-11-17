@@ -1,6 +1,6 @@
 # T16880: The T16770 check times out on staging
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-17

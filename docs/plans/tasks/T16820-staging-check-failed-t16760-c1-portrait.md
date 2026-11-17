@@ -1,6 +1,6 @@
 # T16820: Staging check failed: T16760:C1 Portrait preview and its controls fully visible above the action
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-17

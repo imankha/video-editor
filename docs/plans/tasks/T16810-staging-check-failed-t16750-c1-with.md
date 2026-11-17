@@ -1,6 +1,6 @@
 # T16810: Staging check failed: T16750:C1 With Preview playing, Sharpen, then Finished opens: the Frame video
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-17
