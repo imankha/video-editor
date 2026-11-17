@@ -1,6 +1,6 @@
 # T16700: Staging check failed: T16660:C3 C3: An admin account still sees the Admin Panel as
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-16

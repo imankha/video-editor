@@ -1,6 +1,6 @@
 # T16710: Staging check failed: T16640:C2 C2: In Trim mode the Normal speed track is fully
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-17

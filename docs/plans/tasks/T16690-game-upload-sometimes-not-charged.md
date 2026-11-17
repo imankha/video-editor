@@ -1,6 +1,6 @@
 # T16690: A game upload can go through without charging its credits
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-16
