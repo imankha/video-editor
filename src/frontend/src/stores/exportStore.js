@@ -312,6 +312,8 @@ export const useExportStore = create((set, get) => ({
             retryable: opts.retryable === true,
             // T11330: raw guard payload for the explanatory popup (null for ordinary failures).
             budgetRejection: opts.budgetRejection || null,
+            // T16830: 'export_lost' = the server no longer has the job; the copy says start again.
+            code: opts.code || null,
             completedAt: new Date().toISOString(),
           },
         },

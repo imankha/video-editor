@@ -39,7 +39,7 @@ async function listOf(page, path, key) {
  * uploading" and no Sharpen button; when none is left, make another highlight from a play on a
  * ready game, the same request Annotate's "Make Another Highlight" sends (T11430).
  */
-async function sharpenableDraft(page) {
+export async function sharpenableDraft(page) {
   const ready = new Set((await listOf(page, '/games', 'games'))
     .filter((g) => g.status === 'ready' && g.storage_status === 'active').map((g) => g.id));
   const drafts = (await listOf(page, '/projects', 'projects'))

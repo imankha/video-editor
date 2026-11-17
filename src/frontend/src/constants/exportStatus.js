@@ -9,6 +9,12 @@ export const ExportStatus = {
 };
 
 /**
+ * T16830: failure code the client sets when the server has no record of a job it was
+ * waiting on (lost to a restart). Never sent by the backend.
+ */
+export const EXPORT_LOST_CODE = 'export_lost';
+
+/**
  * Export phase constants - must match backend ExportPhase enum in app/constants.py
  *
  * SINGLE SOURCE OF TRUTH: Status is derived from phase.
