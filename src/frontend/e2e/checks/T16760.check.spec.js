@@ -12,10 +12,10 @@
 import { test } from '@playwright/test';
 import { expectPortraitPreviewAboveBand } from '../helpers/portraitPreviewLayout';
 
-test.setTimeout(300000);
+// Making the highlight took ~5.5 min on a loaded local stack (T16820); both sizes share it. The
+// harness gives one spec 900 s (CHECK_SPEC_SECONDS).
+test.setTimeout(870000);
 
-for (const [width, height] of [[1440, 900], [1366, 768]]) {
-  test(`T16760:C1 - ${width}x${height}: portrait preview and its controls sit above the action bar without scrolling`, async ({ browser }) => {
-    await expectPortraitPreviewAboveBand(browser, width, height);
-  });
-}
+test('T16760:C1 - 1440x900 and 1366x768: portrait preview and its controls sit above the action bar without scrolling', async ({ browser }) => {
+  await expectPortraitPreviewAboveBand(browser, [[1440, 900], [1366, 768]]);
+});

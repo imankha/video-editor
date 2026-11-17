@@ -31,12 +31,15 @@ async function layout(page) {
 }
 
 /**
- * Log in at the given window size, make a new highlight, make sure it is Portrait, press Preview,
- * and assert the stage and play control sit above the action band with nothing scrolled.
+ * Log in, make a new highlight, make sure it is Portrait, press Preview, then at each window size
+ * assert the stage and play control sit above the action band with nothing scrolled. One
+ * highlight serves every size: making it takes minutes on a cold local stack (T16820).
  *
  * @param {import('@playwright/test').Browser} browser
+ * @param {Array<[number, number]>} sizes - window [width, height] pairs
  */
-export async function expectPortraitPreviewAboveBand(browser, width, height) {
+export async function expectPortraitPreviewAboveBand(browser, sizes) {
+  const [[width, height]] = sizes;
   const context = await browser.newContext({ viewport: { width, height } });
   await loginForCheck(context);
   const page = await context.newPage();
@@ -54,17 +57,20 @@ export async function expectPortraitPreviewAboveBand(browser, width, height) {
   }
   await page.getByTestId('framing-preview-toggle').click({ timeout: 60000 });
 
-  // Wait for the stage to take the portrait shape (taller than wide) and the video to size it.
-  await expect.poll(async () => {
+  for (const [w, h] of sizes) {
+    await page.setViewportSize({ width: w, height: h });
+    // Wait for the stage to take the portrait shape (taller than wide) and the video to size it.
+    await expect.poll(async () => {
+      const l = await layout(page);
+      return !!(l.stage && l.play && l.band && l.stage.height > l.stage.width && l.stage.width > 100);
+    }, { timeout: 60000 }).toBe(true);
+    await page.waitForTimeout(1500);
     const l = await layout(page);
-    return !!(l.stage && l.play && l.band && l.stage.height > l.stage.width && l.stage.width > 100);
-  }, { timeout: 60000 }).toBe(true);
-  await page.waitForTimeout(1500);
-  const l = await layout(page);
-  const msg = JSON.stringify(l);
-  expect(l.scrolled, `editor scrolled: ${msg}`).toBe(0);
-  expect(l.stage.top, `stage starts above the window: ${msg}`).toBeGreaterThanOrEqual(0);
-  expect(l.stage.bottom, `preview runs under the action bar: ${msg}`).toBeLessThanOrEqual(l.band.top);
-  expect(l.play.bottom, `play control under the action bar: ${msg}`).toBeLessThanOrEqual(l.band.top);
+    const msg = `${w}x${h} ${JSON.stringify(l)}`;
+    expect(l.scrolled, `editor scrolled: ${msg}`).toBe(0);
+    expect(l.stage.top, `stage starts above the window: ${msg}`).toBeGreaterThanOrEqual(0);
+    expect(l.stage.bottom, `preview runs under the action bar: ${msg}`).toBeLessThanOrEqual(l.band.top);
+    expect(l.play.bottom, `play control under the action bar: ${msg}`).toBeLessThanOrEqual(l.band.top);
+  }
   await context.close();
 }
