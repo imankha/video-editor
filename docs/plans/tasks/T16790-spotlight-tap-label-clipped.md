@@ -1,6 +1,6 @@
 # T16790: Spotlight tap label clipped
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 2
 **Complexity:** 1
 **Created:** 2026-11-16

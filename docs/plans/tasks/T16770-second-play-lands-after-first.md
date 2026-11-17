@@ -1,6 +1,6 @@
 # T16770: Second play lands after first (possible)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-16
