@@ -195,6 +195,38 @@ def repoint_share_video(
         return cur.rowcount > 0
 
 
+def repoint_shares_by_filename(
+    sharer_user_id: str, sharer_profile_id: str, old_filenames: list[str], new_video_id: int,
+    new_video_filename: str, new_video_name: str | None, new_video_duration: float | None,
+) -> int:
+    """Move every live single-video share of the given older versions onto the new one (T16530).
+
+    A redo replaces a finished highlight in place, so a link made before it must play
+    the new version. Matched on filename + sharer user + profile, never on video_id
+    (a per-profile SQLite id). Already-moved rows are skipped, so a retry is a no-op.
+    Returns the number of shares moved."""
+    if not old_filenames:
+        return 0
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """UPDATE share_videos
+                  SET video_id = %s, video_filename = %s,
+                      video_name = %s, video_duration = %s
+                 FROM shares
+                WHERE share_videos.share_id = shares.id
+                  AND share_videos.video_filename = ANY(%s)
+                  AND share_videos.video_filename <> %s
+                  AND shares.sharer_user_id = %s
+                  AND shares.sharer_profile_id = %s
+                  AND shares.share_type = 'video'
+                  AND shares.revoked_at IS NULL""",
+            (new_video_id, new_video_filename, new_video_name, new_video_duration,
+             list(old_filenames), new_video_filename, sharer_user_id, sharer_profile_id),
+        )
+        return cur.rowcount
+
+
 def list_contacts_for_user(sharer_user_id: str) -> list[str]:
     with get_sharing_db() as conn:
         cur = conn.cursor()
