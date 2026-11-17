@@ -111,6 +111,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T16810 | [Staging check failed: T16750:C1 With Preview playing, Sharpen, then Finished opens: the Frame video](tasks/T16810-staging-check-failed-t16750-c1-with.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
