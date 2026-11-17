@@ -2803,7 +2803,7 @@ async def restore_project_from_archive(
         )
         cursor.execute(
             "UPDATE projects SET restored_at = CURRENT_TIMESTAMP, archived_at = NULL "
-            "WHERE id = ? AND archived_at IS NOT NULL",
+            "WHERE id = ?",
             (project_id,),
         )
         conn.commit()
