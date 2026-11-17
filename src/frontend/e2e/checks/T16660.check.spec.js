@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginForCheck } from '../helpers/checkAuth';
+import { loginAsRealUser } from '../helpers/realAuth';
 
 /**
  * T16660 - a signed-in account that is not an admin and opens /admin sees a short not-available
@@ -46,10 +47,18 @@ test('T16660:C1 T16660:C2 a normal account on /admin sees no admin screen and ma
   await expect.poll(() => new URL(page.url()).pathname, { timeout: 60000 }).not.toBe('/admin');
 });
 
+const ADMIN_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
+
 test('T16660:C3 an admin account on /admin still sees the Admin Panel', async ({ page }) => {
-  // No stub: a dev-picker account is an admin on a dev stack (T16430), so the real
-  // GET /api/admin/me answers is_admin:true and the real AdminScreen mounts through App.jsx.
-  await loginForCheck(page);
+  // No stub: the real GET /api/admin/me answers is_admin:true and the real AdminScreen mounts
+  // through App.jsx. A dev-picker account is an admin on a dev stack (T16430); a deployed
+  // target's check account (e2e-gate) is not, so there it logs in as the real admin account
+  // the way the other admin checks do (T16070, T16400). T16700.
+  if (process.env.E2E_BASE_URL) {
+    await loginAsRealUser(page, ADMIN_EMAIL);
+  } else {
+    await loginForCheck(page);
+  }
   const adminMe = page.waitForResponse((res) => new URL(res.url()).pathname.endsWith('/api/admin/me'), { timeout: 60000 });
   await page.goto('/admin');
   const meBody = await (await adminMe).json();

@@ -4,7 +4,7 @@
 
 Finished is the screen that shows a highlight (a finished short clip) once it is in the Highlights tab. Today the choices to redo a highlight live on the "Your highlight is ready" panel that comes before Finish: Edit zoom, which reopens the crop and costs credits to sharpen again, and Add or Redo spotlight, which is free. They are used: 9 of 68 highlights were sharpened a second time and 11 of 37 spotlights were rendered again, nearly all within minutes. Once highlights finish on their own (T16520) that panel is no longer a stop, so the choices need a home. We will put Edit zoom and Add or Redo spotlight on the Finished screen, and make the Home tile of a finished highlight open that screen. Done when a parent can change the crop or the spotlight of a finished highlight on a phone and the new version replaces the old one in Highlights.
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-11-14

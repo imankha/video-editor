@@ -267,6 +267,8 @@
   "tests/test_t16525_finished_flags.py": 0.18,
   "tests/test_t16530_redo_finished.py": 0.18,
   "tests/test_t16535_archive_keeps_clips.py": 1.0,
+  "tests/test_t16540_finish_stranded.py": 36.48,
+  "tests/test_t16540_reedit_stays_draft.py": 12.46,
   "tests/test_t16550_pulse_upload_attempts.py": 0.18,
   "tests/test_t16560_poster_off_event_loop.py": 0.18,
   "tests/test_t1690_stream_proxy_probe.py": 0.1,

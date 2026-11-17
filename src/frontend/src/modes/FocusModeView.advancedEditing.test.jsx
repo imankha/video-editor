@@ -126,25 +126,58 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
 
   // T13580:C1 (bug 21): on a phone the lane opens below the fixed bottom panel;
   // opening it must bring the timeline scope into view, clear of the CTA band.
-  it('scrolls the timeline scope into view when Trim and slow motion opens', () => {
-    const scrolled = [];
-    const origScroll = Element.prototype.scrollIntoView;
+  // T16710: the scroll happens even when the scope sits inside the scroller's viewport but
+  // under the band (scrollIntoView 'nearest' skipped that case in Chromium).
+  function withLayout({ scopeTop, scopeBottom, marginBottom }, run) {
+    const origRect = Element.prototype.getBoundingClientRect;
+    const origScrollBy = Element.prototype.scrollBy;
     const origRaf = globalThis.requestAnimationFrame;
-    Element.prototype.scrollIntoView = function (opts) { scrolled.push([this, opts]); };
+    const origStyle = window.getComputedStyle;
+    const scrolled = [];
+    Element.prototype.getBoundingClientRect = function () {
+      if (this.dataset?.testid === 'trim-guide-scope') return { top: scopeTop, bottom: scopeBottom };
+      return { top: 0, bottom: 800 };
+    };
+    Element.prototype.scrollBy = function (opts) { scrolled.push([this, opts]); };
     globalThis.requestAnimationFrame = (cb) => { cb(0); return 0; };
+    window.getComputedStyle = (el) => {
+      if (el.dataset?.testid === 'trim-guide-scope') return { overflowY: 'visible', scrollMarginBottom: `${marginBottom}px` };
+      if (el.dataset?.testid === 'view-scroller') return { overflowY: 'auto' };
+      return { overflowY: 'visible' };
+    };
     try {
-      renderView({ segmentBoundaries: [0, 100], trimRange: null });
-      expect(scrolled).toHaveLength(0);
+      run(scrolled);
+    } finally {
+      Element.prototype.getBoundingClientRect = origRect;
+      Element.prototype.scrollBy = origScrollBy;
+      globalThis.requestAnimationFrame = origRaf;
+      window.getComputedStyle = origStyle;
+    }
+  }
+
+  it('scrolls the timeline scope clear of the band when Trim and slow motion opens', () => {
+    renderView({ segmentBoundaries: [0, 100], trimRange: null });
+    const scope = screen.getByTestId('trim-guide-scope');
+    expect(scope.style.scrollMarginBottom).toContain('--cta-bar-h');
+    scope.parentElement.dataset.testid = 'view-scroller';
+    // 1280x800 staging layout: scope 490-744 inside the 800px scroller, band 73px + 8px margin.
+    withLayout({ scopeTop: 490, scopeBottom: 744, marginBottom: 81 }, (scrolled) => {
       fireEvent.click(screen.getByTestId('trim-slowmo-button'));
       expect(scrolled).toHaveLength(1);
-      expect(scrolled[0][0]).toBe(screen.getByTestId('trim-guide-scope'));
-      expect(scrolled[0][0].style.scrollMarginBottom).toContain('--cta-bar-h');
+      expect(scrolled[0][0]).toBe(scope.parentElement);
+      expect(scrolled[0][1]).toEqual({ top: 25, behavior: 'smooth' });
       // Closing does not scroll.
       fireEvent.click(screen.getByTestId('trim-slowmo-button'));
       expect(scrolled).toHaveLength(1);
-    } finally {
-      Element.prototype.scrollIntoView = origScroll;
-      globalThis.requestAnimationFrame = origRaf;
-    }
+    });
+  });
+
+  it('does not scroll when the timeline scope already clears the band', () => {
+    renderView({ segmentBoundaries: [0, 100], trimRange: null });
+    screen.getByTestId('trim-guide-scope').parentElement.dataset.testid = 'view-scroller';
+    withLayout({ scopeTop: 300, scopeBottom: 600, marginBottom: 81 }, (scrolled) => {
+      fireEvent.click(screen.getByTestId('trim-slowmo-button'));
+      expect(scrolled).toHaveLength(0);
+    });
   });
 });

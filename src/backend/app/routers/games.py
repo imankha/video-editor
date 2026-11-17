@@ -791,11 +791,14 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
 
         # Cost + reference_id key on the FULL request (stable across retries) so the
         # ledger's (source, reference_id) idempotency dedupes the charge. Distinct
-        # from activate_game's game_upload:{game_id} pair — reusing it would be a
-        # silent no-op (already charged).
+        # from activate_game's game_upload:{profile_id}:{game_id} pair — reusing it
+        # would be a silent no-op (already charged). T16690: the profile is part of
+        # the reference because game ids repeat across a user's profiles.
         new_size = sum(v.file_size or 0 for v in request.videos)
         cost = calculate_upload_cost(new_size) if new_size > 0 else 1
-        reference_id = f"{game_id}:" + ":".join(sorted(v.blake3_hash.lower() for v in request.videos))
+        reference_id = f"{profile_id}:{game_id}:" + ":".join(
+            sorted(v.blake3_hash.lower() for v in request.videos)
+        )
 
         if new_videos:
             # No free video: refuse a NEW attach the user can't pay for BEFORE
@@ -1325,8 +1328,12 @@ async def activate_game(
         # Deduct credits, then flip status — kept ADJACENT so the charge->ready window is
         # as small as today. deduct_credits is idempotent on (source, reference_id), so a
         # retry after a crash between deduct and the status commit won't double-charge.
+        # T16690: game ids count per PROFILE but the ledger is per USER, so the
+        # reference names the profile too -- game 1 of a second profile is a new charge.
         try:
-            result = deduct_credits(user_id, upload_cost, source="game_upload", reference_id=str(game_id))
+            result = deduct_credits(
+                user_id, upload_cost, source="game_upload", reference_id=f"{profile_id}:{game_id}",
+            )
         except CreditsUnavailable:
             raise HTTPException(status_code=503, detail={"code": "credits_unavailable", "retryable": True}) from None
         if not result["success"]:
@@ -2149,7 +2156,8 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
         game_size = game['video_size'] or 0
         cost = calculate_extension_cost(game_size, request.days)
 
-        ext_ref = f"{game_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        # T16690: profile-scoped like game_upload -- game ids repeat across profiles.
+        ext_ref = f"{profile_id}:{game_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         try:
             result = deduct_credits(user_id, cost, source="storage_extension", reference_id=ext_ref)
         except CreditsUnavailable:
