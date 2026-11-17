@@ -1449,6 +1449,45 @@ class PrelandCheckTest(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("src/backend/tests/test_new.py", out)
 
+    def _run_without_python3_ruff(self, venv_ruff):
+        # T16720: the host's python3 can be an unrelated virtualenv without ruff, while src/backend/.venv has it.
+        # The script runs from a harness copy so the real checkout's own venv cannot satisfy the lookup.
+        harness = self.root / "harness" / "scripts"
+        harness.mkdir(parents=True)
+        for name in ("dotask_preland_check.sh", "ci_policy.py"):
+            shutil.copy(PRELAND.parent / name, harness / name)
+        real_ruff = shutil.which("ruff") or self.skipTest("no ruff binary")
+        shims = self.root / "shims"
+        shims.mkdir()
+        (shims / "python3").write_text(f'#!/bin/sh\n[ "$1" = "-m" ] && [ "$2" = "ruff" ] && exit 1\nexec "{shutil.which("python3")}" "$@"\n')
+        (shims / "python3").chmod(0o755)
+        if venv_ruff:
+            venv_bin = self.repo / "src/backend/.venv/bin"
+            venv_bin.mkdir(parents=True)
+            (venv_bin / "ruff").write_text(f'#!/bin/sh\ntouch "{self.root}/venv-ruff-ran"\nexec "{real_ruff}" "$@"\n')
+            (venv_bin / "ruff").chmod(0o755)
+        # PATH without any directory holding a ruff binary: only the venv may supply it
+        path = [str(shims)] + [d for d in os.environ["PATH"].split(os.pathsep) if d and shutil.which("ruff", path=d) is None]
+        result = subprocess.run([dotask_cli.bash(), (harness / "dotask_preland_check.sh").as_posix(), self.repo.as_posix()],
+                                capture_output=True, text=True, check=False, env={**os.environ, "PATH": os.pathsep.join(path)})
+        return result.returncode, result.stdout + result.stderr
+
+    def test_ruff_in_the_backend_venv_is_used_when_python3_has_no_ruff_module(self):
+        # T16720:C1
+        self._commit("src/backend/tests/test_new.py", "import os\n\nprint(os)\n")
+        code, out = self._run_without_python3_ruff(venv_ruff=True)
+        self.assertNotIn("ruff is not installed", out)
+        self.assertEqual(code, 0, out)
+        self.assertTrue((self.root / "venv-ruff-ran").exists(), out)
+
+    def test_no_ruff_anywhere_fails_naming_the_backend_files(self):
+        # T16720:C2
+        self._commit("src/backend/tests/test_new.py", "import os\n\nprint(os)\n")
+        code, out = self._run_without_python3_ruff(venv_ruff=False)
+        self.assertEqual(code, 1, out)
+        self.assertIn("ruff is not installed", out)
+        self.assertIn("src/backend/tests/test_new.py", out)
+
     def test_committed_proof_json_fails_naming_the_path(self):
         # T14260: proof.json stays in the checkout; tracked, every group PR conflicts with the last one
         for relpath in ("qa/proof.json", "src/frontend/qa/proof.json"):
