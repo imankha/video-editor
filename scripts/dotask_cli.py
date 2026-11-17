@@ -2802,6 +2802,28 @@ def wait_for_staging_deploy(sha, cap_minutes=40, appear_minutes=5, interval=30):
         time.sleep(interval)
 
 
+def staging_redeploy_since(started):
+    """The head SHA of the newest staging deploy that was running at or after `started` (an aware UTC
+    datetime), or "".
+
+    T16800: PR #802's backend deploy (14:02-14:05 UTC, 2026-11-17) restarted staging under T16730:C1's
+    sharpen; the job vanished, the check timed out, and the failure was filed as a bug. It began before the
+    check did, so a run counts by when it last changed, not when it started. A merge landing during a check
+    is not the code under test: a failure that overlapped one is re-run after it rather than filed."""
+    newest = ("", "")
+    for workflow in DEPLOY_WORKFLOWS:
+        listed = run_cmd([tool("gh"), "run", "list", "--workflow", workflow, "--branch", "master", "--limit", "10",
+                          "--json", "headSha,status,conclusion,createdAt,updatedAt"],
+                         capture_output=True, text=True, check=False)
+        for run in json.loads(listed.stdout or "[]") if listed.returncode == 0 else []:
+            changed = run.get("updatedAt") or run.get("createdAt") or ""
+            active = run.get("status") != "completed" or (
+                changed and dt.datetime.fromisoformat(changed.replace("Z", "+00:00")) >= started)
+            if active and run.get("createdAt", "") > newest[0]:
+                newest = (run.get("createdAt", ""), run.get("headSha", ""))
+    return newest[1]
+
+
 def staging_check(args):
     """Run a merged group's browser checks against staging and file each failure as a bug task, then free
     the group's container."""
@@ -2818,12 +2840,24 @@ def staging_check(args):
                                 f"Re-run: python scripts/dotask_cli.py staging-check {slug}")
         return 1
     task_sh("up", slug)
-    ran, failed, skipped, filed = [], [], [], []
+    ran, failed, skipped, filed, rerun = [], [], [], [], []
     for task_id in group["tasks"]:
         ids = [c for c, entry in check_manifest(checkout, task_id).items() if entry.get("kind") == "browser"]
         if not ids:
             continue
-        for criterion, (state, detail) in run_browser_checks(slug, task_id, ids, CHECK_SPEC_SECONDS, STAGING).items():
+        started = dt.datetime.now(dt.timezone.utc)
+        results = run_browser_checks(slug, task_id, ids, CHECK_SPEC_SECONDS, STAGING)
+        failing = [c for c, (state, _detail) in results.items() if state not in ("pass", "skipped")]
+        redeploy = staging_redeploy_since(started) if failing else ""
+        if redeploy:
+            after = wait_for_staging_deploy(redeploy)
+            if after == "deployed":
+                results.update(run_browser_checks(slug, task_id, failing, CHECK_SPEC_SECONDS, STAGING))
+                rerun.extend(failing)
+            else:
+                note = f"a staging deploy of {redeploy[:9]} ran during the check and then {after}; not re-run"
+                results.update({c: (results[c][0], f"{results[c][1]} ({note})") for c in failing})
+        for criterion, (state, detail) in results.items():
             ran.append(criterion)
             if state == "skipped":
                 skipped.append(criterion)
@@ -2840,6 +2874,7 @@ def staging_check(args):
     human = [item["id"] for item in group.get("staging_checks", [])]
     line = (f"{STAGING_DONE}PR #{pr} ({deploy}): {len(ran) - len(failed) - len(skipped)} of {len(ran)} browser checks "
             f"passed on staging")
+    line += f"; re-ran {' '.join(rerun)} after a deploy during the check" if rerun else ""
     line += f"; failed {' '.join(failed)}, filed {' '.join(filed)}" if failed else ""
     line += f"; timed out {' '.join(skipped)}" if skipped else ""
     line += f"; still for a person on staging: {' '.join(human)}" if human else ""

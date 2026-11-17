@@ -1,5 +1,6 @@
 """dotask_cli.py (supervisorless /dotask) against fake docker/code/gh on PATH and a
 temp TASKS_ROOT + fixture MAIN_REPO. Never touches real Docker/VS Code/GitHub."""
+import datetime as dt
 import contextlib
 import io
 import json
@@ -2804,6 +2805,59 @@ class StagingCheckTest(AutolandBase):
         self.assertIn("Expected Second", filed)
         self.assertIn("Filed by /dotask staging check.", self.plan.read_text())
         self.assertEqual(self.downs, ["g-t1-1"])
+
+    def test_a_failure_during_a_later_deploy_is_re_run_after_it_not_filed(self):
+        # T16800: PR #802's backend deploy (14:02-14:05 UTC) restarted staging under T16730:C1's sharpen; the
+        # job vanished, the check timed out after 8 minutes and was filed as a bug. It passed once staging was quiet.
+        calls = []
+
+        def checks(slug, task, ids, timeout, staging=None):
+            calls.append(list(ids))
+            if len(calls) == 1:
+                return {"T1:C1": ("pass", "1 test(s) passed"), "T1:C2": ("fail", "TimeoutError: locator.waitFor")}
+            return {"T1:C2": ("pass", "1 test(s) passed")}
+
+        # The deploy began a minute before the check and finished a minute into it, like #802's did.
+        now = dt.datetime.now(dt.timezone.utc)
+        stamp = lambda minutes: (now + dt.timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        runs = [{"headSha": "b" * 40, "status": "completed", "conclusion": "success",
+                 "createdAt": stamp(-1), "updatedAt": stamp(1)},
+                {"headSha": "f" * 40, "status": "completed", "conclusion": "success",
+                 "createdAt": "2026-11-17T13:54:36Z", "updatedAt": "2026-11-17T13:57:42Z"}]
+        waited = []
+
+        def fake_run(cmd, **kwargs):
+            return SimpleNamespace(returncode=0, stdout=json.dumps(runs), stderr="")
+
+        with patch.object(dotask_cli, "run_browser_checks", checks), \
+                patch.object(dotask_cli, "wait_for_staging_deploy", lambda sha: waited.append(sha) or "deployed"), \
+                patch.object(dotask_cli.subprocess, "run", fake_run), \
+                patch.object(dotask_cli, "commit_filed_bug", MagicMock()) as filed, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(dotask_cli.staging_check(SimpleNamespace(slug="g-t1-1")), 0)
+        self.assertEqual(calls, [["T1:C1", "T1:C2"], ["T1:C2"]])
+        self.assertIn("b" * 40, waited)
+        filed.assert_not_called()
+        self.assertIn("2 of 2 browser checks passed on staging; re-ran T1:C2 after a deploy during the check",
+                      self._last())
+
+    def test_a_failure_with_no_deploy_during_the_check_is_filed_without_a_re_run(self):
+        calls = []
+
+        def checks(slug, task, ids, timeout, staging=None):
+            calls.append(list(ids))
+            return {"T1:C1": ("pass", "ok"), "T1:C2": ("fail", "Expected Second")}
+
+        runs = [{"headSha": "f" * 40, "status": "completed", "conclusion": "success",
+                 "createdAt": "2026-11-17T13:54:36Z", "updatedAt": "2026-11-17T13:57:42Z"}]
+        with patch.object(dotask_cli, "run_browser_checks", checks), \
+                patch.object(dotask_cli.subprocess, "run",
+                             lambda cmd, **k: SimpleNamespace(returncode=0, stdout=json.dumps(runs), stderr="")), \
+                patch.object(dotask_cli, "commit_filed_bug", lambda *a: None), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(dotask_cli.staging_check(SimpleNamespace(slug="g-t1-1")), 1)
+        self.assertEqual(calls, [["T1:C1", "T1:C2"]])
+        self.assertIn("failed T1:C2", self._last())
 
     def test_a_failed_deploy_runs_nothing_and_keeps_the_container(self):
         with patch.object(dotask_cli, "wait_for_staging_deploy", lambda sha: "failed: deploy-backend.yml"), \

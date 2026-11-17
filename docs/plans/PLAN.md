@@ -114,6 +114,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T16830 | [Sharpen lost to server restart waits forever](tasks/T16830-sharpen-lost-to-server-restart-waits.md) | 4 | 3 | 1.3 | TODO | [ ] | When the server restarts during a sharpen (a deploy), the sharpen can vanish and Frame keeps showing progress forever. Seen twice on staging on 2026-11-17 (T16800). We will find why the job is lost and make Frame say the sharpen was interrupted. Done when a lost sharpen shows a try-again message within a minute. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
