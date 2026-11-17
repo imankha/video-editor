@@ -1,0 +1,3 @@
+{"criteria": {
+  "T16800:C1": {"kind": "code", "command": "cd scripts && python3 -m pytest test_dotask_cli.py -k StagingCheckTest -q"}
+}}
