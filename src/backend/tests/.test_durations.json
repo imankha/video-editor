@@ -271,6 +271,7 @@
   "tests/test_t16540_reedit_stays_draft.py": 12.46,
   "tests/test_t16550_pulse_upload_attempts.py": 0.18,
   "tests/test_t16560_poster_off_event_loop.py": 0.18,
+  "tests/test_t16730_bootstrap_finished.py": 0.2,
   "tests/test_t1690_stream_proxy_probe.py": 0.1,
   "tests/test_t2580_upload_index_check.py": 0.18,
   "tests/test_t2650_recap_encode_off_server.py": 13.53,

@@ -187,6 +187,22 @@ def exclude_team_highlights_from_rank_clause(fv_alias: str = "fv") -> str:
     """.strip()
 
 
+def framing_job_finished_column(job_alias: str = "e") -> str:
+    """`finished` for an export_jobs row: a framing job whose sharpen the server finished
+    (T16520), i.e. a published final video was made from this job's working video (T16525).
+
+    Shared by GET /api/exports/unacknowledged and /api/bootstrap: the returning-parent
+    card reads whichever arrives, so both lists must carry it (T16730).
+    """
+    return f"""
+        EXISTS (
+            SELECT 1 FROM final_videos fv
+            WHERE {job_alias}.type = 'framing' AND fv.source_working_video_id = {job_alias}.output_video_id
+              AND fv.published_at IS NOT NULL
+        ) as finished
+    """.strip()
+
+
 def downloads_counts(cursor) -> dict:
     """Finished-reel badge numbers: published, latest-version-per-source count and
     the unwatched subset. The ONE definition shared by GET /api/downloads/count and

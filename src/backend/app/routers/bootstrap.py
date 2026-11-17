@@ -15,7 +15,7 @@ from fastapi import APIRouter
 
 from ..constants import MAX_CLIP_DURATION_S, MAX_CLIP_UPLOAD_BYTES, MAX_FILE_SIZE
 from ..database import get_db_connection
-from ..queries import latest_final_videos_subquery
+from ..queries import framing_job_finished_column, latest_final_videos_subquery
 from ..services.credit_ledger import get_credit_balance
 from ..services.user_db import (
     INTRO_FACT_FIELDS,
@@ -127,12 +127,13 @@ def _read_profile_misc() -> dict:
         """)
         active_exports = [dict(row) for row in cursor.fetchall()]
 
-        # Unacknowledged exports
-        cursor.execute("""
+        # Unacknowledged exports (same `finished` as GET /exports/unacknowledged, T16730)
+        cursor.execute(f"""
             SELECT e.id AS job_id, e.project_id, p.name as project_name, e.type, e.status,
                    e.error, e.output_video_id, e.output_filename,
                    e.created_at, e.started_at, e.completed_at,
-                   e.game_id, e.game_name
+                   e.game_id, e.game_name,
+                   {framing_job_finished_column()}
             FROM export_jobs e
             LEFT JOIN projects p ON e.project_id = p.id
             WHERE e.status IN ('complete', 'error')
@@ -140,7 +141,9 @@ def _read_profile_misc() -> dict:
               AND e.completed_at >= datetime('now', '-24 hours')
             ORDER BY e.completed_at DESC
         """)
-        unacknowledged_exports = [dict(row) for row in cursor.fetchall()]
+        unacknowledged_exports = [
+            {**dict(row), "finished": bool(row["finished"])} for row in cursor.fetchall()
+        ]
 
         # Pending uploads (raw list, no R2 validation for speed)
         cursor.execute("""

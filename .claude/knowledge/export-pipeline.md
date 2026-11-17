@@ -931,9 +931,11 @@ it logs `[Finish] FAILED project= step=` and the highlight keeps the old manual 
 - No archive at finish: `archive_completed_projects` (session start) archives it on the next session,
   so Spotlight keeps its working data now. POST /publish still archives.
 - Frontend (T16525): the browser learns "finished" from `is_finished` on GET /api/projects/{id} and
-  `finished` on GET /api/exports/unacknowledged (both = a PUBLISHED final_videos row whose
+  `finished` on GET /api/exports/unacknowledged AND on /api/bootstrap's `exports.unacknowledged` (both = a PUBLISHED final_videos row whose
   `source_working_video_id` is the CURRENT/this job's working video; an older published version does
-  not count). Focus ready panel (`FocusPublishActionBar finished`, tri-state: null while the post-render
+  not count). LANDMINE (T16730): useExportRecovery reads bootstrap's list when it lands within 2 s and
+  only otherwise fetches /unacknowledged, so the two lists must carry the same fields: both select
+  `queries.framing_job_finished_column()`. Bootstrap once lacked it and the card intermittently said "ready". Focus ready panel (`FocusPublishActionBar finished`, tri-state: null while the post-render
   refresh is in flight): "It's in your Highlights", no Finish card, exit "Done" (`leaveFocusForLater
   finished`: Highlights tab / Annotate, no "is framed" banner). The recovery card says
   `EXPORT_JOBS.framing.finished`; `resumeFocusCompletion` reopens the panel for a finished project (the
