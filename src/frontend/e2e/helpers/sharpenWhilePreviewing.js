@@ -77,14 +77,15 @@ export async function frameVideoStaysPaused(page) {
 }
 
 /**
- * From a logged-in, loaded page with Guidance off: make a new highlight, Preview it, Sharpen it
- * while it plays, and wait for the Finished panel. Returns false (the caller skips loudly) when
- * the account has no game with a ready video and a play.
+ * From a logged-in, loaded page with Guidance off: make a new highlight the way a parent does
+ * (Annotate on a game whose video is ready, a play, "Make highlight": always a NEW portrait
+ * draft) and wait for Frame to show its stage. Returns false when the account has no game with
+ * a ready video and a play. Shared with the T16760/T16820 portrait-layout checks (T16820).
  *
  * @param {import('@playwright/test').Page} page
  * @returns {Promise<boolean>}
  */
-export async function sharpenNewHighlightWhilePreviewing(page) {
+export async function makeNewHighlight(page) {
   const body = await pageApi(page, '/games');
   const game = (body.games || body).find((g) => g.status === 'ready' && g.clip_count > 0);
   if (!game) return false;
@@ -99,6 +100,19 @@ export async function sharpenNewHighlightWhilePreviewing(page) {
   await expect.poll(() => projectIdFromUrl(page), { timeout: 180000 }).not.toBeNull();
   await waitForAppLoaded(page);
   await page.getByTestId('focus-video-stage').waitFor({ timeout: 150000 });
+  return true;
+}
+
+/**
+ * From a logged-in, loaded page with Guidance off: make a new highlight, Preview it, Sharpen it
+ * while it plays, and wait for the Finished panel. Returns false (the caller skips loudly) when
+ * the account has no game with a ready video and a play.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<boolean>}
+ */
+export async function sharpenNewHighlightWhilePreviewing(page) {
+  if (!(await makeNewHighlight(page))) return false;
   const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
   await expect(sharpen).toBeEnabled({ timeout: 60000 });
 
