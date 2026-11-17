@@ -1,0 +1,5 @@
+{"criteria": {
+  "T16690:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16690_game_upload_charge_key.py::test_same_game_number_in_two_profiles_is_charged_in_both -q"},
+  "T16690:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16690_game_upload_charge_key.py::test_retried_activation_of_the_same_game_charges_once -q"},
+  "T16690:C3": {"kind": "browser"}
+}}

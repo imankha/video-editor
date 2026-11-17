@@ -2127,8 +2127,8 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   hashes vs existing rows so a retry can't list the same half twice; **duration/dimensions
   backfilled from the R2 probe** in `_insert_game_videos` when the client omits them (attach sends
   null — a NULL `game_videos.duration` makes `buildFullVideoTimeline` compute NaN and the half is
-  unusable); charges credits (`source="game_video_add"`, `reference_id=f"{game_id}:{hashes}"` —
-  distinct from activate's `game_upload:{game_id}` so it's not a silent no-op, idempotent on retry)
+  unusable); charges credits (`source="game_video_add"`, `reference_id=f"{profile_id}:{game_id}:{hashes}"` (T16690) —
+  distinct from activate's `game_upload:{profile_id}:{game_id}` so it's not a silent no-op, idempotent on retry)
   refs-before-charge like `activate_game`, with a `get_balance` pre-check so an unaffordable attach
   402s BEFORE committing the row (no free video). No schema change.
 - **Overlap placement: `game_videos.recorded_at` + `offset_seconds` (T8870, profile_db v051).**

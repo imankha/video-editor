@@ -1662,9 +1662,12 @@ invariant-*pinning*-by-test only (the restructure into a service is T4640):
    status-flip commit (:764-768, **SQLite** — two different datastores, not one atomic unit). A
    crash in that window leaves credits-charged-but-`pending`. This does NOT literally satisfy
    "deduction happens iff activation completed," but `deduct_credits` is idempotent on
-   `(source="game_upload", reference_id=game_id)`, so re-activating the still-`pending` game
-   re-runs deduct with no double-charge and completes the flip — self-healing on retry, not data
-   loss. Closing this window for real (merging the Postgres write and the SQLite flip into one unit)
+   `(source="game_upload", reference_id=f"{profile_id}:{game_id}")`, so re-activating the
+   still-`pending` game re-runs deduct with no double-charge and completes the flip — self-healing
+   on retry, not data loss. **T16690 landmine: game ids are a per-PROFILE autoincrement but the
+   ledger is per USER, so every game-scoped ledger reference must name the profile** (the bare
+   `game_id` let game 1 of a second profile find `game_upload:1` already spent and go uncharged).
+   Legacy rows keep the bare id; `scripts/scan_charged_reverted_games.py` matches both shapes. Closing this window for real (merging the Postgres write and the SQLite flip into one unit)
    is explicitly T4640's scope, not this task's.
 
 **Tests:** `tests/test_t4360_explicit_orderings.py` — a two-writer threadpool race detector proven
