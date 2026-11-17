@@ -51,6 +51,12 @@ backend deploy, and that sharpen also left no job. Runs on a quiet staging passe
 - The product gap this exposed (a sharpen lost to a server restart leaves Frame waiting with no message,
   because a 404 from `GET /api/exports/{id}` keeps the poll going) is filed as T16810.
 
+- The criterion's check is a browser check, `src/frontend/e2e/checks/T16800.check.spec.js`, that runs the
+  T16730:C1 steps (shared with T16730's check in `src/frontend/e2e/helpers/returnAfterSharpen.js`). On
+  2026-11-17 the staging test account's last two unsharpened drafts sat on a game stuck uploading, where Frame
+  shows no Sharpen button; the shared steps now pick a draft on a ready game, or make another highlight from a
+  play on one. It passed on staging at 17:12 UTC (2.9 minutes) and on the dev stack.
+
 ## Acceptance Criteria
 
 - [ ] The steps above give the expected result.
