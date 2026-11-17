@@ -41,3 +41,12 @@ See the `## T16810` notes on how to run a check against staging from a container
 
 - `src/frontend/e2e/checks/T16770.check.spec.js`
 - `src/frontend/e2e/checks/T16770.checks.json`
+
+## Found (2026-11-17)
+
+Run against staging, the check skipped instead of passing: it needed a 38 s free stretch in the account's one ready
+game (game 3, 89 s), and the largest left was about 22 s, because each run left its two plays behind. It also read
+clips with `page.request` after the app had started its session, which got 401 on staging (T16100). The check now
+moves 5 s once instead of four times (needs 21.25 s), aims play 1 at the first 5 s step at or after the free stretch's
+start + 6 s, reads through in-page `fetch`, and deletes every play it made in a `finally`. It passes on staging (29 s)
+and still fails against the pre-#805 `AnnotateContainer.jsx` (Mark Play not back while the save is held).
