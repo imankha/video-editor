@@ -13,7 +13,7 @@
 import { test, expect } from '@playwright/test';
 import { loginForCheck, checkApi } from '../helpers/checkAuth';
 
-test.setTimeout(240000);
+test.setTimeout(420000);
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
 async function listProjects(page) {
@@ -23,15 +23,52 @@ async function listProjects(page) {
   return Array.isArray(body) ? body : body.projects || [];
 }
 
-/** Open Frame on a project with a clip and wait until the stage video has loaded. */
+/** The clip's crop positions the parent placed (trim-origin keyframes are not positions). */
+function focusPoints(clip) {
+  let kfs = clip.crop_data;
+  if (typeof kfs === 'string') { try { kfs = JSON.parse(kfs); } catch { kfs = null; } }
+  return (Array.isArray(kfs) ? kfs : []).filter((k) => k && k.origin !== 'trim');
+}
+
+/**
+ * A project whose Frame opens on a clip with no positions yet: the state both criteria
+ * are about (the rotate hint and the empty-timeline message only show there). Picked
+ * from the API so the check never depends on which project happens to be first, and
+ * fails rather than skips when the account has none.
+ */
+async function projectWithoutPositions(page) {
+  const projects = (await listProjects(page)).filter((p) => (p.clip_count || 0) > 0);
+  for (const p of projects) {
+    const res = await page.request.get(checkApi(`/clips/projects/${p.id}/clips`));
+    if (!res.ok()) continue;
+    const clips = (await res.json()).slice().sort((a, b) => a.sort_order - b.sort_order);
+    if (clips.length && focusPoints(clips[0]).length === 0) return p;
+  }
+  return null;
+}
+
+/**
+ * Wait for the app's loading screen to go away. On a slow stack /api/auth/me can time
+ * out twice in the browser even though the server answered, and the app then waits on
+ * its "Still connecting ... press Retry" screen (T16400) for a press: press it, as a
+ * parent would.
+ */
+async function waitForAppLoaded(page) {
+  await expect.poll(async () => {
+    const retry = page.locator('#preloader-retry');
+    if (await retry.isVisible().catch(() => false)) await retry.click().catch(() => {});
+    return page.locator('#preloader').count();
+  }, { timeout: 150000, intervals: [1000] }).toBe(0);
+}
+
+/** Open Frame on a project whose clip has no positions and wait until the stage video has loaded. */
 async function openFrame(page) {
-  const projects = await listProjects(page);
-  const candidate = projects.find((p) => (p.clip_count || 0) > 0);
-  test.skip(!candidate, '[T16650] no project with a clip in this account');
+  const candidate = await projectWithoutPositions(page);
+  expect(candidate, '[T16650] the account has a project whose clip has no positions yet').not.toBeNull();
   await page.goto(`/focus/p/${candidate.id}`);
+  await waitForAppLoaded(page);
   const stage = page.getByTestId('focus-video-stage');
   await stage.waitFor({ timeout: 90000 });
-  await expect(page.locator('#preloader')).toHaveCount(0, { timeout: 90000 });
   await expect.poll(
     () => stage.locator('video').first().evaluate((v) => v.readyState).catch(() => 0),
     { timeout: 90000 },
@@ -58,7 +95,7 @@ test('T16650:C1 - the rotate hint is fully readable and not behind the video con
   await loginForCheck(context);
   await openFrame(page);
   const nudge = page.getByTestId('rotate-nudge');
-  test.skip(await nudge.count() === 0, '[T16650] the clip already has positions, so no rotate hint shows');
+  await expect(nudge, 'the rotate hint shows for a clip with no positions on a phone').toHaveCount(1);
   await scrollClear(nudge);
 
   const result = await nudge.evaluate((el) => {
@@ -87,8 +124,7 @@ test('T16650:C2 - the empty-timeline message does not overlap the playhead or th
   await loginForCheck(context);
   await openFrame(page);
   const msg = page.getByText('No positions yet. Drag the box on the video to add one.').locator('visible=true');
-  test.skip(await msg.count() === 0, '[T16650] the clip already has positions, so no empty-timeline message shows');
-  await expect(msg).toHaveCount(1);
+  await expect(msg, 'the empty-timeline message shows for a clip with no positions').toHaveCount(1);
   await scrollClear(page.getByTestId('crop-track'));
 
   const result = await msg.evaluate((el) => {
