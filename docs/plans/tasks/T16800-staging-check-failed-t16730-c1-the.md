@@ -1,6 +1,6 @@
 # T16800: Staging check failed: T16730:C1 The steps above give the expected result.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-17

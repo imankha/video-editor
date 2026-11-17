@@ -1,6 +1,6 @@
 # T16780: Posters requested for failed uploads
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 2
 **Complexity:** 1
 **Created:** 2026-11-16
