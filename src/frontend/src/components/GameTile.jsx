@@ -79,6 +79,10 @@ export function GameTile({
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [playsOnlySheet, setPlaysOnlySheet] = useState(null); // T12930: null | 'keep' | 'restore'
   const [posterState, setPosterState] = useState('loading'); // 'loading' | 'loaded' | 'error'
+  // T16780: only a ready game has a poster; requesting one for an unfinished upload
+  // 404s on every Home load. Derived, not stored, so a Retry that makes the game ready
+  // starts loading its poster.
+  const shownPosterState = game.status === 'ready' ? posterState : 'error';
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null); // {top, left} for the desktop portal
   const menuRef = useRef(null);
@@ -312,10 +316,10 @@ export function GameTile({
       }`}
     >
       {/* Poster image or fallback (item 5 — shimmer while loading, fade in on load) */}
-      {posterState === 'loading' && (
+      {shownPosterState === 'loading' && (
         <div className="absolute inset-0 skeleton-shimmer" />
       )}
-      {posterState !== 'error' && (
+      {shownPosterState !== 'error' && (
         <img
           src={posterUrl}
           alt={game.name}
@@ -328,7 +332,7 @@ export function GameTile({
       )}
 
       {/* Branded fallback (no poster): current sport ball, else the app logo. */}
-      {posterState === 'error' && (
+      {shownPosterState === 'error' && (
         <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col items-center justify-center">
           <div className="text-center px-4">
             {sportGlyph ? (
