@@ -82,7 +82,7 @@ vi.mock('../../hooks/useVideo', () => ({
     videoRef: { current: null }, videoUrl: null, metadata: null, isPlaying: false, currentTime: 0,
     duration: 0, error: null, isLoading: false, isVideoElementLoading: false, loadingProgress: 0,
     loadingElapsedSeconds: 0, loadVideo: vi.fn(), loadVideoFromUrl: vi.fn().mockResolvedValue(null),
-    loadVideoFromStreamingUrl: vi.fn(), togglePlay: vi.fn(), seek: vi.fn(), stepForward: vi.fn(),
+    loadVideoFromStreamingUrl: vi.fn(), togglePlay: vi.fn(), pause: vi.fn(), seek: vi.fn(), stepForward: vi.fn(),
     stepBackward: vi.fn(), seekForward: vi.fn(), seekBackward: vi.fn(), restart: vi.fn(), clearError: vi.fn(),
     isUrlExpiredError: false, handlers: {},
   }),
