@@ -309,7 +309,7 @@ describe('uploadStore — failure surfacing (bug26p, per-entry)', () => {
     expect(cb).toHaveBeenCalledWith({ game_id: 42, name: 'G', alreadyOwned: true });
   });
 
-  it('uses the credits modal (no toast, no lingering entry) on insufficient credits', async () => {
+  it('uses the credits modal (no toast) and keeps a retryable entry on insufficient credits (T17380)', async () => {
     const err = new Error('Insufficient credits');
     err.insufficientCredits = true;
     err.uploadCost = 5;
@@ -320,7 +320,8 @@ describe('uploadStore — failure surfacing (bug26p, per-entry)', () => {
     await vi.waitFor(() => expect(store().insufficientCredits).not.toBeNull());
     expect(store().insufficientCredits).toEqual({ required: 5, balance: 2 });
     expect(toast.error).not.toHaveBeenCalled();
-    expect(uploads()).toHaveLength(0); // entry retired, queue can advance
+    expect(uploads()).toHaveLength(1); // T17380: kept as a failed, retryable entry
+    expect(uploads()[0].status).toBe(UPLOAD_STATUS.ERROR);
   });
 });
 

@@ -3124,6 +3124,15 @@ The full checklist for an 11th→Nth sport:
   valid-upload-untouched), `GameTile.test.jsx` (upload_failed state). **Follow-up (not done):** the
   ACTIVE-upload UX (mobile "keep tab open", resume-across-reload with file re-matching) was
   out-of-scope here — it belongs to the active-upload flow (T7480/general), not this dead-orphan card.
+- **An insufficient-credits upload failure keeps its errored entry (T17380, 2026-11-18).** `uploadGame`
+  creates the pending game BEFORE `ensureVideoInR2`'s `can_afford` check, and T8180/T7470 may keep that
+  game. `uploadStore.onEntryError` used to RETIRE the entry on `error.insufficientCredits`, leaving a
+  pending game with nothing on Home (bug 62p). It now patches the entry to `status:'error'` +
+  `insufficientCredits: true` + `ERROR_COPY.UPLOAD_INSUFFICIENT_CREDITS` (no toast: the BuyCreditsModal
+  via top-level `insufficientCredits` is the loud surface); `UploadingGameTile` renders the credits copy
+  in its FAILED state; Retry re-runs the same entry (`runEntry` clears the flag) and the backend's
+  `create_game('pending')` hash reuse resumes into the same game. Tests:
+  `uploadStore.insufficientCredits.test.js`, `UploadingGameTile.insufficientCredits.test.jsx`.
 - **Upload-failure cleanup is ONLY-IF-EMPTY (T7470 — the invariant that protects annotate-during-upload).**
   A failed upload must NEVER cascade-delete a game the user annotated against while it was still
   uploading (T1540: a real `game_id` exists from `onGameCreated`, well before finalize, precisely so

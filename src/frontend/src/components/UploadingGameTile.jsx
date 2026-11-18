@@ -9,6 +9,7 @@ import { GAME } from '../config/themeColors';
 import { UPLOAD_STATUS } from '../stores/uploadStore';
 import { UPLOAD_PHASE } from '../services/uploadManager';
 import { uploadPhasePresentation } from '../utils/uploadPresentation';
+import { ERROR_COPY } from '../config/displayNames';
 
 /**
  * UploadingGameTile - an in-flight upload rendered as a REAL game tile (T7820).
@@ -203,7 +204,9 @@ export function UploadingGameTile({
         </h3>
         {state === TILE_STATE.FAILED ? (
           <p className="mt-0.5 text-[11px] text-rose-200/90 leading-snug">
-            Upload didn&apos;t finish. Retry to resume, or discard.
+            {upload.insufficientCredits
+              ? ERROR_COPY.UPLOAD_INSUFFICIENT_CREDITS
+              : <>Upload didn&apos;t finish. Retry to resume, or discard.</>}
           </p>
         ) : (
           <div className="mt-0.5 flex items-center justify-between gap-2 text-xs">
