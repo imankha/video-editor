@@ -155,6 +155,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
   const currentPage = useAdminStore(s => s.currentPage);
   const totalPages = useAdminStore(s => s.totalPages);
   const totalUsers = useAdminStore(s => s.totalUsers);
+  const deletedUsers = useAdminStore(s => s.deletedUsers);
   const nextPage = useAdminStore(s => s.nextPage);
   const prevPage = useAdminStore(s => s.prevPage);
   // T8110: sort now lives in the store and drives a server refetch (global
@@ -291,7 +292,10 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
 
           <span className="text-gray-500 text-xs">
             {matchedUsers.length} of {users.length} on page
-            {totalUsers > 0 && ` · ${totalUsers} users total`}
+            {/* T17150: deleted payers are listed only under a filter, so they are counted
+                apart; the users total never rises when a filter is turned on. */}
+            {totalUsers > 0 && ` · ${totalUsers - deletedUsers} users total`}
+            {deletedUsers > 0 && ` · ${deletedUsers} deleted accounts`}
           </span>
         </div>
 
