@@ -1,6 +1,6 @@
 # T17340: Staging check failed: T17230:C1 C1: After the first position is placed, Frame shows exactly
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

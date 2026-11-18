@@ -1,6 +1,6 @@
 # T17360: Staging check failed: T17240:C1 C1: No two reel cards on one profile share a
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

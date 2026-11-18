@@ -1,6 +1,6 @@
 # T17320: Staging check failed: T17090:C1 C1: Adding and switching to a second profile on an
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

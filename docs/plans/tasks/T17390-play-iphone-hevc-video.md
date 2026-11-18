@@ -1,6 +1,6 @@
 # T17390: Play iPhone videos in browsers that cannot decode HEVC
 
-**Status:** TODO
+**Status:** TODO (split into the Playable copies epic, owner ruling 2026-11-18)
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-11-18
@@ -27,3 +27,7 @@ Not investigated. Start from the knowledge doc `.claude/knowledge/annotate.md` a
 - [ ] C1: A design doc picks the conversion approach, with cost and time per hour of video, and the owner approves it.
 - [ ] C2: An iPhone HEVC game plays with picture and sound in Chrome on Windows without an HEVC decoder.
 - [ ] C3: Existing H.264 games are unchanged.
+
+## Ruling
+
+**Approved in part** (owner, 2026-11-18). Bug fixes now, not fully designed features: the messaging and foundational parts run now as T17500 and T17510 (and T17370 for attached footage); the conversion feature moves to the Playable copies epic in the Big-file upload and video conversion milestone ([playable-copy/EPIC.md](playable-copy/EPIC.md)), starting with prototypes that measure cost and wait and verify every unverified fact and risk in [T17390-design.md](T17390-design.md). Q1, Q2, Q3, Q4, Q6, Q7, Q8 and Q9 approved as recommended. **Q5 rejected:** optimize the wait before shipping (prototype T17540). This task is the epic's parent and is done when the epic's completion criteria are met.

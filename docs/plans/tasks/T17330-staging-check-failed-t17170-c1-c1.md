@@ -1,6 +1,6 @@
 # T17330: Staging check failed: T17170:C1 C1: At 390x844, after Done on a first play, playing
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

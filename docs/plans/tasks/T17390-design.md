@@ -1,6 +1,6 @@
 # T17390 Design: play iPhone (HEVC) game videos in browsers that cannot decode them
 
-**Status:** DRAFT, waiting for owner approval (Stage 2 gate). The architect cannot approve this.
+**Status:** APPROVED IN PART (owner, 2026-11-18). Q1-Q4 and Q6-Q9 approved as recommended. **Q5 rejected: cut the wait before shipping.** Build is deferred to the [Playable copies epic](playable-copy/EPIC.md): prototypes T17520-T17550 first (measure cost and wait, verify F1-F5, answer R1-R14), then this doc is updated with their results and a wait target, and the owner approves that update before any build task (T17560-T17590) starts. Messaging and format recording run now as T17500 and T17510.
 **Task:** [T17390-play-iphone-hevc-video.md](T17390-play-iphone-hevc-video.md)
 **Background:** [T17280-iphone-game-video-sound-no-picture.md](T17280-iphone-game-video-sound-no-picture.md) (bug 62p, PR #819)
 **Knowledge docs used:** modal-gpu.md, export-pipeline.md, annotate.md, persistence-sync.md, keyframes-framing.md

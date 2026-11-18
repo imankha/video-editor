@@ -1,6 +1,6 @@
 # T17310: Staging check failed: T17110:C2 C2: The same at 360x640 and 768x1024.
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18
