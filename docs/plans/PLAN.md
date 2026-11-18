@@ -160,6 +160,9 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17430 | [Staging check failed: T17310:C1 The steps above give the expected result.](tasks/T17430-staging-check-failed-t17310-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17440 | [Staging check failed: T17320:C1 The steps above give the expected result.](tasks/T17440-staging-check-failed-t17320-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17620 | [Staging check failed: T17380:C2 C2: Retrying after buying credits completes the upload.](tasks/T17620-staging-check-failed-t17380-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17630 | [Staging check failed: T17500:C2 C2: Opening Frame on a play whose saved clip is](tasks/T17630-staging-check-failed-t17500-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17640 | [Staging check failed: T17500:C4 C4: Normal H.264 videos show no message anywhere.](tasks/T17640-staging-check-failed-t17500-c4-c4.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17670 | [A retried storage extension charges twice](tasks/T17670-storage-extension-retry-charges-twice.md) | 6 | 2 | 3.0 | TODO | [ ] | Follow-up to T17620 (owner-approved 2026-11-18). Every storage extension now gets a random charge key, so a resent request (double tap, network retry) is charged twice. Key the charge on a request id the app sends once per tap. |
 
 ### Bugs found by /dotask verify
 
@@ -168,8 +171,6 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T17630 | [Staging check failed: T17500:C2 C2: Opening Frame on a play whose saved clip is](tasks/T17630-staging-check-failed-t17500-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T17640 | [Staging check failed: T17500:C4 C4: Normal H.264 videos show no message anywhere.](tasks/T17640-staging-check-failed-t17500-c4-c4.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 

@@ -1,6 +1,6 @@
 # T17640: Staging check failed: T17500:C4 C4: Normal H.264 videos show no message anywhere.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

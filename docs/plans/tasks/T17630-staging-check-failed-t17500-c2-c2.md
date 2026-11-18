@@ -1,6 +1,6 @@
 # T17630: Staging check failed: T17500:C2 C2: Opening Frame on a play whose saved clip is
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18
