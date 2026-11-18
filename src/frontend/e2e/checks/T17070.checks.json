@@ -1,0 +1,4 @@
+{"criteria": {
+  "T17070:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/screens/__tests__/focusScreenExpiredGamePlay.test.jsx -t 'T17070:C1'", "why_not_browser": "no check account reliably holds a highlight whose game storage has ended (same as T17140:C2); the test mounts the real FocusScreen with the expired play's playback-url answer, and Frame's video wiring has no viewport branch"},
+  "T17070:C2": {"kind": "code", "command": "cd src/backend && python -m pytest tests/test_t17070_marked_play_outlives_game.py -q"}
+}}
