@@ -156,9 +156,10 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17510 | [Record each game video's format](tasks/T17510-record-game-video-format.md) | 5 | 2 | 2.5 | WIP | [ ] | Foundational, owner ruling 2026-11-18. Record codec, pixel format and HDR for every uploaded game, and report how many are iPhone HEVC and how many uploading browsers cannot show them, so the conversion work in milestone 4 is sized on real numbers. No change for parents. |
 | T17400 | [Staging check failed: T17250:C2 C2: Paying for a pack with the test card shows](tasks/T17400-staging-check-failed-t17250-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17410 | [Staging check failed: T17260:C1 C1: The Add profile window and the profile list both](tasks/T17410-staging-check-failed-t17260-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T17420 | [Staging check failed: T17300:C1 The steps above give the expected result.](tasks/T17420-staging-check-failed-t17300-c1-the.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17430 | [Staging check failed: T17310:C1 The steps above give the expected result.](tasks/T17430-staging-check-failed-t17310-c1-the.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17440 | [Staging check failed: T17320:C1 The steps above give the expected result.](tasks/T17440-staging-check-failed-t17320-c1-the.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17420 | [Staging check failed: T17300:C1 The steps above give the expected result.](tasks/T17420-staging-check-failed-t17300-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17430 | [Staging check failed: T17310:C1 The steps above give the expected result.](tasks/T17430-staging-check-failed-t17310-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17440 | [Staging check failed: T17320:C1 The steps above give the expected result.](tasks/T17440-staging-check-failed-t17320-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17620 | [Staging check failed: T17380:C2 C2: Retrying after buying credits completes the upload.](tasks/T17620-staging-check-failed-t17380-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 
 ### Bugs found by /dotask verify
 
@@ -167,7 +168,6 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T17620 | [Staging check failed: T17380:C2 C2: Retrying after buying credits completes the upload.](tasks/T17620-staging-check-failed-t17380-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
