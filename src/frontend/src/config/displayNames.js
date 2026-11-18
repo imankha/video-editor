@@ -1688,6 +1688,11 @@ export const PROFILE_COPY = {
   ADD: 'Add profile',
   EDIT: 'Edit profile',
   DELETE: 'Delete profile',
+  // T17260: a profile is one athlete in one sport for one season.
+  MEANING: 'One profile for each athlete, sport and season.',
+  NAME_HINT: 'One profile for each athlete, sport and season. Games and highlights stay separate in each.',
+  NAME_LABEL: 'Profile name',
+  namePlaceholder: (sport) => `e.g. Maya, Fall ${sport} 2026`,
   DELETE_BODY: 'All plays and highlights for this profile will be permanently deleted. Game videos shared with other profiles will not be affected.',
 };
 

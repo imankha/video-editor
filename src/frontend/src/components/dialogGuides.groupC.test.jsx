@@ -99,7 +99,7 @@ describe('group C dialog guides (T12790)', () => {
     fireEvent.click(screen.getByText('+ Add profile'));
     expect(guideText()).toBe(M.profileAdd);
     // Submit is disabled (and so not pulsing) until a name is typed.
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\. Fall/), { target: { value: 'New Kid' } });
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. Maya, Fall/), { target: { value: 'New Kid' } });
     pulsing('profile-form-submit');
     unmount();
     render(<ManageProfilesModal isOpen onClose={vi.fn()} />);
