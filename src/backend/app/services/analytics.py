@@ -85,15 +85,20 @@ _LEDGER_REVENUE_BY_USER = (
 
 # T15120: the channel read-out dimensions, as literal SQL (never the client's value).
 # A NULL or blank field groups as "unknown", shown and never dropped (T8650).
-ChannelDimension = Literal["origin", "utm_source", "utm_campaign", "utm_content",
-                           "click_source", "referral_channel", "country"]
+ChannelDimension = Literal["origin", "utm_source", "utm_medium", "utm_campaign", "utm_content",
+                           "utm_term", "click_source", "referral_channel", "referrer_host",
+                           "country"]
 _CHANNEL_GROUP_EXPR = {
     "origin": "s.origin",
     "utm_source": "COALESCE(NULLIF(s.utm_source, ''), 'unknown')",
+    "utm_medium": "COALESCE(NULLIF(s.utm_medium, ''), 'unknown')",
     "utm_campaign": "COALESCE(NULLIF(s.utm_campaign, ''), 'unknown')",
     "utm_content": "COALESCE(NULLIF(s.utm_content, ''), 'unknown')",
+    "utm_term": "COALESCE(NULLIF(s.utm_term, ''), 'unknown')",
     "click_source": "COALESCE(NULLIF(s.click_source, ''), 'unknown')",
     "referral_channel": "COALESCE(r.channel, 'none')",
+    # T16900 (v050): no migration-window probe, like country (v043): an admin picks it.
+    "referrer_host": "COALESCE(NULLIF(s.referrer_host, ''), 'unknown')",
     "country": "COALESCE(s.country, 'unknown')",
 }
 # referrals.referred_id is unique, so this join cannot fan a signup out.

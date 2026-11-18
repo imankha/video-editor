@@ -139,4 +139,19 @@ describe('channels dimension (T15120)', () => {
     await useAdminStore.getState().fetchDashboard();
     expect(useAdminStore.getState().channelsBy).toBe('origin');
   });
+
+  it('a pick made while the dashboard is still loading survives the dashboard answer (T16900)', async () => {
+    let finishDashboard;
+    mockApiFetch.mockImplementationOnce(() => new Promise((res) => { finishDashboard = res; }));
+    mockApiFetch.mockResolvedValueOnce(ok({ by: 'utm_medium', channels: [{ utm_medium: 'unknown' }] }));
+    const dashboard = useAdminStore.getState().fetchDashboard();
+    await useAdminStore.getState().setChannelsBy('utm_medium');
+    finishDashboard(ok(DASHBOARD));
+    await dashboard;
+    const s = useAdminStore.getState();
+    expect(s.channelsBy).toBe('utm_medium');
+    expect(s.channelsData.channels).toEqual([{ utm_medium: 'unknown' }]);
+    expect(s.channelsLoading).toBe(false);
+    expect(s.users).toEqual(DASHBOARD.users.users); // the rest of the dashboard still lands
+  });
 });

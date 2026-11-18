@@ -1227,7 +1227,13 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   `_grouped_view_grand_total` scopes by it so the unattributed remainder reconciles within the country. `/analytics/countries`
   (selector options) ignores the filter and probes the column, as it rides the dashboard mount read (T8020: mount stays one request).
   `country` is not attribution: `captureCampaignParams` first-touch ignores it, or an organic visit would block a later `?ref=`.
-- **Channel read-out (T15120):** `GET /analytics/channels?by=origin|utm_source|utm_campaign|utm_content|click_source|referral_channel|country`
+- **Sign-up origin vocabulary (T16900):** with no invite/campaign/click signal, `_determine_origin` returns a
+  `REFERRER_HOST_BUCKETS` bucket (seo, social-*, community, email, ai; most specific suffix wins, so
+  `mail.google.com` is email), else `other-website` (host present, unlisted) or `direct` (no host). `organic` is the
+  legacy label (before 2026-11-17) and the `_get_user_origin` no-row fallback; invitees still inherit it.
+  `normalize_referrer_host` is the one normalizer (auth validators + `bucket_referrer_host`); the host is stored in
+  `user_segments.referrer_host` (v050, sign-up probe `segment_has_referrer_host`, kept on deletion) for every sign-up.
+- **Channel read-out (T15120):** `GET /analytics/channels?by=origin|utm_source|utm_medium|utm_campaign|utm_content|utm_term|click_source|referral_channel|referrer_host|country`
   (default `origin`). `by` is a `Literal` mapped through `_CHANNEL_GROUP_EXPR`; each row keys its value under the
   dimension's own name and the response echoes `by`. A NULL/blank field groups as `"unknown"`, no referral as `"none"`,
   so rows always sum to the window's signups. `referrals.referred_id` is unique, so that join cannot fan out.

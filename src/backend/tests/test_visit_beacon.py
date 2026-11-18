@@ -54,6 +54,11 @@ def test_no_signal_is_direct():
     assert bucket_visit_source(None, None, None, None) == "direct"
 
 
+def test_unrecognised_referrer_host_is_other_website():
+    """T16900: same vocabulary as sign-up origins."""
+    assert bucket_visit_source(None, None, None, "some-blog.example") == "other-website"
+
+
 # -- visit_daily schema + upsert-increment (T7410:C3) -------------------------
 
 def test_schema_ladder_reaches_visit_daily():

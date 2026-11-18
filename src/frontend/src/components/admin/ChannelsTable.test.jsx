@@ -77,12 +77,13 @@ describe('ChannelsTable paid-ads vs referral-programme (T15200)', () => {
 describe('ChannelsTable dimension read-out (T15120)', () => {
   const SRC = { ...CH, origin: undefined, utm_source: 'meta', campaign_name: null };
 
-  it('offers the seven dimensions and reports a change', () => {
+  it('offers the ten dimensions and reports a change', () => {
     const onByChange = vi.fn();
     render(<ChannelsTable data={{ channels: [CH] }} by="origin" onByChange={onByChange} />);
     const picker = screen.getByLabelText('Group by');
     expect([...picker.options].map(o => o.textContent)).toEqual(
-      ['Origin', 'Campaign', 'Source', 'Content', 'Click source', 'Referral channel', 'Country'],
+      ['Origin', 'Campaign', 'Source', 'Medium', 'Term', 'Content', 'Click source',
+        'Referral channel', 'Referring website', 'Country'],
     );
     fireEvent.change(picker, { target: { value: 'utm_source' } });
     expect(onByChange).toHaveBeenCalledWith('utm_source');
@@ -175,5 +176,29 @@ describe('ChannelsTable by country (T15100)', () => {
     fireEvent.click(screen.getByText('unknown'));
     expect(onCountryClick).toHaveBeenCalledWith('unknown');
     expect(screen.queryByText(/rows filter the Users table/)).toBeNull();
+  });
+});
+
+describe('ChannelsTable medium, term and referring website (T16900)', () => {
+  it.each([['utm_medium', 'Medium'], ['utm_term', 'Term'], ['referrer_host', 'Referring website']])(
+    'groups by %s with blanks as unknown', (by, label) => {
+      const rows = [{ ...CH, origin: undefined, [by]: 'some-value' }, { ...CH, origin: undefined, [by]: 'unknown' }];
+      render(<ChannelsTable data={{ channels: rows }} by={by} />);
+      expect(screen.getByRole('columnheader', { name: label })).toBeTruthy();
+      expect(screen.getByText('some-value')).toBeTruthy();
+      expect(screen.getByText('unknown')).toBeTruthy();
+    },
+  );
+
+  it('explains organic in the origin view when an organic row is present', () => {
+    render(<ChannelsTable data={{ channels: [{ ...CH, origin: 'organic' }] }} by="origin" />);
+    expect(screen.getByText(/organic: source unknown, for sign-ups before 2026-11-17/)).toBeTruthy();
+  });
+
+  it('shows no organic note without an organic row or outside the origin view', () => {
+    const { rerender } = render(<ChannelsTable data={{ channels: [{ ...CH, origin: 'direct' }] }} by="origin" />);
+    expect(screen.queryByText(/organic: source unknown/)).toBeNull();
+    rerender(<ChannelsTable data={{ channels: [{ ...CH, origin: undefined, utm_source: 'organic' }] }} by="utm_source" />);
+    expect(screen.queryByText(/organic: source unknown/)).toBeNull();
   });
 });

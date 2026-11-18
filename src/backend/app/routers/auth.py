@@ -30,7 +30,14 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, field_validator
 
-from app.analytics import _determine_origin, close_session, create_user_segment, record_milestone, update_session
+from app.analytics import (
+    _determine_origin,
+    close_session,
+    create_user_segment,
+    normalize_referrer_host,
+    record_milestone,
+    update_session,
+)
 from app.database import USER_DATA_BASE
 from app.profile_context import set_current_profile_id
 from app.services.auth_db import (
@@ -217,6 +224,15 @@ def _clean_landing_path(value: str | None) -> str | None:
     return None
 
 
+def _clean_referrer_host(value: str | None) -> str | None:
+    """T16900: normalized referrer hostname, stored at sign-up. Dropped (never 4xx)
+    when it isn't a bare hostname."""
+    host = normalize_referrer_host(value)
+    if value and value.strip() and host is None:
+        logger.warning(f"[Auth] dropped invalid referrer_host: {value!r}")
+    return host
+
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
@@ -337,6 +353,11 @@ class GoogleAuthRequest(BaseModel):
     @classmethod
     def _validate_landing_path(cls, v):
         return _clean_landing_path(v)
+
+    @field_validator("referrer_host")
+    @classmethod
+    def _validate_referrer_host(cls, v):
+        return _clean_referrer_host(v)
 
 
 class AuthResponse(BaseModel):
@@ -518,6 +539,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             click_source=body.click_source,
             country=body.country,
             landing_path=body.landing_path,
+            referrer_host=body.referrer_host,
             email=email,
         )
         await _send_welcome_email(user_id, email)
@@ -725,6 +747,11 @@ class VerifyOtpRequest(BaseModel):
     def _validate_landing_path(cls, v):
         return _clean_landing_path(v)
 
+    @field_validator("referrer_host")
+    @classmethod
+    def _validate_referrer_host(cls, v):
+        return _clean_referrer_host(v)
+
 
 @router.post("/send-otp")
 async def send_otp(body: SendOtpRequest, request: Request):
@@ -864,6 +891,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             click_source=body.click_source,
             country=body.country,
             landing_path=body.landing_path,
+            referrer_host=body.referrer_host,
             email=email,
         )
         await _send_welcome_email(user_id, email)

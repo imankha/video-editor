@@ -348,6 +348,10 @@ export const useAdminStore = create((set, get) => ({
   // (fetchUsers/fetchPulse/...) stay for their other callers (pagination, campaign
   // click-through). Mirrors fetchUsers' exact users->state field mapping.
   fetchDashboard: async () => {
+    // T16900: the dashboard's channels are the origin view. A Group-by pick (or a newer
+    // dashboard) made while this one is in flight owns the table, so this answer's
+    // channels only land if no channels request started after it.
+    const channelsId = ++channelsRequestId;
     set({
       usersLoading: true, usersError: null,
       pulseLoading: true, channelsLoading: true,
@@ -362,6 +366,9 @@ export const useAdminStore = create((set, get) => ({
       const res = await apiFetch(`${API_BASE}/api/admin/dashboard?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      const channels = channelsId === channelsRequestId
+        ? { channelsData: data.channels, channelsBy: 'origin', channelsLoading: false }
+        : {};
       set({
         countries: data.countries,
         users: data.users.users,
@@ -371,17 +378,17 @@ export const useAdminStore = create((set, get) => ({
         pageSize: data.users.page_size,
         funnelTotals: data.users.funnel_totals || null,
         pulseData: data.pulse,
-        channelsData: data.channels,
-        channelsBy: 'origin', // the dashboard payload is always the origin view
+        ...channels,
         cohortsData: data.cohorts,
         platformsData: data.platforms,
-        usersLoading: false, pulseLoading: false, channelsLoading: false,
+        usersLoading: false, pulseLoading: false,
         cohortsLoading: false, platformsLoading: false,
       });
     } catch (err) {
       set({
         usersError: err.message,
-        usersLoading: false, pulseLoading: false, channelsLoading: false,
+        usersLoading: false, pulseLoading: false,
+        ...(channelsId === channelsRequestId ? { channelsLoading: false } : {}),
         cohortsLoading: false, platformsLoading: false,
       });
     }

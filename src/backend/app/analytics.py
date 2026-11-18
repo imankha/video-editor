@@ -635,7 +635,11 @@ def _get_user_origin(user_id: str) -> str:
         cur = conn.cursor()
         cur.execute("SELECT origin FROM user_segments WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
-    return row["origin"] if row else "organic"
+    if row:
+        return row["origin"]
+    logger.warning("[Analytics] no user_segments row for %s; inherited origin falls back to %r",
+                   user_id, ORIGIN_LEGACY_UNKNOWN)
+    return ORIGIN_LEGACY_UNKNOWN
 
 
 # ---------------------------------------------------------------------------
@@ -649,7 +653,9 @@ def _get_user_origin(user_id: str) -> str:
 # key or ends with "." + key, AFTER a leading www./m./l./lm. label is stripped
 # (see bucket_referrer_host). A referrer is only ever a HINT (privacy settings
 # and Referrer-Policy strip it), so partial coverage is fine — an unlisted host
-# buckets to "organic", never a wrong channel. Extend the dict as data warrants.
+# buckets to "other-website", never a wrong channel. Extend the dict as data warrants:
+# the host is stored (T16900), so a longer list relabels past sign-ups on read.
+# The most specific key wins (mail.google.com -> email before google.com -> seo).
 REFERRER_HOST_BUCKETS: dict[str, str] = {
     # --- search engines -> seo ---
     "google.com": "seo",
@@ -688,34 +694,77 @@ REFERRER_HOST_BUCKETS: dict[str, str] = {
     "whatsapp.com": "community",
     "telegram.org": "community",
     "t.me": "community",
+    # --- webmail -> email (T16900) ---
+    "mail.google.com": "email",
+    "com.google.android.gm": "email",  # Gmail Android app referrer
+    "outlook.live.com": "email",
+    "outlook.office.com": "email",
+    "outlook.office365.com": "email",
+    "mail.yahoo.com": "email",
+    "mail.aol.com": "email",
+    "mail.proton.me": "email",
+    "mail.zoho.com": "email",
+    "fastmail.com": "email",
+    # --- AI assistants -> ai (T16900) ---
+    "chatgpt.com": "ai",
+    "chat.openai.com": "ai",
+    "perplexity.ai": "ai",
+    "gemini.google.com": "ai",
+    "copilot.microsoft.com": "ai",
+    "claude.ai": "ai",
+    "chat.deepseek.com": "ai",
 }
+
+# T16900: origins for a sign-up with no campaign/invite/click signal. `organic` is the
+# legacy label (before 2026-11-17, when "no referrer" and "unlisted referrer" shared it);
+# it is still the _get_user_origin no-row fallback.
+ORIGIN_DIRECT = "direct"
+ORIGIN_OTHER_WEBSITE = "other-website"
+ORIGIN_LEGACY_UNKNOWN = "organic"
 
 # International Google ccTLDs (google.co.uk, google.de, ...) are too many to
 # enumerate; a leading "google." host is treated as search regardless of TLD.
 _GOOGLE_HOST_RE = re.compile(r'^google\.[a-z.]+$')
 
+# ASCII / punycode hostname characters only.
+_HOSTNAME_RE = re.compile(r'^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$')
+_HOST_PORT_RE = re.compile(r':\d{1,5}$')
+
+
+def normalize_referrer_host(raw: str | None) -> str | None:
+    """T16900: the ONE normalization of a client-sent referrer hostname: lowercase,
+    whitespace and a trailing dot removed, a numeric :port stripped, max 253 chars,
+    hostname characters only. Anything else (scheme, path, IPv6 literal, spaces,
+    unicode) is None. Pure: callers that want a warning log it themselves."""
+    if raw is None:
+        return None
+    host = raw.strip().lower().rstrip(".")
+    host = _HOST_PORT_RE.sub("", host)
+    if not host or len(host) > 253 or ".." in host or not _HOSTNAME_RE.fullmatch(host):
+        return None
+    return host
+
 
 def bucket_referrer_host(host: str | None) -> str | None:
     """Map an external referrer hostname to an attribution bucket, or None.
 
-    Returns one of ``seo`` / ``social-<network>`` / ``community`` for a known
-    host, else ``None`` (caller falls back to ``organic``). Hostname only — no
-    query strings or paths are ever consulted. Shared with T7410.
+    Returns one of ``seo`` / ``social-<network>`` / ``community`` / ``email`` /
+    ``ai`` for a known host, else ``None`` (caller falls back to ``other-website``
+    or ``direct``). Hostname only — no query strings or paths are ever consulted.
+    Shared with T7410. The most specific (longest) matching suffix wins.
     """
+    host = normalize_referrer_host(host)
     if not host:
         return None
-    host = host.strip().lower().rstrip(".")
-    if ":" in host:  # strip an accidental :port
-        host = host.split(":", 1)[0]
     # Normalize a leading mobile/link-shim label so m.facebook.com etc. match.
     for prefix in ("www.", "m.", "l.", "lm."):
         if host.startswith(prefix):
             host = host[len(prefix):]
             break
-    if host in REFERRER_HOST_BUCKETS:
-        return REFERRER_HOST_BUCKETS[host]
-    for key, bucket in REFERRER_HOST_BUCKETS.items():
-        if host.endswith("." + key):
+    labels = host.split(".")
+    for i in range(len(labels)):  # a.mail.google.com, mail.google.com, google.com, com
+        bucket = REFERRER_HOST_BUCKETS.get(".".join(labels[i:]))
+        if bucket:
             return bucket
     if host == "google" or _GOOGLE_HOST_RE.match(host):
         return "seo"
@@ -760,7 +809,8 @@ def bucket_visit_source(
     anonymous visit has none of.
 
     Priority: invite ref -> referral (raw ref or utm_campaign) -> click-id social ->
-    referrer host (seo / social-<network> / community) -> direct.
+    referrer host (a bucket, else other-website) -> direct. Same no-source
+    vocabulary as _determine_origin (T16900).
     """
     if ref and INVITE_CODE_RE.match(ref):
         return "invite"
@@ -772,7 +822,7 @@ def bucket_visit_source(
     referrer_bucket = bucket_referrer_host(referrer_host)
     if referrer_bucket:
         return referrer_bucket
-    return "direct"
+    return ORIGIN_OTHER_WEBSITE if normalize_referrer_host(referrer_host) else ORIGIN_DIRECT
 
 
 # ---------------------------------------------------------------------------
@@ -786,11 +836,12 @@ CAMPAIGN_ID_LENGTH = 5
 
 
 def _is_reserved_origin(value: str) -> bool:
-    """True for an origin string the attribution code itself produces (organic,
-    a referrer-host bucket, ``<click_source>_unknown``). A campaign id must never
-    collide with one, or its signups would be indistinguishable from that bucket."""
+    """True for an origin string the attribution code itself produces (direct,
+    other-website, legacy organic, a referrer-host bucket, ``<click_source>_unknown``).
+    A campaign id must never collide with one, or its signups would be
+    indistinguishable from that bucket."""
     return (
-        value == "organic"
+        value in (ORIGIN_DIRECT, ORIGIN_OTHER_WEBSITE, ORIGIN_LEGACY_UNKNOWN)
         or value in REFERRER_HOST_BUCKETS.values()
         or value.endswith("_unknown")
     )
@@ -848,7 +899,7 @@ def _determine_origin(
 
     Priority: ref invite code -> registered campaign id in ANY attribution
     field (T13980) -> raw ref -> utm_campaign -> share-based -> click_source
-    fallback -> referrer host -> organic.
+    fallback -> referrer host -> other-website (unlisted host) / direct (no host).
 
     The registry step exists because platforms rewrite links: an admin-created
     campaign id may survive only in ``utm_source``/``utm_content``/etc.
@@ -856,8 +907,9 @@ def _determine_origin(
     (campaigns set up only in an ad manager).
 
     ``referrer_host`` (T7910) is the LOWEST-priority signal: it only ever breaks
-    the ``organic`` fallback into seo/social/community, never overriding a real
-    campaign/invite/click signal above it.
+    the no-source fallback into a bucket, never overriding a real
+    campaign/invite/click signal above it. T16900: with no bucket, a present host
+    is ``other-website`` and no host is ``direct`` (owner ruling 2026-11-17).
     """
     from app.services.sharing_db import resolve_invite_code
 
@@ -900,7 +952,9 @@ def _determine_origin(
     if referrer_bucket:
         return referrer_bucket, None
 
-    return "organic", None
+    if normalize_referrer_host(referrer_host):
+        return ORIGIN_OTHER_WEBSITE, None
+    return ORIGIN_DIRECT, None
 
 
 # T14000: sticky once seen -- a column never disappears, so only the
@@ -954,6 +1008,23 @@ def segment_has_landing_path(cur) -> bool:
         )
         _landing_path_column_present = cur.fetchone() is not None
     return _landing_path_column_present
+
+
+# T16900: sticky once seen, like the other segment-column guards above.
+_referrer_host_column_present = False
+
+
+def segment_has_referrer_host(cur) -> bool:
+    """Migration-window guard: v050 adds user_segments.referrer_host, and Postgres
+    migrations run after deploy. Until then the signup INSERT must not name the column."""
+    global _referrer_host_column_present
+    if not _referrer_host_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_segments' AND column_name = 'referrer_host'"
+        )
+        _referrer_host_column_present = cur.fetchone() is not None
+    return _referrer_host_column_present
 
 
 # T15290: sticky once seen, like the other segment-column guards above.
@@ -1025,6 +1096,7 @@ def create_user_segment(
     click_source: str | None = None,
     country: str | None = None,
     landing_path: str | None = None,
+    referrer_host: str | None = None,
     email: str | None = None,
 ):
     try:
@@ -1063,6 +1135,15 @@ def create_user_segment(
                     "POST /api/admin/migrate-postgres) -- segment for %s written without its landing_path",
                     user_id,
                 )
+            if segment_has_referrer_host(cur):
+                columns.append("referrer_host")
+                values.append(referrer_host)
+            else:
+                logger.error(
+                    "[Analytics] user_segments.referrer_host missing (v050 not applied; run "
+                    "POST /api/admin/migrate-postgres) -- segment for %s written without its referrer_host",
+                    user_id,
+                )
             if segment_has_returning_after_deletion(cur):
                 columns.append("returning_after_deletion")
                 values.append(bool(email) and _was_account_deleted(cur, email))
@@ -1098,7 +1179,8 @@ def create_user_segment(
 # T14000: signup_build / signup_commit are deploy identifiers, not personal data,
 # so they are KEPT too (the Builds dimension still counts a deleted account).
 # T15010: landing_path is a page class, not identity, so it is KEPT too (owner ruling,
-# 2026-11-07) -- deliberately NOT in this strip list.
+# 2026-11-07) -- deliberately NOT in this strip list. T16900: referrer_host names a
+# site, not a person, so it is KEPT on the same ruling.
 # T15290 (owner ruling 2026-11-07, reverses T8630 round 4's rationale): deletion
 # means the USER'S DATA is gone and their email is replaced with a keyed hash
 # (account_deletions.email_hash) -- not that analytics goes dark. Once the email
