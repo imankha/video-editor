@@ -95,6 +95,18 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(len(added), 1)
         self.assertRegex(next(iter(added)), r"app/svc\.py: unused function 'never_called'")
 
+    def test_a_bare_pydantic_field_validator_is_framework_called_not_dead(self):
+        # T16900: auth.py imports field_validator by name, so the decorator has no "module." prefix.
+        model = ('from pydantic import BaseModel, field_validator, model_validator\n\n\n'
+                 'class Body(BaseModel):\n    host: str | None = None\n\n'
+                 '    @field_validator("host")\n    @classmethod\n    def _check_host(cls, v):\n        return v\n\n'
+                 '    @model_validator(mode="after")\n    def _check_all(self):\n        return self\n')
+        base = {'app/__init__.py': '', 'app/main.py': 'from app.svc import Body\nBody()\n',
+                'app/svc.py': 'from pydantic import BaseModel\n\n\nclass Body(BaseModel):\n    host: str | None = None\n'}
+        head = dict(base, **{'app/svc.py': model})
+        with tempfile.TemporaryDirectory() as b, tempfile.TemporaryDirectory() as h:
+            self.assertEqual(dead.new_unused_definitions(tree(b, base), tree(h, head)), set())
+
     def test_a_dead_function_master_only_moved_is_not_branch_added(self):
         # CI passes the master tip as --base; master moving a file must not blame the branch.
         def git(repo, *args):

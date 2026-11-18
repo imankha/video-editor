@@ -35,7 +35,8 @@ VULTURE_EXCLUDE = 'ai_upscaler/rife'  # vendored upstream code
 VULTURE_IGNORE_DECORATORS = ','.join([
     '@router.*', '@app.*', '@*.get', '@*.post', '@*.put', '@*.delete', '@*.patch', '@*.websocket',
     '@*.on_event', '@*.middleware', '@*.exception_handler', '@*.validator', '@*.field_validator',
-    '@*.model_validator', '@*.function', '@*.method', '@*.enter', '@*.exit', '@*.cls',
+    '@*.model_validator', '@validator', '@field_validator', '@model_validator',
+    '@*.function', '@*.method', '@*.enter', '@*.exit', '@*.cls',
     '@*.local_entrypoint', '@*.asgi_app', '@*.web_endpoint', '@property', '@*.setter',
 ])
 # Names frameworks call by convention, and test seams (tests/ is not scanned).
