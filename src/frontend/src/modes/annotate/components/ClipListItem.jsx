@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useGuidePulse } from '../../../components/instructions/GuideScope';
-import { Info, Play, Users, Share2, Video, Tag, StickyNote } from 'lucide-react';
+import { Info, Users, Share2, Video, Tag, StickyNote } from 'lucide-react';
 import { getRatingDisplay, getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
 import { generateClipName } from '../../../utils/clipDisplayName';
@@ -70,8 +70,9 @@ const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
  * Compact single-line display showing rating badge and title only.
  * Background tint reflects the clip's star rating when selected.
  *
- * On mobile: two action buttons — "details" and "jump to clip".
- * On desktop: entire row is clickable to select.
+ * T17170: the entire row is the tap target. On mobile it jumps to and selects
+ * the play (`onJumpToClip`, falling back to `onClick` where a caller has no jump,
+ * e.g. recap); the info button keeps its own action. On desktop it selects.
  *
  * T4080: when `gameClock` (soccer notation, e.g. "34'12\"") is provided, it renders
  * right-aligned on the row. Callers that lack an in-match start (e.g. recap mode)
@@ -106,9 +107,9 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
       // Stable hook for asserting on row SETS. Needed since only Team rows carry
       // a layer marker now — "count the My Athlete rows" has no marker to count.
       data-testid="clip-row"
-      onClick={isMobile ? undefined : onClick}
+      onClick={isMobile ? (onJumpToClip ?? onClick) : onClick}
       className={`
-        ${isMobile ? '' : 'cursor-pointer'} transition-all ${pulseClass}
+        cursor-pointer transition-all ${pulseClass}
         ${isPlaybackActive
           ? 'border-l-3 border-b border-gray-800 animate-pulse'
           : isSelected
@@ -123,14 +124,14 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
         borderLeftColor: isPlaybackActive ? badgeColor : isSelected ? badgeColor : undefined,
       }}
     >
-      <div className={`flex items-center px-2 ${isMobile ? 'py-3' : 'py-1.5'}`}>
-        {/* Rating badge: drawn disc icon for every rating (T10430). */}
+      <div className={`flex items-center px-2 ${isMobile ? 'min-h-11 py-1.5' : 'py-1'}`}>
+        {/* Rating badge: star count on the rating color (T17170; the icon carries
+            the "N stars" aria-label, the title adds the adjective). */}
         <div
           className={`${isMobile ? 'mr-2.5' : 'mr-2'} flex-shrink-0`}
           title={getRatingLabel(rating)}
-          aria-label={getRatingLabel(rating)}
         >
-          <RatingIcon rating={rating} size={isMobile ? 24 : 20} />
+          <RatingIcon rating={rating} size={28} />
         </div>
 
         {/* Layer chip (T5700): fixed left cluster, always visible */}
@@ -185,7 +186,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
           </span>
         )}
 
-        {/* Mobile: two action buttons */}
+        {/* Mobile: time + the details button (the row itself jumps, T17170) */}
         {isMobile ? (
           <div className="flex items-center gap-1 ml-2 flex-shrink-0">
             {/* T4080: prefer the in-match soccer clock; fall back to clip end time */}
@@ -194,20 +195,13 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
                 editor is suppressed there, so the button would be a dead affordance. */}
             {onViewDetails && (
               <button
-                onClick={onViewDetails}
+                onClick={(e) => { e.stopPropagation(); onViewDetails(); }}
                 className="p-2 rounded-lg coarse-pointer:min-w-11 coarse-pointer:min-h-11 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
                 title="View details"
               >
                 <Info size={16} />
               </button>
             )}
-            <button
-              onClick={onJumpToClip}
-              className="p-2 rounded-lg coarse-pointer:min-w-11 coarse-pointer:min-h-11 bg-green-700 hover:bg-green-600 text-white transition-colors"
-              title="Jump to play"
-            >
-              <Play size={16} />
-            </button>
           </div>
         ) : null}
       </div>

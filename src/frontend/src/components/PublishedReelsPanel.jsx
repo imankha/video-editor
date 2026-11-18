@@ -9,6 +9,9 @@ import { ConfidenceBanner } from './ranking/ConfidenceBanner';
 import { RankingGame } from './ranking/RankingGame';
 import { toPlayerReel } from './collections/playerReels';
 import { useReEditReel } from '../hooks/useReEditReel';
+import { useRedoHighlight } from '../hooks/useRedoHighlight';
+import { useProjectsStore } from '../stores/projectsStore';
+import { EDITOR_MODES } from '../stores/editorStore';
 import { useDownloads } from '../hooks/useDownloads';
 import { useCollections } from '../hooks/useCollections';
 import { useMoveReels } from '../hooks/useMoveReels';
@@ -199,6 +202,21 @@ export function PublishedReelsPanel({
       clip_count: reel.clip_count,
     }, { alreadyPublished: true });
   }, [closeStoryPlayer]);
+  // T17180: the player's labeled Add/Edit spotlight button opens Spotlight for the highlight on
+  // screen, keeping it in Highlights (the same open-for-redo the Finished screen uses).
+  const projects = useProjectsStore((state) => state.projects);
+  const { openForRedo } = useRedoHighlight();
+  const [spotlightOpeningId, setSpotlightOpeningId] = useState(null);
+  const openSpotlight = useCallback(async (reel) => {
+    setSpotlightOpeningId(reel.id);
+    const opened = await openForRedo(EDITOR_MODES.OVERLAY, reel.id);
+    setSpotlightOpeningId(null);
+    if (opened) closeStoryPlayer();
+  }, [openForRedo, closeStoryPlayer]);
+  const reelHasSpotlight = useCallback(
+    (reel) => !!projects.find((p) => p.id === reel.project_id)?.has_overlay_edits,
+    [projects],
+  );
 
   // T4030: author re-ranks a reel while watching it. The tap is the only write
   // trigger (gesture-only): POST /api/rank/reopen re-opens the reel for ranking
@@ -978,6 +996,9 @@ export function PublishedReelsPanel({
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
           onReEdit={openFinished}
+          onSpotlight={openSpotlight}
+          hasSpotlight={reelHasSpotlight}
+          spotlightLoadingId={spotlightOpeningId}
           onReRank={handleReRank}
           reRankLoadingId={reRankingId}
           handleGlyph={storyPlayerHandleGlyph}

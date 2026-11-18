@@ -2669,10 +2669,12 @@ export function AnnotateContainer({
     if (type === 'EDITING') return;
     if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
     if (hasUncommittedTeammateText()) return;
-    // T13590: a playing playhead never changes selection. The primary tile swaps
-    // Mark play <-> highlight/Edit with selection, so swapping mid-play put a
+    // T13590: a playing playhead never SELECTS. The primary tile swaps
+    // Mark play <-> highlight/Edit with selection, so selecting mid-play put a
     // different action under a tap aimed at Mark play. Re-syncs on pause.
-    if (effectiveIsPlaying) return;
+    // T17170: it does DESELECT once it leaves the selected play, so Mark play
+    // comes back at once for the next moment (below, `effectiveIsPlaying` branch).
+    if (effectiveIsPlaying && type !== 'SELECTED') return;
 
     const regionAtPlayhead = getRegionAtTimeUnified(effectiveCurrentTime);
 
@@ -2692,7 +2694,7 @@ export function AnnotateContainer({
         }
         if (effectiveCurrentTime < clipStart - FRAME_TOLERANCE || effectiveCurrentTime > clipEnd + FRAME_TOLERANCE) {
           console.log('[AutoDeselect] Deselecting', clipId, 'playhead:', effectiveCurrentTime.toFixed(2), 'clipVirtual:', clipStart.toFixed(2), '-', clipEnd.toFixed(2), 'seq:', selectedClip.videoSequence, 'regionAtPlayhead:', regionAtPlayhead?.id ?? 'none');
-          regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
+          regionAtPlayhead && !effectiveIsPlaying ? selectClip(regionAtPlayhead.id) : deselectClip();
         }
       } else {
         console.warn('[AutoDeselect] Selected clip not found in clipRegions:', clipId);

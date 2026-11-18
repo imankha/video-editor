@@ -1,83 +1,82 @@
 /**
- * T10430: every rating renders as a drawn disc icon (RatingIcon) instead of
- * notation text on a filled rectangle, everywhere the badge appears. The icon
- * keeps a visually hidden notation so textContent-based assertions (and screen
- * readers) still see "!!", "!", "!?", "?", "??".
+ * T17170:C3: the rating badge shows the STAR COUNT on its colored disc, never a
+ * chess glyph ("!!", "!", "!?", "?", "??" read as nothing to parents). Colors
+ * stay RATING_BADGE_COLORS; dark text on the gold 5-star face. A 28px+ badge
+ * reads "4★"; a smaller timeline dot shows the digit only. Unrated is grey with
+ * no number. (Replaces the T10430 drawn-glyph tests.)
  */
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { RatingIcon } from './RatingIcon';
-import { RATING_BADGE_COLORS, RATING_NOTATION, RATING_GLYPH_COLORS } from './clipConstants';
+import * as clipConstants from './clipConstants';
 import { NotesOverlay } from '../../modes/annotate/components/NotesOverlay';
 import { ClipListItem } from '../../modes/annotate/components/ClipListItem';
 
-describe('RatingIcon', () => {
-  it.each([1, 2, 3, 4, 5])('rating %i draws a disc in its palette color and keeps its notation in textContent', (rating) => {
-    const { container, unmount } = render(<RatingIcon rating={rating} size={24} />);
+const { RATING_BADGE_COLORS, RATING_GLYPH_COLORS, UNRATED_BADGE_COLOR } = clipConstants;
+const CHESS = /[!?]/;
+
+// jsdom normalizes inline colors to rgb(); compare the same way.
+const rgb = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+};
+
+describe('RatingIcon star count', () => {
+  it.each([1, 2, 3, 4, 5])('rating %i at 28px reads "N★" on its palette color', (rating) => {
+    const { unmount } = render(<RatingIcon rating={rating} size={28} />);
     const icon = screen.getByTestId('rating-icon');
     expect(icon.dataset.rating).toBe(String(rating));
-    expect(icon.textContent).toBe(RATING_NOTATION[rating]);
-    const svg = container.querySelector('svg');
-    expect(svg.getAttribute('width')).toBe('24');
-    expect(svg.getAttribute('aria-hidden')).toBe('true');
-    const discFills = [...svg.querySelectorAll('circle')].map((c) => c.getAttribute('fill'));
-    expect(discFills).toContain(RATING_BADGE_COLORS[rating]);
-    // Glyph shapes are drawn (paths/rects), not text.
-    expect(svg.querySelector('text')).toBeNull();
-    expect(svg.querySelectorAll('path, rect').length).toBeGreaterThan(0);
+    expect(icon.textContent).toBe(`${rating}★`);
+    expect(icon.getAttribute('aria-label')).toBe(`${rating} star${rating === 1 ? '' : 's'}`);
+    expect(icon.style.backgroundColor).toBe(rgb(RATING_BADGE_COLORS[rating]));
+    expect(icon.style.width).toBe('28px');
+    expect(icon.style.fontSize).toBe('13px');
     unmount();
   });
 
-  it('renders null/undefined as Good (4)', () => {
-    render(<RatingIcon rating={undefined} />);
+  it('a 20px timeline dot shows the digit only', () => {
+    render(<RatingIcon rating={3} size={20} />);
+    expect(screen.getByTestId('rating-icon').textContent).toBe('3');
+  });
+
+  it('5 stars draws dark text on gold (never white on gold)', () => {
+    render(<RatingIcon rating={5} size={28} />);
     const icon = screen.getByTestId('rating-icon');
-    expect(icon.dataset.rating).toBe('4');
+    expect(icon.style.backgroundColor).toBe(rgb('#F5B700'));
+    expect(icon.style.color).toBe(rgb(RATING_GLYPH_COLORS[5]));
   });
 
-  it('Brilliant (5) is gold, distinct from the 4-star green', () => {
-    expect(RATING_BADGE_COLORS[5]).toBe('#F5B700');
-    expect(RATING_BADGE_COLORS[5]).not.toBe(RATING_BADGE_COLORS[4]);
+  it('null/undefined renders as Good (4)', () => {
+    render(<RatingIcon rating={undefined} size={28} />);
+    expect(screen.getByTestId('rating-icon').textContent).toBe('4★');
   });
 
-  it('T11110: draws the notation glyph in a dark color on the gold 5-star face (never white on gold)', () => {
-    const { container } = render(<RatingIcon rating={5} size={24} />);
-    const svg = container.querySelector('svg');
-    const fills = [...svg.querySelectorAll('g')].map((g) => g.getAttribute('fill'));
-    // Behavioral: whatever color the glyph is drawn in, it must never be
-    // #ffffff on the gold face (illegible white-on-gold).
-    expect(fills).not.toContain('#ffffff');
-    // The notation glyph group is filled with the per-rating glyph color.
-    expect(fills).toContain(RATING_GLYPH_COLORS[5]);
-    expect(RATING_GLYPH_COLORS[5]).toBe('#1a1300');
+  it('an out-of-range rating is unrated: neutral grey, no number', () => {
+    render(<RatingIcon rating={0} size={28} />);
+    const icon = screen.getByTestId('rating-icon');
+    expect(icon.textContent).toBe('');
+    expect(icon.style.backgroundColor).toBe(rgb(UNRATED_BADGE_COLOR));
   });
-});
 
-describe('NotesOverlay rating notation', () => {
-  it('renders the rating icon with the human label for 5-star and 4-star plays', () => {
-    const { rerender } = render(
-      <NotesOverlay name="Great goal" notes="" rating={5} isVisible />
-    );
-    expect(screen.getByTestId('rating-icon').dataset.rating).toBe('5');
-    expect(screen.getByLabelText('5 stars · Brilliant').textContent).toBe('!!');
-
-    rerender(<NotesOverlay name="Nice pass" notes="" rating={4} isVisible />);
-    expect(screen.getByTestId('rating-icon').dataset.rating).toBe('4');
-    expect(screen.getByLabelText('4 stars · Good').textContent).toBe('!');
+  it('chess notation is retired', () => {
+    expect(clipConstants.RATING_NOTATION).toBeUndefined();
+    expect(clipConstants.getRatingDisplay(5).notation).toBeUndefined();
   });
 });
 
-describe('ClipListItem rating badge', () => {
-  const region = (rating) => ({
-    id: `r${rating}`, index: 0, startTime: 0, endTime: 8, rating, tags: [], notes: '', name: 'Play',
+describe('rating badge callers show stars, never chess glyphs', () => {
+  it('NotesOverlay', () => {
+    render(<NotesOverlay name="Great goal" notes="" rating={5} isVisible />);
+    const icon = screen.getByTestId('rating-icon');
+    expect(icon.dataset.rating).toBe('5');
+    expect(icon.textContent).not.toMatch(CHESS);
   });
 
-  it.each([5, 4, 1])('renders the disc icon (no filled rectangle) for a %i-star play', (rating) => {
-    const { unmount } = render(<ClipListItem region={region(rating)} isSelected={false} onClick={() => {}} />);
-    const badge = screen.getByTitle(/stars? · /);
-    const icon = badge.querySelector('[data-testid="rating-icon"]');
-    expect(icon).not.toBeNull();
-    expect(icon.dataset.rating).toBe(String(rating));
-    expect(badge.style.backgroundColor).toBe('');
-    unmount();
+  it.each([true, false])('ClipListItem row badge is 28px "N★" with aria-label "N stars" (mobile=%s)', (isMobile) => {
+    render(<ClipListItem region={{ id: 'r', index: 0, startTime: 0, endTime: 8, rating: 4, tags: [], notes: '', name: 'Play' }}
+      isSelected={false} isMobile={isMobile} onClick={() => {}} onJumpToClip={() => {}} />);
+    const icon = screen.getByLabelText('4 stars');
+    expect(icon.textContent).toBe('4★');
+    expect(icon.style.width).toBe('28px');
   });
 });

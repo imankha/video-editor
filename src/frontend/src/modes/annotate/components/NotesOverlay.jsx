@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCircle2, Film } from 'lucide-react';
-import { RATING_NOTATION, RATING_BADGE_COLORS, displayRating, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RATING_BADGE_COLORS, displayRating, getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
 import { CLIP_STAGE } from '../clipStage';
 import { NOTES_OVERLAY_STATUS } from '../../../config/displayNames';
@@ -19,7 +19,7 @@ const CLIP_STATE_MARK = {
 const RATING_COLORS = RATING_BADGE_COLORS;
 
 /**
- * NotesOverlay - Displays clip name, rating notation, and notes as text overlay on the video
+ * NotesOverlay - Displays clip name, rating badge (star count), and notes as text overlay on the video
  *
  * Styling per spec:
  * - Position: absolute, top of video
@@ -28,7 +28,7 @@ const RATING_COLORS = RATING_BADGE_COLORS;
  * - Text: black
  * - Width: 80% centered
  * - Rounded corners
- * - Rating notation + Name: centered, first line, bold
+ * - Rating badge + Name: centered, first line, bold
  * - Notes: below name
  * - More vertical padding in fullscreen mode
  *
@@ -39,7 +39,6 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, clipStage 
     return null;
   }
 
-  const notation = RATING_NOTATION[displayRating(rating)] || '';
   const clipMark = clipStage ? CLIP_STATE_MARK[clipStage] || null : null;
   // T10690: an unrated clip's border is neutral, not a borrowed "Interesting"
   // blue — a NULL rating is a real state, never a value to substitute.
@@ -76,7 +75,7 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, clipStage 
       )}
       {name && (
         // T5290: below sm the narrow pill laid the absolutely-positioned game clock
-        // over the centered name (`8'56"Good Control`). Below sm, lay time + notation
+        // over the centered name (`8'56"Good Control`). Below sm, lay time + rating badge
         // + name out inline with a gap so they read as `8'56" ! Good Control`; at sm+
         // the original absolute-left clock / centered name returns (byte-identical).
         // Pure Tailwind sm: treatment (640px) — matches the recap layout breakpoint,
@@ -89,11 +88,9 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, clipStage 
           {gameClock && (
             <span className="tabular-nums text-[#666] sm:absolute sm:left-0 sm:top-0">{gameClock}</span>
           )}
-          {notation && (
-            <span className="inline-flex self-center sm:mr-1.5 sm:align-middle" aria-label={getRatingLabel(rating)}>
-              <RatingIcon rating={rating} size={18} />
-            </span>
-          )}
+          <span className="inline-flex self-center sm:mr-1.5 sm:align-middle" aria-label={getRatingLabel(rating)}>
+            <RatingIcon rating={rating} size={18} />
+          </span>
           <span>{name}</span>
         </div>
       )}

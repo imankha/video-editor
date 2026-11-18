@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Download, Check, X, ChevronUp, ChevronDown, Loader, Clock } from 'lucide-react';
 import { useExportStore } from '../stores/exportStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
+import { useExportCardSlotStore } from '../stores/exportCardSlotStore';
 import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
 import { useWebShare } from '../hooks/useWebShare';
@@ -46,7 +48,7 @@ export const POST_UPSCALE_TAIL_SECONDS = 30;
 
 // T15950: two consecutive frame windows whose ms-per-frame differ by more than this
 // factor mean the pace hasn't settled (e.g. GPU warm-up then the steady pace), so no
-// estimate is shown yet ("Time remaining varies.").
+// estimate is shown yet ("Usually a few minutes").
 export const ETA_RATE_SETTLED_RATIO = 1.5;
 
 // T14860: the only phases that report a numeric "frame i/N" count are the AI-upscale
@@ -154,7 +156,7 @@ function formatRemaining(seconds) {
  *   or percent has been frozen past ETA_STALL_MS while the estimate reads under a minute.
  *
  * T9900: consumers now render the estimate slot via `etaSlotText`, which shows a number
- * only when stale=false and otherwise the honest "Time remaining varies." fallback — the
+ * only when stale=false and otherwise the honest "Usually a few minutes" fallback — the
  * real stage line (`progressLine`) is rendered on its OWN line alongside it. `fallbackText`
  * (the stage copy) is retained on the return object for T8510's direct unit tests.
  *
@@ -198,7 +200,7 @@ export function resolveEtaDisplay(exp, now, deadlines, percentTracks, frameTrack
  * T9900: the honest text for the estimate slot — never blank, never a frozen/fabricated
  * countdown. A trustworthy live estimate reads "About 1 minute remaining"; anything else
  * (too little data yet — `display` is null — or an estimate that broke its own promise —
- * `display.stale`) reads the "Time remaining varies." fallback. The real stage line always
+ * `display.stale`) reads the "Usually a few minutes" fallback. The real stage line always
  * renders alongside this, so the user still sees what is happening.
  */
 export function etaSlotText(display) {
@@ -226,6 +228,8 @@ export function GlobalExportIndicator() {
   // T11330: exportIds whose over-budget popup the user has dismissed (local, session-scoped).
   const [dismissedBudgetIds, setDismissedBudgetIds] = useState(() => new Set());
   const { isMobile, copyLink } = useWebShare();
+  // T17190: a screen (Frame) can offer a slot below its video; the card docks there.
+  const cardSlot = useExportCardSlotStore((state) => state.slot);
 
   // Get export state from store (updated via WebSocket)
   const activeExports = useExportStore((state) => state.activeExports);
@@ -440,17 +444,18 @@ export function GlobalExportIndicator() {
     }
   };
 
-  return (
-    <>
-      {budgetModal}
-      {/* T14230: below lg the editors' action band spans the full width, so the card docks
-          ABOVE it (ActionBand / CtaBar publish its height as --cta-bar-h; unset off-editor)
-          instead of covering Generate / Add text / Trim. lg+ keeps the bottom-4 slot. */}
-      <div className="fixed bottom-4 max-lg:bottom-[calc(var(--cta-bar-h,0px)+1rem)] right-4 z-50" data-testid="global-export-indicator">
-      {/* Main indicator card */}
+  // T17190: one line the parent reads first: the job and its percent ("Sharpening your
+  // highlight... 15%"); the stage line below only when it adds something.
+  const primaryPercent = primaryExport?.progress?.percent >= 0 ? ` ${primaryExport.progress.percent}%` : '';
+  const headline = processingExports.length > 1
+    ? EXPORT_PROGRESS.MANY_IN_PROGRESS(processingExports.length)
+    : `${jobVocab(primaryExport)?.inProgress ?? progressLine(primaryExport)}${primaryPercent}`;
+  const primaryStage = primaryExport ? progressLine(primaryExport) : null;
+
+  const card = (
       <div
         className={`bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden transition-all duration-200 max-w-[calc(100vw-2rem)] ${
-          isExpanded ? 'w-80' : 'w-64'
+          cardSlot ? 'w-full' : isExpanded ? 'w-80' : 'w-64'
         }`}
       >
         {/* Header - always visible */}
@@ -466,8 +471,8 @@ export function GlobalExportIndicator() {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-white">
-                {processingExports.length} Highlight{processingExports.length !== 1 ? 's' : ''} Generating
+              <div className="text-sm font-medium text-white break-words">
+                {headline}
               </div>
               {primaryExport && (
                 // T9900: give the object name, stage, percent and estimate their own lines
@@ -476,10 +481,13 @@ export function GlobalExportIndicator() {
                 // announcing toast has dismissed (evidence E19).
                 <div className="text-xs text-gray-400 space-y-0.5">
                   <div className="truncate">{getExportLabel(primaryExport)}</div>
-                  <div className="break-words">
-                    {progressLine(primaryExport)}
-                    {primaryExport.progress?.percent >= 0 ? ` · ${primaryExport.progress.percent}%` : ''}
-                  </div>
+                  {primaryStage && !headline.startsWith(primaryStage) && (
+                    <div className="break-words">{primaryStage}</div>
+                  )}
+                  {/* T17190: the parent may leave; say so and where the highlight lands. */}
+                  {jobVocab(primaryExport)?.canLeave && (
+                    <div className="text-gray-300 break-words">{jobVocab(primaryExport).canLeave}</div>
+                  )}
                   <div className="text-gray-500 break-words">{etaSlotText(primaryETA)}</div>
                 </div>
               )}
@@ -558,7 +566,7 @@ export function GlobalExportIndicator() {
                     </div>
                     {/* ETA display — the stage message already renders above this row, so
                         the estimate slot carries only an honest remaining time or the
-                        "Time remaining varies." fallback (never blank, never frozen). */}
+                        "Usually a few minutes" fallback (never blank, never frozen). */}
                     <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                       <Clock className="w-3 h-3 shrink-0" />
                       <span className="min-w-0 break-words">
@@ -586,7 +594,22 @@ export function GlobalExportIndicator() {
           </div>
         )}
       </div>
-      </div>
+  );
+
+  return (
+    <>
+      {budgetModal}
+      {cardSlot ? createPortal(
+        <div className="mt-2" data-testid="global-export-indicator" data-docked="below-video">{card}</div>,
+        cardSlot,
+      ) : (
+        // T14230: below lg the editors' action band spans the full width, so the card docks
+        // ABOVE it (ActionBand / CtaBar publish its height as --cta-bar-h; unset off-editor)
+        // instead of covering Generate / Add text / Trim. lg+ keeps the bottom-4 slot.
+        <div className="fixed bottom-4 max-lg:bottom-[calc(var(--cta-bar-h,0px)+1rem)] right-4 z-50" data-testid="global-export-indicator">
+          {card}
+        </div>
+      )}
     </>
   );
 }

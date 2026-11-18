@@ -24,6 +24,7 @@ const CONTROL_PHRASES = [
   { name: 'Retry', re: /\bTap Retry\b/, pulse: [P.GAMES_RETRY, P.UPLOAD_RETRY, P.VIDEO_RETRY] },
   { name: 'Open it / your game', re: /\bOpen (it now|your game)\b/, pulse: [P.FIRST_GAME] },
   { name: 'Open Finished', re: /\bOpen Finished\b/, pulse: [P.TAB_PUBLISHED] },
+  { name: 'Go to Highlights', re: /\bTap Go to Highlights\b/, pulse: [P.GO_TO_HIGHLIGHTS] }, // T17190
   { name: 'open a game', re: /\bopen a game\b/i, pulse: [P.FIRST_GAME] },
   { name: 'Drag the box', re: /\bDrag the box\b/, pulse: [P.CROP_BOX] },
   { name: 'Preview', re: /\bTap Preview\b/, pulse: [P.PREVIEW, P.COCKPIT_PREVIEW] },
