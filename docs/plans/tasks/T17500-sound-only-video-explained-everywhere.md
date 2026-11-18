@@ -1,6 +1,6 @@
 # T17500: Every video that plays sound only says why
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-18
