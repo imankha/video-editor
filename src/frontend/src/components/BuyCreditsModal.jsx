@@ -253,7 +253,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
             {selectedPack.label}: {selectedPack.credits.toLocaleString()} credits
           </h3>
           <p className="text-gray-400 text-sm">
-            {selectedPack.price} · ~{selectedPack.plays} plays
+            {selectedPack.price} · ~{selectedPack.highlights} highlights
           </p>
         </div>
         <button

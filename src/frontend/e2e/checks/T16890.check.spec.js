@@ -16,7 +16,10 @@ const TOUCH_SIZES = [{ width: 390, height: 844 }, { width: 768, height: 1024 }, 
 const DESKTOPS = [{ width: 1280, height: 720 }, { width: 1366, height: 768 }, { width: 1440, height: 900 }];
 
 async function openCardStep(page) {
-  await page.goto('/');
+  // '/home', not '/': a bare '/' cold load restores the account's resume point (T14980), and
+  // on staging the shared account's point is an editor that opens a few seconds later,
+  // unmounting the Buy credits dialog this check just opened (T16910).
+  await page.goto('/home');
   await disableGuidanceForCheck(page);
   await page.getByTitle(/to buy more/i).first().click();
   const dialog = page.locator('div.fixed.inset-0').filter({ has: page.getByRole('heading', { name: 'Buy credits' }) });

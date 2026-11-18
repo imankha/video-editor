@@ -53,6 +53,19 @@ describe('GameDetailsModal invalid file (T12830)', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('T17280: tells the parent plainly when the browser can play only the sound (iPhone HEVC)', async () => {
+    const err = new Error('picture not decodable');
+    err.code = 'VIDEO_PICTURE_UNSUPPORTED';
+    extractSpy.mockRejectedValueOnce(err);
+    const { onCreateGame, onClose } = setup();
+    fireEvent.submit(document.querySelector('form'));
+    const text = (await screen.findByRole('alert')).textContent;
+    expect(text).toMatch(/can't show this video's picture/);
+    expect(text).toMatch(/Most Compatible/);
+    expect(onCreateGame).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('hands off when the probe succeeds', async () => {
     extractSpy.mockResolvedValueOnce({ width: 1, height: 1, duration: 1 });
     const { onCreateGame } = setup();

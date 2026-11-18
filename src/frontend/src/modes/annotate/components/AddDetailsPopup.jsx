@@ -69,6 +69,9 @@ export function AddDetailsPopup({
       role="dialog"
       aria-modal="true"
       aria-label={ANNOTATE.DETAILS}
+      // T17010: full-screen with its own close X at the top right, where the fixed Guidance switch
+      // paints; data-covers-header hides the switch while the sheet is open (T13770 contract).
+      data-covers-header=""
     >
       {/* T11150 (H19): neutral-gray accent, was yellow — the play editor's
           amber "to-do" treatment is retired everywhere. */}

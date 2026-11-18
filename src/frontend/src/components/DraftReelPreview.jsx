@@ -408,7 +408,8 @@ function DraftReelPreviewInner({ payload }) {
   // gesture is that click, never a mount effect (R5).
   const flowPhase = phase === 'ready-capable' ? 'ready' : phase;
   // T12290: coach only while Share is the next tap (no link yet); review/publishing/failed/link-ready have their own UI.
-  const guide = resolveGuide({ screen: 'finished', local: { shared: !(phase === 'idle' || phase === 'ready-capable') } });
+  // T17040: a phone's ready-capable sheet renders Share link (PublishLinkFlow's coarse-pointer branch), not Get link.
+  const guide = resolveGuide({ screen: 'finished', local: { shared: !(phase === 'idle' || phase === 'ready-capable'), shareLinkButton: isMobile && phase === 'ready-capable' } });
   const actionBar = (
     <GuideScope guides={[guide]}>
       <Guide guide={guide} testId="finished-guide" />

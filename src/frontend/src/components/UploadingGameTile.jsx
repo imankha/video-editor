@@ -195,8 +195,9 @@ export function UploadingGameTile({
         <div className="absolute inset-0 z-[5] bg-gradient-to-b from-rose-950/50 via-black/45 to-black/80" aria-hidden />
       )}
 
-      {/* Bottom scrim: name + meta line, same typography slots as GameTile. */}
-      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${state === TILE_STATE.FAILED ? 'pb-9 coarse-pointer:pb-11' : 'pb-2.5'}`}>
+      {/* Bottom scrim: name + meta line, same typography slots as GameTile.
+          T17130: failed pb-12 clears the 48px Retry/Discard bar, as in GameTile. */}
+      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${state === TILE_STATE.FAILED ? 'pb-12 coarse-pointer:pb-14' : 'pb-2.5'}`}>
         <h3 className="text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={name}>
           {name}
         </h3>

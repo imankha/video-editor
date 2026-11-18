@@ -1,6 +1,6 @@
 # T17150: Admin numbers disagree
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-11-17

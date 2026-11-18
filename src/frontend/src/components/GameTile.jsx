@@ -364,8 +364,11 @@ export function GameTile({
           tile is ~358x200 with room for a 2-line opponent name. The scrim auto-sizes
           to its content (bottom-anchored with padding), so it still fully covers a
           2-line name on the shortest tile. The gradient is opaque enough at the base
-          to stay legible over a bright poster frame. */}
-      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${isUploadFailed ? 'pb-9 coarse-pointer:pb-11' : 'pb-1.5'}`}>
+          to stay legible over a bright poster frame.
+          T17130: a failed tile's bottom padding (pb-12, 48px) equals the height of the
+          Retry/Discard bar laid over it (p-1.5 + min-h-[36px] buttons), so the sentence ends
+          above the buttons; pb-9 left its last line under them. */}
+      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${isUploadFailed ? 'pb-12 coarse-pointer:pb-14' : 'pb-1.5'}`}>
         {/* T6890: the edit (rename) pencil sits beside the game name it edits,
             instead of only inside the top-right kebab. Same "icon touches the name"
             placement as DraftTile/ReelTile (ManageProfilesModal reference pattern:

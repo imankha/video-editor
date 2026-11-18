@@ -53,6 +53,16 @@ import { useClearOfGuide } from './instructions/useClearOfGuide';
 const RECOVERY_CARD_MS = 8000;
 /** The card's own spot (`bottom-24 right-4`), in px, for useClearOfGuide. */
 const CARD_HOME = { right: 16, bottom: 96 };
+/**
+ * T17060: from lg up, CornerStack's Report button (desktop-only) sits at bottom cta-bar + 5rem and
+ * is 42px tall, so the card rises 8.5rem above the CTA bar and never covers its Dismiss with that button.
+ */
+const LG_QUERY = '(min-width: 1024px)';
+function cardHome() {
+  if (!window.matchMedia?.(LG_QUERY).matches) return CARD_HOME;
+  const ctaBar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cta-bar-h')) || 0;
+  return { right: 16, bottom: ctaBar + 136 };
+}
 
 export function FocusCompletionRecovery() {
   const recovered = useFocusCompletionStore((s) => s.recovered);
@@ -138,7 +148,7 @@ export function FocusCompletionRecovery() {
 
   // T13570: with guidance on, the card moves off the coach card and whatever it names (the game tile on Home).
   const cardRef = useRef(null);
-  const clearSpot = useClearOfGuide(cardRef, hasRecovered, CARD_HOME);
+  const clearSpot = useClearOfGuide(cardRef, hasRecovered, cardHome());
 
   if (!recovered) return null;
 
@@ -157,7 +167,7 @@ export function FocusCompletionRecovery() {
     // T9285: stacked ABOVE GlobalExportIndicator's bottom-4/right-4 slot (design
     // §5 risk: "two bottom-right surfaces collide") so a concurrent export
     // indicator never renders on top of this card.
-    <div ref={cardRef} className="fixed bottom-24 right-4 z-40" style={clearSpot ? { left: clearSpot.left, top: clearSpot.top, right: 'auto', bottom: 'auto' } : undefined}
+    <div ref={cardRef} className="fixed bottom-24 lg:bottom-[calc(var(--cta-bar-h,0px)+8.5rem)] right-4 z-40" style={clearSpot ? { left: clearSpot.left, top: clearSpot.top, right: 'auto', bottom: 'auto' } : undefined}
       data-testid="focus-completion-recovery" data-guide-transient="true">
       <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl px-4 py-3 w-64">
         <div className="text-sm font-medium text-white">

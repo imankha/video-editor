@@ -57,6 +57,7 @@ const TODAYS_TARGETS = {
   'overlay.ready': P.OVERLAY_FINISH,
   'overlay.pick.done': P.EXPORT,
   'finished.viewer': P.GET_LINK,
+  'finished.viewer.shareLink': P.SHARE_LINK,
   'share.modal': P.SHARE_SUBMIT,
   'home.games.error': P.GAMES_RETRY, // T12790
   'focus.video-error.retry': P.VIDEO_RETRY,

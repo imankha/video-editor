@@ -1,6 +1,6 @@
 # T17050: Checkout header missing highlight count
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-11-17
