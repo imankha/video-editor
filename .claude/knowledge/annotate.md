@@ -2354,11 +2354,12 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
     synchronously after the pick's awaits (a real ordering trap, pinned by the "rated Highlight in the
     gate" test). The already-rated path passes no `pickedRating` and reads the stored value (fresh).
   - **Make Highlight Now** = the Frame Now path exactly: `updateClipRegionWithSync(id, {createProject:true,
-    silent:true})`, `await awaitRegionWrites`, then `onOpenReelInFocus(projectId)`. **Back to Editing** =
-    same create (silent) but no nav — closes the editor (returns to marking plays) and fires the ONLY
-    confirmation toast via `announceReelCreated(pid, {message: ANNOTATE.HIGHLIGHT_MOVED_TO_CLIPS,
-    withAction:false})` ("Highlight moved to Clips so you can edit it later", no action button —
-    `announceReelCreated` gained `message`/`withAction` params; default callers unchanged). Synchronous
+    silent:true})`, `await awaitRegionWrites`, then `onOpenReelInFocus(projectId)`. **Keep marking plays**
+    (`handleHighlightChoiceLater`) creates NOTHING since T17210 (2026-11-18): it closes the editor, nudges
+    the playhead past the play and returns to marking; no createProject, no toast, so the Plays tab never
+    gains an unasked-for draft (the play stays un-highlighted and re-offers the card on its next Done).
+    Its old toast copy constant was deleted; `announceReelCreated`'s `message`/`withAction` params have no
+    caller left. Synchronous
     double-create guard: `highlightChoiceInFlightRef`. Tests: `AnnotateContainer.rateGate.test.jsx` (gate removed; now `AnnotateContainer.noRateGate.test.jsx`)
     (T11130 describe) + `AnnotateFullscreenOverlay.highlightChoice.test.jsx`.
   - **H8 (T11130): the editor's OWN stage CTA + first-clip "Keep marking plays" invitation are REMOVED**
@@ -3613,7 +3614,7 @@ The full checklist for an 11th→Nth sport:
 - `Button` coarse-pointer 44px floor applies ONLY to `iconOnly`. Labelled buttons that must reach 44px on touch need `className="coarse-pointer:min-h-11"` (JustPublishedCard does this).
 - Finished card (`collections/JustPublishedCard.jsx`): Copy link / Download keep `aria-label` and show their text only from `sm` up (`hidden sm:inline`).
 
-**T12510:** the HighlightChoiceCard "Keep Marking Plays" button (`handleHighlightChoiceLater`) DOES create the highlight (createProject, no navigation); its subtext (`ANNOTATE.BACK_TO_EDITING_SUBTEXT`) must say so. Don't reword it as "waits in Clips" unless the create is removed.
+**T12510 -> T17210:** the HighlightChoiceCard "Keep marking plays" button (`handleHighlightChoiceLater`) no longer creates the highlight (T17210 removed the create); its subtext (`ANNOTATE.BACK_TO_EDITING_SUBTEXT`) reads "This play is saved. You can make its highlight any time." Don't reword it to promise a highlight in Plays.
 **T16770:** `handleHighlightChoiceLater` closes the card, deselects and nudges the playhead past the play SYNCHRONOUSLY at the tap, THEN awaits the createProject save. Never move UI/playhead steps after that await: a slow save let the nudge land seconds late and overwrite a seek the user made meanwhile (second play saved just past the first). Testing trap: in a multi-video game a write to `<video>.currentTime` while paused never reaches the app playhead (`useMultiVideoScrub` reads the element only while playing); drive seeks with the transport.
 
 **T13280 per-video labels:** sequential (angle-free) multi-video games render one name chip per video on the

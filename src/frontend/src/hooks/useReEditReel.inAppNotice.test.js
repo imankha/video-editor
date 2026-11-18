@@ -36,18 +36,18 @@ describe('useReEditReel in-app notices (T14570)', () => {
     vi.spyOn(useProjectsStore.getState(), 'fetchProjects').mockImplementation(() => {});
   });
 
-  it('T14570:C2 503 sync_failed toasts the not-synced copy and keeps the restored outcome', async () => {
+  it('T14570:C2 503 sync_failed toasts the not-synced copy and does not navigate', async () => {
     apiFetch.mockResolvedValue({ ok: false, status: 503, json: async () => ({ code: 'sync_failed' }) });
     const outcome = await restore();
-    expect(outcome).toEqual({ restored: true, navigated: false });
-    expect(toastTitles()).toEqual([ERROR_COPY.REOPEN_NOT_SYNCED]);
+    expect(outcome).toEqual({ navigated: false });
+    expect(toastTitles()).toEqual([ERROR_COPY.CHANGES_NOT_SYNCED]);
     expect(window.alert).not.toHaveBeenCalled();
   });
 
   it('T14570:C3 a thrown network error toasts fixed copy, not its message', async () => {
     apiFetch.mockRejectedValue(new TypeError('NetworkError when attempting to fetch resource'));
     const outcome = await restore();
-    expect(outcome).toEqual({ restored: false, navigated: false });
+    expect(outcome).toEqual({ navigated: false });
     expect(toastTitles()).toEqual([ERROR_COPY.OPEN_HIGHLIGHT]);
     expect(window.alert).not.toHaveBeenCalled();
   });
