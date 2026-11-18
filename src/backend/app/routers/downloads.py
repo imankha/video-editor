@@ -573,6 +573,7 @@ async def list_downloads(
                 single_game['opponent_name'] if single_game else None,
                 single_game['game_type'] if single_game else None,
                 row['clip_game_start_time'],
+                single_game['name'] if single_game else None,
             )
 
             # T3600: duration/aspect_ratio/tags are frozen at export-finalize.

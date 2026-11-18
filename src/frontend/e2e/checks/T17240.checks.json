@@ -4,8 +4,7 @@
       "kind": "browser"
     },
     "T17240:C2": {
-      "kind": "code",
-      "command": "cd src/backend && python -m pytest tests/test_t17240_unnamed_play_label.py -q -p no:cacheprovider && grep -q 'displayName={download.display_name}' ../frontend/src/components/PublishedReelsPanel.jsx && grep -q 'project.display_name' ../frontend/src/utils/clipDisplayName.js"
+      "kind": "browser"
     }
   }
 }

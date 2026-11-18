@@ -651,10 +651,12 @@ def _read_projects_list():
 
             # T17240: an unnamed single-game play reads as "Vs Oceanside 0:14" on its
             # tile; `name` stays the stored name (the rename source).
-            opponent_name, game_type = (
-                game_info['opponents'][0] if len(game_info['opponents']) == 1 else (None, None)
+            single_game = len(game_info['opponents']) == 1
+            opponent_name, game_type = game_info['opponents'][0] if single_game else (None, None)
+            play_label = unnamed_play_label(
+                row['name'], opponent_name, game_type, clip_game_start_time,
+                game_info['game_names'][0] if single_game else None,
             )
-            play_label = unnamed_play_label(row['name'], opponent_name, game_type, clip_game_start_time)
 
             result.append(ProjectListItem(
                 id=row['id'],

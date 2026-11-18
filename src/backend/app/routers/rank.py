@@ -148,11 +148,11 @@ def _games_info(cursor, rows) -> dict:
     if game_ids:
         placeholders = ",".join("?" for _ in game_ids)
         cursor.execute(
-            f"SELECT id, opponent_name, game_date, game_type FROM games WHERE id IN ({placeholders})",
+            f"SELECT id, name, opponent_name, game_date, game_type FROM games WHERE id IN ({placeholders})",
             list(game_ids),
         )
         for g in cursor.fetchall():
-            info[g["id"]] = (g["opponent_name"], g["game_date"], g["game_type"])
+            info[g["id"]] = (g["opponent_name"], g["game_date"], g["game_type"], g["name"])
     return info
 
 
@@ -180,11 +180,13 @@ def _minute(clip_start_time) -> int | None:
 
 def _side(row, games_info: dict) -> MatchupSide:
     gid = route_collection(row["game_ids"], row["clip_count"])
-    opponent_name, game_date, game_type = (
-        games_info.get(gid, (None, None, None)) if gid is not None else (None, None, None)
+    opponent_name, game_date, game_type, game_name = (
+        games_info.get(gid, (None,) * 4) if gid is not None else (None,) * 4
     )
     # T17240: two unnamed "Play 1"s read as "Vs Oceanside 0:14" / "at Carlsbad 1:15".
-    label = unnamed_play_label(row["name"], opponent_name, game_type, row["clip_game_start_time"])
+    label = unnamed_play_label(
+        row["name"], opponent_name, game_type, row["clip_game_start_time"], game_name,
+    )
     return MatchupSide(
         id=row["id"],
         name=label or row["name"] or f"Highlight {row['id']}",

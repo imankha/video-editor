@@ -49,6 +49,11 @@ class TestUnnamedPlayLabel:
         assert unnamed_play_label("Play 1", None, "home", 14) is None
         assert unnamed_play_label("Play 1", "Oceanside", "home", None) is None
 
+    def test_game_without_opponent_reads_by_its_name(self):
+        # Fix round 1: a game with no opponent set left "Play 1" on every tile.
+        from app.queries import unnamed_play_label
+        assert unnamed_play_label("Play 1", None, "unknown", 18.7, "Game uploaded Sep 20") == "Game uploaded Sep 20 0:18"
+
 
 class TestRankingShowsGamePlusTime:
     def test_two_unnamed_plays_read_apart(self, db):
@@ -65,6 +70,22 @@ class TestRankingShowsGamePlusTime:
         m = asyncio.run(rank_next(aspect_ratio="9:16"))
         names = {m.a.id: m.a.name, m.b.id: m.b.name}
         assert names == {a: "Vs Oceanside 0:14", b: "at Carlsbad 1:15"}
+
+    def test_game_without_opponent_reads_by_game_name(self, db):
+        with _conn(db) as c:
+            cur = c.cursor()
+            _insert_game(cur, 3, None)
+            a = _insert_fv(cur, game_ids=[3], source_clip_id=1, clip_game_start_time=18.7)
+            b = _insert_fv(cur, game_ids=[3], source_clip_id=2, clip_game_start_time=328.0)
+            _name_reel(cur, a, "Play 1")
+            _name_reel(cur, b, "Play 1")
+            c.commit()
+        from app.routers.rank import rank_next
+        m = asyncio.run(rank_next(aspect_ratio="9:16"))
+        names = {m.a.id: m.a.name, m.b.id: m.b.name}
+        assert names == {a: "g3.mp4 0:18", b: "g3.mp4 5:28"}
+        by_id = {d.id: d for d in _downloads().downloads}
+        assert by_id[a].display_name == "g3.mp4 0:18"
 
 
 class TestReelTileShowsGamePlusTime:

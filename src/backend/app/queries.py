@@ -32,20 +32,25 @@ _DEFAULT_PLAY_NAME_RE = re.compile(r"^Play \d+$")
 
 
 def unnamed_play_label(name: str | None, opponent_name: str | None,
-                       game_type: str | None, game_start_time: float | None) -> str | None:
+                       game_type: str | None, game_start_time: float | None,
+                       game_name: str | None = None) -> str | None:
     """'Vs Oceanside 0:14' for a play still carrying its one-tap default name, so
-    two "Play 1"s from different games read apart. Display only: the stored name
-    is never rewritten. None when the play has a real name, or when the game
-    opponent or in-match time is unknown (the caller shows the stored name).
-    Frontend twin: unnamedPlayLabel() in utils/clipDisplayName.js."""
+    two "Play 1"s from different games read apart. A game with no opponent set
+    reads by its own name instead ('Game uploaded Sep 20 0:18'). Display only: the
+    stored name is never rewritten. None when the play has a real name, or when the
+    game or in-match time is unknown (the caller shows the stored name)."""
     if not _DEFAULT_PLAY_NAME_RE.match((name or "").strip()):
         return None
-    if not opponent_name or game_start_time is None:
+    if game_start_time is None:
         return None
-    from app.constants import GameType
-    prefix = "at" if game_type == GameType.AWAY else "Vs"
     clock = _play_time_name(game_start_time)[len("Play at "):]
-    return f"{prefix} {opponent_name} {clock}"
+    if opponent_name:
+        from app.constants import GameType
+        prefix = "at" if game_type == GameType.AWAY else "Vs"
+        return f"{prefix} {opponent_name} {clock}"
+    if game_name:
+        return f"{game_name} {clock}"
+    return None
 
 
 def short_game_date(game_date: str | None) -> str:
