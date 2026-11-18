@@ -74,14 +74,13 @@ describe('UserTable Games column (T8220 tries vs succeeded, T11010 per-file pair
   });
 });
 
-describe('UserTable Clips Saved column (T8240 relabel)', () => {
-  it('labels the clip_created_count column "Clips Saved", not "Clips" or "Published"', () => {
+describe('UserTable Plays column (T8240 relabel, T17270 "Plays")', () => {
+  it('labels the clip_created_count column "Plays", not "Clips" or "Published"', () => {
     render(<UserTable users={[BASE_USER]} onUserClick={() => {}} funnelTotals={{}} />);
 
-    // The header reads "Clips Saved" (activity/save events), which honestly
-    // describes clip_created_count and does not claim to be published output.
-    expect(screen.getByText('Clips Saved')).toBeTruthy();
-    expect(screen.queryByText('Clips')).toBeNull();
+    // T17270: the parent's word for a marked clip. Still not published output.
+    expect(screen.getByText('Plays')).toBeTruthy();
+    expect(screen.queryByText(/Clips/)).toBeNull();
     expect(screen.queryByText('Published')).toBeNull();
   });
 
@@ -103,8 +102,8 @@ describe('UserTable Clips Saved column (T8240 relabel)', () => {
   });
 });
 
-describe('UserTable Exports split (T8230 Focus / Overlay)', () => {
-  it('renders Focus and Overlay columns alongside the retained Exports total', () => {
+describe('UserTable render columns (T8230 split, T17270 Sharpens / Spotlights / Highlights)', () => {
+  it('renders Sharpens and Spotlights columns and no double-counting Exports total', () => {
     const users = [
       {
         ...BASE_USER,
@@ -119,14 +118,12 @@ describe('UserTable Exports split (T8230 Focus / Overlay)', () => {
     ];
     render(<UserTable users={users} onUserClick={() => {}} funnelTotals={{}} />);
 
-    // The header still carries the grand total plus the two new per-type columns.
-    expect(screen.getByText('Exports')).toBeTruthy();
-    expect(screen.getByText('Focus')).toBeTruthy();
-    expect(screen.getByText('Overlay')).toBeTruthy();
+    // T17270: the Exports total counted a spotlight render twice; it is gone.
+    expect(screen.queryByText('Exports')).toBeNull();
+    expect(screen.getByText('Sharpens')).toBeTruthy();
+    expect(screen.getByText('Spotlights')).toBeTruthy();
 
-    // Total is retained (so the 2 "other"/recovered exports are never dropped)
-    // and each per-type count renders as its own cell.
-    expect(screen.getByText('9')).toBeTruthy();
+    expect(screen.queryByText('9')).toBeNull();
     expect(screen.getByText('4')).toBeTruthy();
     expect(screen.getByText('3')).toBeTruthy();
   });

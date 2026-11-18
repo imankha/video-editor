@@ -135,14 +135,14 @@ describe('StepInspector (T14020)', () => {
     show();
     const left = screen.getByTestId('step-where-left');
     expect(left.className).not.toContain('opacity-40');
-    expect(screen.getByTestId('step-left-stamp').textContent).toContain('2026-10-31 10:00');
+    expect(screen.getByTestId('step-left-stamp').textContent).toContain(new Date('2026-10-31T10:00:00+00:00').toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })); // T17270: local time
     expect(screen.getByTestId('step-left-stamp').textContent).toContain('40 users');
     expect(screen.getByTestId('step-left-stamp').textContent).toContain('2 below head');
     const exits = within(screen.getByTestId('step-left-exits')).getAllByRole('listitem');
-    expect(exits[0].textContent).toContain('project-manager');
+    expect(exits[0].textContent).toContain('Home'); // T17270: parent-facing screen names
     expect(exits[0].textContent).toContain('14 / 20');
     const dwell = screen.getByTestId('step-left-dwell').textContent;
-    expect(dwell).toContain('annotate');
+    expect(dwell).toContain('Mark Plays');
     expect(dwell).toContain('1-5 min');
     expect(left.textContent).toContain('game_created');
     expect(left.textContent).toContain('add_footage');

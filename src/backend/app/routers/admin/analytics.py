@@ -774,7 +774,7 @@ def analytics_journey(user_id: str):
 
     with get_pg() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
+        cur.execute("SELECT email, is_test_account FROM users WHERE user_id = %s", (user_id,))
         user_row = cur.fetchone()
         # T15290: a deleted account's `users` row is gone BUT its de-identified
         # user_segments row is kept (T8630 r4) -- 404ing here made every deleted
@@ -783,6 +783,7 @@ def analytics_journey(user_id: str):
         # below (from account_deletions, the audit trail, not a last_active_at
         # guess) is what the panel shows as the deletion status.
         email = user_row["email"] if user_row else None
+        is_test_account = bool(user_row["is_test_account"]) if user_row else False
 
         name_select, name_join = _campaign_name_join(cur)
         # T15010: landing_path probed like signup_build/country -- this page loads
@@ -919,11 +920,14 @@ def analytics_journey(user_id: str):
         "user_id": user_id,
         "email": "Deleted account" if email is None else email,
         "is_deleted": email is None,
+        "is_test_account": is_test_account,
         "deleted_at": deleted_at.isoformat() if deleted_at else None,
         "origin": seg["origin"],
         "campaign_name": seg["campaign_name"],
         "landing_path": seg["landing_path"],
         "acquired_at": str(seg["acquired_at"]) if seg["acquired_at"] else None,
+        # T17270: signup moment for the local-time Joined label (acquired_at is a UTC day).
+        "joined_at": seg["created_at"].isoformat() if seg["created_at"] else None,
         "milestones": milestones,
         "session_count": session_count,
         "last_active_at": seg["last_active_at"].isoformat() if seg["last_active_at"] else None,

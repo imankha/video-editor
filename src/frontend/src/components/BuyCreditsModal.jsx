@@ -10,7 +10,7 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
 import { useCreditStore } from '../stores/creditStore';
 import { toast } from './shared';
-import { CREDITS, DETECTION, RETENTION, ERROR_COPY, CREDIT_COPY } from '../config/displayNames';
+import { CREDITS, DETECTION, RETENTION, ERROR_COPY, CREDIT_COPY, PACK_NAMES } from '../config/displayNames';
 import { approxHighlights, CREDITS_PER_HIGHLIGHT, FEATURED_PACK_KEY } from '../config/pricing';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
@@ -76,9 +76,9 @@ async function getPacks() {
 // Labels never promise a game or a season: what a pack covers is shown as approximate highlights.
 // Badge styles match the landing pricing cards: solid amber for the featured pack, outlined for best value.
 const PACK_META = {
-  starter: { label: 'Starter', badge: null, badgeClass: null },
-  popular: { label: 'Popular', badge: CREDIT_COPY.MOST_POPULAR, badgeClass: 'font-bold bg-amber-400 text-slate-950' },
-  best_value: { label: CREDIT_COPY.BEST_VALUE, badge: CREDIT_COPY.BEST_VALUE, badgeClass: 'font-semibold border border-white/20 bg-gray-800 text-gray-200' },
+  starter: { label: PACK_NAMES.starter, badge: null, badgeClass: null },
+  popular: { label: PACK_NAMES.popular, badge: CREDIT_COPY.MOST_POPULAR, badgeClass: 'font-bold bg-amber-400 text-slate-950' },
+  best_value: { label: PACK_NAMES.best_value, badge: CREDIT_COPY.BEST_VALUE, badgeClass: 'font-semibold border border-white/20 bg-gray-800 text-gray-200' },
 };
 
 

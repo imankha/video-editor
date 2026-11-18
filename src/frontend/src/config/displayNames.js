@@ -1615,6 +1615,15 @@ export const CREDIT_COPY = {
   balanceHint: (n) => `${CREDITS.count(n)}. Tap to buy more`,
 };
 
+// T17270: the pack name a parent sees at checkout, keyed by pack key. The buy window
+// and the admin Pack Mix both read it, so the admin never says "One Game" (the
+// Stripe-facing name in pricing.json) for the pack parents bought as "Starter".
+export const PACK_NAMES = {
+  starter: 'Starter',
+  popular: 'Popular',
+  best_value: CREDIT_COPY.BEST_VALUE,
+};
+
 export const CREDIT_HISTORY_LABELS = {
   PURCHASE: 'Credit purchase',
   HIGHLIGHT: 'Highlight',

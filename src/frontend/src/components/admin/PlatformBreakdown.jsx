@@ -22,11 +22,11 @@ const ACTION_LABELS = {
   // NOTE the grain: game_created above is per GAME, these two are per FILE, so
   // a multi-angle game is 1 "Games Tried" and N "Game Uploads Tried".
   game_upload_attempted: 'Game Uploads Tried',
-  clip_created: 'Clips Created',
+  clip_created: 'Plays Marked', // T17270: parent-facing names (Plays, Zoom in, Spotlight)
   // T11010: the direct clip-upload pair (T8370 flow). clip_upload_attempted was
   // a registered name nothing ever fired until T11010 emitted it at prepare.
-  clip_upload_attempted: 'Clip Uploads Tried',
-  clip_uploaded: 'Clip Uploads Succeeded',
+  clip_upload_attempted: 'Play Uploads Tried',
+  clip_uploaded: 'Play Uploads Succeeded',
   // T11930: Portrait-vs-Landscape highlight choice. Always read tried WITH made
   // per orientation (never one number); first_made gives the landscape share of
   // first highlights, both_orientations the users who made both on one play.
@@ -38,11 +38,11 @@ const ACTION_LABELS = {
   highlight_first_made_landscape: 'First Highlight: Landscape',
   highlight_both_orientations: 'Both Orientations (One Play)',
   annotation_completed: 'Watched Annotate Video', // T7930: watched-video, not a clip created
-  framing_opened: 'Focus Opened',
-  framing_exported: 'Focus Exports',
+  framing_opened: 'Zoom in Opened',
+  framing_exported: 'Sharpens',
   export_started: 'Exports Started',
   export_completed: 'Exports Done',
-  overlay_exported: 'Overlay Exports',
+  overlay_exported: 'Spotlights',
   gallery_viewed: 'Gallery Views',
   video_downloaded: 'Downloads',
   share_completed: 'Shares',

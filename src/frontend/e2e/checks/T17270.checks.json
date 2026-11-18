@@ -1,0 +1,4 @@
+{"criteria": {
+  "T17270:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/admin/adminPlainNames.T17270.test.jsx -t 'plain names'"},
+  "T17270:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/admin/adminPlainNames.T17270.test.jsx -t 'Joined|names match checkout'"}
+}}

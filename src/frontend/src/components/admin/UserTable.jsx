@@ -7,6 +7,7 @@ import { NO_SOURCE_ORIGINS, OriginLabel } from './OriginLabel';
 import { useAuthStore } from '../../stores/authStore';
 import { useAdminStore } from '../../stores/adminStore';
 import { fmtPct } from './formatNumber';
+import { formatAdminDateTime, stepName, TEST_SIGN_IN_NOTE } from './adminLabels';
 
 const CLOUDFLARE_DASHBOARD_URL = 'https://dash.cloudflare.com/?to=/:account/web-analytics';
 
@@ -55,21 +56,23 @@ const COLUMNS = [
     key: 'game_created_count', label: 'Games', align: 'right',
     title: 'Game video uploads: attempted / succeeded (per video file). Sorts by games started, which is the only dimension with full history.',
   },
-  // T8240: label is "Clips Saved" (activity events -- annotate-save + direct-upload
+  // T8240: the plays count is activity events (annotate-save + direct-upload
   // attempts/successes), NOT "Published" -- publishing is a different concept
   // (final_videos.published_at) with no cheap Postgres source. Sort key stays
   // clip_created_count (annotate-only) for back-compat; the cell shows the
   // combined tried/succeeded pair (clip_tried_count / clip_succeeded_count).
+  // T17270: the parent's words. Plays = marked plays (clips), Sharpens = Zoom in
+  // renders (framing exports), Spotlights = spotlight renders (overlay exports),
+  // Highlights = finished highlights (highlight_finished). The old Exports total is
+  // gone: a spotlight render fired it a second time for the same highlight, so it
+  // read "4 exports for 3 highlights".
   {
-    key: 'clip_created_count', label: 'Clips Saved', align: 'right',
-    title: 'Clips saved or uploaded: attempted / succeeded (annotate-save + direct upload).',
+    key: 'clip_created_count', label: 'Plays', align: 'right',
+    title: 'Plays marked or uploaded: attempted / succeeded (annotate-save + direct upload).',
   },
-  { key: 'export_completed_count', label: 'Exports', align: 'right' },
-  // T8230: per-type breakdown of the Exports total. Exports stays as the honest
-  // grand total (framing + overlay + "other"/recovered), so the residual is never
-  // silently dropped -- it reads as Exports - Focus - Overlay.
-  { key: 'framing_exported_count', label: 'Focus', align: 'right' },
-  { key: 'overlay_exported_count', label: 'Overlay', align: 'right' },
+  { key: 'framing_exported_count', label: 'Sharpens', align: 'right', title: 'Zoom in renders (sharpen).' },
+  { key: 'overlay_exported_count', label: 'Spotlights', align: 'right', title: 'Spotlight renders.' },
+  { key: 'highlight_finished_count', label: 'Highlights', align: 'right', title: 'Highlights finished (one per highlight).' },
   { key: 'share_completed_count', label: 'Shares', align: 'right' },
   { key: 'credits', label: 'Credits', align: 'right' },
   { key: 'total_spent_cents', label: '$ Spent', align: 'right' },
@@ -101,7 +104,7 @@ function StepBadge({ step }) {
   const style = STEP_STYLES[step] || STEP_STYLES['Signed Up'];
   return (
     <span className={`inline-block px-1.5 py-0.5 text-[10px] rounded border ${style}`}>
-      {step}
+      {stepName(step)}
     </span>
   );
 }
@@ -418,8 +421,11 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                   <StepBadge step={user.last_step} />
                 </td>
 
-                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.acquired_at || '—'}
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs whitespace-nowrap">
+                  {/* T17270: local time, same format as Last active. A test sign-in
+                      (dev preset) never gets a segment timestamp or sessions. */}
+                  {user.joined_at ? formatAdminDateTime(user.joined_at)
+                    : user.is_test_account ? TEST_SIGN_IN_NOTE : '—'}
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs whitespace-nowrap">
@@ -440,14 +446,13 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                   {/* Clips mirror the Games pair above. Both flows count: annotate-save
                       (clip_save_attempted -> clip_created) and direct upload
                       (clip_upload_attempted -> clip_uploaded). */}
-                  <span title="Clips saved or uploaded: attempted / succeeded (annotate-save + direct upload)">
+                  <span title="Plays marked or uploaded: attempted / succeeded (annotate-save + direct upload)">
                     {user.clip_tried_count ?? 0} / {user.clip_succeeded_count ?? 0}
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.export_completed_count ?? 0}</td>
-                {/* T8230: Focus (framing) / Overlay export breakdown of the Exports total. */}
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.framing_exported_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.overlay_exported_count ?? 0}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.highlight_finished_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.share_completed_count ?? 0}</td>
 
                 <td className="px-3 py-2.5 text-right">
@@ -477,7 +482,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
 
                 <td className="px-3 py-2.5 text-right text-gray-500 text-xs">
                   <div className="flex items-center justify-end gap-1.5">
-                    <span>{user.last_active_at ? user.last_active_at.slice(0, 10) : '—'}</span>
+                    <span className="whitespace-nowrap">{user.last_active_at ? formatAdminDateTime(user.last_active_at) : '—'}</span>
                     {/* T8110: per-row mark/unmark as a test account (gesture DB
                         write). Amber when flagged; toggles the badge in place. */}
                     {!user.is_deleted && <button

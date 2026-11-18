@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { OriginLabel } from './OriginLabel';
+import { formatAdminDateTime, screenName, TEST_SIGN_IN_NOTE } from './adminLabels';
 
 // T7510: content-outcome pipeline. The upload step is special-cased to render
 // BOTH the attempt (game_created, pending insert) and the durable success
@@ -187,7 +188,7 @@ function ResumePointRow({ point, signupBuild }) {
   }
 
   const parts = [];
-  if (point.screen) parts.push(point.screen);
+  if (point.screen) parts.push(screenName(point.screen));
   if (point.step) parts.push(`${point.step} step`);
   if (point.object_title) {
     const kindLabel = point.object_kind === 'play' ? 'play' : 'game';
@@ -216,11 +217,11 @@ function SessionExitTrail({ exits }) {
       {exits.map(x => (
         <div key={x.at} className="font-mono text-gray-400 flex flex-wrap gap-x-3">
           <span className="text-gray-600">{formatShortDate(x.at)}</span>
-          <span>left on <span className="text-sky-300/90">{x.last_screen || 'unknown'}</span></span>
+          <span>left on <span className="text-sky-300/90">{x.last_screen ? screenName(x.last_screen) : 'unknown'}</span></span>
           {Object.entries(x.dwell).length > 0 && (
-            <span>dwell {Object.entries(x.dwell).map(([screen, secs]) => `${screen} ${Math.round(secs)}s`).join(', ')}</span>
+            <span>dwell {Object.entries(x.dwell).map(([screen, secs]) => `${screenName(screen)} ${Math.round(secs)}s`).join(', ')}</span>
           )}
-          {x.trail.length > 0 && <span>trail {x.trail.join(' > ')}</span>}
+          {x.trail.length > 0 && <span>trail {x.trail.map(screenName).join(' > ')}</span>}
         </div>
       ))}
     </div>
@@ -287,7 +288,7 @@ export function UserDetailPanel({ data, onClose }) {
                 {data.email}
                 {data.is_deleted && (
                   <span className="text-xs font-normal px-2 py-0.5 rounded bg-red-500/15 text-red-400"
-                        title={data.deleted_at ? `Deleted ${new Date(data.deleted_at).toLocaleString()}` : 'Deleted'}>
+                        title={data.deleted_at ? `Deleted ${formatAdminDateTime(data.deleted_at)}` : 'Deleted'}>
                     Deleted
                   </span>
                 )}
@@ -295,8 +296,11 @@ export function UserDetailPanel({ data, onClose }) {
               <div className="text-gray-400 text-xs mt-0.5">
                 <OriginLabel origin={data.origin} campaignName={data.campaign_name} />
                 {data.landing_path && <> · Landed on {data.landing_path}</>}
-                {' '}· Joined {data.acquired_at || '--'} · {data.session_count} sessions
-                {data.last_active_at && ` · Last active ${new Date(data.last_active_at).toLocaleString()}`}
+                {/* T17270: Joined and Last active in one local format on one line; a
+                    test sign-in has no segment timestamp or sessions, and says so. */}
+                {' '}· Joined {data.joined_at ? formatAdminDateTime(data.joined_at) : '--'}
+                {data.is_test_account && !data.session_count ? ` · ${TEST_SIGN_IN_NOTE}` : ` · ${data.session_count} sessions`}
+                {data.last_active_at && ` · Last active ${formatAdminDateTime(data.last_active_at)}`}
               </div>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-white">

@@ -149,9 +149,9 @@ describe('UserDetailPanel session-exit trail (T14020)', () => {
     };
     render(<UserDetailPanel data={data} onClose={() => {}} />);
     const trail = screen.getByTestId('session-exit-trail');
-    expect(trail.textContent).toContain('left on framing');
-    expect(trail.textContent).toContain('annotate 13s');
-    expect(trail.textContent).toContain('trail annotate > framing');
+    expect(trail.textContent).toContain('left on Zoom in'); // T17270
+    expect(trail.textContent).toContain('Mark Plays 13s');
+    expect(trail.textContent).toContain('trail Mark Plays > Zoom in');
   });
 
   it('shows nothing when the user has no session exits', () => {
@@ -185,7 +185,7 @@ describe('UserDetailPanel resume point row (T14990)', () => {
     };
     render(<UserDetailPanel data={data} onClose={() => {}} />);
     const row = screen.getByTestId('resume-point-row');
-    expect(row.textContent).toContain('framing');
+    expect(row.textContent).toContain('Zoom in'); // T17270: parent-facing screen name
     expect(row.textContent).toContain('crop step');
     expect(row.textContent).toContain('play 8124 in "Lucas U12"');
     expect(row.textContent).toContain('profile Lucas');
