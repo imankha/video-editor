@@ -156,7 +156,9 @@ test.describe('T16770:C2 second play lands at the new playhead', () => {
         await forward.click({ timeout: 3000 });
       }
       // Let the held save land, then mark, as QA did 0.8 s after moving.
-      await saveReleased;
+      // T17210: "Keep marking plays" sends no highlight save any more, so wait
+      // out the delay instead when none is held.
+      await Promise.race([saveReleased, page.waitForTimeout(SAVE_DELAY_MS)]);
       await page.waitForTimeout(800);
 
       await expect(markBtn).toBeVisible({ timeout: 60000 });

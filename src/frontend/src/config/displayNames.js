@@ -100,7 +100,7 @@ export const ANNOTATE = {
   // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —
   // the "Create clip"/"Save and create clip" affordances are gone; a play
   // becomes a highlight through the rating + Done -> Highlight popup gesture
-  // (HIGHLIGHT_CHOICE_* / HIGHLIGHT_MOVED_TO_CLIPS below), not a manual toggle.
+  // (HIGHLIGHT_CHOICE_* below), not a manual toggle.
   // T10550: the rating popup's own visible heading (+ its accessible name, so
   // they match) — layer-aware like `getRatingCaption`'s existing `mine` split,
   // so a Team play never claims to be "your athlete's".
@@ -135,12 +135,8 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep marking plays',
-  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Plays. Open it there to edit or finish it.',
-  // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
-  // no action button) — the editor closes, so the toast IS the confirmation.
-  // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
-  // that still say "Clips".
-  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Plays so you can edit it later',
+  // T17210: "Keep marking plays" creates no highlight; the play itself is kept.
+  BACK_TO_EDITING_SUBTEXT: 'This play is saved. You can make its highlight any time.',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
   // T14610 (audit F-34): one title for a game that is gone.
