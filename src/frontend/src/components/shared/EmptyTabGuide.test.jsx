@@ -69,7 +69,7 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
 });
 
 describe('EmptyTabGuide - Games tab', () => {
-  it('shows the approved headline, the upload-a-game coach, Add Game CTA, and the Clips link without a cost caption', () => {
+  it('shows the approved headline, the upload-a-game coach, Upload game CTA, and no Skip ahead button or cost caption', () => {
     const onAddGame = vi.fn();
     const onNavigate = vi.fn();
     render(<EmptyTabGuide tab="games" gamesCount={0} guide={resolveGuide(homeFacts({ tab: 'games' }))} onAddGame={onAddGame} onNavigate={onNavigate} />);
@@ -80,15 +80,11 @@ describe('EmptyTabGuide - Games tab', () => {
     expect(EMPTY_TAB_GUIDE.games.addGameCaption).toBeNull();
     expect(screen.queryByText(/from your phone or computer/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Upload game$/ }));
     expect(onAddGame).toHaveBeenCalledTimes(1);
 
-    // T14810: the Clips link is a REAL secondary button beside Upload game, not
-    // grey body text, and still switches to the Clips tab (id 'projects').
-    const skipAhead = screen.getByRole('button', { name: EMPTY_TAB_GUIDE.games.footerLink });
-    fireEvent.click(skipAhead);
-    expect(onNavigate).toHaveBeenCalledWith('projects');
-    // No standalone "Have a play already?" caption remains outside the button row.
+    // T17200: Upload game is the one button; short videos get a small link (EmptyTabGuide.firstRun.test.jsx).
+    expect(screen.queryByText(/Skip ahead/)).toBeNull();
     expect(screen.queryByText(/have a play already/i)).toBeNull();
   });
 });

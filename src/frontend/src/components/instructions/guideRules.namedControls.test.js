@@ -56,7 +56,7 @@ const CONTROL_PHRASES = [
   { name: 'drag it back', re: /\bdrag it back\b/, pulse: [P.CROP_BOX] },
   { name: 'Back to full video', re: /\bTap Back to full video\b/, pulse: [] },
   { name: 'Preview again', re: /\bTap Preview again\b/, pulse: [] },
-  { name: 'Pick your game video', re: /\bPick your game video\b/, pulse: [] },
+  { name: 'Choose your game video', re: /\bChoose your game video\b/, pulse: [] },
   { name: 'Open a game (noPulse)', re: /\bOpen a game\b/, pulse: [] },
   { name: 'Open this play again', re: /\bopen this play again\b/, pulse: [] },
   { name: 'Tap (moment)', re: /\bstill needs a tap\b|\bneeds a tap\b/, pulse: [] },

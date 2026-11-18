@@ -34,12 +34,11 @@ import { ANNOTATE } from './displayNames';
 // count is > 0.
 export const EMPTY_TAB_GUIDE = {
   games: {
-    headline: 'Review your game',
+    headline: 'Start with your game video',
     addGameCaption: null,
-    // T14810: now a real secondary button beside Upload game (GamesActions in
-    // EmptyTabGuide.jsx), not a grey footer caption -- "a game is not a hard
-    // prerequisite either" message.
-    footerLink: 'Skip ahead to Plays.',
+    // T17200: a small link under the one Upload game button (it replaced T14810's
+    // equal-weight "Skip ahead to Plays." button); opens the play upload.
+    uploadPlayLink: 'Only have short videos? Upload a play',
   },
   clips: {
     headline: "Plays you're turning into highlights",

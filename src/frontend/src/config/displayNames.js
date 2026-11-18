@@ -1,5 +1,6 @@
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
+import { approxHighlights } from './pricing';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 
 // T9520 / T14600: the canonical vocabulary, single source. The word list is
@@ -974,7 +975,13 @@ export const GUIDE = {
   },
   // T12250: Home tabs and the Upload modal. Each value is { title, body }.
   home: {
-    gamesEmpty: { title: 'Start with your game video. Tap Upload game.', body: '' },
+    gamesEmpty: { title: 'Upload your game to start.', body: '' },
+    // T17200: the first-run credits sentence, appended to gamesEmpty in the coach and shown
+    // alone as plain text in the empty Games state with Guidance off.
+    freeCredits: (credits) => {
+      const n = approxHighlights(credits);
+      return n > 0 ? `You have ${credits} free credits, enough for about ${n} highlights.` : `You have ${credits} free credits.`;
+    },
     gamesUploading: { title: 'Your game is uploading. Open it now to start marking plays.', body: '' },
     gamesError: { title: 'Your games didn’t load. Tap Retry.', body: '' },
     gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
@@ -990,7 +997,7 @@ export const GUIDE = {
     finishedEmpty: { title: 'Your highlights show here. Open a game to make your first one.', body: '' },
   },
   upload: {
-    choose: { title: 'Pick your game video. Name and details are optional.', body: '' },
+    choose: { title: 'Choose your game video. Name and details are optional.', body: '' },
     submit: { title: 'Tap Upload game. You can start marking plays while it uploads.', body: '' },
     failed: { title: 'That upload didn’t finish. Tap Retry to try again.', body: '' },
   },
@@ -1480,7 +1487,7 @@ export const UPLOAD = {
   // T15620: this toggle renders in the Upload game modal on every device,
   // desktop included, so "phone" was wrong there.
   NO_VIDEO_TOGGLE: "Don't have the game video on this device?",
-  NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here. A highlights zip works too.",
+  NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here.",
   NO_VIDEO_STEPS_LINK: 'See the steps for your camera',
   NO_VIDEO_SWITCH: 'Upload a play instead',
   NO_VIDEO_OTHER_DEVICE: 'On another device? Open reelballers.com there. Your account is the same.',
