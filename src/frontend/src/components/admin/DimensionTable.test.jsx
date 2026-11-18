@@ -35,7 +35,7 @@ describe('Dimension tables share one KPI column set (T13990)', () => {
   it.each(TABLES)('%s: renders the KPI values the same way', (_name, table) => {
     const { container } = render(table);
     const cells = [...container.querySelectorAll('tbody tr:first-child td')].slice(1).map(td => td.textContent);
-    expect(cells).toEqual(['3', '0', '$12.34', '75.00%', '4 / 3', '12.50% (3/24)', '4', '2', '1', '67.00%', '33.00%', '33.00%', '0.00%', '33.00%']);
+    expect(cells).toEqual(['3', '0', '$12.34', '75.00%', '3 of 4', '12.50% (3/24)', '4', '2', '1', '67.00%', '33.00%', '33.00%', '0.00%', '33.00%']);
   });
 
   it('T16340: Upload tries explains the window the rate counts', () => {
@@ -52,6 +52,17 @@ describe('Dimension tables share one KPI column set (T13990)', () => {
   it('T16340: a rate over 100% is shown as it is', () => {
     render(<CohortGrid data={{ cohorts: [{ cohort_period: '2026-10-05', ...KPIS, upload_success_pct: 300, upload_tries: 1, upload_successes: 3 }] }} />);
     expect(screen.getByText('300.00%')).toBeTruthy();
+  });
+
+  it('T17150: the tries cell reads successes of tries and the rate is successes / tries', () => {
+    // Staging showed "7 / 3" beside 42.86% and it read as 7 successes of 3 tries.
+    const row = { cohort_period: '2026-10-05', ...KPIS, upload_tries: 7, upload_successes: 3, upload_success_pct: 42.86 };
+    const { container } = render(<CohortGrid data={{ cohorts: [row] }} />);
+    const cells = [...container.querySelectorAll('tbody tr:first-child td')].map(td => td.textContent);
+    expect(cells[5]).toBe('3 of 7');
+    expect(cells[4]).toBe(`${(3 / 7 * 100).toFixed(2)}%`);
+    const th = [...container.querySelectorAll('th')].find(h => h.textContent === 'Upload tries');
+    expect(th.getAttribute('title')).toMatch(/successes of tries/);
   });
 
   it('upload success with no upload outcome reads "--"', () => {

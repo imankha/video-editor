@@ -80,7 +80,7 @@
   {
     "source": "displayNames:GUIDE.annotate.watch.title",
     "word": "moment",
-    "text": "Tap Play to watch the game. Tap Mark play at any moment worth keeping, a great play or one to learn from.",
+    "text": "Press Play to watch the game. Press Mark play at any moment worth keeping, a great play or one to learn from.",
     "reason": "Owner-specified wording (T17170 task file C2): a moment in the game worth marking, before it is a play, not the retired noun for a marked play."
   }
 ]

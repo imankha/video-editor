@@ -5,9 +5,9 @@ import { GUIDE_PULSE as P } from './guideTargets';
 // T12800 layer 3: a sentence that names a control must point the card away from it. Every control
 // phrase below maps to the rule's `pulse` or its `keepClear`, or carries a documented reason in
 // NAMES_OFFSCREEN. Explicit table on purpose (greppable, no registry): a new sentence that tells the
-// user to tap/drag/pick/open something and matches no row fails here until a row is added.
+// user to tap/press/drag/pick/open something and matches no row fails here until a row is added.
 const CONTROL_PHRASES = [
-  { name: 'Play', re: /\bTap Play\b/, pulse: [P.ANNOTATE_PLAY, P.PLAY], keepClear: ['annotate-controls'] },
+  { name: 'Play', re: /\b(Tap|Press) Play\b/, pulse: [P.ANNOTATE_PLAY, P.PLAY], keepClear: ['annotate-controls'] },
   { name: 'Mark play', re: /\bMark play\b/, pulse: [P.MARK_PLAY] },
   { name: 'Make highlight', re: /\bTap Make highlight\b/, pulse: [P.CHOICE_NOW, P.MAKE_HIGHLIGHT] },
   { name: 'Edit play', re: /\bEdit play\b/, keepClear: ['annotate-primary-cta'] },
@@ -20,7 +20,7 @@ const CONTROL_PHRASES = [
   { name: 'tap a play', re: /\btap a play\b/, pulse: [P.FIRST_PLAY] },
   { name: 'tap a clip', re: /\bTap a (clip|play)\b/, pulse: [P.FIRST_CLIP] },
   { name: 'Tap it/one', re: /\bTap (it|one)\b/, pulse: [P.HIGHLIGHT_ROW, P.FIRST_FINISHED] },
-  { name: 'Upload game', re: /\bTap Upload game\b/, pulse: [P.UPLOAD_SUBMIT, P.UPLOAD_GAME, P.CLIP_SIZE_ADD_GAME] },
+  { name: 'Upload game', re: /\b(Tap|Press) Upload game\b/, pulse: [P.UPLOAD_SUBMIT, P.UPLOAD_GAME, P.CLIP_SIZE_ADD_GAME] },
   { name: 'Retry', re: /\bTap Retry\b/, pulse: [P.GAMES_RETRY, P.UPLOAD_RETRY, P.VIDEO_RETRY] },
   { name: 'Open it / your game', re: /\bOpen (it now|your game)\b/, pulse: [P.FIRST_GAME] },
   { name: 'Open Finished', re: /\bOpen Finished\b/, pulse: [P.TAB_PUBLISHED] },
@@ -84,7 +84,7 @@ const NAMES_OFFSCREEN = {
   'modal.teammates.done:Tap Close/Done (dialog)': IN_DIALOG,
 };
 
-const VERBS = /\b(tap|click|drag|pick|choose|exit)\b|\bopen (it|a|your|this)\b/i;
+const VERBS = /\b(tap|press|click|drag|pick|choose|exit)\b|\bopen (it|a|your|this)\b/i;
 const titleOf = rule => rule.message?.title ?? '';
 const testidsOf = selectors => (selectors ?? []).map(s => /data-testid="([^"]+)"/.exec(s)?.[1]).filter(Boolean);
 const rules = GUIDE_RULES.filter(r => titleOf(r) && !r.silent);

@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T17150:C1": {"kind": "code", "command": "cd src/backend && python -m pytest tests/test_t8657_paying_filter_ledger.py -q -k test_paying_live_count_never_exceeds_unfiltered && cd ../frontend && npx vitest run src/components/admin/UserTable.test.jsx -t T17150"},
+    "T17150:C2": {"kind": "browser"},
+    "T17150:C3": {"kind": "browser"}
+  }
+}

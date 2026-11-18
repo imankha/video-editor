@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { UserDetailPanel } from './UserDetailPanel';
@@ -214,5 +214,14 @@ describe('UserDetailPanel resume point row (T14990)', () => {
     render(<UserDetailPanel data={data} onClose={() => {}} />);
     const row = screen.getByTestId('resume-point-row');
     expect(row.textContent).toContain('game 999 (deleted)');
+  });
+});
+
+describe('UserDetailPanel Esc (T17160)', () => {
+  it('T17160: Esc closes the journey window', () => {
+    const onClose = vi.fn();
+    render(<UserDetailPanel data={{ ...BASE_DATA, milestones: [] }} onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

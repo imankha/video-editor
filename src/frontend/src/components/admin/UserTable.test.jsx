@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 
 import { UserTable } from './UserTable';
+import { useAdminStore } from '../../stores/adminStore';
 
 const BASE_USER = {
   user_id: 'u1',
@@ -181,5 +182,23 @@ describe('UserTable origin badge (T16900)', () => {
   it('shows a sourced origin in blue', () => {
     render(<UserTable users={[{ ...BASE_USER, origin: 'seo' }]} onUserClick={() => {}} funnelTotals={{}} />);
     expect(screen.getByTitle('seo').className).toContain('text-blue-400');
+  });
+});
+
+describe('UserTable users total (T17150)', () => {
+  it('counts deleted payer rows apart so a filter never raises the users total', () => {
+    // Staging: Paying listed 3 live payers + 10 deleted payers and read "13 users total"
+    // against 10 unfiltered.
+    useAdminStore.setState({ totalUsers: 13, deletedUsers: 10 });
+    render(<UserTable users={[BASE_USER]} onUserClick={() => {}} funnelTotals={{}} />);
+    expect(screen.getByText(/3 users total · 10 deleted accounts/)).toBeTruthy();
+    expect(screen.queryByText(/13 users total/)).toBeNull();
+  });
+
+  it('shows no deleted part when the list has none', () => {
+    useAdminStore.setState({ totalUsers: 10, deletedUsers: 0 });
+    render(<UserTable users={[BASE_USER]} onUserClick={() => {}} funnelTotals={{}} />);
+    expect(screen.getByText(/10 users total/)).toBeTruthy();
+    expect(screen.queryByText(/deleted accounts/)).toBeNull();
   });
 });

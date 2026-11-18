@@ -307,7 +307,7 @@ ${introCard.css}</style>
 <main>
 <video id="v" src="${videoUrl}"${posterAttr}${videoAutoplayAttr} muted playsinline controls preload="auto"></video>
 ${introCard.html}
-<button id="unmute" type="button">Tap to unmute</button>
+<button id="unmute" type="button">Turn sound on</button>
 <div id="end-card" role="region" aria-label="End of video">
 <div class="ec-lr">
 <span class="ec-mw">Made with</span>

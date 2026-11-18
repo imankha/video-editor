@@ -149,7 +149,7 @@ footer{display:flex;align-items:center;justify-content:center;gap:12px;padding:1
 <div class="attr">${escapeHtml(attribution)}</div>
 <main>
 <video id="v" src="${recapUrl}"${posterAttr} autoplay muted playsinline controls preload="auto"></video>
-<button id="unmute" type="button">Tap to unmute</button>
+<button id="unmute" type="button">Turn sound on</button>
 </main>
 ${clipRail}
 <footer>

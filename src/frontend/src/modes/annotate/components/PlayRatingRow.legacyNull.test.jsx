@@ -17,7 +17,7 @@ describe('PlayRatingRow - legacy null rating displays as Good (4)', () => {
     expect(checked).toHaveLength(1);
     expect(checked[0].getAttribute('aria-label')).toMatch(/^4 stars/);
     expect(within(row).getByText(RATING_MEANINGS[4])).toBeTruthy();
-    expect(within(row).getByText('Tap to change')).toBeTruthy();
+    expect(within(row).getByText('You can change it later')).toBeTruthy();
 
     expect(onRatingChange).not.toHaveBeenCalled();
   });

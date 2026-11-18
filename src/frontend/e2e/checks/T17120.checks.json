@@ -1,0 +1,12 @@
+{
+  "criteria": {
+    "T17120:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/config/desktopTapWording.test.js -t 'says neither tap nor click'"
+    },
+    "T17120:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/config/desktopTapWording.test.js src/components/instructions/guideRules.namedControls.test.js"
+    }
+  }
+}
