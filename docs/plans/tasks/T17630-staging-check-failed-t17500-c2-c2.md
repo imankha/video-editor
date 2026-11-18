@@ -18,10 +18,15 @@ Found by the staging check after PR #830 merged (group g-t17500-2, ce8988c54). I
 
 ## Acceptance Criteria
 
-- [ ] The steps above give the expected result.
+- [x] The steps above give the expected result.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
 
-- To be found.
+- `src/frontend/e2e/helpers/frameVideoCheck.js` (new): `openFrame` and the fixture helpers, moved out of the T17500 check.
+- `src/frontend/e2e/checks/T17500.check.spec.js`: uses the helper.
+
+### Cause (2026-11-18)
+
+The check opened the first play in `/projects` with a clip. On the shared staging account both listed plays sit on game 2, whose upload never finished (`storage_status` 'uploading'), so Frame showed "Game video still uploading" and never mounted a `<video>`; the check timed out waiting for it. `/projects` leaves out finished highlights, which is why no other play was offered. No app bug: `openFrame` now opens a play whose `playback-url` answers 200, an expired game's saved clip first (the C2 case itself).
