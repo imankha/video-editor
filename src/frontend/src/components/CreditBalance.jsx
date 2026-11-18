@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { Coins } from 'lucide-react';
 import { useCreditStore } from '../stores/creditStore';
 import { useIsAuthenticated } from '../stores/authStore';
+import { useProfileStore } from '../stores/profileStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { toast } from './shared';
 import { CREDITS, CREDIT_COPY } from '../config/displayNames';
@@ -17,6 +18,16 @@ let _firstRunHintDismissed = false;
 export function resetFirstRunHintDismissalForTests() { _firstRunHintDismissed = false; }
 
 /**
+ * T17090: "You start with N free credits" is a brand new account's welcome, so
+ * it needs an ACCOUNT-level signal. Games are per-profile: a second profile on
+ * an existing account has zero games too, but its credits are the account's own
+ * (shared across profiles), not a gift. A new account has exactly one profile.
+ */
+export function isNewAccountForCreditHint({ profileHasNoGames, profilesLoaded, profileCount }) {
+  return profileHasNoGames && profilesLoaded && profileCount === 1;
+}
+
+/**
  * CreditBalance - Small pill showing credit balance in the header (T530)
  *
  * Subscribes to export complete/error events so the balance stays in sync
@@ -28,7 +39,8 @@ export function resetFirstRunHintDismissalForTests() { _firstRunHintDismissed = 
  * T8500: showFirstRunHint (derived by the caller from "games list empty") adds
  * a one-time "You start with N free credits" caption under the chip - the
  * first-run explanation for the bare number. Any click anywhere dismisses it
- * for the session.
+ * for the session. T17090: shown only when the account also has a single
+ * profile (isNewAccountForCreditHint).
  */
 export function CreditBalance({ showFirstRunHint = false }) {
   const isAuthenticated = useIsAuthenticated();
@@ -38,7 +50,11 @@ export function CreditBalance({ showFirstRunHint = false }) {
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const [hintDismissed, setHintDismissed] = useState(_firstRunHintDismissed);
 
-  const hintVisible = showFirstRunHint && !hintDismissed && loaded && isAuthenticated;
+  const profilesLoaded = useProfileStore((s) => s.isInitialized);
+  const profileCount = useProfileStore((s) => s.profiles.length);
+
+  const hintVisible = isNewAccountForCreditHint({ profileHasNoGames: showFirstRunHint, profilesLoaded, profileCount })
+    && !hintDismissed && loaded && isAuthenticated;
 
   // Dismiss forever (session memory) on ANY click - capture phase so the
   // dismissing click still performs whatever it was aimed at.
