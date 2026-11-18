@@ -1,6 +1,6 @@
 # T17670: A retried storage extension charges twice
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-18
