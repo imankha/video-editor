@@ -216,7 +216,7 @@ _LIST_USERS_URL = "/api/admin/users"
 
 
 class _ListUsersFakeCursor:
-    """list_users subscripts `cur.fetchone()["cnt"]` for its COUNT query, so the shared
+    """list_users subscripts `cur.fetchone()["cnt"]` (and `["deleted"]`, T17150) for its COUNT query, so the shared
     _FakeCursor (fetchone -> None) would raise TypeError -> a 500 that httpx.ASGITransport
     RE-RAISES into the test (raise_app_exceptions defaults True), breaking the probe. This
     stub returns an empty-but-well-formed result set so list_users runs its whole body to a
@@ -234,7 +234,7 @@ class _ListUsersFakeCursor:
             return {"has_ledger": True}
         if "to_regclass('campaigns')" in self._last_query:  # T13980 migration-window probe
             return {"t": "campaigns"}
-        return {"cnt": 0}
+        return {"cnt": 0, "deleted": 0}
 
     def fetchall(self):
         return []
