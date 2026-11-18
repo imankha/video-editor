@@ -1,6 +1,6 @@
 # T17100: Empty Highlights tab shows nothing
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-17

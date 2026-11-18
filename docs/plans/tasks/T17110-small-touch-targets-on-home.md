@@ -1,6 +1,6 @@
 # T17110: Small touch targets on Home
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-17
