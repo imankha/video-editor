@@ -1,0 +1,4 @@
+{"criteria": {
+  "T17250:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/annotate/SourceBar.lineUp.test.jsx -t 'T17250:C1'", "why_not_browser": "the control appears only on a game with a second video, and no check account reliably holds one; the test mounts the real SourceBar the Annotate screen renders"},
+  "T17250:C2": {"kind": "browser"}
+}}

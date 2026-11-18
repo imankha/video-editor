@@ -105,7 +105,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
   const handlePaymentSuccess = useCallback(async () => {
     setShowBuyCredits(false);
     await fetchCredits();
-    toast.success('Credits purchased! Extending storage...');
+    toast.success('Extending storage...');
     await extendStorage();
   }, [fetchCredits, extendStorage]);
 
