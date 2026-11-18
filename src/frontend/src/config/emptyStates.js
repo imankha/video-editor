@@ -59,9 +59,10 @@ export const EMPTY_TAB_GUIDE = {
   // the Create-reel builder.
   published: {
     headline: 'Your highlights',
-    // T10310 (2026-09-18 user request): dropped the "Cut your first clip to get
-    // started." line + Go to Games button -- the headline/body alone is the
-    // empty state now, no fallback action.
+    // T17100 (2026-11-18) supersedes T10310's headline-only empty state: QA found an
+    // empty profile's tab showed only the headline, with no way forward.
+    body: `A highlight is a play you marked and finished. Open a game and tap ${ANNOTATE.MARK_PLAY} to make your first one.`,
+    cta: 'Go to Games',
   },
 };
 
