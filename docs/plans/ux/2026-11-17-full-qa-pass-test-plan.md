@@ -35,7 +35,4 @@ Working files (local, gitignored): `qa/qa-pass-2026-11-17/` (REPORT.md, COVERAGE
 Done 2026-11-17 (admin signed out afterwards). Batch 3 filed: T17140 to T17160. Not done: Journey map section details, Revenue Reconciliation run (not pressed on purpose), By Sport "Run rollup" (not pressed).
 
 ## Step 5. Wrap up
-- [ ] 5.1 Cleanup: extra profiles, junk games (keep bug evidence).
-- [ ] 5.2 Build `ux-review.html`, publish as Artifact with screenshots.
-- [ ] 5.3 COVERAGE.md has no empty cells; REPORT.md complete.
-- [ ] 5.4 Final reply (section 12).
+Done: test profile deleted, review page published (https://claude.ai/artifact/QDjidEXfCW1HuNXby2RYLC, 22 findings awaiting the owner's answers), COVERAGE.md filled (every cell has a value; "not reached: budget" cells are the remaining work above), REPORT.md complete. Still to do if the pass resumes: everything listed in steps 2 and 3 above, then add any new confusion findings to the review page.
