@@ -158,6 +158,9 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | T17340 | [Staging check failed: T17230:C1 C1: After the first position is placed, Frame shows exactly](tasks/T17340-staging-check-failed-t17230-c1-c1.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T17350 | [Staging check failed: T17230:C2 C2: Changing the shape after positions exist asks to confirm,](tasks/T17350-staging-check-failed-t17230-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 | T17360 | [Staging check failed: T17240:C1 C1: No two reel cards on one profile share a](tasks/T17360-staging-check-failed-t17240-c1-c1.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T17370 | [Attached footage with sound but no picture is caught](tasks/T17370-attach-footage-sound-no-picture.md) | 6 | 3 | 2.0 | TODO | [ ] | Follow-up to T17280: the attach-footage path does not run the sound-but-no-picture check, so an iPhone video the browser cannot draw attaches silently. |
+| T17380 | [A failed upload for lack of credits leaves a stuck game](tasks/T17380-insufficient-credits-orphan-pending-game.md) | 7 | 4 | 1.8 | TODO | [ ] | Follow-up to T17280: an upload that fails with insufficient credits drops its entry but leaves the pending game behind. |
+| T17390 | [Play iPhone videos in browsers that cannot decode HEVC](tasks/T17390-play-iphone-hevc-video.md) | 8 | 7 | 1.1 | TODO | [ ] | Follow-up to T17280: convert or otherwise make iPhone HEVC games play in browsers without an HEVC decoder. Needs a design choice first (design gate). |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
