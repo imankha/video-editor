@@ -1,6 +1,6 @@
 # T17280: iPhone game plays sound but no picture
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-17

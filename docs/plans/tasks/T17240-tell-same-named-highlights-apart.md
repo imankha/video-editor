@@ -1,6 +1,6 @@
 # T17240: Tell same-named highlights apart
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-11-17

@@ -1,6 +1,6 @@
 # T17200: Home first run: one clear start
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-17

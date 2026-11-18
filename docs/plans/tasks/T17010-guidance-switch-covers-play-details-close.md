@@ -1,6 +1,6 @@
 # T17010: Guidance switch covers Tags and Notes close
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-17

@@ -1,6 +1,6 @@
 # T17130: Failed upload tile text cut off
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-11-17

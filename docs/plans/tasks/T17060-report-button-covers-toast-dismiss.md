@@ -1,6 +1,6 @@
 # T17060: Report button covers toast Dismiss
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-11-17

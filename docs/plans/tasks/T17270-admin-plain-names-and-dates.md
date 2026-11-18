@@ -1,6 +1,6 @@
 # T17270: Admin: plain names and one time zone
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-11-17
