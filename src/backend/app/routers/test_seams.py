@@ -522,6 +522,49 @@ async def seed_recap_game(req: SeedRecapGameRequest):
     }
 
 
+class ExpireGameStorageRequest(BaseModel):
+    game_id: int
+
+
+@router.post("/expire-game-storage")
+async def expire_game_storage(req: ExpireGameStorageRequest):
+    """End a game's storage in the current profile (test seam, T17070).
+
+    Moves every game_storage.storage_expires_at for the game's videos into the
+    past, the state a game is in once its storage ran out, so GET /api/games
+    reports it 'expired' and the playback seams treat its video as reclaimed. The
+    global games/{hash}.mp4 object is left alone: dev accounts cloned from one
+    template share it. Non-prod only (gated three ways like every seam)."""
+    _require_seams_enabled()
+
+    from ..database import get_db_connection
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        hashes = [
+            r[0] for r in cur.execute(
+                """SELECT blake3_hash FROM game_videos WHERE game_id = ? AND blake3_hash IS NOT NULL
+                   UNION SELECT blake3_hash FROM games WHERE id = ? AND blake3_hash IS NOT NULL""",
+                (req.game_id, req.game_id),
+            ).fetchall()
+        ]
+        if not hashes:
+            raise HTTPException(status_code=404, detail="game has no stored video")
+        marks = ",".join("?" * len(hashes))
+        cur.execute(
+            f"UPDATE game_storage SET storage_expires_at = '2000-01-01T00:00:00+00:00' "
+            f"WHERE blake3_hash IN ({marks})",
+            hashes,
+        )
+        expired = cur.rowcount
+        conn.commit()
+
+    if not expired:
+        raise HTTPException(status_code=404, detail="game has no storage row")
+    logger.warning(f"[TEST] expired game storage game={req.game_id} rows={expired}")
+    return {"status": "ok", "game_id": req.game_id, "rows": expired}
+
+
 # --- T6200: concurrency / event-loop-serialization probe (test seam) ---------
 # Reproduces the "N concurrent requests all take the same time and finish
 # together" signature under the SAME single-worker uvicorn config prod runs.
