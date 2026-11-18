@@ -1,8 +1,6 @@
 import { test, expect } from '@playwright/test';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { loginForCheck, checkApi, disableGuidanceForCheck } from '../helpers/checkAuth';
+import { loginForCheck, disableGuidanceForCheck } from '../helpers/checkAuth';
+import { HEVC, H264, MESSAGE, serveVideoBytes, openFrame } from '../helpers/frameVideoCheck';
 
 /**
  * T17500: every place that plays a video this browser can only play the sound of says why.
@@ -17,18 +15,6 @@ import { loginForCheck, checkApi, disableGuidanceForCheck } from '../helpers/che
  */
 test.setTimeout(240000);
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const HEVC = path.join(__dirname, 'fixtures', 'T17500-hevc-sound-only.mp4');
-const H264 = path.join(__dirname, 'fixtures', 'T17500-h264.mp4');
-const MESSAGE = /can't show this video's picture, only its sound/;
-
-async function listedProjects(page) {
-  const res = await page.request.get(checkApi('/projects'));
-  expect(res.ok(), `/projects -> ${res.status()}`).toBeTruthy();
-  const body = await res.json();
-  return Array.isArray(body) ? body : body.projects || [];
-}
-
 async function openClipPicker(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
@@ -36,40 +22,6 @@ async function openClipPicker(page) {
   await page.getByRole('button', { name: /^Plays\b/ }).first().click();
   await page.getByTestId('home-upload-clip').first().click();
   await page.getByRole('button', { name: 'Continue' }).click();
-}
-
-// Serve `file` for every video element request (the player's media fetch, not the app's
-// metadata fetch), with the CORS headers a cross-origin storage URL needs.
-async function serveVideoBytes(page, file) {
-  const bytes = fs.readFileSync(file);
-  await page.route('**/*', (route) => {
-    const req = route.request();
-    if (req.resourceType() !== 'media') return route.fallback();
-    const origin = req.headers().origin;
-    return route.fulfill({
-      status: 200,
-      body: bytes,
-      headers: {
-        'Content-Type': 'video/mp4',
-        'Accept-Ranges': 'none',
-        ...(origin ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Credentials': 'true' } : {}),
-      },
-    });
-  });
-}
-
-async function openFrame(page) {
-  const list = await listedProjects(page);
-  const project = list.find((p) => p.clip_count > 0);
-  expect(project, 'a play with a clip to open in Frame').toBeTruthy();
-  const p = `/focus/p/${project.id}`;
-  await page.goto(p);
-  await expect.poll(() => new URL(page.url()).pathname, { timeout: 60000 }).toBe(p);
-  // The player element loaded its metadata (duration known).
-  await expect.poll(
-    () => page.locator('video').first().evaluate((v) => v.readyState).catch(() => -1),
-    { timeout: 60000 },
-  ).toBeGreaterThanOrEqual(1);
 }
 
 test.describe('T17500 sound-only videos are explained everywhere', () => {
