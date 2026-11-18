@@ -122,7 +122,7 @@ export const ANNOTATE = {
   // RATING_MEANINGS line.
   RATING_QUESTION: 'How good was this play?',
   // Muted suffix after the question: new plays default to Good, so say it is changeable.
-  RATING_CHANGE_HINT: 'Tap to change',
+  RATING_CHANGE_HINT: 'You can change it later',
   // T11840: icon-only X in the highlight choice card header (Escape's touch twin).
   RATE_MODAL_CLOSE_LABEL: 'Back to the play',
   // T11840: mode-bar help (retired by T12130; Annotate shows no tabs until a highlight exists).
@@ -948,7 +948,7 @@ export const ANNOTATE_COCKPIT = {
 // (Q15 = C), no em dashes, no motion claims the app does not make.
 export const GUIDE = {
   annotate: {
-    watch: { title: 'Tap Play to watch the game. When your athlete does something great, tap Mark play.', body: '' },
+    watch: { title: 'Press Play to watch the game. When your athlete does something great, press Mark play.', body: '' },
     watchPlaying: { title: 'See a great play? Tap Mark play.', body: '' },
     hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
@@ -991,7 +991,7 @@ export const GUIDE = {
   },
   upload: {
     choose: { title: 'Pick your game video. Name and details are optional.', body: '' },
-    submit: { title: 'Tap Upload game. You can start marking plays while it uploads.', body: '' },
+    submit: { title: 'Press Upload game. You can start marking plays while it uploads.', body: '' },
     failed: { title: 'That upload didn’t finish. Tap Retry to try again.', body: '' },
   },
   focus: {
@@ -1593,7 +1593,7 @@ export const CREDIT_COPY = {
   highlightCost: (required, length) =>
     `Sharpening this highlight costs ${CREDITS.count(required)} for ${length} of video (${CREDITS.PER_SECOND_RULE}).`,
   uploadCost: (n) => `Adding this game costs ${CREDITS.count(n)} and keeps it for ${STORAGE_DURATION_DAYS} days.`,
-  balanceHint: (n) => `${CREDITS.count(n)}. Tap to buy more`,
+  balanceHint: (n) => `${CREDITS.count(n)}. Buy more`,
 };
 
 export const CREDIT_HISTORY_LABELS = {
