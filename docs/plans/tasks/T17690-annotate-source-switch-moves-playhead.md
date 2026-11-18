@@ -1,6 +1,6 @@
 # T17690: Switching video source in Annotate moves the playhead
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-18
@@ -25,7 +25,7 @@ Owner report 2026-11-18 while testing: "the playhead changes when I switch the v
 
 ## Solution
 
-Find where a source switch sets the current time and keep the game-time position across the switch. Cover both overlapping cameras and sequential videos, and the Line up offset if one is set. No silent clamping: if the other video does not cover that moment, say so (existing copy if there is one) rather than jumping without explanation.
+Find where a source switch sets the current time and keep the game-time position across the switch. Cover both overlapping cameras and sequential videos, and the Line up offset if one is set. Owner rule (2026-11-18): the parent can only switch to a video that covers the moment the playhead is on. In the source bar, a video that does not cover the current playhead time is shown but cannot be chosen (disabled, with a short reason on hover or tap, for example that it does not cover this moment), and it becomes choosable again as soon as the playhead moves into its span. So a switch never has to move the playhead.
 
 ## Relevant Files
 
@@ -35,5 +35,9 @@ Start from `src/frontend/src/modes/annotate/hooks/useMultiVideoScrub.js`, `src/f
 
 - [ ] C1: With two cameras filmed at the same time, switching source keeps the same moment of the game (playhead time within one frame), with and without a Line up offset.
 - [ ] C2: With videos one after another, switching source does not move the game playhead by itself.
-- [ ] C3: If the chosen video does not cover the current moment, the parent is told, and the playhead does not move silently.
+- [ ] C3: A video that does not cover the current playhead moment cannot be chosen in the source bar: it is visibly disabled with a short reason, and becomes choosable once the playhead moves into its span (owner rule 2026-11-18).
 - [ ] C4: A browser check reproduces the move on master (red) and passes on the branch.
+
+## Ruling
+
+**Only covering videos are choosable** (owner, 2026-11-18): "I should only be able to switch to videos that occur over the duration of where the playhead is." Reflected in Solution and C3.
