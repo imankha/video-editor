@@ -25,7 +25,7 @@ import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { homeFacts, reviewCounts, reviewableGames } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, HOME_TILE, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, HOME_TILE, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG, UPLOAD } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
@@ -34,6 +34,7 @@ import { setPendingVeoZip } from '../utils/veoHighlights/pendingZip';
 import { expandClipZips, isZipFile } from '../utils/zipClips';
 import { clipMetaForLooseFile } from '../utils/veoHighlights';
 import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
+import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useConfigStore } from '../stores/configStore';
 import { GAME, REEL, PUBLISHED } from '../config/themeColors';
 import { StorageExtensionModal } from './StorageExtensionModal';
@@ -1358,14 +1359,39 @@ export function ProjectManager({
   // T10250 pre-flight: a file over the server cap never enters the hash/upload
   // pipeline. When the cap is unknown (bootstrap not yet resolved) we skip the
   // optimistic gate and let the server refuse — never a hardcoded fallback.
-  const startClipUpload = useCallback((files, metaByFile = {}) => {
+  const startClipUpload = useCallback(async (files, metaByFile = {}) => {
     Object.assign(clipMetaRef.current, metaByFile);
     const overCap = maxClipUploadBytes ? files.filter((f) => f.size > maxClipUploadBytes) : [];
     const withinCap = maxClipUploadBytes ? files.filter((f) => f.size <= maxClipUploadBytes) : files;
     if (overCap.length > 0) setOversizeClips(overCap);
-    if (withinCap.length > 0) {
-      toast.info(CLIP_UPLOAD.uploadingToast(withinCap.length, withinCap[0].name));
-      runClipUpload(withinCap);
+    // T17500: the same probe as the Upload game dialog (T17280). A file this browser
+    // can only play the sound of (iPhone HEVC without an HEVC decoder) is refused
+    // before anything uploads or is charged, with the game upload's message. Any other
+    // probe failure is not ours to judge here; the server stays authoritative for it.
+    const soundOnly = [];
+    const drawable = [];
+    for (const f of withinCap) {
+      try {
+        await extractVideoMetadata(f);
+        drawable.push(f);
+      } catch (err) {
+        if (err?.code === 'VIDEO_PICTURE_UNSUPPORTED') soundOnly.push(f);
+        else drawable.push(f);
+      }
+    }
+    if (soundOnly.length > 0) {
+      toast.error(UPLOAD.VIDEO_PICTURE_UNSUPPORTED);
+      setFailedClips((prev) => {
+        const names = new Set(soundOnly.map((f) => f.name));
+        return [
+          ...prev.filter((p) => !names.has(p.name)),
+          ...soundOnly.map((f) => ({ name: f.name, file: null, retryable: false, message: UPLOAD.VIDEO_PICTURE_UNSUPPORTED })),
+        ];
+      });
+    }
+    if (drawable.length > 0) {
+      toast.info(CLIP_UPLOAD.uploadingToast(drawable.length, drawable[0].name));
+      runClipUpload(drawable);
     }
   }, [runClipUpload, maxClipUploadBytes]);
 

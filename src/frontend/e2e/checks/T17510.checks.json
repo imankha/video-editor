@@ -1,0 +1,6 @@
+{"criteria": {
+  "T17510:C1": {"kind": "code", "command": "cd src/backend && python -m pytest tests/test_t17510_game_video_format.py -k probe_r2_video -p no:cacheprovider -q"},
+  "T17510:C2": {"kind": "code", "command": "cd src/backend && python -m pytest tests/test_t17510_game_video_format.py -k activate_records_game_format_once -p no:cacheprovider -q"},
+  "T17510:C3": {"kind": "human", "why": "The read is covered by tests/test_t17510_game_video_format.py::test_admin_game_formats_reports_mix_and_cannot_decode_share, but its first STAGING run needs an admin session on staging and can only show data after this code is deployed there (games activated before the deploy recorded no format). After merge: open /api/admin/analytics/game-formats on staging as an admin and paste the JSON into the T17510 task file's 'First staging run' section."},
+  "T17510:C4": {"kind": "code", "command": "cd src/backend && python -m pytest tests/test_game_activate_consistency.py tests/test_t4260_duration_source.py tests/test_t8150_activate_durable.py tests/test_t15590_concurrent_activate.py tests/test_t1500_clip_dimensions.py -p no:cacheprovider -q"}
+}}
