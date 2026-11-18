@@ -70,5 +70,17 @@
     "word": "moment",
     "text": "Getting things ready, one moment...",
     "reason": "Idiom meaning \"shortly\", not the retired noun for a marked play."
+  },
+  {
+    "source": "displayNames:ANNOTATE.MODE_DESCRIPTION",
+    "word": "moment",
+    "text": "Mark plays: tap Mark play right after a moment worth keeping.",
+    "reason": "Owner-specified wording (T17170 task file C2): a moment in the game worth marking, before it is a play, not the retired noun for a marked play."
+  },
+  {
+    "source": "displayNames:GUIDE.annotate.watch.title",
+    "word": "moment",
+    "text": "Tap Play to watch the game. Tap Mark play at any moment worth keeping, a great play or one to learn from.",
+    "reason": "Owner-specified wording (T17170 task file C2): a moment in the game worth marking, before it is a play, not the retired noun for a marked play."
   }
 ]
