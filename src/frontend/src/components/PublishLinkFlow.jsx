@@ -104,7 +104,7 @@ export function PublishLinkFlow({
             )}
             {canShareFile ? (
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="cyan" size="sm" icon={Link2} className="w-full coarse-pointer:min-h-11" onClick={onNativeShare}>
+                <Button variant="cyan" size="sm" icon={Link2} className="w-full coarse-pointer:min-h-11" onClick={onNativeShare} guideTarget={GUIDE_PULSE.SHARE_LINK}>
                   {RESULT_PUBLISH.SHARE_LINK}
                 </Button>
                 <Button variant="secondary" size="sm" icon={Share2} className="w-full coarse-pointer:min-h-11" onClick={onShareVideo}>
@@ -112,7 +112,7 @@ export function PublishLinkFlow({
                 </Button>
               </div>
             ) : (
-              <Button variant="cyan" size="sm" icon={Link2} fullWidth className="coarse-pointer:min-h-11" onClick={onNativeShare}>
+              <Button variant="cyan" size="sm" icon={Link2} fullWidth className="coarse-pointer:min-h-11" onClick={onNativeShare} guideTarget={GUIDE_PULSE.SHARE_LINK}>
                 {RESULT_PUBLISH.SHARE_LINK}
               </Button>
             )}

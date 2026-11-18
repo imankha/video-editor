@@ -36,6 +36,8 @@ export const GUIDE_PULSE = {
   FOCUS_ADD_SPOTLIGHT: 'focus-choice-primary',
   OVERLAY_FINISH: 'overlay-choice-primary',
   GET_LINK: 'finished-get-link',
+  // T17040: a phone's already-published viewer shares through Share link instead of a Get link trigger.
+  SHARE_LINK: 'finished-share-link',
   SHARE_SUBMIT: 'share-modal-submit',
   GAMES_RETRY: 'home-games-retry',
   VIDEO_RETRY: 'focus-video-retry',
