@@ -1,6 +1,6 @@
 # T16910: Staging check failed: T16890:C1 C1: The repro steps expose reachable payment and close controls
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

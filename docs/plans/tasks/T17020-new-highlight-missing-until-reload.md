@@ -1,6 +1,6 @@
 # T17020: New highlight missing until reload
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-11-17

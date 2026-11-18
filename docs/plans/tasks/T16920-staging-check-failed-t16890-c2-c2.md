@@ -1,6 +1,6 @@
 # T16920: Staging check failed: T16890:C2 C2: The complete card form is reachable at 768 x
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

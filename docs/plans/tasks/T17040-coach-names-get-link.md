@@ -1,6 +1,6 @@
 # T17040: Coach names a missing Get link
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 1
 **Created:** 2026-11-17
