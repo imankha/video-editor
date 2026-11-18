@@ -8,7 +8,7 @@ Spotlight is the step that draws a circle that follows the parent's athlete thro
 **Filed:** 2026-11-12
 **Started:** not started
 **Impact:** 9 **Complexity:** 7 **Priority:** 1.3
-**Placement:** runs after the Referral programme (owner, 2026-11-13; it was first placed before AI Coach on 2026-11-12).
+**Placement:** roadmap section 4b, after Big-file upload and video conversion (section 4) and Sharper output (section 4a) (owner, 2026-11-18). It now also holds T15900 (player-following history note), T15800 (Spotlight becomes a step) and T15810 (Finished screen hub), which run first. Earlier placements: before AI Coach (2026-11-12), after the Referral programme (2026-11-13).
 **Design:** the Spotlight screen changes (T16240, T16250) need a design review before they are built.
 
 ## Goal
@@ -20,7 +20,7 @@ A parent taps their athlete once in Spotlight and gets a circle that stays on th
 1. **One tap is the goal.** After the parent taps their athlete's box on the first frame, they should not need another tap.
 2. **Prove it outside the app first.** Done: the prototype project and its results are described below.
 3. **The model is SAM 2.1 base+.** The owner picked it from the prototype table. It is free to use commercially (Apache 2 licence).
-4. **This runs after the Referral programme.** (Moved by the owner on 2026-11-13; it was first placed before AI Coach.)
+4. **This runs after Big-file upload and Sharper output** (owner, 2026-11-18), after T15900, T15800 and T15810. (Earlier: before AI Coach on 2026-11-12, after the Referral programme on 2026-11-13.)
 5. **A new spotlight stays two seconds long.** Following covers those two seconds, and continues for as long as the parent stretches the spotlight (T16260).
 
 ## What the prototype measured
