@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loginForCheck, checkApi, disableGuidanceForCheck } from '../helpers/checkAuth';
 import { openGameInAnnotate } from '../helpers/realAuth';
 
@@ -9,7 +12,9 @@ import { openGameInAnnotate } from '../helpers/realAuth';
  *      back within a second, with no timeline tap.
  * C3 - tapping a plays-list row (its name, not a button) selects that play and
  *      jumps to it; every rating badge shows a star count in its palette color,
- *      never a chess glyph.
+ *      never a chess glyph. "Anywhere" includes the ranking game and share
+ *      pages, so the check also scans every shipped frontend and backend source
+ *      for the retired chess notation (RATING_NOTATION and its glyph literals).
  */
 test.setTimeout(300000);
 test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
@@ -22,6 +27,26 @@ const BADGE_RGB = {
   4: 'rgb(0, 158, 115)',
   5: 'rgb(245, 183, 0)',
 };
+
+// Shipped sources (tests excluded) under a repo dir, relative to this file.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+function sourceFiles(rel) {
+  const out = [];
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (['node_modules', '__pycache__', 'tests'].includes(e.name)) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile() && /\.(jsx?|tsx?|py)$/.test(e.name) && !/\.test\.|\.spec\.|^test_/.test(e.name)) out.push(p);
+    }
+  };
+  walk(path.resolve(HERE, rel));
+  return out;
+}
+
+// The retired chess notation: the constant/helper names, and a quoted string
+// that is only a chess glyph ("!!", "!?", "?!", "??").
+const CHESS_NOTATION = /RATING_NOTATION|get_rating_notation|['"](?:!!|!\?|\?!|\?\?)['"]/;
 
 async function activeGames(page) {
   const res = await page.request.get(checkApi('/games'));
@@ -96,6 +121,13 @@ test('T17170:C1 playing past a just-marked play brings Mark play back within a s
 });
 
 test('T17170:C3 a row tap selects its play; badges show stars in their colors, no chess glyphs', async ({ context, page }) => {
+  // No chess notation left in any shipped source: ranking game, share pages, backend.
+  const leftovers = [...sourceFiles('../../src'), ...sourceFiles('../../../backend/app')]
+    .flatMap((file) => readFileSync(file, 'utf8').split('\n')
+      .map((line, i) => (CHESS_NOTATION.test(line) ? `${file}:${i + 1}: ${line.trim()}` : null))
+      .filter(Boolean));
+  expect(leftovers, 'chess notation still in shipped source').toEqual([]);
+
   await loginForCheck(context);
   const games = (await activeGames(page)).filter((g) => (g.clip_count || 0) > 1);
   test.skip(!games.length, '[T17170] no active game with 2+ plays');
