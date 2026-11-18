@@ -193,6 +193,14 @@ From the same review. Deletions come first, because less false code makes every 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 
+### Full QA continuation 2026-11-18: reproduced bugs (owner-requested, BUGS FIRST)
+
+**Why this section exists.** The owner requested continuation of every-feature QA and immediate filing. Current staging is ce8988c54 (#8063). Evidence is under `qa/qa-pass-2026-11-18/` locally. Existing bugs keep their ids.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T6600 | [Background controls cover profile dialogs](tasks/player-intro/T6600-modal-z-order-and-stacking-scale.md) | 7 | 4 | 1.8 | TODO | [ ] | Play and Share controls from background highlights appear above Manage profiles and can cover its profile rows. The owner reported the overlap, and it repeated on phone, tablet and desktop. On current staging the background Share button still receives input through the modal backdrop in three fresh loads. This reopens the existing layering task whose archive row says done. Done when every background control stays behind the dialog and its backdrop, including the nested Intro cards case. |
+
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
 
 **Why this section exists.** Owner asked on 2026-11-17 for a full QA pass of every feature at phone, iPad and desktop sizes. The new parent journey reached a downloaded highlight and share link, with checkout tested at phone and desktop viewports. Screenshots: `qa/qa-pass-2026-11-17/` (local, gitignored). Rows marked possible need a repro first.

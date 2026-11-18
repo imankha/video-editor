@@ -93,3 +93,13 @@ commit, separate from the portal change (moves are mechanical commits).
 - [ ] Nested modal ordering is correct for ManageProfiles → IntroCards → ConfirmationDialog.
 - [ ] No regression to CollectionPlayer / DownloadsPanel / LockedReasonModal ordering.
 - [ ] Any other collidable pair found in the sweep is reported (fixed or filed).
+
+## Progress Log
+
+### 2026-11-18: Profile dialog overlap reproduced on staging
+
+The owner reported Play and Share buttons floating over Manage profiles. On build 7a6b3123b (#7949), fresh loads at 390 x 844, 768 x 1024 and 1440 x 900 showed the background highlight controls above the dialog. The 768 x 1024 screenshot places the controls directly over the second profile row. Real touch contexts at phone and tablet sizes show the same issue. Evidence: `qa/qa-pass-2026-11-18/bugs/B01-owner-profile-overlap.jpg`, `B01-original-ipad-touch.png`, and `B01-original-phone-touch.png`.
+
+The continuation on current staging build ce8988c54 (#8063), as e2e@test.local, reproduced background Share controls above the modal backdrop in three fresh loads at 1440 x 900. After scrolling Highlights by 300 pixels and opening Manage profiles, the background Share control remains undimmed and hit-testing returns that background button instead of the modal backdrop. Screenshots: `B01-profile-repro1.png` through `B01-profile-repro3.png`; measured evidence: `B01-geometry.json`, in the same folder. No failing request or console exception was established as the cause. This is a visual layering defect. The task file still says TODO while the archive row says DONE, so the current failure is brought back into the active task list under this existing id rather than filed twice.
+
+Expected: Manage profiles and its backdrop cover every background highlight control, and background controls cannot receive input until the dialog closes. Also verify the original nested Intro cards case before closing this task.
