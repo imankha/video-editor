@@ -44,3 +44,7 @@ Not investigated. Related history: Keep Only Marked Plays epic (T12910 to T12950
 
 - [ ] C1: For a highlight whose game has expired, "Edit highlight" opens Frame with the play's video and no expiry message, at 1440x900.
 - [ ] C2: The same at 390x844 and 768x1024; the play's playback URL no longer answers 410 for a marked play.
+
+## Ruling
+
+**(c)** (owner, 2026-11-18): drop the browser check that needs POST /api/test/expire-game-storage; keep T17070:C1 and C2 as code checks (backend pytest against the real playback-url route with an expired game_storage row, plus the strongest real-path frontend vitest possible without mocking the behavior under test). Record the browser-only half as a `human` criterion (staging walk). Do not edit scripts/dotask_preland_check.sh.
