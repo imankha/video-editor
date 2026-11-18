@@ -2,7 +2,7 @@
 Shared constants for the Video Editor API.
 
 This module is the single source of truth for rating-related constants
-used across the application. All rating notation, colors, and adjectives
+used across the application. All rating colors and adjectives
 should be imported from here to avoid duplication and inconsistencies.
 """
 
@@ -109,16 +109,6 @@ def phase_to_status(phase: str) -> ExportStatus:
     else:
         return ExportStatus.PROCESSING
 
-# Rating notation symbols (chess-inspired, for display overlays)
-# Used in video overlays and exports
-RATING_NOTATION: dict[int, str] = {
-    1: '??',   # Blunder
-    2: '?',    # Mistake
-    3: '!?',   # Interesting
-    4: '!',    # Good
-    5: '!!'    # Brilliant
-}
-
 # Rating colors (color-blind safe palette) for FFmpeg overlays.
 # T11110 note: this is the SEPARATE FFmpeg overlay palette, NOT the UI badge
 # palette (that lives in the frontend clipConstants.js RATING_BADGE_COLORS, which
@@ -151,11 +141,6 @@ MAX_RATING: int = 5
 
 # Default rating for fallbacks
 DEFAULT_RATING: int = 3
-
-
-def get_rating_notation(rating: int) -> str:
-    """Get notation symbol for a rating, defaulting to '!?' for invalid ratings."""
-    return RATING_NOTATION.get(rating, RATING_NOTATION[DEFAULT_RATING])
 
 
 def get_rating_color_hex(rating: int) -> str:

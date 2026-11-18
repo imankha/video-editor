@@ -13,10 +13,8 @@ from app.constants import (
     MIN_RATING,
     RATING_COLORS_CSS,
     RATING_COLORS_HEX,
-    RATING_NOTATION,
     SourceType,
     get_rating_color_hex,
-    get_rating_notation,
     is_valid_rating,
 )
 
@@ -32,34 +30,6 @@ class TestSourceTypeLabels:
 
     def test_brilliant_clip_persisted_value_unchanged(self):
         assert SourceType.BRILLIANT_CLIP.value == 'brilliant_clip'
-
-
-class TestRatingNotation:
-    """Test RATING_NOTATION constant and helper."""
-
-    def test_has_all_ratings(self):
-        """RATING_NOTATION should have entries for ratings 1-5."""
-        for rating in range(1, 6):
-            assert rating in RATING_NOTATION
-            assert isinstance(RATING_NOTATION[rating], str)
-
-    def test_expected_values(self):
-        """RATING_NOTATION should have chess-inspired notation."""
-        assert RATING_NOTATION[5] == '!!'
-        assert RATING_NOTATION[4] == '!'
-        assert RATING_NOTATION[3] == '!?'
-        assert RATING_NOTATION[2] == '?'
-        assert RATING_NOTATION[1] == '??'
-
-    def test_get_rating_notation_valid(self):
-        """get_rating_notation returns correct values for valid ratings."""
-        assert get_rating_notation(5) == '!!'
-        assert get_rating_notation(1) == '??'
-
-    def test_get_rating_notation_invalid(self):
-        """get_rating_notation returns default for invalid ratings."""
-        assert get_rating_notation(0) == '!?'
-        assert get_rating_notation(6) == '!?'
 
 
 class TestRatingColorsHex:
@@ -135,7 +105,6 @@ class TestConstantsConsistency:
     def test_all_dicts_same_keys(self):
         """All rating dictionaries should have the same keys."""
         expected_keys = set(range(1, 6))
-        assert set(RATING_NOTATION.keys()) == expected_keys
         assert set(RATING_COLORS_HEX.keys()) == expected_keys
         assert set(RATING_COLORS_CSS.keys()) == expected_keys
 

@@ -85,13 +85,14 @@ const layerColorFor = (region) => (region.my_athlete === false ? LAYER_COLORS.te
 const layerNameFor = (region) => (region.my_athlete === false ? ANNOTATE.LAYER_TEAM : ANNOTATE.LAYER_MINE);
 
 /**
- * ClipRegionLayer - Timeline layer displaying clip markers with rating notation
+ * ClipRegionLayer - Timeline layer displaying clip markers with their star rating
  *
  * Interaction:
  * - Click marker to select it
  * - Click empty track space to seek the playhead there (T11050)
  * - Delete clips via sidebar (not by clicking)
- * - Shows rating notation: ?? (1), ? (2), !? (3), ! (4), !! (5)
+ * - Marker: rating-colored dot with the star count (T17170): digit only at 20px,
+ *   "N★" when selected (30px)
  *
  * Clips are added via:
  * - "Add Play" button (primary CTA under the video, or in the controls bar)
@@ -285,7 +286,7 @@ export default function ClipRegionLayer({
                 title={isAngle ? `${getRatingLabel(rating)}: from an angle` : getRatingLabel(rating)}
                 aria-label={isAngle ? `${getRatingLabel(rating)}: angle play` : getRatingLabel(rating)}
               >
-                <RatingIcon rating={rating} size={isSelected ? 30 : 24} />
+                <RatingIcon rating={rating} size={isSelected ? 30 : 20} />
                 {isAngle && (
                   <span
                     className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full bg-violet-600 text-white"

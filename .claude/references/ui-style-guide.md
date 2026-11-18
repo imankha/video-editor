@@ -193,8 +193,8 @@ wordmark into stacked "Reel" / icon / "Ballers" lines — a wrap accident, banne
 ### Labeled metadata pill (rating / count chips)
 
 Generalized from `TagBadges`. Card metadata must be legible to a non-expert: bare
-dates, bare scores, and developer notation (chess `!!`/`!`) never reach the UI — the
-notation stays in constants (`RATING_NOTATION`), the UI shows the adjective.
+dates, bare scores, and developer notation (chess `!!`/`!`) never reach the UI; the
+chess notation is retired (T17170), and rating badges show the star count (`RatingIcon`, "4★").
 
 ```jsx
 <span

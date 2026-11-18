@@ -50,7 +50,7 @@ export const ANNOTATE = {
   VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cameras filmed at the same time, tapping switches cameras without moving.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',
-  MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a great play.', // N04/T11850 mode-switcher help
+  MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a moment worth keeping.', // N04/T11850 mode-switcher help
   BACK_TO_MARK_PLAYS: 'Back to plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
   // T14610 (audit F-35): the game video is gone after the storage window.
@@ -579,7 +579,7 @@ export const NOTES_OVERLAY_STATUS = {
 // clicking their kid on AI-proposed per-frame boxes (PlayerDetectionOverlay),
 // not identity tracking. No em dashes (project-wide rule).
 export const DIVISION_OF_WORK =
-  'You mark the best plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
+  'You mark the plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload a play',
@@ -953,8 +953,8 @@ export const ANNOTATE_COCKPIT = {
 // (Q15 = C), no em dashes, no motion claims the app does not make.
 export const GUIDE = {
   annotate: {
-    watch: { title: 'Tap Play to watch the game. When your athlete does something great, tap Mark play.', body: '' },
-    watchPlaying: { title: 'See a great play? Tap Mark play.', body: '' },
+    watch: { title: 'Tap Play to watch the game. Tap Mark play at any moment worth keeping, a great play or one to learn from.', body: '' },
+    watchPlaying: { title: 'See a play worth keeping? Tap Mark play.', body: '' },
     hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },

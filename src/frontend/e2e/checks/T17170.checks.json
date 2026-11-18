@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T17170:C1": {"kind": "browser"},
+    "T17170:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/config/displayNames.markPlaysCopy.test.js"},
+    "T17170:C3": {"kind": "browser"}
+  }
+}

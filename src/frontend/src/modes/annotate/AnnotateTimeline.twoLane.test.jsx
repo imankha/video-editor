@@ -41,6 +41,9 @@ const baseProps = {
   onSelectRegion: () => {},
 };
 
+// T17170: markers show star counts (no chess glyphs); read the rating off the marker.
+const ratingsIn = (el) => [...el.querySelectorAll('[data-testid="rating-icon"]')].map((i) => i.dataset.rating).sort();
+
 describe('AnnotateTimeline — two clip lanes (T5700 follow-up)', () => {
   it('desktop: renders two labeled lanes, each showing only its own layer\'s clips', () => {
     stubMatchMedia(false);
@@ -52,13 +55,10 @@ describe('AnnotateTimeline — two clip lanes (T5700 follow-up)', () => {
     const mineLane = screen.getByTestId('clip-lane-mine');
     const teamLane = screen.getByTestId('clip-lane-team');
 
-    // Rating notations: mine lane has the rating-4 ('!') and legacy null rating-5 ('!!')
-    // clips (legacy null defaults to My Athlete); team lane has only the rating-3 ('!?').
-    expect(mineLane.textContent).toContain('!!');
-    expect(mineLane.textContent).toContain('!');
-    expect(mineLane.textContent).not.toContain('!?');
-    expect(teamLane.textContent).toContain('!?');
-    expect(teamLane.textContent).not.toContain('!!');
+    // Rating markers: mine lane has the rating-4 and legacy null rating-5 clips
+    // (legacy null defaults to My Athlete); team lane has only the rating-3.
+    expect(ratingsIn(mineLane)).toEqual(['4', '5']);
+    expect(ratingsIn(teamLane)).toEqual(['3']);
 
     expect(screen.queryByTestId('clip-track-mobile')).toBeNull();
   });
@@ -92,8 +92,6 @@ describe('AnnotateTimeline — two clip lanes (T5700 follow-up)', () => {
 
     // Single track shows all three clips together.
     const track = screen.getByTestId('clip-track-mobile');
-    expect(track.textContent).toContain('!!');
-    expect(track.textContent).toContain('!');
-    expect(track.textContent).toContain('!?');
+    expect(ratingsIn(track)).toEqual(['3', '4', '5']);
   });
 });
