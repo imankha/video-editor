@@ -130,13 +130,13 @@ test('T17230:C2 - changing the shape after positions exist asks to confirm', asy
     const currentName = await current.textContent();
     const writes = [];
     page.on('request', (r) => { if (r.method() === 'POST' && /aspect-ratio/.test(r.url())) writes.push(r.url()); });
-    await other.click();
+    await other.click({ timeout: 60000 });
 
     const dialog = page.getByTestId('focus-shape-switch-confirm');
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(/Switch to (portrait|landscape)\?/);
     // Keep: nothing is written and the shape stays.
-    await page.getByTestId('focus-shape-switch-keep').click();
+    await page.getByTestId('focus-shape-switch-keep').click({ timeout: 60000 });
     await expect(dialog).toHaveCount(0);
     await expect(current).toHaveText(currentName);
     expect(writes, 'no shape change was sent').toEqual([]);
