@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { loginAsDevPreset, loginAsRealUser } from '../helpers/realAuth';
+import { loginForCheck } from '../helpers/checkAuth';
+import { loginAsRealUser } from '../helpers/realAuth';
 
 /**
  * T17160 - on the Admin Panel at 1440x900, Esc closes the "Manage Campaigns" window and the
@@ -18,7 +19,7 @@ test('T17160:C1 Esc closes Manage Campaigns and View journey', async ({ page }) 
   if (process.env.E2E_BASE_URL) {
     await loginAsRealUser(page, ADMIN_EMAIL);
   } else {
-    await loginAsDevPreset(page, 'empty');
+    await loginForCheck(page, { devPreset: 'empty' });
   }
   await page.goto('/admin');
   await expect(page.getByRole('heading', { name: 'Admin Panel' })).toBeVisible({ timeout: 60000 });

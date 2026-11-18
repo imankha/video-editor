@@ -10,13 +10,18 @@ import { loginAsDevPreset, loginAsRealUser } from './realAuth';
  * named by E2E_CHECK_EMAIL (e2e/STAGING-GATE.md lane B by default). The two accounts hold
  * different data: read ids through checkApi() after logging in, never hard-code them.
  *
+ * A check that needs none of the account's own data (the Admin Panel) passes devPreset 'empty':
+ * the full preset's first session start runs migrations and finishes stranded exports, which once
+ * took 53s (T17160).
+ *
  * @param {import('@playwright/test').Page | import('@playwright/test').BrowserContext} pageOrContext
+ * @param {{ devPreset?: 'empty' | 'upload' | 'full' }} [options] - dev preset; ignored on a deployed target
  */
-export async function loginForCheck(pageOrContext) {
+export async function loginForCheck(pageOrContext, { devPreset = 'full' } = {}) {
   if (process.env.E2E_BASE_URL) {
     return loginAsRealUser(pageOrContext, process.env.E2E_CHECK_EMAIL || 'e2e-gate@test.local');
   }
-  return loginAsDevPreset(pageOrContext, 'full');
+  return loginAsDevPreset(pageOrContext, devPreset);
 }
 
 /**
