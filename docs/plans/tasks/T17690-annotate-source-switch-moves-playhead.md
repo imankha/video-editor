@@ -37,7 +37,10 @@ Start from `src/frontend/src/modes/annotate/hooks/useMultiVideoScrub.js`, `src/f
 - [ ] C2: With videos one after another, switching source does not move the game playhead by itself.
 - [ ] C3: A video that does not cover the current playhead moment cannot be chosen in the source bar: it is visibly disabled with a short reason, and becomes choosable once the playhead moves into its span (owner rule 2026-11-18).
 - [ ] C4: A browser check reproduces the move on master (red) and passes on the branch.
+- [ ] C5: Choosing a video in the source bar actually shows that video: the player's picture and sound switch to the chosen source (its video element's src is the chosen video and its frames are what is drawn), and the source bar marks it as the one playing. Owner report 2026-11-18: choosing another video did not seem to show it.
 
 ## Ruling
 
 **Only covering videos are choosable** (owner, 2026-11-18): "I should only be able to switch to videos that occur over the duration of where the playhead is." Reflected in Solution and C3.
+
+**Switching must show the chosen video** (owner, 2026-11-18): "switching to that video should show that video, doesn't seem to be the case." Added as C5; the C4 browser check covers it too (red on master if it reproduces).
