@@ -1,6 +1,6 @@
 # T17410: Staging check failed: T17260:C1 C1: The Add profile window and the profile list both
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

@@ -1,6 +1,6 @@
 # T17400: Staging check failed: T17250:C2 C2: Paying for a pack with the test card shows
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18
