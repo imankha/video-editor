@@ -1,4 +1,4 @@
-import { RATIO, RATIO_ORDER, ratioLabel } from '../constants/aspectRatios';
+import { RATIO, RATIO_ORDER, ratioLabel, ratioWithName } from '../constants/aspectRatios';
 
 /**
  * AspectRatioSelector component - Visual icon-based toggle for crop aspect ratio
@@ -16,7 +16,7 @@ export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }
     <div
       className="flex items-center gap-2"
       role="group"
-      aria-label={`Highlight aspect ratio, currently ${aspectRatio}`}
+      aria-label={`Shape, currently ${ratioWithName(aspectRatio)}`}
     >
       {RATIO_ORDER.map((value) => {
         const isSelected = aspectRatio === value;
@@ -25,6 +25,7 @@ export default function AspectRatioSelector({ aspectRatio, onAspectRatioChange }
         return (
           <button
             key={value}
+            data-testid={`shape-setting-${isRatioTall ? 'portrait' : 'landscape'}`}
             onClick={() => onAspectRatioChange(value)}
             className={`
               relative flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-all

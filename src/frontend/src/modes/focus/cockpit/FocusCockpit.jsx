@@ -308,7 +308,6 @@ export default function FocusCockpit({
                 hasPositions={focusPointCount > 0}
                 onChange={onAspectRatioChange}
                 onChosen={handleShapeChosen}
-                compact
               />
             </div>
           )}
@@ -363,6 +362,7 @@ export default function FocusCockpit({
           <FocusSettingsPanel
             globalAspectRatio={globalAspectRatio}
             onAspectRatioChange={onAspectRatioChange}
+            hasPositions={focusPointCount > 0}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             straightenVisible={straightenVisible}

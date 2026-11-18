@@ -18,7 +18,7 @@
  *   3. Annotate fullscreen Mark play                       -- annotate test
  *   4. Plays list View details + Jump to play              -- annotate test
  *   5. Plays list Hide plays (drawer close)                -- annotate test
- *   6. Frame's Portrait/Landscape chip (focus-shape-chip)  -- frame test
+ *   6. Frame's Portrait/Landscape shape buttons (Settings "Shape" row, T17230) -- frame test
  *   7. Spotlight number chips (DetectionMarkerLayer markers, the 24x24 boxes with the
  *      athlete-count badge: their hit pad is what a finger lands on) -- spotlight test
  *   8. Spotlight Delete spotlight                          -- spotlight test
@@ -187,46 +187,22 @@ for (const vp of VIEWPORTS) {
       await assertAtLeast44(page.getByTestId('trim-field-end'), 'Annotate time label (end)');
     });
 
-    test(`T16210:C1 - Frame: the Portrait/Landscape chip is >=44x44 on ${vp.name}`, async ({ context, page }) => {
+    test(`T16210:C1 - Frame: the Settings Shape (Portrait/Landscape) buttons are >=44x44 on ${vp.name}`, async ({ context, page }) => {
       await loginForCheck(context);
       const project = await findFrameableProject(page);
       expect(project, 'a project whose game video Frame can play').toBeTruthy();
 
-      // The chip replaces the "Where will you share it?" picker once the highlight has a
-      // saved box position when Frame opens (FrameShapeChoice hasPositions = FocusModeView's
-      // mount-time boxPrePlaced). If this draft has none yet, place one the way a parent
-      // does -- drag the box -- then come back to Frame.
-      const cropHandles = page.locator('.crop-handle');
-      const chip = page.getByTestId('focus-shape-chip');
-      const picker = page.getByTestId('focus-shape-option-portrait');
+      // T17230: the small above-video chip is gone; after the first position the shape
+      // is changed only from Settings ("Shape"), opened from the mobile settings row.
       await page.goto(`/focus/p/${project.id}`);
-      await cropHandles.first().waitFor({ timeout: 180000 });
-      await chip.or(picker).first().waitFor({ timeout: 60000 });
-      if (!(await chip.isVisible())) {
-        await disableGuidanceForCheck(page);
-        const boxes = await cropHandles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
-        const left = Math.min(...boxes.map((b) => b.x + b.width / 2));
-        const right = Math.max(...boxes.map((b) => b.x + b.width / 2));
-        const top = Math.min(...boxes.map((b) => b.y + b.height / 2));
-        const bottom = Math.max(...boxes.map((b) => b.y + b.height / 2));
-        const cx = (left + right) / 2;
-        const cy = (top + bottom) / 2;
-        const saved = page.waitForResponse((r) => r.request().method() === 'POST' && /\/actions/.test(r.url()), { timeout: 60000 });
-        await page.mouse.move(cx, cy);
-        await page.mouse.down();
-        await page.mouse.move(cx - 15, cy, { steps: 5 });
-        await page.mouse.move(cx - 30, cy, { steps: 5 });
-        await page.mouse.up();
-        expect((await saved).ok(), 'the box drag saved a position').toBeTruthy();
-        // Leave Frame and come back in-app (Spotlight tab, then Frame tab), the way a
-        // parent returns to it; Frame re-mounts with the saved position.
-        await page.getByTestId('mode-overlay').click();
-        await page.locator('.region-track').first().waitFor({ timeout: 180000 });
-        await page.getByTestId('mode-framing').click();
-        await cropHandles.first().waitFor({ timeout: 180000 });
+      await page.locator('.crop-handle').first().waitFor({ timeout: 180000 });
+      const settingsRow = page.getByTestId('mobile-settings-row');
+      if (await settingsRow.isVisible()) await settingsRow.tap();
+      for (const shape of ['portrait', 'landscape']) {
+        const btn = page.getByTestId(`shape-setting-${shape}`);
+        await btn.waitFor({ timeout: 60000 });
+        await assertAtLeast44(btn, `Frame Settings Shape ${shape} button`);
       }
-      await chip.waitFor({ timeout: 60000 });
-      await assertAtLeast44(chip, 'Frame Portrait/Landscape chip');
     });
 
     test(`T16210:C1 - Spotlight: number chips, Delete spotlight and the toast are >=44x44 on ${vp.name}`, async ({ context, page }) => {

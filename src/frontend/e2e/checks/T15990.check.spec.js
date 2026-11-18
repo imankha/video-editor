@@ -7,6 +7,7 @@
  * frozen value to FrameShapeChoice's `hasPositions`; a project whose crop positions load
  * after the view mounts kept the full "Where will you share it?" picker forever. The
  * portrait layout now passes the live position count, as the landscape cockpit does.
+ * T17230 removed the chip: the confirm now opens from the Settings "Shape" row.
  *
  * Run: bash scripts/dev-verify.sh e2e/checks/T15990.check.spec.js --reporter=line
  */
@@ -25,15 +26,15 @@ test.describe('T15990 checks: Switch to landscape dialog on iPhone 14', () => {
     const body = await res.json();
     const projects = Array.isArray(body) ? body : body.projects || [];
     const candidate = projects.find((p) => p.has_crop_keyframes);
-    test.skip(!candidate, '[T15990] no project with crop keyframes placed (needed for the shape chip)');
+    test.skip(!candidate, '[T15990] no project with crop keyframes placed (needed for the switch-shape confirm)');
 
     await page.goto(`/focus/p/${candidate.id}`);
     await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
 
-    // The staging failure: the chip never appeared (the full picker stayed instead).
-    const chip = page.getByTestId('focus-shape-chip');
-    await expect(chip).toBeVisible({ timeout: 60000 });
-    await chip.tap();
+    // T17230: the chip is gone; the shape is switched from Settings ("Shape"), which asks
+    // first once positions exist (the live count, the T15990 fix).
+    await page.getByTestId('mobile-settings-row').tap();
+    await page.locator('[data-testid^="shape-setting-"][aria-pressed="false"]').first().tap();
 
     await expect(page.getByTestId('focus-shape-switch-confirm')).toBeVisible();
 

@@ -854,6 +854,9 @@ export const FOCUS_PREVIEW = {
 
 // T14620: Frame screen strings that used to sit inline in the components.
 export const FRAME_COPY = {
+  // T17230: the Settings row for the reel's portrait/landscape choice ("shape", as the
+  // switch dialog says).
+  SHAPE_LABEL: 'Shape',
   LENGTH_CHANGED: 'Length of your highlight. Credits are based on this.',
   LENGTH_UNCHANGED: 'Length of your highlight (no slow motion or trim).',
   LENGTH_LABEL: 'Length',
