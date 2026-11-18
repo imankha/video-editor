@@ -65,7 +65,9 @@ export async function checkHomeTouchTargets(browser, viewport) {
   const page = await context.newPage();
   try {
     await forceFailedAndExpiring(page);
-    await page.goto('/');
+    // '/home', not '/': a bare '/' restores the account's resume point (T14980), and an earlier
+    // check on the shared account can leave it in Annotate, where no Games button shows (T17420).
+    await page.goto('/home');
     await page.getByRole('button', { name: /^Games/ }).first().click({ timeout: 60000 });
 
     const banner = page.getByTestId('storage-expiry-banner');

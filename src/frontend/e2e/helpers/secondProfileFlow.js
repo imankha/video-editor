@@ -31,7 +31,9 @@ export async function checkSecondProfileHasNoCreditsBubble(browser) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await loginForCheck(context);
   const page = await context.newPage();
-  await page.goto('/');
+  // '/home', not '/': a bare '/' restores the shared check account's resume point, which an
+  // earlier check may have left in Annotate, where there is no profile chip (T17440).
+  await page.goto('/home');
   await page.waitForLoadState('domcontentloaded');
 
   const listed = await pageApi(page, '/profiles');
