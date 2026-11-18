@@ -18,10 +18,15 @@ Found by the staging check after PR #830 merged (group g-t17500-2, ce8988c54). I
 
 ## Acceptance Criteria
 
-- [ ] The steps above give the expected result.
+- [x] The steps above give the expected result.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
 
-- To be found.
+- `src/frontend/e2e/helpers/frameVideoCheck.js`: `openFrame`, fixed under T17630.
+- `src/frontend/e2e/checks/T17640.check.spec.js`: runs T17500:C4's flow.
+
+### Cause (2026-11-18)
+
+Same as T17630: the check opened the first play in `/projects`, which on the shared staging account sits on game 2, whose upload never finished, so Frame showed "Game video still uploading" and never mounted a `<video>`. No app bug; T17630's `openFrame` fix (open a play whose `playback-url` answers 200) makes T17500:C4 pass on staging.
