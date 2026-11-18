@@ -1,6 +1,6 @@
 # T17620: Staging check failed: T17380:C2 C2: Retrying after buying credits completes the upload.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

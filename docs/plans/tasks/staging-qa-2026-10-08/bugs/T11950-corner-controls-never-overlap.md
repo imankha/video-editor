@@ -61,3 +61,11 @@ Playwright geometry spec: mount the 'Make this a highlight now?' card and assert
 - [ ] Below 640px the Guidance control is at least 44x44 and does not overlap a CTA bar
 - [ ] Guidance on/off still saves through the same setCoachEnabled click (no new write path)
 - [ ] Relevant tests pass and lint is clean
+
+## Progress Log
+
+### 2026-11-18: Sharpen progress still covers Add video
+
+Current staging build ce8988c54 (#8063), returning parent e2e@test.local, desktop 1440 x 900. While a sharpen runs, open Mark Plays for the QA game qa18-game and select the game video rather than a play. The fixed progress card covers the Add video action. This repeated on three fresh page loads during one sharpen. The Add video rectangle is x1162.5 to1411 and y746 to854.5. Hit-testing its center returns a child of the global progress card, and normal clicks are intercepted. This is the same corner-content obstruction covered by this task, so no duplicate task was created.
+
+Evidence: `qa/qa-pass-2026-11-18/bugs/B03-progress-repro1.png` through `B03-progress-repro3.png`, and `B03-progress-geometry.json` (local). The screenshot also shows the ready toast from the prior sharpen stacked above the active progress card. No console exception or failed request was established as the cause of the overlap. Expected: the progress card and toast do not cover any game action, including Add video. Phone and tablet have not yet been checked for this exact overlap.

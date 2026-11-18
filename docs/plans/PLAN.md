@@ -152,13 +152,20 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17360 | [Staging check failed: T17240:C1 C1: No two reel cards on one profile share a](tasks/T17360-staging-check-failed-t17240-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17370 | [Attached footage with sound but no picture is caught](tasks/T17370-attach-footage-sound-no-picture.md) | 6 | 3 | 2.0 | STAGING | [ ] | Follow-up to T17280: the attach-footage path does not run the sound-but-no-picture check, so an iPhone video the browser cannot draw attaches silently. |
 | T17380 | [A failed upload for lack of credits leaves a stuck game](tasks/T17380-insufficient-credits-orphan-pending-game.md) | 7 | 4 | 1.8 | STAGING | [ ] | Follow-up to T17280: an upload that fails with insufficient credits drops its entry but leaves the pending game behind. |
-| T17500 | [Every video that plays sound only says why](tasks/T17500-sound-only-video-explained-everywhere.md) | 6 | 2 | 3.0 | WIP | [ ] | Follow-up to T17280, owner ruling 2026-11-18 (bug fixes now, conversion later). A play uploaded directly as a clip, or the saved clip of an expired iPhone game, can still show a black box with sound and no explanation. Every place that plays such a video shows the same message and way out. |
-| T17510 | [Record each game video's format](tasks/T17510-record-game-video-format.md) | 5 | 2 | 2.5 | WIP | [ ] | Foundational, owner ruling 2026-11-18. Record codec, pixel format and HDR for every uploaded game, and report how many are iPhone HEVC and how many uploading browsers cannot show them, so the conversion work in milestone 4 is sized on real numbers. No change for parents. |
+| T17500 | [Every video that plays sound only says why](tasks/T17500-sound-only-video-explained-everywhere.md) | 6 | 2 | 3.0 | STAGING | [ ] | Follow-up to T17280, owner ruling 2026-11-18 (bug fixes now, conversion later). A play uploaded directly as a clip, or the saved clip of an expired iPhone game, can still show a black box with sound and no explanation. Every place that plays such a video shows the same message and way out. |
+| T17510 | [Record each game video's format](tasks/T17510-record-game-video-format.md) | 5 | 2 | 2.5 | STAGING | [ ] | Foundational, owner ruling 2026-11-18. Record codec, pixel format and HDR for every uploaded game, and report how many are iPhone HEVC and how many uploading browsers cannot show them, so the conversion work in milestone 4 is sized on real numbers. No change for parents. |
 | T17400 | [Staging check failed: T17250:C2 C2: Paying for a pack with the test card shows](tasks/T17400-staging-check-failed-t17250-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17410 | [Staging check failed: T17260:C1 C1: The Add profile window and the profile list both](tasks/T17410-staging-check-failed-t17260-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T17420 | [Staging check failed: T17300:C1 The steps above give the expected result.](tasks/T17420-staging-check-failed-t17300-c1-the.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17430 | [Staging check failed: T17310:C1 The steps above give the expected result.](tasks/T17430-staging-check-failed-t17310-c1-the.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17440 | [Staging check failed: T17320:C1 The steps above give the expected result.](tasks/T17440-staging-check-failed-t17320-c1-the.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17420 | [Staging check failed: T17300:C1 The steps above give the expected result.](tasks/T17420-staging-check-failed-t17300-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17430 | [Staging check failed: T17310:C1 The steps above give the expected result.](tasks/T17430-staging-check-failed-t17310-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17440 | [Staging check failed: T17320:C1 The steps above give the expected result.](tasks/T17440-staging-check-failed-t17320-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17620 | [Staging check failed: T17380:C2 C2: Retrying after buying credits completes the upload.](tasks/T17620-staging-check-failed-t17380-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17630 | [Staging check failed: T17500:C2 C2: Opening Frame on a play whose saved clip is](tasks/T17630-staging-check-failed-t17500-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17640 | [Staging check failed: T17500:C4 C4: Normal H.264 videos show no message anywhere.](tasks/T17640-staging-check-failed-t17500-c4-c4.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17670 | [A retried storage extension charges twice](tasks/T17670-storage-extension-retry-charges-twice.md) | 6 | 2 | 3.0 | TODO | [ ] | Follow-up to T17620 (owner-approved 2026-11-18). Every storage extension now gets a random charge key, so a resent request (double tap, network retry) is charged twice. Key the charge on a request id the app sends once per tap. |
+| T17690 | [Switching video source moves the playhead](tasks/T17690-annotate-source-switch-moves-playhead.md) | 7 | 3 | 2.3 | WIP | [ ] | Owner report 2026-11-18. In Annotate, switching the video source in a multi-video game moves the playhead, so the parent loses their place. The help text promises switching cameras without moving. Keep the game-time position across a switch. |
+| T17660 | [Multiple videos cost more than shown](tasks/T17660-multiple-videos-cost-more-than-shown.md) | 9 | 3 | 3.0 | WIP | [ ] | A parent adds two videos to a game and sees a cost of two credits before confirming. Four credits are taken instead. This repeated on all three batches, including tiny videos. Done when the total shown for the selected videos equals the total credits taken. |
+| T17650 | [Trim control blocks deleting split](tasks/T17650-trim-control-blocks-delete-split.md) | 5 | 2 | 2.5 | WIP | [ ] | A parent splits a play and trims its last section. The control that restores the trimmed end sits over Delete split. Clicking Delete split cannot reach that button, so the parent must restore the trimmed section before removing the split. This repeated on all three fresh page loads. The two controls should both remain reachable. Done when deleting the split and restoring trimmed footage are separately reachable. |
 
 ### Bugs found by /dotask verify
 
@@ -167,7 +174,6 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T17620 | [Staging check failed: T17380:C2 C2: Retrying after buying credits completes the upload.](tasks/T17620-staging-check-failed-t17380-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
@@ -190,6 +196,14 @@ From the same review. Deletions come first, because less false code makes every 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+
+### Full QA continuation 2026-11-18: reproduced bugs (owner-requested, BUGS FIRST)
+
+**Why this section exists.** The owner requested continuation of every-feature QA and immediate filing. Current staging is ce8988c54 (#8063). Evidence is under `qa/qa-pass-2026-11-18/` locally. Existing bugs keep their ids.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T6600 | [Background controls cover profile dialogs](tasks/player-intro/T6600-modal-z-order-and-stacking-scale.md) | 7 | 4 | 1.8 | TODO | [ ] | Play and Share controls from background highlights appear above Manage profiles and can cover its profile rows. The owner reported the overlap, and it repeated on phone, tablet and desktop. On current staging the background Share button still receives input through the modal backdrop in three fresh loads. This reopens the existing layering task whose archive row says done. Done when every background control stays behind the dialog and its backdrop, including the nested Intro cards case. |
 
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
 

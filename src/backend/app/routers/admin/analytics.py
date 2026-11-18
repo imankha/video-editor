@@ -358,6 +358,69 @@ def analytics_pack_mix(exclude_test: bool = True, sport: SportFilter = None):
     return {"windows": windows}
 
 
+# T17510: the game-video format census. Both halves live in the in-house
+# `user_actions` aggregate as `capability_impression:*` rows (no table of their
+# own): the server's per-activated-video format record
+# (`game_format_{family}_{transfer}_{res}`, games.py _record_game_video_formats)
+# and the uploading browser's decode answer (`shrink_decode_{yes|no|unavailable}
+# _{family}_{res}`, utils/shrinkCapability.js). Counts are all-time: the
+# aggregate keeps a count per (user, action), not per-event timestamps.
+_GAME_FORMAT_PREFIX = "capability_impression:game_format_"
+_SHRINK_DECODE_PREFIX = "capability_impression:shrink_decode_"
+_DECODE_ANSWERS = ("yes", "no", "unavailable")
+
+
+@router.get("/analytics/game-formats")
+# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_game_formats(exclude_test: bool = True):
+    """How many activated game videos are HEVC, HDR, by resolution, and what share
+    of HEVC uploads came from a browser that could not decode them.
+
+    `hevc_cannot_decode_share` = no / (yes + no) over HEVC census probes;
+    `unavailable` (no WebCodecs, so the browser's ability is unknown) is reported
+    apart and left out of the share. None when there is no known answer yet."""
+    excl = _test_exclusion(exclude_test)
+    excl_and = f" AND {excl}" if excl else ""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT a.action, SUM(a.count) AS n
+            FROM user_actions a
+            LEFT JOIN users u ON u.user_id = a.user_id
+            LEFT JOIN user_segments s ON s.user_id = a.user_id
+            WHERE (a.action LIKE %s OR a.action LIKE %s){excl_and}
+            GROUP BY a.action
+            """,
+            [_GAME_FORMAT_PREFIX + "%", _SHRINK_DECODE_PREFIX + "%"],
+        )
+        rows = cur.fetchall()
+
+    formats, by_res = [], {}
+    hevc_decode = dict.fromkeys(_DECODE_ANSWERS, 0)
+    for r in rows:
+        action, n = r["action"], int(r["n"])
+        if action.startswith(_GAME_FORMAT_PREFIX):
+            family, transfer, res = action[len(_GAME_FORMAT_PREFIX):].split("_")
+            formats.append({"family": family, "transfer": transfer, "res": res, "games": n})
+            by_res[res] = by_res.get(res, 0) + n
+        else:
+            answer, family, _res = action[len(_SHRINK_DECODE_PREFIX):].split("_")
+            if family.startswith("hevc") and answer in hevc_decode:
+                hevc_decode[answer] += n
+    formats.sort(key=lambda f: -f["games"])
+    known = hevc_decode["yes"] + hevc_decode["no"]
+    return {
+        "games": sum(f["games"] for f in formats),
+        "hevc_games": sum(f["games"] for f in formats if f["family"].startswith("hevc")),
+        "hdr_games": sum(f["games"] for f in formats if f["transfer"] != "sdr"),
+        "by_res": by_res,
+        "formats": formats,
+        "hevc_decode": hevc_decode,
+        "hevc_cannot_decode_share": hevc_decode["no"] / known if known else None,
+    }
+
+
 @router.get("/analytics/channels")
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_channels(

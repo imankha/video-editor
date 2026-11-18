@@ -21,7 +21,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.analytics import record_milestone
+from app.analytics import record_impression, record_milestone
 from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, ShareClipScope
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import acquire_write_lock, durable_sync
@@ -1130,6 +1130,32 @@ def _maybe_send_game_ready_email(game_id: int, game_name: str) -> None:
         logger.warning(f"[game_ready_email] failed to schedule for game {game_id}: {e}")
 
 
+def _record_game_video_formats(game_id: int, probed: list[tuple[str, dict]]) -> None:
+    """T17510: record each activated video's format once, for the format census.
+
+    Called only on the genuine pending->ready flip, so a repeat activate never
+    counts a game twice. One `capability_impression:game_format_{label}` row in
+    the in-house `user_actions` aggregate (same kind and vocabulary as the
+    client's shrink_decode beacons; read by GET /api/admin/analytics/game-formats)
+    plus a log line with the raw ffprobe fields. Never fails the activation.
+    """
+    from app.services.video_probe import video_format_label
+    for blake3_hash, meta in probed:
+        try:
+            label = video_format_label(meta)
+            logger.info(
+                f"[activate] game_format game={game_id} hash={blake3_hash} label={label} "
+                f"codec={meta['codec']} pix_fmt={meta['pix_fmt']} color_transfer={meta['color_transfer']} "
+                f"size={meta['width']}x{meta['height']} fps={meta['fps']}"
+            )
+        except Exception:
+            # A probe dict without the format fields is a bug in probe_r2_video's
+            # contract: say so loudly, but the game is already ready -- don't 500.
+            logger.exception(f"[activate] game_format not recorded game={game_id} hash={blake3_hash}")
+            continue
+        record_impression("capability", f"game_format_{label}")
+
+
 @router.post("/{game_id:int}/activate")
 async def activate_game(
     game_id: int,
@@ -1190,6 +1216,7 @@ async def activate_game(
             await _validate_video_in_r2_or_record(game['blake3_hash'], stage="activating")
 
         # Backfill missing metadata from R2 probe (pending games skip probe at creation)
+        probed_formats = []  # T17510: (hash, probe) per video, recorded after the flip
         for row in video_rows:
             cursor.execute(
                 "SELECT fps, duration, video_width, video_height FROM game_videos WHERE game_id = ? AND blake3_hash = ?",
@@ -1209,6 +1236,7 @@ async def activate_game(
             if not meta:
                 logger.warning(f"[activate] probe failed for game={game_id} hash={row['blake3_hash']}, metadata will remain incomplete")
                 continue
+            probed_formats.append((row['blake3_hash'], meta))
 
             gv_updates = []
             gv_params = []
@@ -1366,6 +1394,7 @@ async def activate_game(
     # never fails or delays the activation response.
     if flipped_to_ready:
         _maybe_send_game_ready_email(game_id, game_name)
+        _record_game_video_formats(game_id, probed_formats)
 
     # T5683: Warm the game source poster at gesture (non-blocking background task).
     # Best-effort -- never fails the activation. get_current_user_id/
