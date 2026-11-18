@@ -110,6 +110,8 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T16810 | [Staging check failed: T16750:C1 With Preview playing, Sharpen, then Finished opens: the Frame video](tasks/T16810-staging-check-failed-t16750-c1-with.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T16820 | [Staging check failed: T16760:C1 Portrait preview and its controls fully visible above the action](tasks/T16820-staging-check-failed-t16760-c1-portrait.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T16830 | [Sharpen lost to server restart waits forever](tasks/T16830-sharpen-lost-to-server-restart-waits.md) | 4 | 3 | 1.3 | STAGING | [ ] | When the server restarts during a sharpen (a deploy), the sharpen can vanish and Frame keeps showing progress forever. Seen twice on staging on 2026-11-17 (T16800). We will find why the job is lost and make Frame say the sharpen was interrupted. Done when a lost sharpen shows a try-again message within a minute. |
+| T16890 | [Checkout payment button is unreachable](tasks/T16890-checkout-pay-button-offscreen.md) | 8 | 2 | 4.0 | STAGING | [ ] | A parent opens the smallest credit pack and expands Card. The form becomes taller than the screen, leaving Pay below the bottom and the heading above the top. Scrolling does not expose the button, and this repeated on all three attempts at phone width and also appeared on desktop. Done when the entire checkout and its payment and close controls are reachable at supported sizes. |
+| T16900 | [Tell direct sign-ups from unknown sources](tasks/T16900-signup-source-direct-vs-unknown.md) | 6 | 4 | 1.5 | WIP | [x] | On production, 418 sign-ups are labelled "organic". That label means we found no source: a typed address, an app that hides where the visitor came from, or a website we do not recognise. The referring website is read once at sign-up and then thrown away, so those sign-ups can never be broken down. We will save the referring website, split "organic" into "direct" and "other website", and let the Campaigns table group by referring website and by medium. Owner ruled 2026-11-17: new sign-ups are labelled "direct" or "other website", and old ones keep "organic". |
 
 ### Bugs found by /dotask verify
 
@@ -118,6 +120,8 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T16910 | [Staging check failed: T16890:C1 C1: The repro steps expose reachable payment and close controls](tasks/T16910-staging-check-failed-t16890-c1-c1.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T16920 | [Staging check failed: T16890:C2 C2: The complete card form is reachable at 768 x](tasks/T16920-staging-check-failed-t16890-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
@@ -148,7 +152,6 @@ From the same review. Deletions come first, because less false code makes every 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T17040 | [Coach names a missing Get link](tasks/T17040-coach-names-get-link.md) | 4 | 1 | 4.0 | TODO | [ ] | With Guidance on, the coach on a finished highlight's share sheet says "Tap Get link to send it", but the button on screen is "Share link". A first-time parent is told to look for a button that does not exist. Done when the coach names only buttons that are on that sheet. |
-| T16890 | [Checkout payment button is unreachable](tasks/T16890-checkout-pay-button-offscreen.md) | 8 | 2 | 4.0 | TODO | [ ] | A parent opens the smallest credit pack and expands Card. The form becomes taller than the screen, leaving Pay below the bottom and the heading above the top. Scrolling does not expose the button, and this repeated on all three attempts at phone width and also appeared on desktop. Done when the entire checkout and its payment and close controls are reachable at supported sizes. |
 | T17050 | [Checkout header missing highlight count](tasks/T17050-checkout-header-missing-count.md) | 3 | 1 | 3.0 | TODO | [ ] | After picking a credit pack, the payment window reads "$6.99 · ~ plays": the number is missing and it says plays where the pack list said "~10 highlights". It happens for every pack. Done when the heading shows the same "~N highlights" as the pack card. |
 | T17130 | [Failed upload tile text cut off](tasks/T17130-failed-upload-tile-text-cut-off.md) | 3 | 1 | 3.0 | TODO | [ ] | On desktop the "Upload incomplete" tile's sentence "Upload didn't finish. Retry to resume, or discard" runs under its Retry and Discard buttons, hiding the end. Done when the whole sentence is readable at every size. |
 | T17010 | [Guidance switch covers Tags and Notes close](tasks/T17010-guidance-switch-covers-play-details-close.md) | 5 | 2 | 2.5 | TODO | [ ] | On a phone, the Guidance switch sits exactly on the close X of a play's "Tags and Notes" sheet, so tapping X turns Guidance on or off and the sheet stays open. It repeated on 3 of 4 loads and is a return of T13770, fixed in October. Done when the X is uncovered and closes the sheet at phone and iPad sizes. |
@@ -236,7 +239,8 @@ A parent on an iPhone cannot see the play while trimming or fast-forwarding in f
 
 **Why this section exists.** The 2026-11-04 top-down analysis ([topdown-vs-bottomup-2026-11-04.md](bi/topdown-vs-bottomup-2026-11-04.md), revenue outlook in [revenue-outlook-2026-11-04.md](bi/revenue-outlook-2026-11-04.md)) found the gap between the market (4.7M to 8.4M US competitive-tier athletes) and the funnel ($348 a year today) is reach, not price or demand, and that the referral K factor, the cost per sign-up by platform and geography, and the US vs non-US mix are the model inputs no existing data can produce. A multi-arm acquisition test (Meta, Reddit Ads, share loop, coach codes, organic Reddit, SEO; budget tier is the owner's open decision, $2,500 recommended) needs three measurement pieces first, approved 2026-11-04 from a list of six: the sharer's code on the end card (K becomes measurable from existing tables), a channel read-out keyed on raw attribution (the daily row every arm is read from), and country at sign-up (the organic comparator for the geo arms). Deliberately not filed: code entry at sign-up and partner codes, footage source at upload, a flag-gated referral reward (pricing-adjacent), and any Meta CAPI or Reddit Pixel (against the in-house analytics rule). Audit of what already exists is in section 10 of the top-down doc. Order: T15070 (half a week, unlocks K) -> T15120 -> T15100.
 
-*All tasks in this section are complete — rows archived to [PLAN-archive.md](../../../docs/plans/PLAN-archive.md).*
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
 
 ### Journey map follow-ups (user request 2026-11-03, runs after Copy audit)
 
@@ -280,7 +284,6 @@ New tasks (board rows), stage order. The nine rows from T14800 down were dropped
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-|  | **[Automatic finish](tasks/automatic-finish/EPIC.md)** | 9 | 6 | 1.5 | TODO |  | A highlight is finished the moment sharpening ends, with no Finish tap and whether or not the parent is still on the screen. Changing the crop and adding or redoing a spotlight move to the Finished screen, so nothing is lost. The highlights already stranded are finished too. |
 
 ### Milestone: AI Coach (owner request 2026-11-12, runs before the Referral programme)
 
