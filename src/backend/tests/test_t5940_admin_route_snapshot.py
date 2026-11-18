@@ -25,6 +25,7 @@ ADMIN_ROUTES = [
     ('GET', '/api/admin/analytics/cohorts', 'analytics_cohorts'),
     ('GET', '/api/admin/analytics/countries', 'analytics_countries'),
     ('GET', '/api/admin/analytics/funnel', 'analytics_funnel'),
+    ('GET', '/api/admin/analytics/game-formats', 'analytics_game_formats'),
     ('GET', '/api/admin/analytics/journey', 'analytics_journey_map'),
     ('GET', '/api/admin/analytics/journey/step/{stage}', 'analytics_journey_step'),
     ('GET', '/api/admin/analytics/journey/{user_id}', 'analytics_journey'),

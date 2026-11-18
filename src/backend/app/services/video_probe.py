@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 
 logger = logging.getLogger(__name__)
@@ -114,8 +115,10 @@ def probe_r2_video(s3_client, bucket: str, key: str) -> dict | None:
     of samples) — far more reliable than pre-fetching a fixed prefix, which
     often fails because ffprobe needs to cross-reference moov and mdat offsets.
 
-    Returns {width, height, fps, duration}, or None when R2 or the probe fails
-    (an external dependency; logged, callers decide).
+    Returns {width, height, fps, duration, codec, pix_fmt, color_transfer}, or
+    None when R2 or the probe fails (an external dependency; logged, callers
+    decide). T17510: pix_fmt / color_transfer are None when the file does not
+    say (an untagged SDR file has no color_transfer).
     """
     try:
         url = s3_client.generate_presigned_url(
@@ -127,4 +130,41 @@ def probe_r2_video(s3_client, bucket: str, key: str) -> dict | None:
     except Exception as e:
         logger.warning(f"[video_probe] probe_r2_video failed for {key}: {e}")
         return None
-    return {k: info[k] for k in ("width", "height", "fps", "duration")}
+    stream = info["video_stream"]
+    return {
+        **{k: info[k] for k in ("width", "height", "fps", "duration", "codec")},
+        "pix_fmt": stream.get("pix_fmt"),
+        "color_transfer": stream.get("color_transfer"),
+    }
+
+
+# T17510: HDR transfer functions -> the census label. Anything else (bt709,
+# untagged, ...) is SDR.
+_HDR_TRANSFERS = {"arib-std-b67": "hlg", "smpte2084": "pq"}
+
+
+def video_format_label(meta: dict) -> str:
+    """T17510: bounded census label for a probed video, `{family}_{transfer}_{res}`.
+
+    family and res use the SAME vocabulary as the client's shrink_decode census
+    beacons (utils/shrinkCapability.js deriveCodecFamily / deriveResBucket), so
+    the server's format record and the browser's decode answer line up:
+    family avc|hevc8|hevc10|av1|vp9|other, transfer sdr|hlg|pq,
+    res le1080|le4k|gt4k (by height).
+    """
+    codec = meta["codec"]
+    if codec == "h264":
+        family = "avc"
+    elif codec == "hevc":
+        # Main = 8-bit (no depth suffix: yuv420p), Main10 = yuv420p10le; any
+        # other depth stays out of the two counted buckets, like the client.
+        depth = re.search(r"(\d+)[lb]e$", meta["pix_fmt"] or "")
+        family = "hevc8" if depth is None else "hevc10" if depth.group(1) == "10" else "other"
+    elif codec in ("av1", "vp9"):
+        family = codec
+    else:
+        family = "other"
+    transfer = _HDR_TRANSFERS.get(meta["color_transfer"] or "", "sdr")
+    height = meta["height"]
+    res = "le1080" if height <= 1080 else "le4k" if height <= 2160 else "gt4k"
+    return f"{family}_{transfer}_{res}"
