@@ -150,8 +150,8 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17340 | [Staging check failed: T17230:C1 C1: After the first position is placed, Frame shows exactly](tasks/T17340-staging-check-failed-t17230-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17350 | [Staging check failed: T17230:C2 C2: Changing the shape after positions exist asks to confirm,](tasks/T17350-staging-check-failed-t17230-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17360 | [Staging check failed: T17240:C1 C1: No two reel cards on one profile share a](tasks/T17360-staging-check-failed-t17240-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T17370 | [Attached footage with sound but no picture is caught](tasks/T17370-attach-footage-sound-no-picture.md) | 6 | 3 | 2.0 | WIP | [ ] | Follow-up to T17280: the attach-footage path does not run the sound-but-no-picture check, so an iPhone video the browser cannot draw attaches silently. |
-| T17380 | [A failed upload for lack of credits leaves a stuck game](tasks/T17380-insufficient-credits-orphan-pending-game.md) | 7 | 4 | 1.8 | WIP | [ ] | Follow-up to T17280: an upload that fails with insufficient credits drops its entry but leaves the pending game behind. |
+| T17370 | [Attached footage with sound but no picture is caught](tasks/T17370-attach-footage-sound-no-picture.md) | 6 | 3 | 2.0 | STAGING | [ ] | Follow-up to T17280: the attach-footage path does not run the sound-but-no-picture check, so an iPhone video the browser cannot draw attaches silently. |
+| T17380 | [A failed upload for lack of credits leaves a stuck game](tasks/T17380-insufficient-credits-orphan-pending-game.md) | 7 | 4 | 1.8 | STAGING | [ ] | Follow-up to T17280: an upload that fails with insufficient credits drops its entry but leaves the pending game behind. |
 | T17500 | [Every video that plays sound only says why](tasks/T17500-sound-only-video-explained-everywhere.md) | 6 | 2 | 3.0 | WIP | [ ] | Follow-up to T17280, owner ruling 2026-11-18 (bug fixes now, conversion later). A play uploaded directly as a clip, or the saved clip of an expired iPhone game, can still show a black box with sound and no explanation. Every place that plays such a video shows the same message and way out. |
 | T17510 | [Record each game video's format](tasks/T17510-record-game-video-format.md) | 5 | 2 | 2.5 | WIP | [ ] | Foundational, owner ruling 2026-11-18. Record codec, pixel format and HDR for every uploaded game, and report how many are iPhone HEVC and how many uploading browsers cannot show them, so the conversion work in milestone 4 is sized on real numbers. No change for parents. |
 | T17400 | [Staging check failed: T17250:C2 C2: Paying for a pack with the test card shows](tasks/T17400-staging-check-failed-t17250-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
@@ -167,6 +167,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17620 | [Staging check failed: T17380:C2 C2: Retrying after buying credits completes the upload.](tasks/T17620-staging-check-failed-t17380-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 

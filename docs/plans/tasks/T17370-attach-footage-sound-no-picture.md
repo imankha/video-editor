@@ -1,6 +1,6 @@
 # T17370: Attached footage with sound but no picture is caught
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-18
