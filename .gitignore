@@ -59,6 +59,8 @@ src/backend/yolov8x.pt
 /src/frontend/test-results
 /src/frontend/playwright-report
 !src/landing/public/before_after_demo.mp4
+# T17500: tiny HEVC/H.264 fixtures for the sound-only video checks (e2e/checks/T17500.check.spec.js)
+!src/frontend/e2e/checks/fixtures/T17500-*.mp4
 /screenshots
 /screenshots
 src/landing/dist/

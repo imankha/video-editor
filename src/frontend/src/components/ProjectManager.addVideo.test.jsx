@@ -56,6 +56,14 @@ vi.mock('../utils/veoHighlights', async (importOriginal) => ({
   extractEntry: vi.fn(async (zip, entry, type) => new File(['v'], entry.name, { type })),
 }));
 
+// T17500: startClipUpload probes each file for a drawable picture; jsdom's <video>
+// never loads, so the probe is stubbed to "drawable" (covered by
+// ProjectManager.clipPictureUnsupported.test.jsx).
+vi.mock('../utils/videoMetadata', async (importOriginal) => ({
+  ...(await importOriginal()),
+  extractVideoMetadata: vi.fn(async () => ({ width: 1920, height: 1080, duration: 10 })),
+}));
+
 vi.mock('../stores/settingsStore', () => ({
   useGuidanceSettings: () => ({ coachEnabled: true }),
   useSettingsStore: () => ({
@@ -190,7 +198,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [mp4('a.mp4')] } });
 
-    expect(toastInfo).toHaveBeenCalledWith('Uploading a.mp4...');
+    await waitFor(() => expect(toastInfo).toHaveBeenCalledWith('Uploading a.mp4...'));
     finish({ results: [], charged: 0, balance: null });
   });
 

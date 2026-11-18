@@ -1,0 +1,6 @@
+{"criteria": {
+  "T17500:C1": {"kind": "browser"},
+  "T17500:C2": {"kind": "browser"},
+  "T17500:C3": {"kind": "code", "command": "grep -q 'Playback places checked (C3' docs/plans/tasks/T17500-sound-only-video-explained-everywhere.md && for p in GameDetailsModal startClipUpload AnnotateScreen FocusScreen OverlayScreen MediaPlayer RecapPlayerModal ClipVideo; do grep -q \"$p\" docs/plans/tasks/T17500-sound-only-video-explained-everywhere.md || exit 1; done"},
+  "T17500:C4": {"kind": "browser"}
+}}
