@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { X, Download, Loader, Pencil, Scale, Share2, FolderInput, Play, Pause, Maximize, Minimize } from 'lucide-react';
+import { X, Download, Loader, Pencil, Scale, Share2, FolderInput, Play, Pause, Maximize, Minimize, Sparkles, MoreHorizontal } from 'lucide-react';
 import { Button } from '../shared/Button';
 import apiFetch from '../../utils/apiFetch';
 import { API_BASE } from '../../config';
@@ -10,6 +10,7 @@ import { LIBRARY_ACTIONS, RESULT_SURFACE, HOME_TILE, RANKING_COPY } from '../../
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
 import { canReEditReel } from '../../utils/reelReEditable';
+import { useIsPhonePortrait } from '../../hooks/useIsMobile';
 import { PlayheadHandle } from '../shared/PlayheadHandle';
 import { CompositeScrubber } from '../introcards/CompositeScrubber';
 
@@ -134,7 +135,28 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     §2.4). Omitted -> no affordance, byte-identical for every caller that
  *                                     never passes it (public /shared viewer, Published/IntroStoryPlayer,
  *                                     DownloadsPanel, RankingGame).
+ * @param {Function=} onSpotlight    - T17180: (reel) => void; a labeled "Add spotlight" ("Edit
+ *                                     spotlight" when `hasSpotlight(reel)`) button beside Share, shown
+ *                                     for a reel the editor can open (canReEditReel). Omitted -> none.
+ * @param {Function=} hasSpotlight   - T17180: (reel) => boolean, picks the button's label.
+ * @param {*=} spotlightLoadingId    - T17180: reel id whose spotlight is opening (spins the button).
  */
+// T17180: one labeled row in the phone header's More menu.
+function PlayerMenuItem({ icon: Icon, label, onClick, disabled = false }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full flex items-center gap-2 px-3 min-h-11 text-sm text-left text-gray-200 hover:bg-gray-600 disabled:text-gray-500"
+    >
+      <Icon size={15} className="shrink-0" aria-hidden="true" />
+      <span className="flex-1">{label}</span>
+    </button>
+  );
+}
+
 export function CollectionPlayer({
   reels,
   initialIndex = 0,
@@ -163,6 +185,9 @@ export function CollectionPlayer({
   fullscreenTarget = null,
   onBackToGame,
   clearGuidanceToggle = false,
+  onSpotlight,
+  hasSpotlight,
+  spotlightLoadingId,
 }) {
   const videoRef = useRef(null);
   const panelRef = useRef(null);
@@ -188,6 +213,22 @@ export function CollectionPlayer({
   // drops); `glyphFaded` fades the center glyph one beat after the play edge.
   const [expanded, setExpanded] = useState(false);
   const [glyphFaded, setGlyphFaded] = useState(false);
+  // T17180: on a phone, Re-rank and Play/Pause leave the header for a "More" menu with words.
+  const isPhone = useIsPhonePortrait();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    const onDown = (e) => {
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+    };
+  }, [moreOpen]);
 
   const handleAllEnded = useCallback(() => onEnded?.(), [onEnded]);
   const handleReelChange = useCallback(
@@ -209,6 +250,7 @@ export function CollectionPlayer({
     onAllEnded: handleAllEnded,
     onReelChange: handleReelChange,
   });
+  const canReRank = !!(onReRank && activeReel?.project_id && activeReel.clip_count === 1);
 
   // T6710 / MAJOR #4: apply a cross-boundary landing fraction from a composite
   // scrubber (IntroStoryPlayer) via the SAME goTo the internal bar's
@@ -582,6 +624,21 @@ export function CollectionPlayer({
               Share
             </Button>
           )}
+          {/* T17180: the spotlight gets its own labeled button beside Share, so a parent who left
+              the Frame screen finds it here instead of behind the pencil. */}
+          {onSpotlight && canReEditReel(activeReel) ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={spotlightLoadingId === activeReel.id ? Loader : Sparkles}
+              disabled={spotlightLoadingId === activeReel.id}
+              onClick={() => onSpotlight(activeReel)}
+              data-testid="player-spotlight"
+              className={`coarse-pointer:min-h-11${spotlightLoadingId === activeReel.id ? ' [&_svg]:animate-spin' : ''}`}
+            >
+              {hasSpotlight?.(activeReel) ? HOME_TILE.EDIT_SPOTLIGHT : HOME_TILE.ADD_SPOTLIGHT}
+            </Button>
+          ) : null}
           {/* T8540: demoted from primary to secondary now that Share leads. */}
           {onDownload && (
             <Button
@@ -599,26 +656,30 @@ export function CollectionPlayer({
           {/* T3940: jump straight into THIS reel's editor (acts on the active reel).
               Gated on the prop (public viewer omits it) AND an editable project
               (project_id null/0 -> non-editable export, button hidden). T8540:
-              demoted to the toolbar's tertiary/icon-only end, behind Share+Download.
+              demoted to the toolbar's tertiary end, behind Share+Download.
               T11220: canReEditReel also hides it for a legacy multi-clip reel
-              (clip_count > 1) — the single-clip editor can't edit those. */}
+              (clip_count > 1) — the single-clip editor can't edit those.
+              T17180: labeled in words; the bare pencil was read as "spotlight". */}
           {onReEdit && canReEditReel(activeReel) ? (
             <Button
               variant="ghost"
               size="sm"
               icon={reEditLoadingId === activeReel.id ? Loader : Pencil}
-              iconOnly
               disabled={reEditLoadingId === activeReel.id}
               title={HOME_TILE.EDIT_HIGHLIGHT}
               onClick={() => onReEdit(activeReel)}
-              className={reEditLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
-            />
+              data-testid="player-edit-highlight"
+              className={`coarse-pointer:min-h-11${reEditLoadingId === activeReel.id ? ' [&_svg]:animate-spin' : ''}`}
+            >
+              {HOME_TILE.EDIT_HIGHLIGHT}
+            </Button>
           ) : null}
           {/* T4030: re-open THIS reel for ranking (rd reset, progress drops).
               Author-only (public viewer omits onReRank) AND single-clip with an
               editable project -- Mixes/multi-clip never rank, so the control hides.
-              T8540: demoted to the toolbar's tertiary/icon-only end (gating unchanged). */}
-          {onReRank && activeReel.project_id && activeReel.clip_count === 1 ? (
+              T8540: demoted to the toolbar's tertiary/icon-only end (gating unchanged).
+              T17180: on a phone it lives in the More menu below. */}
+          {!isPhone && canReRank ? (
             <Button
               variant="ghost"
               size="sm"
@@ -634,30 +695,62 @@ export function CollectionPlayer({
               iconOnly shape as Re-edit/Re-rank/Close, appended immediately BEFORE
               Close. coarse-pointer:min-h-11 floors the touch target to 44px.
               Present only when `transport` (default true); absent for the
-              IntroStoryPlayer opt-out so that caller is byte-identical. */}
+              IntroStoryPlayer opt-out so that caller is byte-identical.
+              T17180: on a phone Play/Pause moves into the More menu (the video's
+              own center tap still toggles it). */}
+          {transport && !isPhone && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={isPlaying ? Pause : Play}
+              iconOnly
+              onClick={togglePlay}
+              title={isPlaying ? 'Pause' : 'Play'}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
+              className="coarse-pointer:min-h-11"
+            />
+          )}
+          {isPhone && (transport || canReRank) && (
+            <div className="relative" ref={moreRef}>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={MoreHorizontal}
+                iconOnly
+                onClick={() => setMoreOpen((open) => !open)}
+                title="More"
+                aria-label="More"
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+                data-testid="player-more"
+                className="coarse-pointer:min-h-11"
+              />
+              {moreOpen && (
+                <div role="menu" className={`absolute right-0 mt-1 ${Z.DROPDOWN} w-56 rounded-lg bg-gray-700 border border-gray-600 shadow-xl py-1`}>
+                  {transport && (
+                    <PlayerMenuItem icon={isPlaying ? Pause : Play} label={isPlaying ? 'Pause' : 'Play'}
+                      onClick={() => { setMoreOpen(false); togglePlay(); }} />
+                  )}
+                  {canReRank && (
+                    <PlayerMenuItem icon={reRankLoadingId === activeReel.id ? Loader : Scale} label={RANKING_COPY.MOVE}
+                      disabled={reRankLoadingId === activeReel.id}
+                      onClick={() => { setMoreOpen(false); onReRank(activeReel); }} />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {transport && (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={isPlaying ? Pause : Play}
-                iconOnly
-                onClick={togglePlay}
-                title={isPlaying ? 'Pause' : 'Play'}
-                aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="coarse-pointer:min-h-11"
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={expanded ? Minimize : Maximize}
-                iconOnly
-                onClick={toggleExpanded}
-                title={expanded ? 'Exit fullscreen' : 'Fullscreen'}
-                aria-label={expanded ? 'Exit fullscreen' : 'Fullscreen'}
-                className="coarse-pointer:min-h-11"
-              />
-            </>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={expanded ? Minimize : Maximize}
+              iconOnly
+              onClick={toggleExpanded}
+              title={expanded ? 'Exit fullscreen' : 'Fullscreen'}
+              aria-label={expanded ? 'Exit fullscreen' : 'Fullscreen'}
+              className="coarse-pointer:min-h-11"
+            />
           )}
           {/* T7730: icon-only close button had no text/aria-label, so it had no
               accessible name at all (screen readers + role-based selectors could

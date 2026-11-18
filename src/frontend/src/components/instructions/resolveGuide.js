@@ -94,6 +94,8 @@ const PLAYER_VIDEO = tid('collection-player-video');
 // T14840: Download sits in the player's header toolbar, not inside the share action bar
 // (FINISHED_SHARE) -- it needs its own cutout, the share bar's never covered it.
 const PLAYER_DOWNLOAD = tid('player-download');
+// T17180: the Finished screen's Add/Redo spotlight + Edit zoom choices sit under Share; the card must not cover them.
+const FINISHED_REDO = tid('finished-redo-actions');
 const FOCUS_READY_PRIMARY = tid('focus-choice-primary');
 const FOCUS_READY_CTAS = [FOCUS_READY_PRIMARY, tid('focus-choice-publish'), tid('focus-choice-edit-framing'), tid('focus-save-draft')];
 // T16525: the server already finished it, so the panel has no Finish card.
@@ -298,13 +300,13 @@ export const GUIDE_RULES = [
   readyPanel(jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PRIMARY, OVERLAY_READY_PANEL, 'coach', GUIDE_PULSE.OVERLAY_FINISH), OVERLAY_READY_CTAS),
   // T12290: finished viewer (silent once a link exists: the link card is the instruction) and share modal.
   // T17040: a phone viewing an already-published highlight has Share link where Get link would be.
-  { id: 'finished.viewer.shareLink', screen: 'finished', when: (f) => !local(f).shared && local(f).shareLinkButton, message: { title: GUIDE.finished.viewerShareLink, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
-  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
+  { id: 'finished.viewer.shareLink', screen: 'finished', when: (f) => !local(f).shared && local(f).shareLinkButton, message: { title: GUIDE.finished.viewerShareLink, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD, FINISHED_REDO], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
+  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD, FINISHED_REDO], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
   // End of the first-highlight walk: the link exists, so offer to turn the guide off. T14840: this
   // card's only action is "turn off guidance" -- it has nothing to protect by shading the screen, so
   // it renders unshaded like a progress/error card (NO_SHADE_TONES) rather than needing a cutout for
   // every real player action (Download, Close, Back to game, ...).
-  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'progress', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-done' },
+  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'progress', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD, FINISHED_REDO], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-done' },
   { id: 'share.modal', screen: 'share', when: () => true, message: { title: GUIDE.share.modal, body: '' }, anchor: { target: SHARE_MODAL_BODY, fallback: SHARE_MODAL_BODY }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_SUBMIT, avoid: [], step: null, phase: 'share-modal' },
   // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong', GUIDE_PULSE.EXPORT),

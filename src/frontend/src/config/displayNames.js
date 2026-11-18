@@ -541,6 +541,8 @@ export const HOME_TILE = {
   MENU_CANCEL: 'Cancel',
   EDIT_HIGHLIGHT: 'Edit highlight',
   EDIT_SPOTLIGHT: 'Edit spotlight',
+  // T17180: the Highlights player's spotlight button before a spotlight exists.
+  ADD_SPOTLIGHT: 'Add spotlight',
   MOVE_TO_HIGHLIGHTS: 'Move to Highlights',
   moveToHighlightsHint: () => `Move to ${SECTION_NAMES.PUBLISHED}`,
   TAP_AGAIN_CONFIRM: 'Tap again to confirm',
@@ -1305,6 +1307,8 @@ export const EDITOR_PANELS = {
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
   PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
   PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Tap ${n}/${total}` : `Tap ${n} of ${total}`),
+  // T17180: the phone's one-line strip above the video, e.g. "Tap your athlete, 1 of 4".
+  PICK_GUIDE_STRIP: (verb, n, total) => `${verb}, ${n} of ${total}`,
   PICK_GUIDE_WHY: (total) => GUIDE.overlay.pick.first.body.replace('{n}', total),
   PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,
   PICK_GUIDE_CONFIRM: GUIDE.overlay.pick.next.title,
