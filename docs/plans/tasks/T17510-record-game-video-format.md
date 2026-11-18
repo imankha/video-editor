@@ -1,6 +1,6 @@
 # T17510: Record each game video's format
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-18

@@ -1,6 +1,6 @@
 # T17430: Staging check failed: T17310:C1 The steps above give the expected result.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18
