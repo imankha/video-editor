@@ -486,8 +486,11 @@ async def _send_welcome_email(user_id: str, email: str) -> None:
         logger.warning(f"[Auth] welcome email failed for new user {user_id} ({email})", exc_info=True)
 
 
-def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
-    invalidate_user_sessions(user_id)
+def _issue_session_cookie(user_id: str, payload: dict, *, revoke_other_sessions: bool = True) -> JSONResponse:
+    """A sign-in ends the user's other sessions; dev-login passes revoke_other_sessions=False
+    because concurrent staging checks share one account and would sign each other out (T17290)."""
+    if revoke_other_sessions:
+        invalidate_user_sessions(user_id)
     session_id = create_session(user_id)
     response = JSONResponse(content=payload)
     _set_cookie(response, "rb_session", session_id)
@@ -1387,4 +1390,5 @@ async def dev_login(request: Request):
     return _issue_session_cookie(
         user_id,
         {"email": email, "user_id": user_id, "profile_id": resolved_profile, "dev_login": True},
+        revoke_other_sessions=False,
     )
