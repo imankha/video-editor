@@ -18,6 +18,7 @@ import {
 } from '../constants/shareClipScope';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { Z } from '../constants/zLayers';
 import { formatInstant, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
@@ -30,6 +31,9 @@ import { serverError, userErrorMessage } from '../utils/userError';
 // hydrate prior state on open — see Phase B note), becomes ACTIVE on copy/create
 // and REVOKED after a confirmed revoke, which drives the General access UI.
 const LINK_STATUS = { UNKNOWN: 'unknown', ACTIVE: 'active', REVOKED: 'revoked' };
+
+// The share-link 409 code for a game with no team plays (backend games.py create_game_link).
+const EMPTY_TEAM_LAYER = 'empty_team_layer';
 
 // A clip preview position -- an instant. T9480 Stage C2: mechanical move.
 function fmtTimestamp(seconds) {
@@ -188,6 +192,9 @@ function RevokeConfirmDialog({ busy, onKeep, onConfirm }) {
 
 export function ShareGameModal({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
+  // T17220: a valid address typed but not yet added (UserPicker reports it), so
+  // tapping Send shares it without Enter first.
+  const [pendingEmail, setPendingEmail] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // per-recipient state, keyed by email
@@ -199,6 +206,8 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   const [copied, setCopied] = useState(false);
   const [linkStatus, setLinkStatus] = useState(LINK_STATUS.UNKNOWN);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  // T17080: a game with no team plays can't have a link; say so where the button is.
+  const [noTeamPlays, setNoTeamPlays] = useState(false);
 
   // Fetch the per-scope clip preview for one recipient. A READ triggered by the
   // ADD gesture (below), never a reactive state-watcher — the preview list must
@@ -271,13 +280,16 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   // a zero-team-clip game with an actionable 409.
   const handleCopyLink = useCallback(async () => {
     setLinkBusy(true);
+    setNoTeamPlays(false);
     try {
       const resp = await apiFetch(`${API_BASE}/api/games/${gameId}/share-link`, {
         method: 'POST',
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => null);
-        toast.error(serverError(resp, data, ERROR_COPY.CREATE_LINK).message);
+        const err = serverError(resp, data, ERROR_COPY.CREATE_LINK);
+        if (resp.status === 409 && data?.detail?.error === EMPTY_TEAM_LAYER) setNoTeamPlays(true);
+        else toast.error(err.message);
         return;
       }
       const data = await resp.json();
@@ -342,7 +354,10 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose, confirmRevoke]);
 
-  const canSubmit = emails.length > 0 && !isSubmitting;
+  const recipientEmails = pendingEmail && !emails.includes(pendingEmail)
+    ? [...emails, pendingEmail]
+    : emails;
+  const canSubmit = recipientEmails.length > 0 && !isSubmitting;
 
   // Recipients set to "Only clips they're tagged in" whose resolved tagged set is
   // empty — surfaced in a send-time banner so a zero-clip send is never silent.
@@ -354,10 +369,10 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   }).length;
 
   const handleSubmit = async () => {
-    if (emails.length === 0) return;
+    if (recipientEmails.length === 0) return;
     setIsSubmitting(true);
     try {
-      const recipients = emails.map((email) => ({
+      const recipients = recipientEmails.map((email) => ({
         email,
         scope: scopeByEmail[email] || DEFAULT_SHARE_CLIP_SCOPE,
       }));
@@ -372,7 +387,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
       }
       const data = await resp.json();
       if (data.all_sent) {
-        toast.success(SHARE_COPY.gameSharedWith(emails.length));
+        toast.success(SHARE_COPY.gameSharedWith(recipientEmails.length));
         onClose();
       } else {
         const failed = data.results.filter((r) => !r.sent).map((r) => r.email);
@@ -390,7 +405,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
 
   return (
     <GuideScope guides={[guide]}>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className={`fixed inset-0 ${Z.SHARE} flex items-center justify-center bg-black/60 backdrop-blur-sm`}>
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white truncate pr-4">
@@ -413,6 +428,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
             onChange={handleEmailsChange}
             contacts={contacts}
             placeholder={SHARE_COPY.EMAIL_HINT}
+            onPendingEmailChange={setPendingEmail}
           />
         </div>
 
@@ -473,6 +489,16 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
               </div>
             </>
           )}
+          {noTeamPlays && (
+            <div
+              data-testid="share-link-blocked"
+              role="status"
+              className="mt-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-800/50"
+            >
+              <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-200">{SHARE_COPY.NO_TEAM_PLAYS_FOR_LINK}</p>
+            </div>
+          )}
         </div>
 
         {/* Send-time zero-clips banner — unmissable even if a row scrolled off */}
@@ -491,7 +517,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
           layout="modal"
           primary={{
             icon: isSubmitting ? Loader : undefined,
-            title: isSubmitting ? 'Sharing...' : `Share with ${emails.length}`,
+            title: isSubmitting ? SHARE_COPY.SENDING : SHARE_COPY.SEND,
             onClick: handleSubmit,
             disabled: !canSubmit,
             loading: isSubmitting,

@@ -62,3 +62,12 @@ describe('T13100: review plays does not shade the playing video', () => {
     expect(g.pulse).toBeTruthy();
   });
 });
+
+describe('T17180: the Finished coach keeps the spotlight button clear', () => {
+  it('every finished.* rule keepClears the Add/Redo spotlight choice', () => {
+    for (const local of [{ shared: false }, { shared: false, shareLinkButton: true }, { shared: true }]) {
+      const g = resolveGuide({ screen: 'finished', local });
+      expect(g.keepClear, g.id).toContain(t('finished-redo-actions'));
+    }
+  });
+});

@@ -34,12 +34,11 @@ import { ANNOTATE } from './displayNames';
 // count is > 0.
 export const EMPTY_TAB_GUIDE = {
   games: {
-    headline: 'Review your game',
+    headline: 'Start with your game video',
     addGameCaption: null,
-    // T14810: now a real secondary button beside Upload game (GamesActions in
-    // EmptyTabGuide.jsx), not a grey footer caption -- "a game is not a hard
-    // prerequisite either" message.
-    footerLink: 'Skip ahead to Plays.',
+    // T17200: a small link under the one Upload game button (it replaced T14810's
+    // equal-weight "Skip ahead to Plays." button); opens the play upload.
+    uploadPlayLink: 'Only have short videos? Upload a play',
   },
   clips: {
     headline: "Plays you're turning into highlights",
@@ -59,9 +58,10 @@ export const EMPTY_TAB_GUIDE = {
   // the Create-reel builder.
   published: {
     headline: 'Your highlights',
-    // T10310 (2026-09-18 user request): dropped the "Cut your first clip to get
-    // started." line + Go to Games button -- the headline/body alone is the
-    // empty state now, no fallback action.
+    // T17100 (2026-11-18) supersedes T10310's headline-only empty state: QA found an
+    // empty profile's tab showed only the headline, with no way forward.
+    body: `A highlight is a play you marked and finished. Open a game and tap ${ANNOTATE.MARK_PLAY} to make your first one.`,
+    cta: 'Go to Games',
   },
 };
 

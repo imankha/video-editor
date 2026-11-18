@@ -50,7 +50,7 @@ describe('CollectionsTab — nudge vs hidden', () => {
     renderTab([
       sub30({ key: 'soccer_goals_assists', name: 'Top Goals & Assists', tags: ['Assist', 'Goal'], nudge_when_locked: true }),
     ]);
-    expect(screen.getByTestId('locked').textContent).toBe('Top Goals & Assists:9:16');
+    expect(screen.getByTestId('locked').textContent).toBe('Top Goals & Assists (portrait):9:16');
     expect(screen.queryByTestId('card')).toBeNull();
   });
 
@@ -66,7 +66,7 @@ describe('CollectionsTab — nudge vs hidden', () => {
     renderTab([
       ready({ key: 'tag:Dig', name: 'Top Digs', tags: ['Dig'], nudge_when_locked: false }),
     ]);
-    expect(screen.getByTestId('card').textContent).toBe('Top Digs:9:16');
+    expect(screen.getByTestId('card').textContent).toBe('Top Digs (portrait):9:16');
     expect(screen.queryByTestId('locked')).toBeNull();
   });
 

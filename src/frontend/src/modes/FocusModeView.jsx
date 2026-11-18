@@ -30,6 +30,7 @@ import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
 import { useExportJobStatus } from '../components/instructions/exportJob';
+import { useExportCardSlotStore } from '../stores/exportCardSlotStore';
 
 // T14850: below ~850px of viewport height at desktop widths, the 22rem header/timeline
 // reservation in the box-state height formula (and the matching 70vh*aspect-ratio term
@@ -397,6 +398,8 @@ export function FocusModeView({
   // (T4880); the inline scrollable layout keeps every control reachable.
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
+  // T17190: hands the slot under the video to the sharpen progress card (null on unmount).
+  const setExportCardSlot = useExportCardSlotStore((s) => s.setSlot);
   // T5641: straighten tool is a niche affordance (~99% of clips never rotate), so
   // the line-drag tool + fine dial are HIDDEN by default behind this toggle.
   // EPHEMERAL view state — local useState, NEVER persisted (no-persisted-view-state
@@ -462,8 +465,10 @@ export function FocusModeView({
   // T14770: step 1 of 6 -- "Where will you share it?" (design decision 1, Option
   // C). Done once the parent taps a shape this session, OR the box already has
   // positions (the shape was already settled in an earlier session).
+  // T17230: also once positions exist at all (e.g. loaded after mount) -- the chooser
+  // hides then, so the step must not point at a control that is gone.
   const [shapeTapped, setShapeTapped] = useState(false);
-  const shapeChosen = shapeTapped || hasDragged || boxPrePlaced;
+  const shapeChosen = shapeTapped || hasDragged || boxPrePlaced || focusPointCount > 0;
   const handleShapeChosen = useCallback(() => setShapeTapped(true), []);
   // Step 3 -> 4: once the first play has started, reaching the clip end while
   // playing counts as one full play-through (playback loops, so the time wraps
@@ -633,6 +638,7 @@ export function FocusModeView({
     <FocusSettingsPanel
       globalAspectRatio={globalAspectRatio}
       onAspectRatioChange={onAspectRatioChange}
+      hasPositions={focusPointCount > 0}
       includeAudio={includeAudio}
       onIncludeAudioChange={onIncludeAudioChange}
       straightenVisible={straightenVisible}
@@ -885,11 +891,12 @@ export function FocusModeView({
           )}
           {/* T14770: "Where will you share it?" (design decision 1, Option C) —
               prominent above the video while the highlight has no box positions
-              yet, then a small chip once the first position is placed. Not shown
-              fullscreen (no room, same as CompactGuide above).
+              yet; T17230: gone once the first position is placed (Settings "Shape"
+              is the lasting control). Not shown fullscreen (no room, same as
+              CompactGuide above).
               T15990: the LIVE count, not `boxPrePlaced` (frozen at mount by T15610 for
               the step total) -- positions that load or get placed after mount must
-              collapse to the chip and make a shape switch ask first, as the cockpit does. */}
+              hide the chooser and make a Settings shape switch ask first, as the cockpit does. */}
           {!isFullscreen && !mobileFs && (
             <div className="mb-2">
               <FrameShapeChoice
@@ -1046,6 +1053,12 @@ export function FocusModeView({
               </button>
             )}
           </div>
+
+          {/* T17190: the sharpen progress card (GlobalExportIndicator) docks here, directly
+              under the video, instead of floating over the preview. */}
+          {!isFullscreen && !mobileFs && (
+            <div data-testid="export-card-slot" ref={setExportCardSlot} />
+          )}
 
           {/* T10850 (D14): the portrait rotate nudge sits DIRECTLY under the stage,
               where the eye lands right after seeing how small the crop box is — not

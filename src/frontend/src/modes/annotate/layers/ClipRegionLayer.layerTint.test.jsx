@@ -27,7 +27,7 @@ describe('ClipRegionLayer — layer tint (T5700)', () => {
     const icons = screen.getAllByTestId('rating-icon');
     expect(icons).toHaveLength(2);
     expect(icons.map((i) => i.dataset.rating)).toEqual(['4', '4']);
-    expect(screen.getAllByText('!')).toHaveLength(2); // notation kept for a11y/textContent
+    expect(icons.map((i) => i.textContent)).toEqual(['4', '4']); // T17170: digit only on an unselected 20px marker
 
     const spans = screen.getAllByTestId('clip-span');
     expect(spans).toHaveLength(2);

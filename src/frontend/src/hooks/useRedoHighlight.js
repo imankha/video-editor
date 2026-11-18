@@ -18,12 +18,13 @@ import { serverError, userErrorMessage } from '../utils/userError';
  *
  *   loadRedoInfo()   GET  /api/downloads/{id}/redo-info  (read-only, on the Edit zoom
  *                    tap): { project_id, reframe_credits, game_video_available }
- *   openForRedo(mode) POST /api/downloads/{id}/open-for-redo, then select the project
+ *   openForRedo(mode[, videoId]) POST /api/downloads/{id}/open-for-redo, then select the project
  *                    and switch to Spotlight (OVERLAY) or Frame (FRAMING).
  *
  * Both run only inside a button's click chain (gesture-based; no effect fires them).
  *
- * @param {number} finalVideoId - the finished highlight's final video id
+ * @param {number=} finalVideoId - the finished highlight's final video id (omit when every
+ *                                  openForRedo call passes its own videoId)
  */
 export function useRedoHighlight(finalVideoId) {
   // The mode being opened (drives the button spinner), null when idle.
@@ -38,13 +39,15 @@ export function useRedoHighlight(finalVideoId) {
     return response.json();
   }, [finalVideoId]);
 
-  const openForRedo = useCallback(async (mode) => {
+  // T17180: `videoId` lets a player of many highlights (the Highlights story player) open the
+  // one on screen; the Finished screen omits it and opens its own.
+  const openForRedo = useCallback(async (mode, videoId = finalVideoId) => {
     setOpeningMode(mode);
     try {
-      const response = await apiFetch(`${API_BASE}/api/downloads/${finalVideoId}/open-for-redo`, {
+      const response = await apiFetch(`${API_BASE}/api/downloads/${videoId}/open-for-redo`, {
         method: 'POST',
       });
-      recordWrite('downloads.openForRedo', 'open-for-redo', response, { downloadId: finalVideoId });
+      recordWrite('downloads.openForRedo', 'open-for-redo', response, { downloadId: videoId });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw serverError(response, body, ERROR_COPY.OPEN_HIGHLIGHT);

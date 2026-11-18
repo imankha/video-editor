@@ -20,7 +20,7 @@ const baseProps = {
   formatMeta: () => '2 days ago · 0:32',
 };
 
-const highlight = { id: 501, project_name: 'Great Save', game_names: ['Vs Alpha'], aspect_ratio: '9:16' };
+const highlight = { id: 501, project_name: 'Great Save', display_name: 'Great Save', game_names: ['Vs Alpha'], aspect_ratio: '9:16' };
 
 describe('JustPublishedCard (T11580)', () => {
   it('renders nothing while the member fetch has not resolved the highlight yet', () => {

@@ -158,14 +158,18 @@ test.describe('T15400 checks: Switch to landscape dialog reachability on iPhone 
     await loginForCheck(context);
     const projects = await listProjects(page);
     const candidate = projects.find((p) => p.has_crop_keyframes);
-    test.skip(!candidate, '[T15400] no project with crop keyframes placed (needed for the shape chip)');
+    test.skip(!candidate, '[T15400] no project with crop keyframes placed (needed for the switch-shape confirm)');
 
     await page.goto(`/focus/p/${candidate.id}`);
     await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
 
-    const chip = page.getByTestId('focus-shape-chip');
-    await expect(chip).toBeVisible();
-    await chip.evaluate((el) => el.click());
+    // T17230: the shape is switched from Settings ("Shape"); the above-video chip is gone.
+    const settingsRow = page.getByTestId('mobile-settings-row');
+    await expect(settingsRow).toBeVisible({ timeout: 60000 });
+    await settingsRow.evaluate((el) => el.click());
+    const otherShape = page.locator('[data-testid^="shape-setting-"][aria-pressed="false"]').first();
+    await expect(otherShape).toBeVisible();
+    await otherShape.evaluate((el) => el.click());
 
     const dialog = page.getByTestId('focus-shape-switch-confirm');
     await expect(dialog).toBeVisible();

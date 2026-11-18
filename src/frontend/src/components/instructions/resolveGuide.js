@@ -94,6 +94,8 @@ const PLAYER_VIDEO = tid('collection-player-video');
 // T14840: Download sits in the player's header toolbar, not inside the share action bar
 // (FINISHED_SHARE) -- it needs its own cutout, the share bar's never covered it.
 const PLAYER_DOWNLOAD = tid('player-download');
+// T17180: the Finished screen's Add/Redo spotlight + Edit zoom choices sit under Share; the card must not cover them.
+const FINISHED_REDO = tid('finished-redo-actions');
 const FOCUS_READY_PRIMARY = tid('focus-choice-primary');
 const FOCUS_READY_CTAS = [FOCUS_READY_PRIMARY, tid('focus-choice-publish'), tid('focus-choice-edit-framing'), tid('focus-save-draft')];
 // T16525: the server already finished it, so the panel has no Finish card.
@@ -112,7 +114,10 @@ const TAB_GAMES = tid('home-tab-games');
 const TAB_PUBLISHED = tid('home-tab-published');
 const CLIPS_GALLERY = tid('clips-gallery');
 const UPLOAD_CLIP = tid('home-upload-clip');
+// T17200: the first-run sentence names the free credits, so the chip it counts stays out of the shade.
+const CREDIT_CHIP = tid('credit-balance');
 const PUBLISHED_PANEL = tid('published-tab-panel');
+const GO_TO_HIGHLIGHTS = tid('home-go-to-highlights');
 const CLIPS_KEEP_CLEAR = [CLIPS_GALLERY, TAB_GAMES, UPLOAD_CLIP];
 // T13570: a Games card that steers into a game keeps Upload game (the tab's other main button) lit and uncovered.
 const GAMES_KEEP_CLEAR = [UPLOAD_GAME];
@@ -148,10 +153,11 @@ const modalRule = (id, name, title, { when = () => true, pulse = null, noPulse, 
  * T12250: Home / Upload-modal facts. `tab` is 'games' | 'clips' | 'finished';
  * `modal` is null | 'choose' | 'submit'. Counts come from lists the Home screen
  * already holds (nothing stored): games, games with saved plays, in-flight
- * uploads, failed uploads, unfinished clip drafts, Finished highlights.
+ * uploads, failed uploads, unfinished clip drafts, Finished highlights, and the credit
+ * balance (null until loaded; T17200 puts it in the first-run sentence).
  */
-export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesReviewing = 0, gamesUnreviewed = 0, gamesError = false } = {}) {
-  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished, gamesReviewing, gamesUnreviewed }, local: { tab, modal, gamesError } };
+export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesReviewing = 0, gamesUnreviewed = 0, gamesError = false, highlightReady = false, credits = null } = {}) {
+  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished, gamesReviewing, gamesUnreviewed, credits }, local: { tab, modal, gamesError, highlightReady } };
 }
 
 /** A game counts as reviewed once its furthest playhead (`viewed_duration` high-water mark) reaches this share of the video. */
@@ -230,7 +236,7 @@ export const GUIDE_RULES = [
   // T12790: the games list failed to load; the error panel's Retry is the only way forward.
   { id: 'home.games.error', screen: 'home', when: (f) => f.local.tab === 'games' && f.local.gamesError, ...home(GUIDE.home.gamesError, tid('home-games-retry'), { id: 'home-games-error', tone: 'strong', pulse: GUIDE_PULSE.GAMES_RETRY }) },
   { id: 'upload.failed', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).failed > 0, ...home(GUIDE.upload.failed, FAILED_GAME, { id: 'upload-failed', tone: 'strong', pulse: GUIDE_PULSE.UPLOAD_RETRY }) },
-  { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty', pulse: GUIDE_PULSE.UPLOAD_GAME }) },
+  { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty', keepClear: [CREDIT_CHIP], pulse: GUIDE_PULSE.UPLOAD_GAME }) },
   { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.FIRST_GAME }) },
   // After the first finished highlight (before it, the plays rules below steer to making one): a started game
   // under 90% watched still has plays in it. Then, every game watched and every clip finished: congrats, an END
@@ -241,6 +247,8 @@ export const GUIDE_RULES = [
   { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.FIRST_GAME }) },
   { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.FIRST_GAME }) },
   { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', pulse: GUIDE_PULSE.FIRST_CLIP, keepClear: CLIPS_DRAFTS_KEEP_CLEAR, reveal: true }) },
+  // T17190: a sharpen finished this session (`highlightReady`) and the Plays tab shows the ready message: point at Go to Highlights.
+  { id: 'home.clips.ready', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts === 0 && hp(f).finished > 0 && f.local.highlightReady, ...home(GUIDE.home.clipsHighlightReady, GO_TO_HIGHLIGHTS, { id: 'home-clips-ready', pulse: GUIDE_PULSE.GO_TO_HIGHLIGHTS, keepClear: [GO_TO_HIGHLIGHTS] }) },
   { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.finished.many', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 1, ...home(GUIDE.home.finishedMany, HOME_HEADING, { id: 'home-finished-many', pulse: GUIDE_PULSE.FIRST_FINISHED, keepClear: [PUBLISHED_PANEL] }) },
@@ -294,12 +302,14 @@ export const GUIDE_RULES = [
   jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress', null, NO_PROGRESS),
   readyPanel(jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PRIMARY, OVERLAY_READY_PANEL, 'coach', GUIDE_PULSE.OVERLAY_FINISH), OVERLAY_READY_CTAS),
   // T12290: finished viewer (silent once a link exists: the link card is the instruction) and share modal.
-  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
+  // T17040: a phone viewing an already-published highlight has Share link where Get link would be.
+  { id: 'finished.viewer.shareLink', screen: 'finished', when: (f) => !local(f).shared && local(f).shareLinkButton, message: { title: GUIDE.finished.viewerShareLink, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD, FINISHED_REDO], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
+  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD, FINISHED_REDO], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-viewer' },
   // End of the first-highlight walk: the link exists, so offer to turn the guide off. T14840: this
   // card's only action is "turn off guidance" -- it has nothing to protect by shading the screen, so
   // it renders unshaded like a progress/error card (NO_SHADE_TONES) rather than needing a cutout for
   // every real player action (Download, Close, Back to game, ...).
-  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'progress', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-done' },
+  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'progress', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [FINISHED_SHARE, PLAYER_DOWNLOAD, FINISHED_REDO], shadeClear: [PLAYER_VIDEO], side: 'beside', step: null, phase: 'finished-done' },
   { id: 'share.modal', screen: 'share', when: () => true, message: { title: GUIDE.share.modal, body: '' }, anchor: { target: SHARE_MODAL_BODY, fallback: SHARE_MODAL_BODY }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_SUBMIT, avoid: [], step: null, phase: 'share-modal' },
   // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong', GUIDE_PULSE.EXPORT),
@@ -323,8 +333,6 @@ export const GUIDE_RULES = [
   modalRule('collection-share', 'collection-share', M.collectionShare, { pulse: GUIDE_PULSE.COLLECTION_SHARE_SUBMIT }),
   modalRule('teammates.done', 'teammates', M.teammatesDone, { when: (l) => l.allShared, noPulse: CLOSE_ONLY }),
   modalRule('teammates', 'teammates', M.teammates, { pulse: GUIDE_PULSE.TEAMMATES_SHARE_SUBMIT }),
-  modalRule('share-playback.error', 'share-playback', M.sharePlaybackError, { when: (l) => l.error, noPulse: CLOSE_ONLY }),
-  modalRule('share-playback', 'share-playback', M.sharePlayback, { pulse: GUIDE_PULSE.SHARE_PLAYBACK_SUBMIT }),
   modalRule('buy-credits.pay', 'buy-credits', M.buyCreditsPay, { when: (l) => l.step === 'pay', pulse: GUIDE_PULSE.CREDITS_PAY }),
   modalRule('buy-credits.pick', 'buy-credits', M.buyCreditsPick, { noPulse: PICK_ONE }),
   modalRule('insufficient-credits', 'insufficient-credits', M.insufficientCredits, { pulse: GUIDE_PULSE.INSUFFICIENT_BUY }),
@@ -352,6 +360,7 @@ export function resolveGuide(facts) {
   const gotIt = rule.gotIt ?? !end;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   if (id === 'annotate.has-highlights.many') message = hasHighlightsMany(facts.progress.highlightCount);
+  if (id === 'home.games.empty' && hp(facts).credits != null) message = { ...rule.message, title: `${rule.message.title} ${GUIDE.home.freeCredits(hp(facts).credits)}` };
   if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
   // T14760: a box already on the athlete (AI-proposed, or copied from an earlier highlight)
   // gets the "check it" wording instead of "drag it onto" -- step 1 still shows, it is not skipped.
@@ -471,11 +480,13 @@ export const GUIDE_STATES = [
     ['clips: none', { tab: 'clips' }, 'home.clips.empty'],
     ['clips: unfinished', { tab: 'clips', drafts: 2 }, 'home.clips.unfinished'],
     ['clips: all done', { tab: 'clips', finished: 1 }, 'home.clips.all-done'],
+    ['clips: a sharpen just finished', { tab: 'clips', finished: 1, highlightReady: true }, 'home.clips.ready'],
     ['finished: first', { tab: 'finished', finished: 1 }, 'home.finished.first'],
     ['finished: two or more', { tab: 'finished', finished: 2 }, 'home.finished.many'],
     ['finished: empty', { tab: 'finished' }, 'home.finished.empty'],
   ].map(([name, over, expectId]) => ({ name: `home: ${name}`, expectId, facts: homeFacts(over) })),
   { name: 'finished viewer: not shared', expectId: 'finished.viewer', facts: { screen: 'finished', local: { shared: false } } },
+  { name: 'finished viewer: phone, already published', expectId: 'finished.viewer.shareLink', facts: { screen: 'finished', local: { shared: false, shareLinkButton: true } } },
   { name: 'finished viewer: shared (turn-off message)', expectId: 'finished.done', facts: { screen: 'finished', local: { shared: true } } },
   { name: 'share modal', expectId: 'share.modal', facts: { screen: 'share', local: {} } },
   ...[
@@ -485,7 +496,6 @@ export const GUIDE_STATES = [
     ['link-clip', {}, 'modal.link-clip'], ['link-clip', { empty: true }, 'modal.link-clip.empty'],
     ['share-game', {}, 'modal.share-game'], ['collection-share', {}, 'modal.collection-share'], ['collection-share', { done: true }, 'modal.collection-share.done'],
     ['teammates', {}, 'modal.teammates'], ['teammates', { allShared: true }, 'modal.teammates.done'],
-    ['share-playback', {}, 'modal.share-playback'], ['share-playback', { error: true }, 'modal.share-playback.error'],
     ['buy-credits', {}, 'modal.buy-credits.pick'], ['buy-credits', { step: 'pay' }, 'modal.buy-credits.pay'],
     ['insufficient-credits', {}, 'modal.insufficient-credits'], ['credit-history', {}, 'modal.credit-history'],
     ['storage-extension', {}, 'modal.storage-extension'], ['export-too-large', {}, 'modal.export-too-large'],

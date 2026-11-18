@@ -1,5 +1,6 @@
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
+import { approxHighlights } from './pricing';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 
 // T9520 / T14600: the canonical vocabulary, single source. The word list is
@@ -50,7 +51,7 @@ export const ANNOTATE = {
   VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cameras filmed at the same time, tapping switches cameras without moving.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',
-  MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a great play.', // N04/T11850 mode-switcher help
+  MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a moment worth keeping.', // N04/T11850 mode-switcher help
   BACK_TO_MARK_PLAYS: 'Back to plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
   // T14610 (audit F-35): the game video is gone after the storage window.
@@ -100,7 +101,7 @@ export const ANNOTATE = {
   // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —
   // the "Create clip"/"Save and create clip" affordances are gone; a play
   // becomes a highlight through the rating + Done -> Highlight popup gesture
-  // (HIGHLIGHT_CHOICE_* / HIGHLIGHT_MOVED_TO_CLIPS below), not a manual toggle.
+  // (HIGHLIGHT_CHOICE_* below), not a manual toggle.
   // T10550: the rating popup's own visible heading (+ its accessible name, so
   // they match) — layer-aware like `getRatingCaption`'s existing `mine` split,
   // so a Team play never claims to be "your athlete's".
@@ -135,12 +136,8 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep marking plays',
-  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Plays. Open it there to edit or finish it.',
-  // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
-  // no action button) — the editor closes, so the toast IS the confirmation.
-  // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
-  // that still say "Clips".
-  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Plays so you can edit it later',
+  // T17210: "Keep marking plays" creates no highlight; the play itself is kept.
+  BACK_TO_EDITING_SUBTEXT: 'This play is saved. You can make its highlight any time.',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
   // T14610 (audit F-34): one title for a game that is gone.
@@ -341,20 +338,12 @@ export const SHARING = {
   SETTINGS: 'Sharing settings',     // state-neutral: manage/adjust an existing share
   SETTINGS_SHORT: 'Sharing',        // narrow-viewport state label
   // T9810: the "Share game" buttons (fullscreen bar + normal-view promoted/compact)
-  // all open the game-scoped SharePlaybackDialog now. Tagged-player sharing (T2820,
-  // ShareWithTeammatesModal) keeps its OWN honest affordance, rendered only when
-  // tagged clips exist so it can never silently no-op.
+  // open the game share window (T17220: ShareGameModal, the same one as the Home
+  // game menu). Tagged-player sharing (T2820, ShareWithTeammatesModal) keeps its
+  // OWN honest affordance, rendered only when tagged clips exist so it can never
+  // silently no-op.
   TAGGED_SHARE: 'Share with tagged teammates',       // T2820 tagged-player sharing entry
   TAGGED_SHARE_SHORT: 'Tagged teammates',            // narrow-viewport label
-  // T9810: scope disclosure for the game-invitation dialog. VERIFIED against
-  // POST /api/games/{id}/share-playback -> materialize_game_share/_copy_game +
-  // _materialize_clips: a recipient receives the FULL game recording (blake3_hash +
-  // all game_videos) PLUS every marked play (all raw_clips for the game), not a
-  // subset. Do NOT narrow this to "only invited plays" without re-checking that grant.
-  SCOPE_DISCLOSURE: "Anyone you invite can watch this entire game and every play you've marked in it.",
-  // T9810: open-failure state (dialog reached without a game context). Distinct from
-  // the per-recipient send-failure toast ("Failed to send to: ...").
-  OPEN_ERROR: "Game invitations couldn't open. Try again.",
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep): the editor MODE noun,
@@ -541,6 +530,8 @@ export const HOME_TILE = {
   MENU_CANCEL: 'Cancel',
   EDIT_HIGHLIGHT: 'Edit highlight',
   EDIT_SPOTLIGHT: 'Edit spotlight',
+  // T17180: the Highlights player's spotlight button before a spotlight exists.
+  ADD_SPOTLIGHT: 'Add spotlight',
   MOVE_TO_HIGHLIGHTS: 'Move to Highlights',
   moveToHighlightsHint: () => `Move to ${SECTION_NAMES.PUBLISHED}`,
   TAP_AGAIN_CONFIRM: 'Tap again to confirm',
@@ -579,7 +570,7 @@ export const NOTES_OVERLAY_STATUS = {
 // clicking their kid on AI-proposed per-frame boxes (PlayerDetectionOverlay),
 // not identity tracking. No em dashes (project-wide rule).
 export const DIVISION_OF_WORK =
-  'You mark the best plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
+  'You mark the plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload a play',
@@ -717,6 +708,8 @@ export const EXPORT_JOBS = {
     completed: 'Your highlight is ready',
     // T16525: the server finished it (T16520), so it is already in Highlights.
     finished: 'Your highlight is in Highlights',
+    // T17190: shown on the progress card for the whole sharpen.
+    canLeave: 'You can leave. It will be in Highlights when it is ready.',
     jobNoun: 'Highlight',
   },
   overlay: {
@@ -746,7 +739,10 @@ export const EXPORT_PROGRESS = {
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.
-  ETA_VARIES: 'Time remaining varies.',
+  // T17190: says what is usual instead of "Time remaining varies."
+  ETA_VARIES: 'Usually a few minutes',
+  // T17190: card header while more than one job runs.
+  MANY_IN_PROGRESS: (n) => `${n} highlights in progress`,
 };
 
 // T11330: the explanatory popup shown when the T11320 preflight cost guard rejects an
@@ -861,6 +857,9 @@ export const FOCUS_PREVIEW = {
 
 // T14620: Frame screen strings that used to sit inline in the components.
 export const FRAME_COPY = {
+  // T17230: the Settings row for the reel's portrait/landscape choice ("shape", as the
+  // switch dialog says).
+  SHAPE_LABEL: 'Shape',
   LENGTH_CHANGED: 'Length of your highlight. Credits are based on this.',
   LENGTH_UNCHANGED: 'Length of your highlight (no slow motion or trim).',
   LENGTH_LABEL: 'Length',
@@ -948,8 +947,8 @@ export const ANNOTATE_COCKPIT = {
 // (Q15 = C), no em dashes, no motion claims the app does not make.
 export const GUIDE = {
   annotate: {
-    watch: { title: 'Press Play to watch the game. When your athlete does something great, press Mark play.', body: '' },
-    watchPlaying: { title: 'See a great play? Tap Mark play.', body: '' },
+    watch: { title: 'Press Play to watch the game. Press Mark play at any moment worth keeping, a great play or one to learn from.', body: '' },
+    watchPlaying: { title: 'See a play worth keeping? Tap Mark play.', body: '' },
     hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },
@@ -974,7 +973,13 @@ export const GUIDE = {
   },
   // T12250: Home tabs and the Upload modal. Each value is { title, body }.
   home: {
-    gamesEmpty: { title: 'Start with your game video. Tap Upload game.', body: '' },
+    gamesEmpty: { title: 'Upload your game to start.', body: '' },
+    // T17200: the first-run credits sentence, appended to gamesEmpty in the coach and shown
+    // alone as plain text in the empty Games state with Guidance off.
+    freeCredits: (credits) => {
+      const n = approxHighlights(credits);
+      return n > 0 ? `You have ${credits} free credits, enough for about ${n} highlights.` : `You have ${credits} free credits.`;
+    },
     gamesUploading: { title: 'Your game is uploading. Open it now to start marking plays.', body: '' },
     gamesError: { title: 'Your games didn’t load. Tap Retry.', body: '' },
     gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
@@ -985,12 +990,14 @@ export const GUIDE = {
     clipsEmpty: { title: 'Plays you’re turning into highlights wait here. Open a game in Games to start one.', body: '' },
     clipsUnfinished: { title: 'Pick up where you left off. Tap a play to make its highlight.', body: '' },
     clipsAllDone: { title: 'Every play is finished. Open a game to mark more plays.', body: '' },
+    // T17190: a sharpen just finished; point at the highlight, not away from it.
+    clipsHighlightReady: { title: 'Your highlight is ready. Tap Go to Highlights to watch or share it.', body: '' },
     finishedFirst: { title: 'Your highlight is ready. Tap it to share it or download it.', body: '' },
     finishedMany: { title: 'You have {n} highlights. Tap one to share it or download it, or open a game to mark another play.', body: '' },
     finishedEmpty: { title: 'Your highlights show here. Open a game to make your first one.', body: '' },
   },
   upload: {
-    choose: { title: 'Pick your game video. Name and details are optional.', body: '' },
+    choose: { title: 'Choose your game video. Name and details are optional.', body: '' },
     submit: { title: 'Press Upload game. You can start marking plays while it uploads.', body: '' },
     failed: { title: 'That upload didn’t finish. Tap Retry to try again.', body: '' },
   },
@@ -1025,6 +1032,8 @@ export const GUIDE = {
   },
   finished: {
     viewer: `Done! Tap ${RESULT_PUBLISH.PUBLISH_GET_LINK} to send it, or Download to save it.`,
+    // T17040: a phone viewing an already-published highlight shows Share link, not Get link.
+    viewerShareLink: `Done! Tap ${RESULT_PUBLISH.SHARE_LINK} to send it, or Download to save it.`,
     done: 'Keep going: upload videos, mark plays and make highlights. Turn guidance off for now. You can always turn it back on if you get confused.',
     doneCta: 'Turn off guidance for now',
   },
@@ -1059,13 +1068,11 @@ export const GUIDE = {
     editGame: 'Change what you need, then tap Save Changes.',
     linkClip: 'Tap the game this highlight came from.',
     linkClipEmpty: 'You have no games to link to yet. Add a game first, then link this highlight.',
-    shareGame: 'Add people or copy the link, then tap Share.',
+    shareGame: 'Add people or copy the link, then tap Send.',
     collectionShare: 'Add people, then tap Share.',
     collectionShareDone: 'Shared. Tap Done.',
     teammates: 'Pick who gets each tagged play, then tap Share.',
     teammatesDone: 'Every tagged play is already shared. Tap Close.',
-    sharePlayback: 'Add people, then tap Share to send them these plays.',
-    sharePlaybackError: 'These plays can’t be shared right now. Tap Close.',
     buyCreditsPick: 'Tap a credit pack to buy it.',
     buyCreditsPay: 'Enter your card, then tap Pay.',
     insufficientCredits: 'You need more credits for this. Tap Buy credits.',
@@ -1296,6 +1303,8 @@ export const EDITOR_PANELS = {
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
   PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
   PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Tap ${n}/${total}` : `Tap ${n} of ${total}`),
+  // T17180: the phone's one-line strip above the video, e.g. "Tap your athlete, 1 of 4".
+  PICK_GUIDE_STRIP: (verb, n, total) => `${verb}, ${n} of ${total}`,
   PICK_GUIDE_WHY: (total) => GUIDE.overlay.pick.first.body.replace('{n}', total),
   PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,
   PICK_GUIDE_CONFIRM: GUIDE.overlay.pick.next.title,
@@ -1466,6 +1475,10 @@ export const SPORT_PICK = {
 export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
   INVALID_VIDEO_FILE: "This file isn't a video we can open. Use an MP4, MOV or WebM.",
+  // T17280: the file has sound but this browser cannot draw its picture (iPhone HEVC).
+  VIDEO_PICTURE_UNSUPPORTED:
+    "This browser can't show this video's picture, only its sound. iPhone videos saved as High Efficiency "
+    + 'play in Safari, or set iPhone Settings > Camera > Formats to Most Compatible and record again.',
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   FOOTAGE_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   // T14610: AttachVideoModal (add another half or camera to a game).
@@ -1478,7 +1491,7 @@ export const UPLOAD = {
   // T15620: this toggle renders in the Upload game modal on every device,
   // desktop included, so "phone" was wrong there.
   NO_VIDEO_TOGGLE: "Don't have the game video on this device?",
-  NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here. A highlights zip works too.",
+  NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here.",
   NO_VIDEO_STEPS_LINK: 'See the steps for your camera',
   NO_VIDEO_SWITCH: 'Upload a play instead',
   NO_VIDEO_OTHER_DEVICE: 'On another device? Open reelballers.com there. Your account is the same.',
@@ -1520,9 +1533,11 @@ export const RESULT_SURFACE = {
 // T14640: sharing copy. Share, link, people; one dead-link message for every shared page.
 export const SHARE_COPY = {
   ADD_PEOPLE: 'Add people',
+  // T17220: the share window's send button; disabled until an email is added.
+  SEND: 'Send',
+  SENDING: 'Sending...',
   PEOPLE_WITH_ACCESS: 'People with access',
   EMAIL_HINT: 'Add emails, separated by commas',
-  CONTACTS_FAILED: "We couldn't load your contacts. You can still type emails.",
   DEAD_LINK: 'This link no longer works.',
   RESTRICTED: 'Only people it was shared with can watch. Sign in with the email the link was sent to.',
   COPY_LINK: 'Copy link',
@@ -1542,6 +1557,8 @@ export const SHARE_COPY = {
   GAME_LINK_OFF: 'Game link turned off',
   NO_GAME_LINK: "This game doesn't have a link.",
   PUBLIC_GAME_HELP: 'Watches the game plays. No account needed.',
+  // T17080: the link shows team plays only; a game whose plays are all "My athlete" has none.
+  NO_TEAM_PLAYS_FOR_LINK: `The link shows team plays, and this game has none yet. Open the game, pick a play, and set "${ANNOTATE.LAYER_LABEL}" to ${ANNOTATE.LAYER_TEAM}.`,
   EMAILS_SENT: 'Emails sent',
   LOADING_PEOPLE: 'Loading people...',
   LINK_UPDATED: 'Link updated',
@@ -1551,7 +1568,6 @@ export const SHARE_COPY = {
   peopleCount: (n) => `${n} ${n === 1 ? 'person' : 'people'}`,
   sharedWith: (n) => `Shared with ${SHARE_COPY.peopleCount(n)}`,
   gameSharedWith: (n) => `Game shared with ${SHARE_COPY.peopleCount(n)}`,
-  playsSharedWith: (n) => `Plays shared with ${SHARE_COPY.peopleCount(n)}`,
   teammatesSharedWith: (n) => `Shared with ${n} teammate${n === 1 ? '' : 's'}`,
   playAt: (time) => `Play at ${time}`,
   playsFor: (email) => `Plays for ${email}`,
@@ -1843,6 +1859,11 @@ export const APP_SHELL_COPY = {
 };
 
 export const ERROR_COPY = {
+  // T17280 (bug 62p): the browser loads the sound but cannot draw the picture
+  // (an iPhone video saved as High Efficiency / HEVC on a computer without an HEVC decoder).
+  VIDEO_PICTURE_UNSUPPORTED:
+    "This browser can't show this video's picture, only its sound. iPhone videos saved as "
+    + 'High Efficiency play in Safari, or set iPhone Settings > Camera > Formats to Most Compatible and record again.',
   CONNECTION: "We couldn't connect. Check your internet and try again.",
   CONNECTING: 'Connecting...',
   WAKING_UP: 'Getting things ready, one moment...',
@@ -1952,7 +1973,6 @@ export const ERROR_COPY = {
   REMOVE_FROM_PROFILE: "We couldn't remove this from your profile. Try again.",
   MOVE_HIGHLIGHTS: "We couldn't move your highlights. Try again.",
   DELETE_HIGHLIGHT_NOT_SYNCED: "We couldn't delete your highlight. Try again.",
-  REOPEN_NOT_SYNCED: "We couldn't finish saving. Your highlight is back in progress on this device and finishes saving when you tap Retry.",
   CHANGES_NOT_SYNCED: "Some changes didn't save.",
   VERIFY_PAYMENT: "We couldn't confirm your payment yet. Your credits may still be added shortly.",
   FINISH_TITLE: "We couldn't finish your highlight",

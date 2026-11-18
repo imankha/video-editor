@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react';
 
-const DOWNLOAD = vi.hoisted(() => ({ id: 8, project_name: 'Play 1', filename: 'final_9_b251cb00.mp4' }));
+const DOWNLOAD = vi.hoisted(() => ({ id: 8, project_name: 'Play 1', display_name: 'Play 1', filename: 'final_9_b251cb00.mp4' }));
 const hoisted = vi.hoisted(() => ({
   onDelete: null,
   deleteDownload: vi.fn(),

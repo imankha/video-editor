@@ -28,6 +28,7 @@ from app.database import get_db_connection
 from app.queries import (
     exclude_team_highlights_from_rank_clause,
     latest_final_videos_subquery,
+    unnamed_play_label,
 )
 from app.routers.collections import COLLECTION_MIN_DURATION_SEC
 from app.services.collection_metadata import route_collection
@@ -147,11 +148,11 @@ def _games_info(cursor, rows) -> dict:
     if game_ids:
         placeholders = ",".join("?" for _ in game_ids)
         cursor.execute(
-            f"SELECT id, opponent_name, game_date FROM games WHERE id IN ({placeholders})",
+            f"SELECT id, name, opponent_name, game_date, game_type FROM games WHERE id IN ({placeholders})",
             list(game_ids),
         )
         for g in cursor.fetchall():
-            info[g["id"]] = (g["opponent_name"], g["game_date"])
+            info[g["id"]] = (g["opponent_name"], g["game_date"], g["game_type"], g["name"])
     return info
 
 
@@ -179,10 +180,16 @@ def _minute(clip_start_time) -> int | None:
 
 def _side(row, games_info: dict) -> MatchupSide:
     gid = route_collection(row["game_ids"], row["clip_count"])
-    opponent_name, game_date = games_info.get(gid, (None, None)) if gid is not None else (None, None)
+    opponent_name, game_date, game_type, game_name = (
+        games_info.get(gid, (None,) * 4) if gid is not None else (None,) * 4
+    )
+    # T17240: two unnamed "Play 1"s read as "Vs Oceanside 0:14" / "at Carlsbad 1:15".
+    label = unnamed_play_label(
+        row["name"], opponent_name, game_type, row["clip_game_start_time"], game_name,
+    )
     return MatchupSide(
         id=row["id"],
-        name=row["name"] or f"Highlight {row['id']}",
+        name=label or row["name"] or f"Highlight {row['id']}",
         aspect_ratio=row["aspect_ratio"],
         project_id=row["project_id"],
         opponent_line=_opponent_line(opponent_name, game_date),

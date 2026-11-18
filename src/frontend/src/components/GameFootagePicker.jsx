@@ -21,7 +21,7 @@ const COPY = {
   // T15620: a touch phone has no drag gesture, so the drop-oriented heading
   // above hides on coarse pointers (fine-pointer:hidden / coarse-pointer:hidden
   // in the JSX below) and this one shows instead.
-  tapHeading: 'Tap to add a game video.',
+  tapHeading: 'Tap to choose your game video',
   // T8910 attachMode: the picker is scoped to an existing game, so the empty
   // state names that context instead of implying a brand-new game.
   attachHeading: 'Drop a video to add to this game.',
@@ -29,10 +29,11 @@ const COPY = {
   mobileSub: 'Tap to choose videos. Pick as many as you want.',
   dragOver: 'Drop everything here',
   folderLink: 'or add a whole folder',
-  formats: 'MP4, MOV, or WebM',
+  formats: 'MP4, MOV or WebM',
   // T13247: zip mode (the intake takes a zip of clips, see utils/zipClips.js).
-  zipMobileSub: 'Tap to choose videos or a zip of plays',
-  zipFormats: 'MP4, MOV, WebM, or a zip of plays',
+  // T17200: a parent with one game video should not read about zips in the drop
+  // zone; they get one quiet link that opens the same picker.
+  zipLink: 'Have a zip of plays?',
   checking: 'Checking your videos...',
   zeroAccepted:
     "We didn't find any game videos in there. Look for MP4 or MOV files from your camera.",
@@ -423,11 +424,24 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           <p className="font-medium text-gray-200 fine-pointer:hidden">
             {attachMode ? COPY.attachTapHeading : COPY.tapHeading}
           </p>
-          {/* Touch-only sub-copy — coarse pointers can't drag files. */}
-          <p className="text-xs text-gray-500 mt-1 fine-pointer:hidden">{acceptsZip ? COPY.zipMobileSub : COPY.mobileSub}</p>
-          <p className="text-xs text-gray-600 mt-1">{acceptsZip ? COPY.zipFormats : COPY.formats}</p>
+          {/* Touch-only sub-copy — coarse pointers can't drag files. T17200: the
+              game upload (zip mode) keeps its drop zone to the one tap line. */}
+          {!acceptsZip && <p className="text-xs text-gray-500 mt-1 fine-pointer:hidden">{COPY.mobileSub}</p>}
+          <p className="text-xs text-gray-600 mt-1">{COPY.formats}</p>
         </div>
       </div>
+
+      {acceptsZip && (
+        <button
+          type="button"
+          onClick={openFilePicker}
+          disabled={isSubmitting}
+          className="mt-2 text-xs text-gray-400 hover:text-gray-300 underline disabled:opacity-50"
+          data-testid="footage-zip-link"
+        >
+          {COPY.zipLink}
+        </button>
+      )}
 
       {/* Folder pick is desktop-only (webkitdirectory has no coarse-pointer UX). */}
       <button

@@ -17,6 +17,10 @@ import FloatingCoach from '../../../components/instructions/FloatingCoach';
  * beside the stage on desktop), so it never sits inside a narrow portrait video.
  * `compact` drops the sub-line and shortens the frame count (small phone, phone
  * fullscreen/landscape) per the Copy table.
+ *
+ * T17180: `strip` (phone portrait, not fullscreen) renders the guide as a one-line strip in the
+ * page flow ("Tap your athlete, 1 of 4"); the caller mounts it ABOVE the video stage, so no part
+ * of it can cover the athletes it asks the parent to tap. No shade and no Got it: it is a label.
  */
 function ActiveSpotlightPickGuide({
   phase, // null | 'parked' | 'confirm' | 'away' | 'done' | 'none' (no detections, T12790)
@@ -29,6 +33,7 @@ function ActiveSpotlightPickGuide({
   onNotBoxed,
   boxed, // T12350: parent's box visibility. Given = controlled (the single source); omitted = standalone harness.
   noBoxes = false,
+  strip = false,
 }) {
   const [localHint, setLocalHint] = useState(false);
   const controlled = boxed !== undefined;
@@ -41,6 +46,14 @@ function ActiveSpotlightPickGuide({
   useEffect(() => { setLocalHint(false); }, [step]);
 
   if (!phase || !guide) return null;
+
+  if (strip) {
+    return (
+      <StripGuide guideId={guideId} phase={phase} step={step} total={total} tone={guide.tone}
+        dragHintOpen={dragHintOpen} onResumeStep={onResumeStep}
+        onToggleDragHint={() => { if (!controlled) setLocalHint((v) => !v); onNotBoxed?.(); }} />
+    );
+  }
 
   return (
     <FloatingCoach guideId={guideId} tone={guide.tone} keepClear={guide.keepClear} phase={guideId}
@@ -153,6 +166,49 @@ function PickingBody({ phase, step, total, compact, assignedCount, progress, dra
         </button>
       )}
       <ProgressDots progress={progress} activeIndex={step != null ? step - 1 : -1} />
+    </div>
+  );
+}
+
+function stripText(guideId, phase, step, total, dragHintOpen) {
+  if (guideId === 'overlay.pick.done') return EDITOR_PANELS.PICK_GUIDE_DONE(total, true);
+  if (guideId === 'overlay.pick.away') return EDITOR_PANELS.PICK_GUIDE_AWAY(step, total, true);
+  if (phase === 'none') return EDITOR_PANELS.PICK_GUIDE_DRAG;
+  if (dragHintOpen) return GUIDE.overlay.pick.notOutlined.title;
+  return EDITOR_PANELS.PICK_GUIDE_STRIP(phase === 'confirm' ? EDITOR_PANELS.PICK_GUIDE_CONFIRM : EDITOR_PANELS.PICK_GUIDE_TAP, step, total);
+}
+
+function StripGuide({ guideId, phase, step, total, tone, dragHintOpen, onResumeStep, onToggleDragHint }) {
+  const Icon = phase === 'confirm' || guideId === 'overlay.pick.done' ? Check : MousePointerClick;
+  return (
+    <div data-testid="spotlight-pick-guide" data-variant="strip" data-phase={phase} data-guide-id={guideId}>
+      <InstructionCoach
+        role="status"
+        aria-live="polite"
+        className="flex items-center gap-2 w-full px-3 py-1 text-sm font-semibold"
+        phase={phase}
+        tone={tone}
+      >
+        <Icon size={14} aria-hidden="true" className="shrink-0" />
+        <span data-testid="pick-guide-text" className="min-w-0 flex-1 leading-snug">
+          {stripText(guideId, phase, step, total, dragHintOpen)}
+        </span>
+        {guideId === 'overlay.pick.away' && (
+          <button type="button" onClick={onResumeStep} className="shrink-0 min-h-11 px-2 text-sm font-medium underline underline-offset-2">
+            {EDITOR_PANELS.PICK_GUIDE_AWAY_BUTTON(step)}
+          </button>
+        )}
+        {phase === 'parked' && (
+          <button
+            type="button"
+            data-testid="pick-guide-not-boxed"
+            onClick={onToggleDragHint}
+            className="shrink-0 min-h-11 px-1 text-xs font-normal text-white/80 underline underline-offset-2"
+          >
+            {dragHintOpen ? EDITOR_PANELS.PICK_GUIDE_NOT_OUTLINED_DONE : EDITOR_PANELS.PICK_GUIDE_NOT_OUTLINED}
+          </button>
+        )}
+      </InstructionCoach>
     </div>
   );
 }

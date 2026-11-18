@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { ANNOTATE, RECAP, LIBRARY_ACTIONS, GUIDE } from './displayNames';
 import { RATING_ADJECTIVES } from '../components/shared/clipConstants';
 import { CLIP_SYNC_FAILED_COPY } from '../hooks/useRawClipSave';
+import GLOSSARY_ALLOWLIST from './copyGlossary.allowlist.json';
 
 const BANNED = /\b(clips?|moments?|annotations?|layers?|footage|angles?|fix timing|drafts?|recaps?|click|failed to|could not|cloud|submit)\b/i;
 
@@ -62,6 +63,9 @@ describe('T14610 Mark plays copy', () => {
       ...flatten(GUIDE.annotate),
       GUIDE.modal.attachVideoChoose, GUIDE.modal.attachVideoSubmit,
     ];
-    expect(strings.filter((s) => BANNED.test(s))).toEqual([]);
+    // Exact strings the copy glossary guard already allowlists (e.g. T17170's owner-specified
+    // "a moment worth keeping", a moment in the game, not the retired noun for a marked play).
+    const allowed = new Set(GLOSSARY_ALLOWLIST.map((e) => e.text));
+    expect(strings.filter((s) => BANNED.test(s) && !allowed.has(s))).toEqual([]);
   });
 });

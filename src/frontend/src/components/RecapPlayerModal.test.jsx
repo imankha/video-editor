@@ -106,9 +106,9 @@ vi.mock('../modes/annotate/components/PlaybackControls', () => ({
   ),
 }));
 
-vi.mock('./SharePlaybackDialog', () => ({
-  SharePlaybackDialog: ({ onClose, gameId, gameName }) => (
-    <div data-testid="share-playback-dialog">
+vi.mock('./ShareGameModal', () => ({
+  ShareGameModal: ({ onClose, gameId, gameName }) => (
+    <div data-testid="share-game-modal">
       <span data-testid="dialog-game-id">{gameId}</span>
       <span data-testid="dialog-game-name">{gameName}</span>
       <button onClick={onClose} data-testid="dialog-close">Close</button>
@@ -185,18 +185,18 @@ describe('RecapPlayerModal - Share Button', () => {
     });
   });
 
-  it('opens SharePlaybackDialog on share button click', async () => {
+  it('opens ShareGameModal (T17220: the one share window) on share button click', async () => {
     render(<RecapPlayerModal {...defaultProps} />);
     await waitFor(() => screen.getByTitle('Share highlights'));
 
     fireEvent.click(screen.getByTitle('Share highlights'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('share-playback-dialog')).toBeTruthy();
+      expect(screen.getByTestId('share-game-modal')).toBeTruthy();
     });
   });
 
-  it('passes correct gameId to SharePlaybackDialog', async () => {
+  it('passes correct gameId to ShareGameModal (T17220: the one share window)', async () => {
     render(<RecapPlayerModal {...defaultProps} />);
     await waitFor(() => screen.getByTitle('Share highlights'));
     fireEvent.click(screen.getByTitle('Share highlights'));
@@ -206,7 +206,7 @@ describe('RecapPlayerModal - Share Button', () => {
     });
   });
 
-  it('passes correct gameName to SharePlaybackDialog', async () => {
+  it('passes correct gameName to ShareGameModal (T17220: the one share window)', async () => {
     render(<RecapPlayerModal {...defaultProps} />);
     await waitFor(() => screen.getByTitle('Share highlights'));
     fireEvent.click(screen.getByTitle('Share highlights'));
@@ -216,16 +216,16 @@ describe('RecapPlayerModal - Share Button', () => {
     });
   });
 
-  it('closes SharePlaybackDialog when onClose is called', async () => {
+  it('closes ShareGameModal (T17220: the one share window) when onClose is called', async () => {
     render(<RecapPlayerModal {...defaultProps} />);
     await waitFor(() => screen.getByTitle('Share highlights'));
     fireEvent.click(screen.getByTitle('Share highlights'));
 
-    await waitFor(() => screen.getByTestId('share-playback-dialog'));
+    await waitFor(() => screen.getByTestId('share-game-modal'));
     fireEvent.click(screen.getByTestId('dialog-close'));
 
     await waitFor(() => {
-      expect(screen.queryByTestId('share-playback-dialog')).toBeNull();
+      expect(screen.queryByTestId('share-game-modal')).toBeNull();
     });
   });
 

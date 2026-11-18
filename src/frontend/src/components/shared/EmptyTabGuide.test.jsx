@@ -34,7 +34,7 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
       expect(h2.textContent).toBe(c.headline);
       expect(h2.className).toMatch(/text-lg/);
       expect(h2.className).toMatch(/font-semibold/);
-      if (tab !== 'clips') expect(c.body).toBeUndefined();
+      if (tab === 'games') expect(c.body).toBeUndefined(); // T17100: Published has a body too
       // The flow strip (an <ol> of Games/Clips/Reels/Published peers + the dashed
       // "optional" pill) is gone entirely on every tab (T10280).
       expect(container.querySelector('ol')).toBeNull();
@@ -69,7 +69,7 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
 });
 
 describe('EmptyTabGuide - Games tab', () => {
-  it('shows the approved headline, the upload-a-game coach, Add Game CTA, and the Clips link without a cost caption', () => {
+  it('shows the approved headline, the upload-a-game coach, Upload game CTA, and no Skip ahead button or cost caption', () => {
     const onAddGame = vi.fn();
     const onNavigate = vi.fn();
     render(<EmptyTabGuide tab="games" gamesCount={0} guide={resolveGuide(homeFacts({ tab: 'games' }))} onAddGame={onAddGame} onNavigate={onNavigate} />);
@@ -80,15 +80,11 @@ describe('EmptyTabGuide - Games tab', () => {
     expect(EMPTY_TAB_GUIDE.games.addGameCaption).toBeNull();
     expect(screen.queryByText(/from your phone or computer/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Upload game$/ }));
     expect(onAddGame).toHaveBeenCalledTimes(1);
 
-    // T14810: the Clips link is a REAL secondary button beside Upload game, not
-    // grey body text, and still switches to the Clips tab (id 'projects').
-    const skipAhead = screen.getByRole('button', { name: EMPTY_TAB_GUIDE.games.footerLink });
-    fireEvent.click(skipAhead);
-    expect(onNavigate).toHaveBeenCalledWith('projects');
-    // No standalone "Have a play already?" caption remains outside the button row.
+    // T17200: Upload game is the one button; short videos get a small link (EmptyTabGuide.firstRun.test.jsx).
+    expect(screen.queryByText(/Skip ahead/)).toBeNull();
     expect(screen.queryByText(/have a play already/i)).toBeNull();
   });
 });
@@ -141,24 +137,23 @@ describe('EmptyTabGuide - Reels tab removed (T11230)', () => {
   });
 });
 
-describe('EmptyTabGuide - Published tab (T10310: headline/body only, no fallback action)', () => {
-  it('shows the headline and NO "Cut your first clip" text or Go to Games button', () => {
-    // T10310 (2026-09-18 user request) dropped the "Cut your first clip to get
-    // started." line + Go to Games button -- headline/body is the whole guide now,
-    // regardless of clip/game count.
-    render(<EmptyTabGuide tab="published" clipCount={3} gamesCount={2} onNavigate={vi.fn()} />);
+describe('EmptyTabGuide - Published tab (T17100: message + next step)', () => {
+  // T17100 supersedes T10310's headline-only empty Highlights tab: QA (2026-11-17)
+  // found an empty profile's Highlights tab showed only "Your highlights" with no
+  // way forward. It now says how a highlight is made and offers Go to Games.
+  it.each([0, 2])('shows the message and a Go to Games button that switches tabs (games=%i)', (gamesCount) => {
+    const onNavigate = vi.fn();
+    render(<EmptyTabGuide tab="published" gamesCount={gamesCount} onNavigate={onNavigate} />);
 
     expect(screen.getByText(EMPTY_TAB_GUIDE.published.headline)).toBeTruthy();
-    expect(screen.queryByText(/cut your first clip/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Go to Games' })).toBeNull();
-    expect(screen.queryByText(/in progress/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Open Clips' })).toBeNull();
+    expect(screen.getByTestId('highlights-empty-message').textContent).toBe(EMPTY_TAB_GUIDE.published.body);
+    fireEvent.click(screen.getByRole('button', { name: EMPTY_TAB_GUIDE.published.cta }));
+    expect(onNavigate).toHaveBeenCalledWith('games');
   });
 
-  it('offers NO cross-tab Add Game (the zero-everything branch was deleted)', () => {
-    render(<EmptyTabGuide tab="published" clipCount={0} gamesCount={0} onNavigate={vi.fn()} onAddGame={vi.fn()} />);
+  it('offers NO cross-tab Add Game (navigation only)', () => {
+    render(<EmptyTabGuide tab="published" gamesCount={0} onNavigate={vi.fn()} onAddGame={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Upload game' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Go to Games' })).toBeNull();
   });
 });
 

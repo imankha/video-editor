@@ -48,6 +48,7 @@ const TODAYS_TARGETS = {
   'upload.submit': P.UPLOAD_SUBMIT,
   'upload.failed': P.UPLOAD_RETRY,
   'home.clips.unfinished': P.FIRST_CLIP,
+  'home.clips.ready': P.GO_TO_HIGHLIGHTS, // T17190
   'home.finished.first': P.FIRST_FINISHED,
   'home.finished.many': P.FIRST_FINISHED,
   'focus.failed': P.EXPORT,
@@ -57,6 +58,7 @@ const TODAYS_TARGETS = {
   'overlay.ready': P.OVERLAY_FINISH,
   'overlay.pick.done': P.EXPORT,
   'finished.viewer': P.GET_LINK,
+  'finished.viewer.shareLink': P.SHARE_LINK,
   'share.modal': P.SHARE_SUBMIT,
   'home.games.error': P.GAMES_RETRY, // T12790
   'focus.video-error.retry': P.VIDEO_RETRY,
@@ -71,7 +73,6 @@ const TODAYS_TARGETS = {
   'modal.share-game': P.SHARE_GAME_SUBMIT,
   'modal.collection-share': P.COLLECTION_SHARE_SUBMIT,
   'modal.teammates': P.TEAMMATES_SHARE_SUBMIT,
-  'modal.share-playback': P.SHARE_PLAYBACK_SUBMIT,
   'modal.buy-credits.pay': P.CREDITS_PAY,
   'modal.insufficient-credits': P.INSUFFICIENT_BUY,
   'modal.storage-extension': P.STORAGE_EXTEND,

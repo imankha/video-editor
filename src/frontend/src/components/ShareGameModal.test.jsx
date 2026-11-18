@@ -152,7 +152,7 @@ describe('ShareGameModal — per-recipient clip scope', () => {
     // send-time banner (distinct copy: "no tag match ... Send anyway?")
     expect(screen.getByText(/no tag match.*Send anyway/i)).toBeTruthy();
     // send stays ENABLED (speed-bump, not a block)
-    expect(screen.getByText('Share with 1').closest('button').disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Send' }).disabled).toBe(false);
   });
 
   it('sends the {recipients:[{email,scope}]} shape with per-recipient scope', async () => {
@@ -163,7 +163,7 @@ describe('ShareGameModal — per-recipient clip scope', () => {
     const select = screen.getByLabelText('Plays for tagged@test.com');
     fireEvent.change(select, { target: { value: 'tagged_only' } });
 
-    fireEvent.click(screen.getByText('Share with 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => {
       const call = apiMock.mock.calls.find(
@@ -194,5 +194,30 @@ describe('ShareGameModal — general access / revoke', () => {
       expect(screen.getByText(/no one can watch with a link/i)).toBeTruthy());
     expect(apiMock.mock.calls.some((c) => c[1]?.method === 'DELETE')).toBe(true);
     expect(screen.getByText('Create new link')).toBeTruthy();
+  });
+});
+
+// T17080: a game with only "My athlete" plays has no team plays to put behind a public
+// link; the server refuses with 409 empty_team_layer. The parent must see, in the Share
+// window itself, what to do -- never a silent button.
+describe('ShareGameModal — Copy link on a game with no team plays', () => {
+  it('shows a lasting message in General access saying what to do', async () => {
+    const base = defaultApiMock();
+    apiMock = vi.fn(async (url, opts) => {
+      if (url.includes('/share-link') && opts?.method === 'POST') {
+        return {
+          ok: false, status: 409, url,
+          json: async () => ({ detail: { error: 'empty_team_layer', message: 'Tag some team plays first' } }),
+        };
+      }
+      return base(url, opts);
+    });
+    render(<ShareGameModal {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Copy link/ }));
+
+    const note = await screen.findByTestId('share-link-blocked');
+    expect(note.textContent).toContain('Who is this play about?');
+    expect(note.textContent).toContain('Team');
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
   });
 });

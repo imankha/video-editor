@@ -1,6 +1,6 @@
 # T17160: Admin windows ignore Esc
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 2
 **Complexity:** 1
 **Created:** 2026-11-17

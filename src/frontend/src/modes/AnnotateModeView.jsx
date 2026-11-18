@@ -260,7 +260,7 @@ export function AnnotateModeView({
   hasUnsentShares,
   hasTaggedClips = false,
   teammateSuggestions = [],
-  // T2905: Share annotated playback (game invitations — opens SharePlaybackDialog).
+  // T2905: Share annotated playback (game invitations — opens ShareGameModal, T17220).
   // T9810: this is now the primary "Share plays" action on every surface.
   onSharePlayback,
   // T8600: desktop strip only — opens the clip's project in Focus mode.
