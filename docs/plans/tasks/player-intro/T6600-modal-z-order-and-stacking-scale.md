@@ -103,3 +103,7 @@ The owner reported Play and Share buttons floating over Manage profiles. On buil
 The continuation on current staging build ce8988c54 (#8063), as e2e@test.local, reproduced background Share controls above the modal backdrop in three fresh loads at 1440 x 900. After scrolling Highlights by 300 pixels and opening Manage profiles, the background Share control remains undimmed and hit-testing returns that background button instead of the modal backdrop. Screenshots: `B01-profile-repro1.png` through `B01-profile-repro3.png`; measured evidence: `B01-geometry.json`, in the same folder. No failing request or console exception was established as the cause. This is a visual layering defect. The task file still says TODO while the archive row says DONE, so the current failure is brought back into the active task list under this existing id rather than filed twice.
 
 Expected: Manage profiles and its backdrop cover every background highlight control, and background controls cannot receive input until the dialog closes. Also verify the original nested Intro cards case before closing this task.
+
+### 2026-11-18: regression re-filed as T17680
+
+The 2026-11-18 reproduction above is now tracked as [T17680](../T17680-background-controls-cover-profile-dialogs.md). This task keeps its August fix as shipped; `/dotask` cannot reopen a task that already has commits on master.
