@@ -63,7 +63,7 @@ function ColorSelector({ value, onChange, usedColors = [] }) {
 // Profile Form (shared for Add and Edit)
 // ---------------------------------------------------------------------------
 
-function ProfileForm({ title, initialName = '', initialColor, initialSport = NO_SPORT, usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save', nameRequired = true }) {
+function ProfileForm({ title, subtitle, initialName = '', initialColor, initialSport = NO_SPORT, usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save', nameRequired = true }) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor || getNextColor(usedColors));
   const [sport, setSport] = useState(sportDisplayName(initialSport) || 'Soccer');
@@ -79,7 +79,7 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = NO_
   // hint; fall back to "Soccer" for the no-sport / empty case so it stays natural.
   const isNoSport = sport === NO_SPORT_LABEL;
   const placeholderSport = (sport.trim() && !isNoSport) ? sport.trim() : 'Soccer';
-  const namePlaceholder = `e.g. Fall ${placeholderSport} 2025`;
+  const namePlaceholder = PROFILE_COPY.namePlaceholder(placeholderSport);
 
   const isSupportedName = SUPPORTED_SPORTS.some(s => s.name === sport);
 
@@ -104,7 +104,10 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = NO_
         <button type="button" onClick={onCancel} className="text-gray-400 hover:text-white transition-colors">
           <ArrowLeft size={20} />
         </button>
-        <h2 className="text-lg font-bold text-white">{title}</h2>
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-white">{title}</h2>
+          {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+        </div>
       </div>
 
       {/* Body */}
@@ -138,7 +141,7 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = NO_
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">
-            Profile Name{!nameRequired && <span className="text-gray-500 font-normal"> (optional)</span>}
+            {PROFILE_COPY.NAME_LABEL}{!nameRequired && <span className="text-gray-500 font-normal"> (optional)</span>}
           </label>
           <input
             type="text"
@@ -151,6 +154,7 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = NO_
               isDuplicate ? 'border-red-500 focus:border-red-500' : 'border-gray-600 focus:border-purple-500'
             }`}
           />
+          <p className="text-gray-400 text-xs mt-1">{PROFILE_COPY.NAME_HINT}</p>
           {isDuplicate && (
             <p className="text-red-400 text-xs mt-1">A profile with this name already exists</p>
           )}
@@ -297,7 +301,10 @@ export function ManageProfilesModal({ isOpen, onClose }) {
           <>
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h2 className="text-lg font-bold text-white">{PROFILE_COPY.MANAGE}</h2>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-white">{PROFILE_COPY.MANAGE}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{PROFILE_COPY.MEANING}</p>
+              </div>
               <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-white transition-colors p-1 -mr-1"
@@ -395,11 +402,6 @@ export function ManageProfilesModal({ isOpen, onClose }) {
               <Button variant="secondary" fullWidth onClick={() => setMode('add')} icon={null} data-testid={GUIDE_PULSE.PROFILE_ADD} guideTarget={GUIDE_PULSE.PROFILE_ADD}>
                 + {PROFILE_COPY.ADD}
               </Button>
-              {profiles.length <= 1 && (
-                <p className="text-xs text-gray-400 mt-3 text-center leading-relaxed">
-                  Use profiles to keep your videos and highlights organized by athlete, team, sport, or season.
-                </p>
-              )}
             </div>
           </>
         )}
@@ -410,6 +412,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
           {guideEl}
           <ProfileForm
             title={PROFILE_COPY.ADD}
+            subtitle={PROFILE_COPY.MEANING}
             usedColors={usedColors}
             existingNames={allProfileNames}
             submitLabel="Create"

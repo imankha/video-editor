@@ -131,11 +131,13 @@ export default function SourceBar({
       type="button"
       data-testid="source-bar-fix-timing"
       aria-label={ANNOTATE.fixTimingFor(active.name)}
-      title={ANNOTATE.fixTimingFor(active.name)}
+      title={ANNOTATE.LINE_UP_VIDEO}
       onClick={() => onFixTiming(active.sequence)}
-      className="shrink-0 inline-flex items-center justify-center w-8 h-8 coarse-pointer:w-11 coarse-pointer:h-11 rounded text-yellow-300 hover:bg-gray-700 transition-colors"
+      className="shrink-0 inline-flex items-center justify-center gap-1 px-2 h-8 coarse-pointer:min-w-11 coarse-pointer:h-11 rounded text-xs font-medium text-yellow-300 hover:bg-gray-700 transition-colors"
     >
-      <Clock size={16} />
+      {/* T17250: words next to the clock; the icon alone read as decoration. */}
+      <Clock size={16} className="shrink-0" />
+      <span>{ANNOTATE.LINE_UP}</span>
     </button>
   ) : null;
 

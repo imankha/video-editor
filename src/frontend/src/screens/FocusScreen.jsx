@@ -566,16 +566,22 @@ export function FocusScreen({
   }, [projectId]);
 
   // Derive clip range for the currently selected clip (used by VideoPlayer for preload hints)
+  // T17070: the range comes from the LOADED source (getClipVideoConfig ->
+  // videoStore), not the clip's game times: an expired game's play plays its own
+  // extract (0..duration) or recap segment, so game-absolute #t= bounds would
+  // seek past the end of that file.
+  const loadedClipOffset = useVideoStore((s) => s.clipOffset);
+  const loadedClipDuration = useVideoStore((s) => s.clipDuration);
   const currentClipRange = useMemo(() => {
     if (!projectClip) return null;
-    if (projectClip.game_video_url && projectClip.start_time != null && projectClip.end_time != null) {
+    if (projectClip.game_video_url && loadedClipDuration != null) {
       return {
-        clipOffset: projectClip.start_time,
-        clipDuration: projectClip.end_time - projectClip.start_time,
+        clipOffset: loadedClipOffset,
+        clipDuration: loadedClipDuration,
       };
     }
     return null;
-  }, [projectClip]);
+  }, [projectClip, loadedClipOffset, loadedClipDuration]);
 
   // T6190: No mount refetch here. useProjectLoader.loadProject is the single owner of the
   // project-open clips fetch; annotate edits reach Framing via invalidateClips on the

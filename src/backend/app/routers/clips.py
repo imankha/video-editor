@@ -2590,6 +2590,36 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
         return RedirectResponse(url=presigned_url, status_code=302)
 
 
+def _resolve_surviving_play_source(row) -> dict | None:
+    """T17070: the playback-url body for an expired game's play, or None.
+
+    Walks export_helpers.resolve_clip_source past its game step (the game is
+    known reclaimed, so no HEAD probe): the T4175 preserved extract plays over
+    0..duration, the T4140 recap segment over its frozen recap bounds.
+    """
+    from app.services.export_helpers import SourceUnavailable, resolve_clip_source
+
+    try:
+        url, start, end, _flexible = resolve_clip_source({
+            'game_id': row['game_id'],
+            'game_blake3_hash': None,
+            'source': row['source'],
+            'raw_clip_id': row['raw_clip_id'],
+            'raw_start_time': row['start_time'],
+            'raw_end_time': row['end_time'],
+            'raw_filename': row['raw_filename'],
+        })
+    except SourceUnavailable:
+        return None
+    return {
+        "url": url,
+        "expires_in": 3600,  # resolve_clip_source presigns with the default expiry
+        "file_size": None,
+        "start_time": start,
+        "end_time": end,
+    }
+
+
 @router.get("/projects/{project_id}/clips/{clip_id}/playback-url")
 def get_clip_playback_url(project_id: int, clip_id: int):
     """Return presigned R2 URL + clip timing for direct browser playback.
@@ -2599,13 +2629,19 @@ def get_clip_playback_url(project_id: int, clip_id: int):
     the playback-gating request from the HAR — keeping it off the loop lets it
     overlap the sibling list requests instead of queueing behind them.
     """
-    from app.routers.games import assert_clip_source_available, get_game_video_url, log_game_video_failure
+    from app.routers.games import (
+        GameSourceExpired,
+        assert_clip_source_available,
+        get_game_video_url,
+        log_game_video_failure,
+    )
     from app.storage import VideoServeOutcome, log_video_resolution
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT
+                rc.id AS raw_clip_id,
                 rc.start_time, rc.end_time, rc.game_id, rc.source, rc.filename AS raw_filename,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
                 g.video_filename, g.auto_export_status, g.status AS game_status,
@@ -2656,13 +2692,23 @@ def get_clip_playback_url(project_id: int, clip_id: int):
         # T8310: refuse a reclaimed source with a structured 410 instead of
         # presigning a deleted object (the presign succeeds, then the <video>
         # gets an R2 404 and reports "format not supported" -- bug 50p).
-        assert_clip_source_available(
-            cursor,
-            game_id=row['game_id'],
-            blake3_hash=row['blake3_hash'],
-            auto_export_status=row['auto_export_status'],
-            game_status=row['game_status'],
-        )
+        # T17070: a marked play outlives its game -- an expired game's play
+        # plays its own surviving source (T4175 extract, then T4140 recap
+        # segment), the same chain the Frame export renders from. The 410
+        # stands only when nothing survives.
+        try:
+            assert_clip_source_available(
+                cursor,
+                game_id=row['game_id'],
+                blake3_hash=row['blake3_hash'],
+                auto_export_status=row['auto_export_status'],
+                game_status=row['game_status'],
+            )
+        except GameSourceExpired:
+            surviving = _resolve_surviving_play_source(row)
+            if surviving is None:
+                raise
+            return surviving
 
         url = get_game_video_url(row['blake3_hash'], row['video_filename'])
         if not url:

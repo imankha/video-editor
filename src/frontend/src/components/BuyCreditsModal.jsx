@@ -8,7 +8,9 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
-import { CREDITS, DETECTION, RETENTION, ERROR_COPY, CREDIT_COPY } from '../config/displayNames';
+import { useCreditStore } from '../stores/creditStore';
+import { toast } from './shared';
+import { CREDITS, DETECTION, RETENTION, ERROR_COPY, CREDIT_COPY, PACK_NAMES } from '../config/displayNames';
 import { approxHighlights, CREDITS_PER_HIGHLIGHT, FEATURED_PACK_KEY } from '../config/pricing';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
@@ -26,7 +28,9 @@ import { serverError, userErrorMessage } from '../utils/userError';
  *
  * Props:
  *   onClose: () => void
- *   onPaymentSuccess: (credits: number) => void — called after successful payment
+ *   onPaymentSuccess: (credits: number) => void — called after successful payment, AFTER
+ *     this modal has shown the credits-added toast and set the balance (T17250): openers
+ *     do their follow-up only, never a second confirmation toast
  *   insufficientCredits: { required, available, videoSeconds } | null
  *   paywall: boolean - opened because of a credit shortfall (analytics only)
  */
@@ -72,9 +76,9 @@ async function getPacks() {
 // Labels never promise a game or a season: what a pack covers is shown as approximate highlights.
 // Badge styles match the landing pricing cards: solid amber for the featured pack, outlined for best value.
 const PACK_META = {
-  starter: { label: 'Starter', badge: null, badgeClass: null },
-  popular: { label: 'Popular', badge: CREDIT_COPY.MOST_POPULAR, badgeClass: 'font-bold bg-amber-400 text-slate-950' },
-  best_value: { label: CREDIT_COPY.BEST_VALUE, badge: CREDIT_COPY.BEST_VALUE, badgeClass: 'font-semibold border border-white/20 bg-gray-800 text-gray-200' },
+  starter: { label: PACK_NAMES.starter, badge: null, badgeClass: null },
+  popular: { label: PACK_NAMES.popular, badge: CREDIT_COPY.MOST_POPULAR, badgeClass: 'font-bold bg-amber-400 text-slate-950' },
+  best_value: { label: PACK_NAMES.best_value, badge: CREDIT_COPY.BEST_VALUE, badgeClass: 'font-semibold border border-white/20 bg-gray-800 text-gray-200' },
 };
 
 
@@ -149,6 +153,20 @@ function CreditsExplainer() {
 // Step 2: Payment Form (rendered inside <Elements> provider)
 // ---------------------------------------------------------------------------
 
+// T17250: the payment confirmation lives HERE, not in each opener's onPaymentSuccess:
+// Add footage and Attach video only closed the window, so a parent who paid from
+// there saw no message. confirm-intent returns the balance the grant produced.
+function announceGrant(data, credits) {
+  if (typeof data?.balance === 'number') {
+    useCreditStore.getState().setBalance(data.balance);
+    toast.success(CREDITS.addedWithBalance(credits, data.balance));
+    return;
+  }
+  // Verification failed or Stripe not yet settled: the webhook grants the credits.
+  useCreditStore.getState().fetchCredits();
+  toast.success(CREDITS.added(credits));
+}
+
 function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {} }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -196,10 +214,13 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
       }
 
       const data = await res.json();
-      onPaymentSuccess(data.credits || selectedPack.credits);
+      const credits = data.credits || selectedPack.credits;
+      announceGrant(data, credits);
+      onPaymentSuccess(credits);
     } catch (err) {
       // Payment went through but verification failed — credits will arrive via webhook
       console.warn('[BuyCreditsModal] confirm-intent failed, webhook will handle:', err.message);
+      announceGrant(null, selectedPack.credits);
       onPaymentSuccess(selectedPack.credits);
     }
   }, [stripe, elements, selectedPack, onPaymentSuccess]);
@@ -229,9 +250,12 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
       });
       if (!res.ok) throw new Error('Verification failed');
       const data = await res.json();
-      onPaymentSuccess(data.credits || selectedPack.credits);
+      const credits = data.credits || selectedPack.credits;
+      announceGrant(data, credits);
+      onPaymentSuccess(credits);
     } catch (err) {
       console.warn('[BuyCreditsModal] Express checkout confirm failed, webhook will handle:', err.message);
+      announceGrant(null, selectedPack.credits);
       onPaymentSuccess(selectedPack.credits);
     }
   }, [stripe, elements, selectedPack, onPaymentSuccess]);

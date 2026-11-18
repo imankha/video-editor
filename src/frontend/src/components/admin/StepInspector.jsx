@@ -2,6 +2,7 @@ import { formatRate } from './JourneyFlowChart';
 import { fmt2, fmtPct } from './formatNumber';
 import { transitionChipText } from './journeyTargets';
 import { RagChip } from './RagChip';
+import { formatAdminDateTime, screenName } from './adminLabels';
 
 // T14020: inspector for one Journey stage. Presentational: JourneyView owns the selected
 // stage / outcome / breakdown tab (view state) and the store owns the read. Sections:
@@ -212,7 +213,7 @@ function RollupStamp({ left }) {
     left.users_failed && `${left.users_failed} failed`].filter(Boolean);
   return (
     <p data-testid="step-left-stamp" className="text-[11px] text-gray-500">
-      computed {left.computed_at.slice(0, 16).replace('T', ' ')} UTC over {left.users_walked} users
+      computed {formatAdminDateTime(left.computed_at)} over {left.users_walked} users
       {skipped.length > 0 && ` (${skipped.join(', ')})`}; all signups, not filtered
       {left.partial && <span className="text-amber-400"> -- some shards unreadable</span>}
     </p>
@@ -240,7 +241,7 @@ function WhereLeft({ left, rollup, onRunRollup }) {
           {left.exit_screens.length === 0 ? <p className="text-xs text-gray-500">No session exits at this stage.</p> : (
             <ul data-testid="step-left-exits" className="text-xs text-gray-300 space-y-0.5">
               {left.exit_screens.map(e => (
-                <li key={e.screen}><span className="font-mono">{e.screen}</span>{' '}
+                <li key={e.screen}><span className="font-mono">{screenName(e.screen)}</span>{' '}
                   <span className="text-white font-semibold">{e.users} / {left.exit_users}</span>
                   {e.share.pct !== null && <span className="text-gray-500"> ({fmtPct(e.share.pct)})</span>}
                 </li>
@@ -255,7 +256,7 @@ function WhereLeft({ left, rollup, onRunRollup }) {
               </thead>
               <tbody>
                 {left.dwell.map(d => (
-                  <tr key={d.screen}><td className="font-mono pr-3">{d.screen}</td>
+                  <tr key={d.screen}><td className="font-mono pr-3">{screenName(d.screen)}</td>
                     {DWELL_BUCKETS.map(b => <td key={b.key} className="px-1.5 text-center">{d.buckets[b.key]}</td>)}</tr>
                 ))}
               </tbody>
@@ -289,7 +290,7 @@ function People({ people, outcome, onOutcome, onOpenUser }) {
                       className="w-full text-left py-0.5 text-gray-300 hover:text-white flex gap-3">
                 <span className="truncate">{p.is_deleted ? 'Deleted account' : (p.email || p.user_id)}</span>
                 <span className="text-gray-500">{p.platform}</span>
-                <span className="text-gray-500 ml-auto">{p.last_active_at ? p.last_active_at.slice(0, 10) : '—'}</span>
+                <span className="text-gray-500 ml-auto">{p.last_active_at ? formatAdminDateTime(p.last_active_at) : '—'}</span>
               </button>
             </li>
           ))}

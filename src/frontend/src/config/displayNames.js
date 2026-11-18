@@ -43,6 +43,8 @@ export const ANNOTATE = {
   switchHereTitle: (name) => `Switch to ${name} here`,
   // T14610: "Fix timing" is retired; the action names the parent's goal.
   LINE_UP_VIDEO: 'Line up this video with the game',
+  // T17250: the words on the line-up control (was a bare clock icon).
+  LINE_UP: 'Line up',
   fixTimingFor: (name) => `Line up ${name} with the game`,
   dragToRepositionTitle: (name) => `Drag to reposition ${name}`,
   // Shown (in the Videos bar's notice slot) when a video is picked while line-up
@@ -1443,6 +1445,8 @@ export const CREDITS = {
   // T14560: the one place "credit" is pluralized.
   count: (n) => `${n} credit${n === 1 ? '' : 's'}`,
   added: (n) => `${CREDITS.count(n)} added to your balance!`,
+  // T17250: the in-window payment confirmation, with the balance the grant produced.
+  addedWithBalance: (n, balance) => `${CREDITS.count(n)} added. Your balance is ${balance}.`,
   REFUNDED: 'The credits used for this highlight were refunded.',
   billableLine: (exactSeconds, credits) =>
     `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${CREDITS.count(credits)} · ${CREDITS.PER_SECOND_RULE}.`,
@@ -1612,6 +1616,15 @@ export const CREDIT_COPY = {
   balanceHint: (n) => `${CREDITS.count(n)}. Buy more`,
 };
 
+// T17270: the pack name a parent sees at checkout, keyed by pack key. The buy window
+// and the admin Pack Mix both read it, so the admin never says "One Game" (the
+// Stripe-facing name in pricing.json) for the pack parents bought as "Starter".
+export const PACK_NAMES = {
+  starter: 'Starter',
+  popular: 'Popular',
+  best_value: CREDIT_COPY.BEST_VALUE,
+};
+
 export const CREDIT_HISTORY_LABELS = {
   PURCHASE: 'Credit purchase',
   HIGHLIGHT: 'Highlight',
@@ -1685,6 +1698,11 @@ export const PROFILE_COPY = {
   ADD: 'Add profile',
   EDIT: 'Edit profile',
   DELETE: 'Delete profile',
+  // T17260: a profile is one athlete in one sport for one season.
+  MEANING: 'One profile for each athlete, sport and season.',
+  NAME_HINT: 'One profile for each athlete, sport and season. Games and highlights stay separate in each.',
+  NAME_LABEL: 'Profile name',
+  namePlaceholder: (sport) => `e.g. Maya, Fall ${sport} 2026`,
   DELETE_BODY: 'All plays and highlights for this profile will be permanently deleted. Game videos shared with other profiles will not be affected.',
 };
 

@@ -204,6 +204,10 @@ def list_users(
                        -- remainder is never silently dropped.
                        SUM(count) FILTER (WHERE action = 'framing_exported')  AS framing_exported_count,
                        SUM(count) FILTER (WHERE action = 'overlay_exported')  AS overlay_exported_count,
+                       -- T17270: the Highlights column. One per Finish tap (once per
+                       -- highlight); a spotlight render is NOT a new highlight, so this
+                       -- never double counts the way export_completed does.
+                       SUM(count) FILTER (WHERE action = 'highlight_finished') AS highlight_finished_count,
                        SUM(count) FILTER (WHERE action = 'export_failed')    AS export_failed_count,
                        SUM(count) FILTER (WHERE action = 'share_completed')  AS share_completed_count,
                        SUM(count) FILTER (WHERE action = 'credit_purchased') AS credit_purchase_count,
@@ -222,7 +226,7 @@ def list_users(
             pay AS {_LEDGER_REVENUE_BY_USER}
             SELECT
                 u.user_id, u.email, u.created_at, u.is_test_account, u.is_deleted,
-                s.origin, {name_select}, s.acquired_at, s.total_spent_cents, s.last_active_at,
+                s.origin, {name_select}, s.acquired_at, s.created_at AS segment_created_at, s.total_spent_cents, s.last_active_at,
                 s.total_usage_seconds, s.current_session_start,
                 COALESCE(act.action_count, 0)           AS action_count,
                 COALESCE(act.game_created_count, 0)     AS game_created_count,
@@ -234,6 +238,7 @@ def list_users(
                 COALESCE(act.export_completed_count, 0) AS export_completed_count,
                 COALESCE(act.framing_exported_count, 0) AS framing_exported_count,
                 COALESCE(act.overlay_exported_count, 0) AS overlay_exported_count,
+                COALESCE(act.highlight_finished_count, 0) AS highlight_finished_count,
                 COALESCE(act.export_failed_count, 0)    AS export_failed_count,
                 COALESCE(act.share_completed_count, 0)  AS share_completed_count,
                 COALESCE(act.credit_purchase_count, 0)  AS credit_purchase_count,
@@ -349,6 +354,9 @@ def list_users(
             "origin": row["origin"],
             "campaign_name": row["campaign_name"],
             "acquired_at": str(row["acquired_at"]) if row["acquired_at"] else None,
+            # T17270: the signup MOMENT (timestamptz) so the panel shows Joined in the
+            # viewer's local time like Last active; acquired_at is a UTC calendar day.
+            "joined_at": row["segment_created_at"].isoformat() if row["segment_created_at"] else None,
             "game_created_count": row["game_created_count"],
             # T11010: the Games cell renders game_tried_count / game_succeeded_count.
             # Both are per-FILE (prepare_upload attempt -> finalize_upload success),
@@ -366,6 +374,7 @@ def list_users(
             "export_completed_count": row["export_completed_count"],
             "framing_exported_count": row["framing_exported_count"],
             "overlay_exported_count": row["overlay_exported_count"],
+            "highlight_finished_count": row["highlight_finished_count"],
             "export_failed_count": row["export_failed_count"],
             "share_completed_count": row["share_completed_count"],
             "credit_purchase_count": row["credit_purchase_count"],

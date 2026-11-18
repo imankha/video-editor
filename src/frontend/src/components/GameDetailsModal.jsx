@@ -224,7 +224,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   const handlePaymentSuccess = useCallback(async () => {
     setShowBuyCredits(false);
     await fetchCredits();
-    toast.success('Credits purchased! Creating your game...');
+    toast.success('Creating your game...');
     await submitGame();
   }, [fetchCredits, submitGame]);
 

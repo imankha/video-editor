@@ -3,8 +3,7 @@ import { Coins } from 'lucide-react';
 import { useCreditStore } from '../stores/creditStore';
 import { useIsAuthenticated } from '../stores/authStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
-import { toast } from './shared';
-import { CREDITS, CREDIT_COPY } from '../config/displayNames';
+import { CREDIT_COPY } from '../config/displayNames';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 
@@ -28,11 +27,10 @@ export function CreditBalance() {
   const fetchCredits = useCreditStore((s) => s.fetchCredits);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
 
-  const handlePaymentSuccess = useCallback((credits) => {
+  const handlePaymentSuccess = useCallback(() => {
+    // T17250: BuyCreditsModal shows the confirmation and sets the balance.
     setShowBuyCredits(false);
-    fetchCredits();
-    toast.success(CREDITS.added(credits));
-  }, [fetchCredits]);
+  }, []);
 
   // Subscribe to export events that affect credits
   useEffect(() => {

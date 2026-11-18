@@ -7,7 +7,7 @@ import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { SECTION_NAMES, EXPORT_PROGRESS, FRAME_COPY, CREDITS, ERROR_COPY } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_PROGRESS, FRAME_COPY, ERROR_COPY } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
@@ -1106,11 +1106,10 @@ export function ExportButtonContainer({
     showBuyCredits,
     onOpenBuyCredits: () => { console.log('[ExportButtonContainer] Opening BuyCreditsModal'); setShowBuyCredits(true); },
     onCloseBuyCredits: () => setShowBuyCredits(false),
-    onPaymentSuccess: (credits) => {
+    onPaymentSuccess: () => {
       setShowBuyCredits(false);
       setShowInsufficientCredits(null);
-      useCreditStore.getState().fetchCredits();
-      toast.success(CREDITS.added(credits));
+      // T17250: BuyCreditsModal shows the confirmation and sets the balance.
       // Auto-retry export after credits are granted
       setTimeout(() => handleExportRef.current?.(), 300);
     },

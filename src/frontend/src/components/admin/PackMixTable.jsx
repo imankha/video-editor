@@ -1,5 +1,6 @@
 import { RefreshCw } from 'lucide-react';
 import { CREDIT_PACKS } from '../../config/pricing';
+import { PACK_NAMES } from '../../config/displayNames';
 
 // T13330: pure view of purchases by pack (payments ledger). Counts and gross
 // cents per pack only; nothing per user.
@@ -10,12 +11,13 @@ const WINDOWS = [
   { key: 'all', label: 'All time' },
 ];
 
-// Display name + credits of the CURRENT ladder per pack key (payments.pack stores the key).
+// Credits of the CURRENT ladder per pack key (payments.pack stores the key).
 const PACK_BY_KEY = Object.fromEntries(CREDIT_PACKS.map((p) => [p.key, p]));
 
+// T17270: the checkout name (PACK_NAMES), not pricing.json's Stripe-facing name.
 function packLabel(key) {
   const p = PACK_BY_KEY[key];
-  return p ? `${p.name} (${p.credits.toLocaleString()} credits)` : key;
+  return p ? `${PACK_NAMES[key]} (${p.credits.toLocaleString()} credits)` : key;
 }
 
 const fmtMoney = (cents) => `$${(cents / 100).toFixed(2)}`;

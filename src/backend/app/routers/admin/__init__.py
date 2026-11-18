@@ -274,6 +274,7 @@ _SORT_COLUMNS = {
     "export_completed_count": "export_completed_count",
     "framing_exported_count": "framing_exported_count",
     "overlay_exported_count": "overlay_exported_count",
+    "highlight_finished_count": "highlight_finished_count",
     "share_completed_count":  "share_completed_count",
     "credits":                "credits",
     "total_spent_cents":      (
