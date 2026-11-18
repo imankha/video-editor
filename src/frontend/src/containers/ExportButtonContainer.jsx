@@ -661,6 +661,9 @@ export function ExportButtonContainer({
           include_audio: includeAudio
         });
         renderRequestAccepted = true;
+        // T17030: the server took the credits when it accepted the render; re-read the
+        // balance now so the chip doesn't show the pre-charge number for the whole sharpen.
+        useCreditStore.getState().fetchCredits();
 
         // T760: 202 = background processing, completion comes via WebSocket
         if (renderResponse.status === 202) {

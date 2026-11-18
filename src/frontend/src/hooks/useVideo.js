@@ -16,6 +16,15 @@ import { ERROR_COPY } from '../config/displayNames';
 import { userErrorMessage } from '../utils/userError';
 import { isSameOrigin } from '../utils/sameOrigin';
 
+/**
+ * T17280 (bug 62p): the element loaded sound but this browser cannot draw the
+ * picture (iPhone HEVC without an HEVC decoder): real duration, 0x0 picture,
+ * and no media error.
+ */
+function hasSoundButNoPicture(video) {
+  return video.duration > 0 && !video.videoWidth && !video.videoHeight;
+}
+
 // T1400: watchdog delay before checking buffered vs clip duration.
 const RANGE_FALLBACK_WATCHDOG_MS = 5000;
 
@@ -1000,6 +1009,13 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         const elapsedMs = Math.round(performance.now() - loadStartRef.current);
         console.log(`[VIDEO_LOAD] first_frame id=${loadIdRef.current} elapsedMs=${elapsedMs}`);
       }
+      // T17280 (bug 62p): a file this browser can only play the sound of (iPhone
+      // HEVC without an HEVC decoder) loads with a 0x0 picture and no media error.
+      // Say so instead of playing sound over a blank stage.
+      if (hasSoundButNoPicture(video)) {
+        console.error(`[VIDEO_LOAD] picture_unsupported id=${loadIdRef.current} duration=${video.duration} (sound only, 0x0 picture)`);
+        setError(ERROR_COPY.VIDEO_PICTURE_UNSUPPORTED);
+      }
       // Use clipDuration if set (playing subset of game video), else full video duration
       const effectiveDuration = clipDuration ?? video.duration;
       setDuration(effectiveDuration);
@@ -1094,7 +1110,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // (e.g. a retry or a fallback URL swap that later succeeded); leaving
       // it set would show a stuck "failed to load" banner over a working
       // video. Clear it so the error reflects current reality, not history.
-      setError(null);
+      // T17280: audio-only data (0x0 picture) is not a working video; keep
+      // handleLoadedMetadata's picture error up.
+      if (!hasSoundButNoPicture(video)) setError(null);
       setVideoElementReady();
       // T1400: playable signal — cold-load measurement endpoint. Also
       // check for range overbuffer here: a fast load can still buffer far

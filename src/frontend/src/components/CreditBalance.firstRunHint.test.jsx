@@ -14,6 +14,14 @@ vi.mock('../stores/creditStore', () => {
   return { useCreditStore };
 });
 
+// A brand new account: one profile, loaded (T17090).
+const { profileState } = vi.hoisted(() => ({
+  profileState: { isInitialized: true, profiles: [{ id: 'p1' }] },
+}));
+vi.mock('../stores/profileStore', () => ({
+  useProfileStore: (sel) => sel(profileState),
+}));
+
 vi.mock('../stores/authStore', () => ({
   useIsAuthenticated: () => true,
 }));
@@ -26,7 +34,7 @@ vi.mock('./shared', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 
-import { CreditBalance, resetFirstRunHintDismissalForTests } from './CreditBalance';
+import { CreditBalance, resetFirstRunHintDismissalForTests, isNewAccountForCreditHint } from './CreditBalance';
 
 describe('CreditBalance — T8500 first-run hint', () => {
   beforeEach(() => {
@@ -72,5 +80,35 @@ describe('CreditBalance first-run hint layout (T12530)', () => {
     expect(cls).not.toContain('whitespace-normal');
     expect(cls.some((c) => /^max-w-/.test(c))).toBe(false);
     expect(cls.some((c) => /^(sm:)?mt-\[/.test(c))).toBe(false);
+  });
+});
+
+// T17090: the bubble is a brand new account's welcome. A second profile has no
+// games either, but its credits are the account's own, not a gift.
+describe('isNewAccountForCreditHint (T17090)', () => {
+  beforeEach(() => {
+    resetFirstRunHintDismissalForTests();
+    profileState.isInitialized = true;
+    profileState.profiles = [{ id: 'p1' }];
+  });
+
+  it('a brand new account (one profile, no games) sees the bubble once', () => {
+    expect(isNewAccountForCreditHint({ profileHasNoGames: true, profilesLoaded: true, profileCount: 1 })).toBe(true);
+    render(<CreditBalance showFirstRunHint />);
+    expect(screen.getByTestId('credit-first-run-hint').textContent).toBe('You start with 88 free credits');
+    fireEvent.click(document.body);
+    expect(screen.queryByTestId('credit-first-run-hint')).toBeNull();
+  });
+
+  it('a second profile with no games shows no bubble', () => {
+    profileState.profiles = [{ id: 'p1' }, { id: 'p2' }];
+    expect(isNewAccountForCreditHint({ profileHasNoGames: true, profilesLoaded: true, profileCount: 2 })).toBe(false);
+    render(<CreditBalance showFirstRunHint />);
+    expect(screen.queryByTestId('credit-first-run-hint')).toBeNull();
+  });
+
+  it('is false while profiles are loading, and when the profile has games', () => {
+    expect(isNewAccountForCreditHint({ profileHasNoGames: true, profilesLoaded: false, profileCount: 0 })).toBe(false);
+    expect(isNewAccountForCreditHint({ profileHasNoGames: false, profilesLoaded: true, profileCount: 1 })).toBe(false);
   });
 });

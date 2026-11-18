@@ -20,10 +20,9 @@ import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
  * tabs render above their CTA, so all tabs share one guidance structure.
  *
  * T9390 (Decision 3): Clips at zero games shows Add Video ALONE (no cross-tab Add
- * Game). Published's zero-everything branch was dropped. T10310 (2026-09-18 user
- * request) removed the tab-bar gate -- these branches can now render at genuine
- * zero clips (not just zero *everything*) -- but their copy already holds up at
- * that count, so neither was restored.
+ * Game). Published's zero-everything branch was dropped. T17100 gave the empty
+ * Published tab a body line and a Go to Games button (navigation only, no
+ * cross-tab create action).
  *
  * @param {'games'|'clips'|'published'} tab - which empty state to render
  * @param {number} gamesCount - the account's game count (branches Clips)
@@ -74,9 +73,18 @@ export function EmptyTabGuide({
           {finishedCount > 0 ? copy.finishedMessage : copy.body}
         </p>
       )}
+      {/* T17100: the empty Highlights tab says how a highlight is made (was headline only). */}
+      {tab === 'published' && (
+        <p className="text-sm text-gray-400 mt-1" data-testid="highlights-empty-message">{copy.body}</p>
+      )}
 
       <div className="w-full mt-5 mb-4">
         {tab === 'games' && <GamesActions onAddGame={onAddGame} onNavigate={onNavigate} />}
+        {tab === 'published' && (
+          <Button variant="primary" size="lg" onClick={() => onNavigate('games')}>
+            {copy.cta}
+          </Button>
+        )}
         {tab === 'clips' && finishedCount > 0 && <FinishedPointer onNavigate={onNavigate} />}
         {tab === 'clips' && finishedCount === 0 && (
           <ClipsActions

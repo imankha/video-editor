@@ -1,0 +1,5 @@
+{"criteria": {
+  "T17280:C1": {"kind": "code", "command": "grep -q 'Cause (C1' docs/plans/tasks/T17280-iphone-game-video-sound-no-picture.md && grep -q 'videoWidth' docs/plans/tasks/T17280-iphone-game-video-sound-no-picture.md"},
+  "T17280:C2": {"kind": "human", "why": "Needs an iPhone HEVC file in a browser without an HEVC decoder (Windows Chrome without hardware HEVC). The CI and staging Chromium decode support differs, so no automation can reproduce the sound-only load. Steps: on such a PC, upload an iPhone High Efficiency video as a game; expected: the Upload dialog says the browser can't show the picture and suggests Safari or Most Compatible, and nothing uploads. Opening an existing game like that shows the same message on the player. A Most Compatible (H.264) iPhone video uploads and shows its picture and sound."},
+  "T17280:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/utils/videoMetadata.pictureUnsupported.test.js src/hooks/useVideo.pictureUnsupported.test.js src/components/GameDetailsModal.invalidFile.test.jsx"}
+}}

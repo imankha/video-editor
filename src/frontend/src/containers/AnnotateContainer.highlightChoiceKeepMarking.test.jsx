@@ -255,18 +255,19 @@ describe('AnnotateContainer "Keep marking plays" (T15550)', () => {
       later = result.current.handleHighlightChoiceLater();
       await flushMicrotasks();
     });
-    expect(resolveCreate).toBeTypeOf('function');
+    // T17210: "Keep marking plays" no longer creates a highlight, so no
+    // create_project PUT is ever held open.
+    expect(resolveCreate).toBeUndefined();
 
     // The user is back on Mark Play at once, already past the marked play.
     expect(result.current.highlightChoice).toBeNull();
     expect(result.current.annotateSelectedRegionId).toBeNull();
     expect(seek).toHaveBeenCalledWith(expect.closeTo(endTime + 0.25, 5));
 
-    // The user now scrubs to 0:45 (outside the container). When the save
-    // finally lands, nothing may seek the playhead back to the old play.
+    // The user now scrubs to 0:45 (outside the container). Once the handler
+    // has settled, nothing may seek the playhead back to the old play.
     const seeksBeforeSaveLanded = seek.mock.calls.length;
     await act(async () => {
-      resolveCreate();
       await later;
       await flushMicrotasks();
     });

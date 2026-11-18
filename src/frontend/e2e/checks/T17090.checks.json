@@ -1,0 +1,4 @@
+{"criteria": {
+  "T17090:C1": {"kind": "browser"},
+  "T17090:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/CreditBalance.firstRunHint.test.jsx"}
+}}

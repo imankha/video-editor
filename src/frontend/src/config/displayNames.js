@@ -100,7 +100,7 @@ export const ANNOTATE = {
   // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —
   // the "Create clip"/"Save and create clip" affordances are gone; a play
   // becomes a highlight through the rating + Done -> Highlight popup gesture
-  // (HIGHLIGHT_CHOICE_* / HIGHLIGHT_MOVED_TO_CLIPS below), not a manual toggle.
+  // (HIGHLIGHT_CHOICE_* below), not a manual toggle.
   // T10550: the rating popup's own visible heading (+ its accessible name, so
   // they match) — layer-aware like `getRatingCaption`'s existing `mine` split,
   // so a Team play never claims to be "your athlete's".
@@ -135,12 +135,8 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep marking plays',
-  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Plays. Open it there to edit or finish it.',
-  // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
-  // no action button) — the editor closes, so the toast IS the confirmation.
-  // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
-  // that still say "Clips".
-  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Plays so you can edit it later',
+  // T17210: "Keep marking plays" creates no highlight; the play itself is kept.
+  BACK_TO_EDITING_SUBTEXT: 'This play is saved. You can make its highlight any time.',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
   // T14610 (audit F-34): one title for a game that is gone.
@@ -1479,6 +1475,10 @@ export const SPORT_PICK = {
 export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
   INVALID_VIDEO_FILE: "This file isn't a video we can open. Use an MP4, MOV or WebM.",
+  // T17280: the file has sound but this browser cannot draw its picture (iPhone HEVC).
+  VIDEO_PICTURE_UNSUPPORTED:
+    "This browser can't show this video's picture, only its sound. iPhone videos saved as High Efficiency "
+    + 'play in Safari, or set iPhone Settings > Camera > Formats to Most Compatible and record again.',
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   FOOTAGE_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   // T14610: AttachVideoModal (add another half or camera to a game).
@@ -1555,6 +1555,8 @@ export const SHARE_COPY = {
   GAME_LINK_OFF: 'Game link turned off',
   NO_GAME_LINK: "This game doesn't have a link.",
   PUBLIC_GAME_HELP: 'Watches the game plays. No account needed.',
+  // T17080: the link shows team plays only; a game whose plays are all "My athlete" has none.
+  NO_TEAM_PLAYS_FOR_LINK: `The link shows team plays, and this game has none yet. Open the game, pick a play, and set "${ANNOTATE.LAYER_LABEL}" to ${ANNOTATE.LAYER_TEAM}.`,
   EMAILS_SENT: 'Emails sent',
   LOADING_PEOPLE: 'Loading people...',
   LINK_UPDATED: 'Link updated',
@@ -1856,6 +1858,11 @@ export const APP_SHELL_COPY = {
 };
 
 export const ERROR_COPY = {
+  // T17280 (bug 62p): the browser loads the sound but cannot draw the picture
+  // (an iPhone video saved as High Efficiency / HEVC on a computer without an HEVC decoder).
+  VIDEO_PICTURE_UNSUPPORTED:
+    "This browser can't show this video's picture, only its sound. iPhone videos saved as "
+    + 'High Efficiency play in Safari, or set iPhone Settings > Camera > Formats to Most Compatible and record again.',
   CONNECTION: "We couldn't connect. Check your internet and try again.",
   CONNECTING: 'Connecting...',
   WAKING_UP: 'Getting things ready, one moment...',
@@ -1965,7 +1972,6 @@ export const ERROR_COPY = {
   REMOVE_FROM_PROFILE: "We couldn't remove this from your profile. Try again.",
   MOVE_HIGHLIGHTS: "We couldn't move your highlights. Try again.",
   DELETE_HIGHLIGHT_NOT_SYNCED: "We couldn't delete your highlight. Try again.",
-  REOPEN_NOT_SYNCED: "We couldn't finish saving. Your highlight is back in progress on this device and finishes saving when you tap Retry.",
   CHANGES_NOT_SYNCED: "Some changes didn't save.",
   VERIFY_PAYMENT: "We couldn't confirm your payment yet. Your credits may still be added shortly.",
   FINISH_TITLE: "We couldn't finish your highlight",

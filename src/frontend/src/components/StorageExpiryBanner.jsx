@@ -30,7 +30,7 @@ export function StorageExpiryBanner({ atRiskGameCount, dependentDraftCount, onEx
         <button
           type="button"
           onClick={onExtend}
-          className="font-semibold text-yellow-100 underline underline-offset-2 hover:text-white"
+          className="font-semibold text-yellow-100 underline underline-offset-2 hover:text-white coarse-pointer:inline-flex coarse-pointer:items-center coarse-pointer:min-h-[44px]"
         >
           {STORAGE_COPY.EXTEND}
         </button>
@@ -40,7 +40,7 @@ export function StorageExpiryBanner({ atRiskGameCount, dependentDraftCount, onEx
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss"
-        className="flex-shrink-0 text-yellow-400/70 hover:text-yellow-200"
+        className="flex-shrink-0 inline-flex items-center justify-center text-yellow-400/70 hover:text-yellow-200 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] coarse-pointer:-my-3 coarse-pointer:-mr-3"
       >
         <X size={16} />
       </button>

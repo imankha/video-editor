@@ -95,7 +95,7 @@ describe('AnnotateFullscreenOverlay — Done -> Highlight choice card (T11130)',
     expect(screen.getByTestId('highlight-choice-now').textContent).toContain('Make highlight');
     const later = screen.getByTestId('highlight-choice-later');
     expect(later.textContent).toContain('Keep marking plays');
-    expect(later.textContent).toContain('Saves this play as a highlight in Plays. Open it there to edit or finish it.');
+    expect(later.textContent).toContain('This play is saved. You can make its highlight any time.'); // T17210:C2
   });
 
   it('"Make highlight" calls the now handler', () => {

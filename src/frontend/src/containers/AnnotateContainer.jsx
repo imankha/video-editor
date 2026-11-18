@@ -120,10 +120,9 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
   // T9530/N10 dropped the "In Progress" prefix, single-sourced via SECTION_NAMES).
   // The "Open Framing" action still carries T8480's Framing-unlock affordance.
   // `dedupKey` unchanged so it collapses duplicates.
-  // T11130: the Highlight popup's "Keep Annotating" outcome overrides the copy
-  // (HIGHLIGHT_MOVED_TO_CLIPS) and drops the action button (`withAction: false`)
-  // — the editor closes, so there is no "Open Framing" affordance to offer and
-  // the toast IS the confirmation. Default callers keep the original toast.
+  // T11130: `message` overrides the copy and `withAction: false` drops the action
+  // button. Its only caller ("Keep marking plays") stopped creating a highlight
+  // in T17210; default callers keep the original toast.
   const name = (clipName && clipName.trim()) ? clipName.trim() : 'Your highlight';
   const text = message || `${name} is now in ${SECTION_NAMES.CLIPS}`;
   toast.success(text, {
@@ -2328,24 +2327,20 @@ export function AnnotateContainer({
     }
   }, [highlightChoice, updateClipRegionWithSync, awaitRegionWrites, onOpenReelInFocus]);
 
-  // T11130: "Keep Annotating" — creates the highlight (same createProject call as
-  // Frame Later) but does NOT navigate: it closes the editor and returns to
-  // marking plays (M2). Because the editor closes, the gold "Highlight made" chip
-  // is off screen, so the toast is the sole confirmation (M3): announceReelCreated
-  // with the exact HIGHLIGHT_MOVED_TO_CLIPS copy and NO action button. `silent` on
-  // the create suppresses the DEFAULT reel-created toast so only this one fires.
+  // T11130: "Keep marking plays" — closes the editor and returns to marking
+  // plays (M2). T17210: it creates NO highlight and picks no shape; the play
+  // (already saved with its rating) is all that is kept. Only "Make highlight"
+  // creates the highlight, so the Plays tab never gains a draft nobody asked for.
   const handleHighlightChoiceLater = useCallback(async () => {
     const choice = highlightChoice;
     if (!choice) return;
     if (highlightChoiceInFlightRef.current) return;
     highlightChoiceInFlightRef.current = true;
     try {
-      // T16770: return to Mark Play and nudge the playhead BEFORE awaiting the
-      // save. Done after the await, a slow PUT let the nudge land seconds late
-      // and overwrite a seek the user had made meanwhile (staging: a play
-      // marked at 0:45 was saved just past the first play instead). The card
-      // closed after a failed save before too; the write queue's Retry toast
-      // stays the failure surface.
+      // T16770: return to Mark Play and nudge the playhead at once, never after
+      // a network round-trip (a late nudge overwrote a seek the user had made
+      // meanwhile). The play's own writes stay on the region write queue,
+      // whose Retry toast is the failure surface.
       setHighlightChoice(null);
       // T10610 § D.3 pattern: closeOverlay() only steps EDITING -> SELECTED
       // (which renders the "Edit play" / Highlights-from-this-play panel, not
@@ -2382,19 +2377,10 @@ export function AnnotateContainer({
         }
         effectiveSeek(seekTarget);
       }
-      const result = await updateClipRegionWithSync(choice.regionId, { createProject: true, silent: true });
-      if (result?.saveOk && result.projectId) {
-        announceReelCreated(result.projectId, {
-          onOpenReelInFocus,
-          fetchProjects,
-          message: ANNOTATE.HIGHLIGHT_MOVED_TO_CLIPS,
-          withAction: false,
-        });
-      }
     } finally {
       highlightChoiceInFlightRef.current = false;
     }
-  }, [highlightChoice, updateClipRegionWithSync, onOpenReelInFocus, fetchProjects, closeOverlay, deselectClip, isOverlapTimeline, fullTimeline, effectiveSeek, multiVideo, annotateVideoMetadata, videoDuration]);
+  }, [highlightChoice, closeOverlay, deselectClip, isOverlapTimeline, fullTimeline, effectiveSeek, multiVideo, annotateVideoMetadata, videoDuration]);
 
   // T11130: Escape on the choice card — return to the editor with NOTHING
   // written (M5). Like the rate gate's dismiss, this is a gate, never a write.
