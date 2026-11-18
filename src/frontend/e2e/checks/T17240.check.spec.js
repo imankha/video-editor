@@ -11,6 +11,9 @@ import { loginForCheck, checkApi } from '../helpers/checkAuth';
 test.setTimeout(300000);
 test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: 'ignoreErrors' }); });
 
+const DEFAULT_NAME = /^Play \d+$/;
+const singleGame = (row) => (row.game_ids || []).length === 1 && row.clip_game_start_time != null;
+
 const BOTH_SHAPES = {
   reel_count: 6,
   unwatched_count: 0,
@@ -45,10 +48,39 @@ test('T17240:C1 the portrait and landscape "My highlights" cards have different 
   await expect(titles).toHaveCount(2, { timeout: 60000 });
   const names = await titles.allTextContents();
   expect(names.map((n) => n.trim())).toEqual(['My highlights (portrait)', 'My highlights (landscape)']);
-  // No two reel cards on the tab share a name.
-  const all = (await page.locator('h3').allTextContents()).map((n) => n.trim()).filter(Boolean);
-  expect(new Set(all).size).toBe(all.length);
+
+  // Unnamed plays from different moments never share a label. Scope (owner ruling on
+  // T17360): repeated reels of the SAME play (same game, same start) are out of scope.
+  // They legitimately read alike, and the staging check account holds a dozen of them
+  // ("Play 4" at 0:08, left over from repeated e2e publishes), so a "no two cards anywhere"
+  // count failed whenever a game group had opened before it read the names.
+  const dl = await page.request.get(checkApi('/downloads'));
+  expect(dl.ok(), 'GET /downloads').toBe(true);
+  const unnamed = (await dl.json()).downloads.filter((r) => singleGame(r) && DEFAULT_NAME.test((r.project_name || '').trim()));
+  const playKey = (r) => `${r.game_ids[0]}:${Math.floor(r.clip_game_start_time)}`;
+  const byPlay = new Map();
+  for (const r of unnamed) (byPlay.get(playKey(r)) || byPlay.set(playKey(r), []).get(playKey(r))).push(r);
+  expect(byPlay.size, 'the account has unnamed plays from at least two moments').toBeGreaterThanOrEqual(2);
+  const cards = page.getByTestId('reel-card').locator('h3');
+  for (const [key, reels] of byPlay) {
+    const label = reels[0].display_name;
+    await showReelLabel(page, reels[0].group_key, label);
+    const showing = (await cards.allTextContents()).filter((t) => t.trim() === label).length;
+    expect(showing, `label "${label}" (play ${key}) is on its ${reels.length} reel(s) of that play and no other`).toBe(reels.length);
+  }
 });
+
+/** Open the reel's game group (collapsed by default; members load on open) until its label shows. */
+async function showReelLabel(page, groupName, label) {
+  const tile = page.getByTestId('reel-card').locator('h3', { hasText: label }).first();
+  const header = page.getByTestId('collapsible-group-header').filter({ hasText: groupName }).first();
+  for (let i = 0; i < 2; i++) {
+    if (await tile.isVisible().catch(() => false)) return;
+    await header.click({ timeout: 60000 });
+    if (await tile.waitFor({ state: 'visible', timeout: 20000 }).then(() => true, () => false)) return;
+  }
+  await expect(tile, `a reel card reads "${label}"`).toBeVisible({ timeout: 30000 });
+}
 
 /*
  * T17240:C2 -- an unnamed play ("Play N", the one-tap default name) shows as its game
@@ -62,7 +94,6 @@ test('T17240:C1 the portrait and landscape "My highlights" cards have different 
  * matchup itself (/api/rank/next) and every name come from the real backend.
  * The original names are put back at the end.
  */
-const DEFAULT_NAME = /^Play \d+$/;
 
 /** 14.2 -> "0:14", 3725 -> "1:02:05" (the in-match clock the label ends with). */
 function clock(sec) {
@@ -73,7 +104,6 @@ function clock(sec) {
   return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
 
-const singleGame = (row) => (row.game_ids || []).length === 1 && row.clip_game_start_time != null;
 
 /** In-page API call: page.request after the app's own session can 401 on staging (T16100). */
 async function pageApi(page, path, init) {

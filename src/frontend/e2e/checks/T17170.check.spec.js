@@ -79,11 +79,37 @@ test('T17170:C1 playing past a just-marked play brings Mark play back within a s
   const markBtn = page.getByTestId('annotate-mark-play-button').locator('visible=true').first();
   await expect(page.getByTitle('Forward 5 seconds (Right arrow)').locator('visible=true').first()).toBeVisible({ timeout: 90000 });
 
-  // Step forward (real transport taps) to a spot clear of every existing play.
-  const maxEnd = existing.reduce((m, a) => Math.max(m, a.end_time), 0);
-  const steps = Math.ceil((maxEnd + 15) / 5);
+  // Step (real transport taps) to a spot in the widest gap between plays. Mark
+  // play there covers [t - 6, t + 2], and playback must reach past t + 2 before
+  // the next play starts, so t needs 3s of room before it. A play can end at
+  // the video's end (staging's fixture game does, T17330), so "past every play"
+  // is not always reachable; a gap between plays is.
+  const duration = target.video_duration;
+  expect(duration, 'GET /games gives the game video_duration').toBeGreaterThan(0);
+  const sorted = [...existing].sort((a, b) => a.start_time - b.start_time);
+  let gap = null;
+  let prevEnd = 0;
+  for (const next of [...sorted, { start_time: duration, end_time: duration }]) {
+    const lo = prevEnd + 0.5;
+    const hi = next.start_time - 3;
+    if (hi - lo > (gap ? gap.hi - gap.lo : 0)) gap = { lo, hi };
+    prevEnd = Math.max(prevEnd, next.end_time);
+  }
+  // A 5s transport step cannot jump over a gap wider than 5s.
+  test.skip(!gap || gap.hi - gap.lo < 5.2, '[T17170] no gap between plays wide enough to mark one in');
   const forward = page.getByTitle('Forward 5 seconds (Right arrow)').locator('visible=true').first();
-  for (let i = 0; i < steps; i++) await forward.click({ timeout: 15000 });
+  const back = page.getByTitle('Back 5 seconds (Left arrow)').locator('visible=true').first();
+  const playhead = () => page.evaluate(() => document.querySelector('video')?.currentTime ?? -1);
+  for (let i = 0; i < 40; i++) {
+    const t = await playhead();
+    if (t >= gap.lo && t <= gap.hi) break;
+    const before = t;
+    await (t < gap.lo ? forward : back).click({ timeout: 15000 });
+    await expect.poll(playhead, { timeout: 10000 }).not.toBe(before);
+  }
+  const markAt = await playhead();
+  expect(markAt, `playhead in the gap ${gap.lo}-${gap.hi}`).toBeGreaterThanOrEqual(gap.lo);
+  expect(markAt).toBeLessThanOrEqual(gap.hi);
   await expect.poll(() => markPlayVisible(page), { timeout: 30000 }).toBe(true);
 
   await markBtn.click();
@@ -92,9 +118,17 @@ test('T17170:C1 playing past a just-marked play brings Mark play back within a s
   const created = (await annotationsOf(page, target.id)).find((a) => !existing.some((e) => e.id === a.id));
 
   try {
+    // A profile with no sport yet (staging's fixture account) gets the one-time
+    // "What sport is this?" question over the editor at its first phone Mark
+    // play (T8140). Skip it as a user would; it changes nothing on the account.
+    const sportQuestion = page.getByRole('dialog', { name: 'What sport is this?' });
+    if (await sportQuestion.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false)) {
+      await sportQuestion.getByRole('button', { name: 'Skip for now' }).click();
+      await expect(sportQuestion).toBeHidden({ timeout: 10000 });
+    }
     const done = page.getByTestId('play-editor-done').locator('visible=true').first();
     await expect(done).toBeVisible({ timeout: 30000 });
-    await done.click();
+    await done.click({ timeout: 15000 });
     // The play stays selected (Edit play), so Mark play is gone for now.
     await expect.poll(() => markPlayVisible(page), { timeout: 15000 }).toBe(false);
 
