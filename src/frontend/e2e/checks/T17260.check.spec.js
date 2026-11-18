@@ -17,7 +17,9 @@ test('T17260:C1 the profile list and the Add profile window say a profile is per
   await page.goto('/home');
   await disableGuidanceForCheck(page);
 
-  await page.getByRole('button', { name: /switch sport or profile/i }).first().click({ timeout: 60000 });
+  // The title, not the name: with no sport picked the chip's name is "Pick your sport for play tags"
+  // (SPORT_PICK.CHIP_ARIA), while its title says "Switch sport or profile" in both states.
+  await page.getByTitle(/switch sport or profile/i).first().click({ timeout: 60000 });
   const manage = page.getByRole('heading', { name: 'Manage profiles' });
   await expect(manage).toBeVisible({ timeout: 30000 });
   await expect(page.getByText(MEANING, { exact: true })).toBeVisible();

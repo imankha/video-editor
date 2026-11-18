@@ -1,0 +1,3 @@
+{"criteria": {
+  "T17410:C1": {"kind": "code", "command": "bash scripts/dev-verify.sh e2e/checks/T17260.check.spec.js --grep 'T17260:C1' --reporter=line", "why_not_browser": "the criterion IS the T17260:C1 browser check passing (opens the sport-and-profile chip, reads the Manage profiles list and the Add profile window); this runs that same check, and the staging check runs it against staging"}
+}}
