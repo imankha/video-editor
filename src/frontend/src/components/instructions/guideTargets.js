@@ -52,7 +52,6 @@ export const GUIDE_PULSE = {
   SHARE_GAME_SUBMIT: 'share-game-submit',
   COLLECTION_SHARE_SUBMIT: 'collection-share-submit',
   TEAMMATES_SHARE_SUBMIT: 'teammates-share-submit',
-  SHARE_PLAYBACK_SUBMIT: 'share-playback-submit',
   CREDITS_PAY: 'buy-credits-pay',
   INSUFFICIENT_BUY: 'insufficient-credits-buy',
   STORAGE_EXTEND: 'storage-extend-submit',

@@ -6,7 +6,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ShareModal } from './ShareModal';
 import { CollectionShareModal } from './CollectionShareModal';
 import { ShareWithTeammatesModal } from './ShareWithTeammatesModal';
-import { SharePlaybackDialog } from './SharePlaybackDialog';
 import { ShareGameModal } from './ShareGameModal';
 
 vi.mock('./shared/Toast', () => ({
@@ -19,8 +18,8 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function expectMainFirstInPrimaryColour(footer, exitName) {
-  const primary = within(footer).getByRole('button', { name: /^Share\b/ });
+function expectMainFirstInPrimaryColour(footer, exitName, primaryName = /^Share\b/) {
+  const primary = within(footer).getByRole('button', { name: primaryName });
   const exit = within(footer).getByRole('button', { name: exitName });
   // primary precedes the exit in DOM order (leftmost on desktop, top on mobile)
   expect(primary.compareDocumentPosition(exit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -66,13 +65,9 @@ describe('share modal footers (T12080)', () => {
     expectMainFirstInPrimaryColour(footerOf(/^Cancel$/), /^Cancel$/);
   });
 
-  it('SharePlaybackDialog: Share first, Cancel after', () => {
-    render(<SharePlaybackDialog gameId={42} gameName="Game" onClose={() => {}} />);
-    expectMainFirstInPrimaryColour(footerOf(/^Cancel$/), /^Cancel$/);
-  });
-
   it('ShareGameModal: Share first, Cancel after', () => {
     render(<ShareGameModal gameId={42} gameName="Game" onClose={() => {}} />);
-    expectMainFirstInPrimaryColour(footerOf(/^Cancel$/), /^Cancel$/);
+    // T17220: its main action reads "Send".
+    expectMainFirstInPrimaryColour(footerOf(/^Cancel$/), /^Cancel$/, /^Send$/);
   });
 });

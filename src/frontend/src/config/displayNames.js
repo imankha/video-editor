@@ -342,20 +342,12 @@ export const SHARING = {
   SETTINGS: 'Sharing settings',     // state-neutral: manage/adjust an existing share
   SETTINGS_SHORT: 'Sharing',        // narrow-viewport state label
   // T9810: the "Share game" buttons (fullscreen bar + normal-view promoted/compact)
-  // all open the game-scoped SharePlaybackDialog now. Tagged-player sharing (T2820,
-  // ShareWithTeammatesModal) keeps its OWN honest affordance, rendered only when
-  // tagged clips exist so it can never silently no-op.
+  // open the game share window (T17220: ShareGameModal, the same one as the Home
+  // game menu). Tagged-player sharing (T2820, ShareWithTeammatesModal) keeps its
+  // OWN honest affordance, rendered only when tagged clips exist so it can never
+  // silently no-op.
   TAGGED_SHARE: 'Share with tagged teammates',       // T2820 tagged-player sharing entry
   TAGGED_SHARE_SHORT: 'Tagged teammates',            // narrow-viewport label
-  // T9810: scope disclosure for the game-invitation dialog. VERIFIED against
-  // POST /api/games/{id}/share-playback -> materialize_game_share/_copy_game +
-  // _materialize_clips: a recipient receives the FULL game recording (blake3_hash +
-  // all game_videos) PLUS every marked play (all raw_clips for the game), not a
-  // subset. Do NOT narrow this to "only invited plays" without re-checking that grant.
-  SCOPE_DISCLOSURE: "Anyone you invite can watch this entire game and every play you've marked in it.",
-  // T9810: open-failure state (dialog reached without a game context). Distinct from
-  // the per-recipient send-failure toast ("Failed to send to: ...").
-  OPEN_ERROR: "Game invitations couldn't open. Try again.",
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep): the editor MODE noun,
@@ -1068,13 +1060,11 @@ export const GUIDE = {
     editGame: 'Change what you need, then tap Save Changes.',
     linkClip: 'Tap the game this highlight came from.',
     linkClipEmpty: 'You have no games to link to yet. Add a game first, then link this highlight.',
-    shareGame: 'Add people or copy the link, then tap Share.',
+    shareGame: 'Add people or copy the link, then tap Send.',
     collectionShare: 'Add people, then tap Share.',
     collectionShareDone: 'Shared. Tap Done.',
     teammates: 'Pick who gets each tagged play, then tap Share.',
     teammatesDone: 'Every tagged play is already shared. Tap Close.',
-    sharePlayback: 'Add people, then tap Share to send them these plays.',
-    sharePlaybackError: 'These plays can’t be shared right now. Tap Close.',
     buyCreditsPick: 'Tap a credit pack to buy it.',
     buyCreditsPay: 'Enter your card, then tap Pay.',
     insufficientCredits: 'You need more credits for this. Tap Buy credits.',
@@ -1529,9 +1519,11 @@ export const RESULT_SURFACE = {
 // T14640: sharing copy. Share, link, people; one dead-link message for every shared page.
 export const SHARE_COPY = {
   ADD_PEOPLE: 'Add people',
+  // T17220: the share window's send button; disabled until an email is added.
+  SEND: 'Send',
+  SENDING: 'Sending...',
   PEOPLE_WITH_ACCESS: 'People with access',
   EMAIL_HINT: 'Add emails, separated by commas',
-  CONTACTS_FAILED: "We couldn't load your contacts. You can still type emails.",
   DEAD_LINK: 'This link no longer works.',
   RESTRICTED: 'Only people it was shared with can watch. Sign in with the email the link was sent to.',
   COPY_LINK: 'Copy link',
@@ -1560,7 +1552,6 @@ export const SHARE_COPY = {
   peopleCount: (n) => `${n} ${n === 1 ? 'person' : 'people'}`,
   sharedWith: (n) => `Shared with ${SHARE_COPY.peopleCount(n)}`,
   gameSharedWith: (n) => `Game shared with ${SHARE_COPY.peopleCount(n)}`,
-  playsSharedWith: (n) => `Plays shared with ${SHARE_COPY.peopleCount(n)}`,
   teammatesSharedWith: (n) => `Shared with ${n} teammate${n === 1 ? '' : 's'}`,
   playAt: (time) => `Play at ${time}`,
   playsFor: (email) => `Plays for ${email}`,

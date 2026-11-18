@@ -152,7 +152,7 @@ describe('ShareGameModal — per-recipient clip scope', () => {
     // send-time banner (distinct copy: "no tag match ... Send anyway?")
     expect(screen.getByText(/no tag match.*Send anyway/i)).toBeTruthy();
     // send stays ENABLED (speed-bump, not a block)
-    expect(screen.getByText('Share with 1').closest('button').disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Send' }).disabled).toBe(false);
   });
 
   it('sends the {recipients:[{email,scope}]} shape with per-recipient scope', async () => {
@@ -163,7 +163,7 @@ describe('ShareGameModal — per-recipient clip scope', () => {
     const select = screen.getByLabelText('Plays for tagged@test.com');
     fireEvent.change(select, { target: { value: 'tagged_only' } });
 
-    fireEvent.click(screen.getByText('Share with 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => {
       const call = apiMock.mock.calls.find(
