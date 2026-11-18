@@ -142,16 +142,18 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17260 | [Explain what a profile is](tasks/T17260-profile-means-athlete-sport-season.md) | 3 | 2 | 1.5 | STAGING | [ ] | UX, owner-agreed (U19). A profile is one athlete in one sport for one season, but nothing says so. Done when the Add profile window and the profile list both say a profile is for each athlete, sport and season. |
 | T17070 | [Marked plays expire with game](tasks/T17070-marked-plays-expire-with-game.md) | 8 | 6 | 1.3 | STAGING | [ ] | Marked plays are meant to outlive the game video, but on an expired game, "Edit highlight" opens Frame saying "Game video expired ... can't be edited. Extend storage" and the play's video answers 410. Owner rule from this pass: opening anything in Frame must never say expired. Done when a marked play opens in Frame with its video after its game expires. |
 | T17270 | [Admin: plain names and one time zone](tasks/T17270-admin-plain-names-and-dates.md) | 4 | 3 | 1.3 | STAGING | [ ] | UX, owner-agreed (U20, U21, U22). The Admin Panel uses internal names (columns CLIPS SAVED, FOCUS, OVERLAY; journey trail "project-manager > annotate > framing"), counts spotlight renders as exports (4 exports for 3 highlights), calls the 150 credit pack "One Game" while parents see "Starter", and shows a UTC date beside a local time on one line. Done when no admin column or journey trail uses CLIPS, FOCUS, OVERLAY or project-manager. |
-| T17290 | [Staging check failed: T17010:C1 C1: At 390x844 with Guidance on, the "Tags and Notes"](tasks/T17290-staging-check-failed-t17010-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17300 | [Staging check failed: T17110:C1 C1: At 390x844 touch, the storage banner's two controls, failed-upload](tasks/T17300-staging-check-failed-t17110-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17310 | [Staging check failed: T17110:C2 C2: The same at 360x640 and 768x1024.](tasks/T17310-staging-check-failed-t17110-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17320 | [Staging check failed: T17090:C1 C1: Adding and switching to a second profile on an](tasks/T17320-staging-check-failed-t17090-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17330 | [Staging check failed: T17170:C1 C1: At 390x844, after Done on a first play, playing](tasks/T17330-staging-check-failed-t17170-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17340 | [Staging check failed: T17230:C1 C1: After the first position is placed, Frame shows exactly](tasks/T17340-staging-check-failed-t17230-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17350 | [Staging check failed: T17230:C2 C2: Changing the shape after positions exist asks to confirm,](tasks/T17350-staging-check-failed-t17230-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
-| T17360 | [Staging check failed: T17240:C1 C1: No two reel cards on one profile share a](tasks/T17360-staging-check-failed-t17240-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17290 | [Staging check failed: T17010:C1 C1: At 390x844 with Guidance on, the "Tags and Notes"](tasks/T17290-staging-check-failed-t17010-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17300 | [Staging check failed: T17110:C1 C1: At 390x844 touch, the storage banner's two controls, failed-upload](tasks/T17300-staging-check-failed-t17110-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17310 | [Staging check failed: T17110:C2 C2: The same at 360x640 and 768x1024.](tasks/T17310-staging-check-failed-t17110-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17320 | [Staging check failed: T17090:C1 C1: Adding and switching to a second profile on an](tasks/T17320-staging-check-failed-t17090-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17330 | [Staging check failed: T17170:C1 C1: At 390x844, after Done on a first play, playing](tasks/T17330-staging-check-failed-t17170-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17340 | [Staging check failed: T17230:C1 C1: After the first position is placed, Frame shows exactly](tasks/T17340-staging-check-failed-t17230-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17350 | [Staging check failed: T17230:C2 C2: Changing the shape after positions exist asks to confirm,](tasks/T17350-staging-check-failed-t17230-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17360 | [Staging check failed: T17240:C1 C1: No two reel cards on one profile share a](tasks/T17360-staging-check-failed-t17240-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17370 | [Attached footage with sound but no picture is caught](tasks/T17370-attach-footage-sound-no-picture.md) | 6 | 3 | 2.0 | WIP | [ ] | Follow-up to T17280: the attach-footage path does not run the sound-but-no-picture check, so an iPhone video the browser cannot draw attaches silently. |
 | T17380 | [A failed upload for lack of credits leaves a stuck game](tasks/T17380-insufficient-credits-orphan-pending-game.md) | 7 | 4 | 1.8 | WIP | [ ] | Follow-up to T17280: an upload that fails with insufficient credits drops its entry but leaves the pending game behind. |
+| T17400 | [Staging check failed: T17250:C2 C2: Paying for a pack with the test card shows](tasks/T17400-staging-check-failed-t17250-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17410 | [Staging check failed: T17260:C1 C1: The Add profile window and the profile list both](tasks/T17410-staging-check-failed-t17260-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 
 ### Bugs found by /dotask verify
 
@@ -160,9 +162,10 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T17390 | [Play iPhone videos in browsers that cannot decode HEVC](tasks/T17390-play-iphone-hevc-video.md) | 8 | 7 | 1.1 | TODO | [ ] | Follow-up to T17280: convert or otherwise make iPhone HEVC games play in browsers without an HEVC decoder. Needs a design choice first (design gate). |
-| T17400 | [Staging check failed: T17250:C2 C2: Paying for a pack with the test card shows](tasks/T17400-staging-check-failed-t17250-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T17410 | [Staging check failed: T17260:C1 C1: The Add profile window and the profile list both](tasks/T17410-staging-check-failed-t17260-c1-c1.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T17390 | [Play iPhone videos in browsers that cannot decode HEVC](tasks/T17390-play-iphone-hevc-video.md) | 8 | 7 | 1.1 | WAITING ON USER | [ ] | Follow-up to T17280: convert or otherwise make iPhone HEVC games play in browsers without an HEVC decoder. Needs a design choice first (design gate). |
+| T17420 | [Staging check failed: T17300:C1 The steps above give the expected result.](tasks/T17420-staging-check-failed-t17300-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T17430 | [Staging check failed: T17310:C1 The steps above give the expected result.](tasks/T17430-staging-check-failed-t17310-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T17440 | [Staging check failed: T17320:C1 The steps above give the expected result.](tasks/T17440-staging-check-failed-t17320-c1-the.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
