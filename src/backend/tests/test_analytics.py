@@ -79,9 +79,9 @@ class TestDetermineOrigin:
         create_user("user-b", email="b@test.com")
         create_user("user-c", email="c@test.com")
 
-    def test_organic_no_ref(self, pg_conn):
+    def test_no_signal_is_direct(self, pg_conn):
         origin, referrer_id = _determine_origin("user-b", None)
-        assert origin == "organic"
+        assert origin == "direct"
         assert referrer_id is None
 
     def test_campaign_ref_nonhex(self, pg_conn):
@@ -128,9 +128,9 @@ class TestDetermineOrigin:
         assert origin == "facebook_unknown"
         assert referrer_id is None
 
-    def test_unresolved_hex_no_fallback_is_organic(self, pg_conn):
+    def test_unresolved_hex_no_fallback_is_direct(self, pg_conn):
         origin, referrer_id = _determine_origin("user-b", "deadbeef")
-        assert origin == "organic"
+        assert origin == "direct"
         assert referrer_id is None
 
     def test_utm_campaign_without_ref(self, pg_conn):
@@ -198,9 +198,9 @@ class TestDetermineOrigin:
         origin2, _ = _determine_origin("user-b", None, referrer_host="m.facebook.com")
         assert origin2 == "social-facebook"
 
-    def test_referrer_host_unknown_is_organic(self, pg_conn):
+    def test_referrer_host_unknown_is_other_website(self, pg_conn):
         origin, referrer_id = _determine_origin("user-b", None, referrer_host="some-blog.example")
-        assert origin == "organic"
+        assert origin == "other-website"
         assert referrer_id is None
 
     def test_referrer_host_does_not_override_click_source(self, pg_conn):
@@ -258,7 +258,14 @@ class TestBucketReferrerHost:
         ("t.me", "community"),
         ("google.com:443", "seo"),        # port stripped
         ("REDDIT.COM", "community"),       # case-insensitive
-        ("example.com", None),             # unknown -> organic fallback
+        ("mail.google.com", "email"),      # T16900: before the google.com -> seo rule
+        ("foo.mail.google.com", "email"),  # longest suffix wins
+        ("gemini.google.com", "ai"),
+        ("chatgpt.com", "ai"),
+        ("chat.openai.com", "ai"),
+        ("mail.yahoo.com", "email"),
+        ("search.yahoo.com", "seo"),
+        ("example.com", None),             # unknown -> other-website fallback
         ("reelballers.com", None),         # our own host is never a referrer
         ("", None),
         (None, None),

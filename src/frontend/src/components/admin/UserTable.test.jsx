@@ -171,3 +171,15 @@ describe('UserTable deleted payer tombstone', () => {
     expect(screen.queryByTitle('View journey')).toBeNull();
   });
 });
+
+describe('UserTable origin badge (T16900)', () => {
+  it.each(['organic', 'direct', 'other-website'])('shows no-source origin %s in green', (origin) => {
+    render(<UserTable users={[{ ...BASE_USER, origin }]} onUserClick={() => {}} funnelTotals={{}} />);
+    expect(screen.getByTitle(origin).className).toContain('text-green-400');
+  });
+
+  it('shows a sourced origin in blue', () => {
+    render(<UserTable users={[{ ...BASE_USER, origin: 'seo' }]} onUserClick={() => {}} funnelTotals={{}} />);
+    expect(screen.getByTitle('seo').className).toContain('text-blue-400');
+  });
+});

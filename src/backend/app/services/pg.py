@@ -318,6 +318,9 @@ CREATE TABLE IF NOT EXISTS user_segments (
     -- A page class, not identity -- kept on account deletion (not in
     -- _DEIDENTIFY_SEGMENT_COLUMNS). NULL = direct app arrival, or signed up before capture.
     landing_path TEXT,
+    -- T16900 (v050): normalized external referrer hostname at sign-up. NULL = no
+    -- referrer, or signed up before capture. Kept on account deletion.
+    referrer_host TEXT,
     -- T15290 (v045): true when this sign-up's email hash matched a past
     -- account_deletions row. Analytics only -- never restores data, never
     -- blocks the sign-up. Set once at signup by create_user_segment.

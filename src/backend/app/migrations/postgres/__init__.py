@@ -50,6 +50,7 @@ from .v046_account_deletion_hash_and_returning import V046AccountDeletionHashAnd
 from .v047_user_resume_points import V047UserResumePoints
 from .v048_upload_index_checks import V048UploadIndexChecks
 from .v049_usage_daily_upload_attempts import V049UsageDailyUploadAttempts
+from .v050_user_segments_referrer_host import V050UserSegmentsReferrerHost
 
 MIGRATIONS = [
     V001Baseline(),
@@ -101,6 +102,7 @@ MIGRATIONS = [
     V047UserResumePoints(),
     V048UploadIndexChecks(),
     V049UsageDailyUploadAttempts(),
+    V050UserSegmentsReferrerHost(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL

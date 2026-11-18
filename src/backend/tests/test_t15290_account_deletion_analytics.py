@@ -114,7 +114,7 @@ class TestDeletionKeepsAttribution:
             user_id, "paid_social", None, "otp",
             utm_source="tiktok", utm_medium="cpc", utm_campaign="fall",
             utm_content="soccer", utm_term="highlights", click_source="ttclid123",
-            landing_path="/soccer",
+            landing_path="/soccer", referrer_host="some-blog.example",
         )
 
         with _pg() as conn:
@@ -129,6 +129,7 @@ class TestDeletionKeepsAttribution:
         assert row["utm_term"] == "highlights"
         assert row["click_source"] == "ttclid123"
         assert row["landing_path"] == "/soccer"
+        assert row["referrer_host"] == "some-blog.example"  # T16900: kept too
         # The one live-session field left in _DEIDENTIFY_SEGMENT_COLUMNS.
         assert row["current_session_start"] is None
 

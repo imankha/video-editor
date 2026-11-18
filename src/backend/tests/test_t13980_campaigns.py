@@ -172,7 +172,7 @@ class TestAttribution:
             conn.cursor().execute("ALTER TABLE campaigns RENAME TO campaigns_t13980_hidden")
         try:
             with caplog.at_level(logging.WARNING, logger="app.analytics"):
-                assert _signup(client, "window", utm_source="k7x2m") == "organic"
+                assert _signup(client, "window", utm_source="k7x2m") == "direct"
             assert any("campaigns" in rec.getMessage() for rec in caplog.records
                        if rec.levelno >= logging.WARNING)
         finally:

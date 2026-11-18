@@ -7,11 +7,18 @@ const DIMENSIONS = [
   { by: 'origin', label: 'Origin' },
   { by: 'utm_campaign', label: 'Campaign' },
   { by: 'utm_source', label: 'Source' },
+  { by: 'utm_medium', label: 'Medium' },
+  { by: 'utm_term', label: 'Term' },
   { by: 'utm_content', label: 'Content' },
   { by: 'click_source', label: 'Click source' },
   { by: 'referral_channel', label: 'Referral channel' },
+  { by: 'referrer_host', label: 'Referring website' },
   { by: 'country', label: 'Country' },
 ];
+
+// T16900: the day new sign-ups stopped getting `organic` (owner ruling). Move it to the
+// prod deploy date if T16900 ships later.
+const ORGANIC_RETIRED_ON = '2026-11-17';
 
 function downloadCsv(text, by) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
@@ -30,6 +37,7 @@ export function ChannelsTable({ data, onRowClick, onCountryClick, selectedOrigin
   const rows = data?.channels ?? [];
   const remainder = data?.unattributed_revenue_cents;
   const filtersUsers = by === 'origin' || by === 'country';
+  const showOrganicNote = by === 'origin' && rows.some(ch => ch.origin === 'organic');
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
@@ -55,6 +63,13 @@ export function ChannelsTable({ data, onRowClick, onCountryClick, selectedOrigin
           <span className="text-xs text-gray-500">Only Origin and Country rows filter the Users table.</span>
         )}
       </div>
+      {showOrganicNote && (
+        <p className="text-xs text-gray-500">
+          organic: source unknown, for sign-ups before {ORGANIC_RETIRED_ON} and people they invited.
+          Newer sign-ups with no campaign show as direct (no referring website) or other-website
+          (a website not on our list).
+        </p>
+      )}
       <DimensionTable
         rows={data?.channels}
         labelHeader={by === 'origin' ? 'Campaign' : label}

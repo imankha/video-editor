@@ -1,3 +1,7 @@
+// T16900: origins with no source signal: `organic` (legacy, before 2026-11-17),
+// `direct` (no referring website) and `other-website` (a website not on our list).
+export const NO_SOURCE_ORIGINS = new Set(['organic', 'direct', 'other-website']);
+
 // T15200: the origin dimension's "group" value, same labels as admin._channel_group.
 const GROUP_LABEL = { paid: 'Paid ads', referral: 'Referral programme' };
 

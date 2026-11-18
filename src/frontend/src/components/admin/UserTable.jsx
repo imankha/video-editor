@@ -3,7 +3,7 @@ import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLef
 import { CreditGrantModal } from './CreditGrantModal';
 import { BulkEmailModal } from './BulkEmailModal';
 import { BulkActionBar } from './BulkActionBar';
-import { OriginLabel } from './OriginLabel';
+import { NO_SOURCE_ORIGINS, OriginLabel } from './OriginLabel';
 import { useAuthStore } from '../../stores/authStore';
 import { useAdminStore } from '../../stores/adminStore';
 import { fmtPct } from './formatNumber';
@@ -27,7 +27,7 @@ function fmtDuration(seconds) {
 
 function OriginBadge({ origin, campaignName }) {
   if (!origin) return <span className="text-gray-600">{'—'}</span>;
-  const style = origin === 'organic'
+  const style = NO_SOURCE_ORIGINS.has(origin)
     ? 'bg-green-500/20 text-green-400 border-green-500/30'
     : 'bg-blue-500/20 text-blue-400 border-blue-500/30';
   return (

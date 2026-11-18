@@ -1,0 +1,9 @@
+{
+  "criteria": {
+    "T16900:C1": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16900_referrer_host.py -q -k 'no_signal_is_direct or invalid_referrer_host'"},
+    "T16900:C2": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16900_referrer_host.py -q -k 'unlisted_website or campaign_sets_the_origin'"},
+    "T16900:C3": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16900_referrer_host.py -q -k 'email_and_ai or new_origins_are_reserved'"},
+    "T16900:C4": {"kind": "browser"},
+    "T16900:C5": {"kind": "code", "command": "cd src/backend && python3 -m pytest tests/test_t16900_referrer_host.py -q -k 'migration'"}
+  }
+}
