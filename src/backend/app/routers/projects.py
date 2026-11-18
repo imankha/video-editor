@@ -13,7 +13,12 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
 from app.database import column_exists, get_db_connection
-from app.queries import default_game_name, derive_clip_name, latest_working_clips_subquery
+from app.queries import (
+    default_game_name,
+    derive_clip_name,
+    latest_working_clips_subquery,
+    unnamed_play_label,
+)
 from app.services.collection_metadata import compute_unified_clip_start
 from app.services.game_display import game_display_name
 from app.services.state_log import log_state
@@ -197,6 +202,7 @@ class ClipSummary(BaseModel):
 class ProjectListItem(BaseModel):
     id: int
     name: str
+    display_name: str  # T17240: what the tile shows; an unnamed play reads "Vs Oceanside 0:14"
     aspect_ratio: str
     clip_count: int
     clips_exported: int  # Clips with exported_at IS NOT NULL (included in working video)
@@ -491,11 +497,14 @@ def _read_projects_list():
                 project_games[project_id] = {
                     'game_ids': [],
                     'game_names': [],
-                    'game_dates': []
+                    'game_dates': [],
+                    'opponents': [],
                 }
             # Avoid duplicates (can happen with multiple clips from same game)
             if game_row['game_id'] not in project_games[project_id]['game_ids']:
                 project_games[project_id]['game_ids'].append(game_row['game_id'])
+                project_games[project_id]['opponents'].append(
+                    (game_row['opponent_name'], game_row['game_type']))
                 # Generate display name from game details (not stored name which may be filename)
                 display_name = game_display_name(
                     game_row['opponent_name'],
@@ -608,7 +617,8 @@ def _read_projects_list():
             game_info = project_games.get(project_id, {
                 'game_ids': [],
                 'game_names': [],
-                'game_dates': []
+                'game_dates': [],
+                'opponents': [],
             })
 
             # Generate group key
@@ -639,9 +649,17 @@ def _read_projects_list():
                 clips[0].source_start_time = first_clip['source_start_time']
                 clips[0].source_end_time = first_clip['source_end_time']
 
+            # T17240: an unnamed single-game play reads as "Vs Oceanside 0:14" on its
+            # tile; `name` stays the stored name (the rename source).
+            opponent_name, game_type = (
+                game_info['opponents'][0] if len(game_info['opponents']) == 1 else (None, None)
+            )
+            play_label = unnamed_play_label(row['name'], opponent_name, game_type, clip_game_start_time)
+
             result.append(ProjectListItem(
                 id=row['id'],
                 name=row['name'],
+                display_name=play_label or row['name'],
                 aspect_ratio=row['aspect_ratio'],
                 clip_count=row['clip_count'],
                 clips_exported=row['clips_exported'],

@@ -10,7 +10,7 @@ import { withTabProfile } from '../../utils/sessionInit';
 export function toPlayerReel(d) {
   return {
     id: d.id,
-    name: d.project_name,
+    name: d.display_name,
     streamUrl: withTabProfile(`${API_BASE}/api/downloads/${d.id}/stream`),
     aspect_ratio: d.aspect_ratio,
     duration: d.duration, // may be null; the player never relies on it

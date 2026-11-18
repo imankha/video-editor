@@ -36,6 +36,7 @@ from app.queries import (
     downloads_counts,
     latest_final_videos_subquery,
     latest_working_clips_subquery,
+    unnamed_play_label,
 )
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.finish_highlight import mark_published, record_finish
@@ -206,6 +207,7 @@ class DownloadItem(BaseModel):
     id: int
     project_id: int | None = None
     project_name: str
+    display_name: str  # T17240: what the tile shows; an unnamed play reads "Vs Oceanside 0:14"
     filename: str
     file_url: str | None = None  # Presigned R2 URL or None (use local proxy)
     created_at: str
@@ -403,7 +405,9 @@ async def list_downloads(
                 )
                 games_info[game_row['id']] = {
                     'name': display_name,
-                    'date': game_row['game_date'] or ''
+                    'date': game_row['game_date'] or '',
+                    'opponent_name': game_row['opponent_name'],
+                    'game_type': game_row['game_type'],
                 }
 
         # Fetch game info for project exports (via working_clips -> raw_clips -> games)
@@ -561,6 +565,16 @@ async def list_downloads(
                 )
                 display_name = f"Video {row['id']}"
 
+            # T17240: an unnamed single-game play reads as "Vs Oceanside 0:14" on its
+            # tile; project_name stays the stored name (the rename source).
+            single_game = games_info.get(game_ids[0]) if len(game_ids) == 1 else None
+            play_label = unnamed_play_label(
+                display_name,
+                single_game['opponent_name'] if single_game else None,
+                single_game['game_type'] if single_game else None,
+                row['clip_game_start_time'],
+            )
+
             # T3600: duration/aspect_ratio/tags are frozen at export-finalize.
             # NULL means the row predates v007 and could not be backfilled —
             # render it anyway, downstream excludes NULLs from math.
@@ -612,6 +626,7 @@ async def list_downloads(
                 id=row['id'],
                 project_id=row['project_id'],
                 project_name=display_name,
+                display_name=play_label or display_name,
                 filename=row['filename'],
                 file_url=get_download_file_url(row['filename']),
                 created_at=created_at_utc,

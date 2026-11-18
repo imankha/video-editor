@@ -32,6 +32,14 @@ export function ratioLabel(ratio) {
   return RATIO_META[ratio]?.label ?? ratio;
 }
 
+/**
+ * "My highlights (portrait)" -- a collection card's name with its shape word, so
+ * the portrait and landscape cards of one collection never share a name (T17240).
+ */
+export function withRatioWord(name, ratio) {
+  return `${name} (${ratioLabel(ratio).toLowerCase()})`;
+}
+
 /** Small rectangle glyph for a ratio. */
 export function ratioGlyph(ratio) {
   return RATIO_META[ratio]?.glyph ?? '';

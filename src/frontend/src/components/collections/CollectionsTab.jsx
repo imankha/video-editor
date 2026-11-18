@@ -4,7 +4,7 @@ import { Loader, AlertCircle } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { EmptyTabGuide, TabGuideHeader } from '../shared/EmptyTabGuide';
 import { REEL } from '../../config/themeColors';
-import { RATIO_ORDER } from '../../constants/aspectRatios';
+import { RATIO_ORDER, withRatioWord } from '../../constants/aspectRatios';
 import { GameCollectionGroup } from './GameCollectionGroup';
 import { GameAxisGroup } from './GameAxisGroup';
 import { CollectionCard } from './CollectionCard';
@@ -267,7 +267,7 @@ export function CollectionsTab({
               return (
                 <CollectionCard
                   key={ratio}
-                  title={sc.name}
+                  title={withRatioWord(sc.name, ratio)}
                   ratio={ratio}
                   reelCount={sc.ratio_counts[ratio]}
                   ratioDuration={sc.ratio_durations[ratio]}
@@ -382,7 +382,7 @@ export function CollectionsTab({
       {smart.flatMap((sc) => RATIO_ORDER.map((ratio) => (
         !sc.ratio_eligible?.[ratio] && sc.nudge_when_locked && (sc.ratio_counts?.[ratio] || 0) > 0 ? (
           <div key={`smart-locked:${sc.key}:${ratio}`} className="mb-3">
-            <SmartLockedCard name={sc.name} ratio={ratio} currentSec={sc.ratio_durations?.[ratio]} />
+            <SmartLockedCard name={withRatioWord(sc.name, ratio)} ratio={ratio} currentSec={sc.ratio_durations?.[ratio]} />
           </div>
         ) : null
       )))}

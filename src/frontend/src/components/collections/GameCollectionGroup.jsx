@@ -7,7 +7,7 @@ import { CollectionCard } from './CollectionCard';
 import { RatioUnlockGroup } from './RatioUnlockGroup';
 import { LOCKED_KINDS } from './LockedReasonModal';
 import { REEL } from '../../config/themeColors';
-import { RATIO_ORDER, splitByAspect } from '../../constants/aspectRatios';
+import { RATIO_ORDER, splitByAspect, withRatioWord } from '../../constants/aspectRatios';
 import { compareGameTime } from '../../utils/timeFormat';
 import { collectionIntroKey } from './introBadgeKey';
 
@@ -85,6 +85,9 @@ export function GameCollectionGroup({
   // The player/share title keeps the game name (playTitle=name). Mixes keeps its
   // own name for both.
   const cardTitle = shareScope?.type === 'game' ? HOME_TILE.GAME_HIGHLIGHTS : name;
+  // T17240: a group with both shapes names each card by its shape too, so the
+  // two cards never share a name ("Game highlights (portrait)").
+  const cardTitleFor = (ratio) => (isMultiAspect ? withRatioWord(cardTitle, ratio) : cardTitle);
 
   // The default-expanded group never fires onToggle for its initial open state,
   // so trigger its first member fetch on mount.
@@ -144,7 +147,7 @@ export function GameCollectionGroup({
             </span>
           )}
           <CollectionCard
-            title={cardTitle}
+            title={cardTitleFor(ratio)}
             playTitle={name}
             ratio={ratio}
             reelCount={ratioCounts[ratio]}
@@ -186,7 +189,7 @@ export function GameCollectionGroup({
             </span>
           )}
           <RatioUnlockGroup
-            name={cardTitle}
+            name={cardTitleFor(ratio)}
             kind={shareScope?.type === 'game' ? LOCKED_KINDS.GAME : LOCKED_KINDS.MIXES}
             ratio={ratio}
             currentSec={ratioDurations[ratio]}

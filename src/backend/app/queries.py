@@ -8,6 +8,7 @@ multiple files.
 
 
 import logging
+import re
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,27 @@ def _play_time_name(start_time: float) -> str:
 
 # A play with no tags, notes or time has nothing else to be called.
 DEFAULT_PLAY_NAME = "Play"
+
+
+# T17240: the one-tap default name the frontend stores ("Play 3", defaultPlayName).
+_DEFAULT_PLAY_NAME_RE = re.compile(r"^Play \d+$")
+
+
+def unnamed_play_label(name: str | None, opponent_name: str | None,
+                       game_type: str | None, game_start_time: float | None) -> str | None:
+    """'Vs Oceanside 0:14' for a play still carrying its one-tap default name, so
+    two "Play 1"s from different games read apart. Display only: the stored name
+    is never rewritten. None when the play has a real name, or when the game
+    opponent or in-match time is unknown (the caller shows the stored name).
+    Frontend twin: unnamedPlayLabel() in utils/clipDisplayName.js."""
+    if not _DEFAULT_PLAY_NAME_RE.match((name or "").strip()):
+        return None
+    if not opponent_name or game_start_time is None:
+        return None
+    from app.constants import GameType
+    prefix = "at" if game_type == GameType.AWAY else "Vs"
+    clock = _play_time_name(game_start_time)[len("Play at "):]
+    return f"{prefix} {opponent_name} {clock}"
 
 
 def short_game_date(game_date: str | None) -> str:

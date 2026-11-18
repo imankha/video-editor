@@ -421,7 +421,7 @@ export function useDownloads(isOpen = false) {
 
   const renameDownload = useCallback(async (downloadId, name) => {
     setDownloads(prev => prev.map(d =>
-      d.id === downloadId ? { ...d, project_name: name } : d
+      d.id === downloadId ? { ...d, project_name: name, display_name: name } : d
     ));
     try {
       const response = await apiFetch(`${API_BASE_URL}/downloads/${downloadId}/name`, {
