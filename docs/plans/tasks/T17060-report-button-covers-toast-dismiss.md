@@ -6,9 +6,13 @@
 **Created:** 2026-11-17
 **Updated:** 2026-11-17
 
+## Progress Log
+
+- 2026-11-17 (same QA pass, later): confirmed a second overlap by measurement. In Mark Plays at 1440x900 with a play selected, the round "Report a problem" button (x 1382 to 1424, y 778 to 820) covers the lower right of the "Make highlight" card (ends at x 1411, y 796). Screenshot `qa/qa-pass-2026-11-17/bugs/r2-B06-report-covers-make-highlight.png`. So the floating button overlapping content is confirmed; the toast case is still seen once.
+
 ## In plain words
 
-Possible, seen once. On a desktop, the round "Report a problem" button in the bottom right corner sat on top of the "Dismiss" button of the "Your highlight is in Highlights" message, covering its right edge. A parent clicking near that edge opens the problem report instead of closing the message. The floating button should not cover any message's buttons.
+On a desktop, the round "Report a problem" button in the bottom right corner sat on top of the "Dismiss" button of the "Your highlight is in Highlights" message, covering its right edge. A parent clicking near that edge opens the problem report instead of closing the message. The floating button should not cover any message's buttons.
 
 ## How we got here
 
