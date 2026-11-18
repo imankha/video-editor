@@ -1,0 +1,14 @@
+{
+  "criteria": {
+    "T17190:C1": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/GlobalExportIndicator.belowVideo.test.jsx",
+      "why_not_browser": "A sharpen is a paid GPU job of several minutes; the check renders the real Frame view (FocusModeView, mobile) with the real GlobalExportIndicator and a processing sharpen in exportStore, and asserts the card sits in the element directly after focus-video-stage (not fixed) and says 'You can leave. It will be in Highlights when it is ready.'"
+    },
+    "T17190:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/components/ProjectManager.highlightReady.test.jsx",
+      "why_not_browser": "Needs a sharpen to finish (paid GPU job). The check renders the real ProjectManager with a completed framing job in exportStore and a finished highlight, opens Plays, and asserts the Home coach says 'Tap Go to Highlights' and the Go to Highlights button carries the pulse."
+    }
+  }
+}

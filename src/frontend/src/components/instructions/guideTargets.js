@@ -33,6 +33,8 @@ export const GUIDE_PULSE = {
   UPLOAD_RETRY: 'upload-retry',
   FIRST_CLIP: 'home-first-clip',
   FIRST_FINISHED: 'home-first-finished',
+  // T17190: the Plays tab's Go to Highlights, once a sharpen has just finished.
+  GO_TO_HIGHLIGHTS: 'home-go-to-highlights',
   FOCUS_ADD_SPOTLIGHT: 'focus-choice-primary',
   OVERLAY_FINISH: 'overlay-choice-primary',
   GET_LINK: 'finished-get-link',

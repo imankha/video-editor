@@ -4,6 +4,7 @@ import { EmptyTabGuide } from './EmptyTabGuide';
 import { resolveGuide, homeFacts } from '../instructions/resolveGuide';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useCreditStore } from '../../stores/creditStore';
+import { useProfileStore } from '../../stores/profileStore';
 import { approxHighlights } from '../../config/pricing';
 
 // T17200: a brand-new parent's Home. One clear start: "Start with your game video",
@@ -23,7 +24,11 @@ function renderEmptyGames(coachEnabled, handlers = {}) {
 }
 
 describe('T17200 Home first run', () => {
-  beforeEach(() => { useCreditStore.setState({ balance: 88, loaded: true }); });
+  beforeEach(() => {
+    useCreditStore.setState({ balance: 88, loaded: true });
+    // A brand new account: exactly one profile, loaded (T17090).
+    useProfileStore.setState({ profiles: [{ id: 'p1' }], isInitialized: true });
+  });
 
   it('C1: headline "Start with your game video", a single primary button, and a small Upload a play link', () => {
     const onAddGame = vi.fn();
@@ -52,5 +57,12 @@ describe('T17200 Home first run', () => {
   it('C2: Guidance off -- the same sentence shows as plain text in the empty Games state', () => {
     renderEmptyGames(false);
     expect(screen.getByTestId('home-credits-line').textContent).toBe(CREDIT_LINE);
+  });
+
+  it('T17090: a second profile on an existing account is not told it has free credits', () => {
+    useProfileStore.setState({ profiles: [{ id: 'p1' }, { id: 'p2' }], isInitialized: true });
+    renderEmptyGames(false);
+    expect(screen.queryByTestId('home-credits-line')).toBeNull();
+    expect(screen.queryByText(/free credits/)).toBeNull();
   });
 });

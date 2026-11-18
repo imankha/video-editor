@@ -51,7 +51,7 @@ export const ANNOTATE = {
   VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cameras filmed at the same time, tapping switches cameras without moving.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',
-  MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a great play.', // N04/T11850 mode-switcher help
+  MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a moment worth keeping.', // N04/T11850 mode-switcher help
   BACK_TO_MARK_PLAYS: 'Back to plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
   // T14610 (audit F-35): the game video is gone after the storage window.
@@ -101,7 +101,7 @@ export const ANNOTATE = {
   // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —
   // the "Create clip"/"Save and create clip" affordances are gone; a play
   // becomes a highlight through the rating + Done -> Highlight popup gesture
-  // (HIGHLIGHT_CHOICE_* / HIGHLIGHT_MOVED_TO_CLIPS below), not a manual toggle.
+  // (HIGHLIGHT_CHOICE_* below), not a manual toggle.
   // T10550: the rating popup's own visible heading (+ its accessible name, so
   // they match) — layer-aware like `getRatingCaption`'s existing `mine` split,
   // so a Team play never claims to be "your athlete's".
@@ -136,12 +136,8 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep marking plays',
-  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Plays. Open it there to edit or finish it.',
-  // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
-  // no action button) — the editor closes, so the toast IS the confirmation.
-  // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
-  // that still say "Clips".
-  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Plays so you can edit it later',
+  // T17210: "Keep marking plays" creates no highlight; the play itself is kept.
+  BACK_TO_EDITING_SUBTEXT: 'This play is saved. You can make its highlight any time.',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
   // T14610 (audit F-34): one title for a game that is gone.
@@ -534,6 +530,8 @@ export const HOME_TILE = {
   MENU_CANCEL: 'Cancel',
   EDIT_HIGHLIGHT: 'Edit highlight',
   EDIT_SPOTLIGHT: 'Edit spotlight',
+  // T17180: the Highlights player's spotlight button before a spotlight exists.
+  ADD_SPOTLIGHT: 'Add spotlight',
   MOVE_TO_HIGHLIGHTS: 'Move to Highlights',
   moveToHighlightsHint: () => `Move to ${SECTION_NAMES.PUBLISHED}`,
   TAP_AGAIN_CONFIRM: 'Tap again to confirm',
@@ -572,7 +570,7 @@ export const NOTES_OVERLAY_STATUS = {
 // clicking their kid on AI-proposed per-frame boxes (PlayerDetectionOverlay),
 // not identity tracking. No em dashes (project-wide rule).
 export const DIVISION_OF_WORK =
-  'You mark the best plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
+  'You mark the plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload a play',
@@ -710,6 +708,8 @@ export const EXPORT_JOBS = {
     completed: 'Your highlight is ready',
     // T16525: the server finished it (T16520), so it is already in Highlights.
     finished: 'Your highlight is in Highlights',
+    // T17190: shown on the progress card for the whole sharpen.
+    canLeave: 'You can leave. It will be in Highlights when it is ready.',
     jobNoun: 'Highlight',
   },
   overlay: {
@@ -739,7 +739,10 @@ export const EXPORT_PROGRESS = {
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.
-  ETA_VARIES: 'Time remaining varies.',
+  // T17190: says what is usual instead of "Time remaining varies."
+  ETA_VARIES: 'Usually a few minutes',
+  // T17190: card header while more than one job runs.
+  MANY_IN_PROGRESS: (n) => `${n} highlights in progress`,
 };
 
 // T11330: the explanatory popup shown when the T11320 preflight cost guard rejects an
@@ -944,8 +947,8 @@ export const ANNOTATE_COCKPIT = {
 // (Q15 = C), no em dashes, no motion claims the app does not make.
 export const GUIDE = {
   annotate: {
-    watch: { title: 'Tap Play to watch the game. When your athlete does something great, tap Mark play.', body: '' },
-    watchPlaying: { title: 'See a great play? Tap Mark play.', body: '' },
+    watch: { title: 'Tap Play to watch the game. Tap Mark play at any moment worth keeping, a great play or one to learn from.', body: '' },
+    watchPlaying: { title: 'See a play worth keeping? Tap Mark play.', body: '' },
     hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },
@@ -987,6 +990,8 @@ export const GUIDE = {
     clipsEmpty: { title: 'Plays you’re turning into highlights wait here. Open a game in Games to start one.', body: '' },
     clipsUnfinished: { title: 'Pick up where you left off. Tap a play to make its highlight.', body: '' },
     clipsAllDone: { title: 'Every play is finished. Open a game to mark more plays.', body: '' },
+    // T17190: a sharpen just finished; point at the highlight, not away from it.
+    clipsHighlightReady: { title: 'Your highlight is ready. Tap Go to Highlights to watch or share it.', body: '' },
     finishedFirst: { title: 'Your highlight is ready. Tap it to share it or download it.', body: '' },
     finishedMany: { title: 'You have {n} highlights. Tap one to share it or download it, or open a game to mark another play.', body: '' },
     finishedEmpty: { title: 'Your highlights show here. Open a game to make your first one.', body: '' },
@@ -1298,6 +1303,8 @@ export const EDITOR_PANELS = {
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
   PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
   PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Tap ${n}/${total}` : `Tap ${n} of ${total}`),
+  // T17180: the phone's one-line strip above the video, e.g. "Tap your athlete, 1 of 4".
+  PICK_GUIDE_STRIP: (verb, n, total) => `${verb}, ${n} of ${total}`,
   PICK_GUIDE_WHY: (total) => GUIDE.overlay.pick.first.body.replace('{n}', total),
   PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,
   PICK_GUIDE_CONFIRM: GUIDE.overlay.pick.next.title,
@@ -1468,6 +1475,10 @@ export const SPORT_PICK = {
 export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
   INVALID_VIDEO_FILE: "This file isn't a video we can open. Use an MP4, MOV or WebM.",
+  // T17280: the file has sound but this browser cannot draw its picture (iPhone HEVC).
+  VIDEO_PICTURE_UNSUPPORTED:
+    "This browser can't show this video's picture, only its sound. iPhone videos saved as High Efficiency "
+    + 'play in Safari, or set iPhone Settings > Camera > Formats to Most Compatible and record again.',
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   FOOTAGE_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   // T14610: AttachVideoModal (add another half or camera to a game).
@@ -1546,6 +1557,8 @@ export const SHARE_COPY = {
   GAME_LINK_OFF: 'Game link turned off',
   NO_GAME_LINK: "This game doesn't have a link.",
   PUBLIC_GAME_HELP: 'Watches the game plays. No account needed.',
+  // T17080: the link shows team plays only; a game whose plays are all "My athlete" has none.
+  NO_TEAM_PLAYS_FOR_LINK: `The link shows team plays, and this game has none yet. Open the game, pick a play, and set "${ANNOTATE.LAYER_LABEL}" to ${ANNOTATE.LAYER_TEAM}.`,
   EMAILS_SENT: 'Emails sent',
   LOADING_PEOPLE: 'Loading people...',
   LINK_UPDATED: 'Link updated',
@@ -1846,6 +1859,11 @@ export const APP_SHELL_COPY = {
 };
 
 export const ERROR_COPY = {
+  // T17280 (bug 62p): the browser loads the sound but cannot draw the picture
+  // (an iPhone video saved as High Efficiency / HEVC on a computer without an HEVC decoder).
+  VIDEO_PICTURE_UNSUPPORTED:
+    "This browser can't show this video's picture, only its sound. iPhone videos saved as "
+    + 'High Efficiency play in Safari, or set iPhone Settings > Camera > Formats to Most Compatible and record again.',
   CONNECTION: "We couldn't connect. Check your internet and try again.",
   CONNECTING: 'Connecting...',
   WAKING_UP: 'Getting things ready, one moment...',
@@ -1955,7 +1973,6 @@ export const ERROR_COPY = {
   REMOVE_FROM_PROFILE: "We couldn't remove this from your profile. Try again.",
   MOVE_HIGHLIGHTS: "We couldn't move your highlights. Try again.",
   DELETE_HIGHLIGHT_NOT_SYNCED: "We couldn't delete your highlight. Try again.",
-  REOPEN_NOT_SYNCED: "We couldn't finish saving. Your highlight is back in progress on this device and finishes saving when you tap Retry.",
   CHANGES_NOT_SYNCED: "Some changes didn't save.",
   VERIFY_PAYMENT: "We couldn't confirm your payment yet. Your credits may still be added shortly.",
   FINISH_TITLE: "We couldn't finish your highlight",

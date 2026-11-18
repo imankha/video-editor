@@ -678,7 +678,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       handleGameVideoSelect(pendingFile, pendingDetails).catch((err) => {
         console.error('[AnnotateScreen] Failed to open game video:', err);
         isLoadingRef.current = false;
-        toast.error(UPLOAD.INVALID_VIDEO_FILE);
+        toast.error(err?.code === 'VIDEO_PICTURE_UNSUPPORTED'
+          ? UPLOAD.VIDEO_PICTURE_UNSUPPORTED
+          : UPLOAD.INVALID_VIDEO_FILE);
         clearAnnotateResume();
         redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
       });

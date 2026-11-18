@@ -49,7 +49,8 @@ test.describe('T15640:C1 Jump to play seeks to the play start', () => {
     await expect(drawer).toBeVisible();
 
     const row = drawer.getByTestId('clip-row').nth(rowIndex);
-    await row.getByTitle('Jump to play').click();
+    // T17170: the whole row jumps (the separate Jump to play button is gone).
+    await row.click();
 
     await expect.poll(async () => {
       return page.evaluate(() => document.querySelector('video')?.currentTime ?? null);

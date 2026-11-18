@@ -74,7 +74,9 @@ describe('exportProgressLabel — T12120 parent-readable words', () => {
   it('the overlay job renders as "Adding your spotlight", never "overlay"', () => {
     const r = exportProgressLabel('processing', '', 'overlay');
     expect(r.primary).toBe('Adding your spotlight');
-    for (const v of Object.values(EXPORT_PROGRESS)) expect(v).not.toMatch(/overlay/i);
+    for (const v of Object.values(EXPORT_PROGRESS)) {
+      expect(typeof v === 'function' ? v(2) : v).not.toMatch(/overlay/i);
+    }
   });
 });
 

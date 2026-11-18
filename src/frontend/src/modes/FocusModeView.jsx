@@ -30,6 +30,7 @@ import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
 import { useExportJobStatus } from '../components/instructions/exportJob';
+import { useExportCardSlotStore } from '../stores/exportCardSlotStore';
 
 // T14850: below ~850px of viewport height at desktop widths, the 22rem header/timeline
 // reservation in the box-state height formula (and the matching 70vh*aspect-ratio term
@@ -397,6 +398,8 @@ export function FocusModeView({
   // (T4880); the inline scrollable layout keeps every control reachable.
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
+  // T17190: hands the slot under the video to the sharpen progress card (null on unmount).
+  const setExportCardSlot = useExportCardSlotStore((s) => s.setSlot);
   // T5641: straighten tool is a niche affordance (~99% of clips never rotate), so
   // the line-drag tool + fine dial are HIDDEN by default behind this toggle.
   // EPHEMERAL view state — local useState, NEVER persisted (no-persisted-view-state
@@ -1050,6 +1053,12 @@ export function FocusModeView({
               </button>
             )}
           </div>
+
+          {/* T17190: the sharpen progress card (GlobalExportIndicator) docks here, directly
+              under the video, instead of floating over the preview. */}
+          {!isFullscreen && !mobileFs && (
+            <div data-testid="export-card-slot" ref={setExportCardSlot} />
+          )}
 
           {/* T10850 (D14): the portrait rotate nudge sits DIRECTLY under the stage,
               where the eye lands right after seeing how small the crop box is — not

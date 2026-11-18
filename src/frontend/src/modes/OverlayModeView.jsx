@@ -548,6 +548,9 @@ export function OverlayModeView({
     : isPhonePortrait ? 'strip'
     : 'pill';
   const pickGuideCompact = pickGuideVariant === 'strip-compact' || pickGuideVariant === 'pill-safearea';
+  // T17180: on a phone in portrait (not fullscreen) the walk is a one-line strip mounted ABOVE the
+  // stage in the page flow, so the floating card can no longer cover the athletes it names.
+  const pickGuideStrip = (pickGuideVariant === 'strip' || pickGuideVariant === 'strip-compact') && !isFullscreen && !mobileFs;
 
   // Real-geometry top/bottom placement (T11570 MAJOR-2 fix): SpotlightPickGuide
   // itself measures its OWN rendered height against `stageRef`'s real height
@@ -786,7 +789,7 @@ export function OverlayModeView({
 
       {/* T11570 / T12640: guided athlete-pick walk -- a FloatingCoach step (shade that leaves the
           stage clear, Got it, docked on phones). One guide at a time: the text tip replaces it. */}
-      {!textGuidanceStarted && (
+      {!textGuidanceStarted && !pickGuideStrip && (
         <SpotlightPickGuide
           phase={pickWalkPhase}
           step={pickGuideStep}
@@ -1087,6 +1090,19 @@ export function OverlayModeView({
                   reflows this column wider for free). The stage box inside just
                   respects whatever width the column leaves it via max-w-full. */}
               <div className="flex flex-col w-full lg:w-fit lg:flex-1 lg:min-w-0 lg:pr-6">
+                {!textGuidanceStarted && pickGuideStrip && (
+                  <SpotlightPickGuide
+                    strip
+                    phase={pickWalkPhase}
+                    step={pickGuideStep}
+                    total={pickGuideTotal}
+                    assignedCount={assignedDetections}
+                    onResumeStep={onResumePickGuideStep}
+                    onNotBoxed={onTogglePlayerBoxes}
+                    boxed={showPlayerBoxes}
+                    noBoxes={pickNoBoxes}
+                  />
+                )}
                 <div ref={stageRef} data-testid="overlay-video-stage" className={stageBoxClass} style={stageBoxStyle}>
                   {videoStageInner}
                 </div>

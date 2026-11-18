@@ -1,0 +1,10 @@
+{
+  "criteria": {
+    "T17180:C1": { "kind": "browser" },
+    "T17180:C2": {
+      "kind": "code",
+      "command": "cd src/frontend && npx vitest run src/modes/OverlayModeView.pickStrip.test.jsx src/modes/overlay/components/SpotlightPickGuide.strip.test.jsx",
+      "why_not_browser": "The pick walk needs a highlight whose working video is stored; the dev preset's highlights have none on a local stack (Spotlight shows 'This highlight's video is no longer available'), so a browser check never reaches 'Tap your athlete' there. The test renders the real OverlayModeView at phone-portrait and pins the guide as a strip in the page flow before the video stage, outside it and outside the floating coach host."
+    }
+  }
+}

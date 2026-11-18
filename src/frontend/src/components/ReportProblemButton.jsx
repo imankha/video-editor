@@ -318,7 +318,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
         onClick={handleOpen}
         aria-label="Report a problem"
         title={compact ? 'Report a problem' : undefined}
-        className={`${className || 'text-sm text-gray-400 hover:text-gray-200'} transition-all`}
+        className={`${className || 'text-sm text-gray-400 hover:text-gray-200 coarse-pointer:inline-flex coarse-pointer:items-center coarse-pointer:min-h-[44px] coarse-pointer:px-2'} transition-all`}
       >
         {/* T13910: the SAME hosted image the subscriber email shows, so the button looks
             identical everywhere (emoji fonts draw U+1F4AC differently per platform).

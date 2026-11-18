@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 // T15640 AC1: "Jump to play" on the mobile clip row landed at the play's END
+// (T17170: the whole row is now the jump target; the separate button is gone)
 // (region.endTime was passed through instead of region.startTime), so tapping
 // it on a 14-22s play seeked to the END of the play rather than its start.
 vi.mock('./ClipDetailsEditor', () => ({ default: () => null }));
@@ -35,7 +36,7 @@ describe('ClipsSidePanel — Jump to play (T15640:C1)', () => {
     const onJumpToClip = vi.fn();
     render(<ClipsSidePanel {...baseProps} clipRegions={clipRegions} onJumpToClip={onJumpToClip} />);
 
-    fireEvent.click(screen.getByTitle('Jump to play'));
+    fireEvent.click(screen.getByTestId('clip-row'));
 
     expect(onJumpToClip).toHaveBeenCalledWith('play-1', 14);
   });

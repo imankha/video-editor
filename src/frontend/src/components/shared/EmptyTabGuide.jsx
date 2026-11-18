@@ -5,7 +5,7 @@ import { Plus } from 'lucide-react';
 import { Button } from './Button';
 import { GUIDE_PULSE } from '../instructions/guideTargets';
 import { CLIP_UPLOAD, GUIDE, LIBRARY_ACTIONS, SECTION_NAMES_SHORT } from '../../config/displayNames';
-import { useCreditStore } from '../../stores/creditStore';
+import { useFirstRunCredits } from '../../hooks/useFirstRunCredits';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
 /**
@@ -21,10 +21,9 @@ import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
  * tabs render above their CTA, so all tabs share one guidance structure.
  *
  * T9390 (Decision 3): Clips at zero games shows Add Video ALONE (no cross-tab Add
- * Game). Published's zero-everything branch was dropped. T10310 (2026-09-18 user
- * request) removed the tab-bar gate -- these branches can now render at genuine
- * zero clips (not just zero *everything*) -- but their copy already holds up at
- * that count, so neither was restored.
+ * Game). Published's zero-everything branch was dropped. T17100 gave the empty
+ * Published tab a body line and a Go to Games button (navigation only, no
+ * cross-tab create action).
  *
  * @param {'games'|'clips'|'published'} tab - which empty state to render
  * @param {number} gamesCount - the account's game count (branches Clips)
@@ -75,9 +74,18 @@ export function EmptyTabGuide({
           {finishedCount > 0 ? copy.finishedMessage : copy.body}
         </p>
       )}
+      {/* T17100: the empty Highlights tab says how a highlight is made (was headline only). */}
+      {tab === 'published' && (
+        <p className="text-sm text-gray-400 mt-1" data-testid="highlights-empty-message">{copy.body}</p>
+      )}
 
       <div className="w-full mt-5 mb-4">
         {tab === 'games' && <GamesActions onAddGame={onAddGame} onAddVideo={onAddVideo} />}
+        {tab === 'published' && (
+          <Button variant="primary" size="lg" onClick={() => onNavigate('games')}>
+            {copy.cta}
+          </Button>
+        )}
         {tab === 'clips' && finishedCount > 0 && <FinishedPointer onNavigate={onNavigate} />}
         {tab === 'clips' && finishedCount === 0 && (
           <ClipsActions
@@ -129,11 +137,10 @@ const STEP_ACCENT_BORDER = {
 function GamesActions({ onAddGame, onAddVideo }) {
   const c = EMPTY_TAB_GUIDE.games;
   const { coachEnabled } = useGuidanceSettings();
-  const credits = useCreditStore((s) => s.balance);
-  const creditsLoaded = useCreditStore((s) => s.loaded);
+  const credits = useFirstRunCredits();
   return (
     <div className="flex flex-col items-center gap-2">
-      {!coachEnabled && creditsLoaded && (
+      {!coachEnabled && credits != null && (
         <p data-testid="home-credits-line" className="text-sm text-gray-300 mb-2">{GUIDE.home.freeCredits(credits)}</p>
       )}
       <Button guideTarget={GUIDE_PULSE.UPLOAD_GAME} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
@@ -158,7 +165,7 @@ function FinishedPointer({ onNavigate }) {
       <Button variant="primary" size="lg" onClick={() => onNavigate('games')}>
         {c.markMorePlays}
       </Button>
-      <Button variant="secondary" size="md" onClick={() => onNavigate('published')}>
+      <Button variant="secondary" size="md" data-testid="home-go-to-highlights" guideTarget={GUIDE_PULSE.GO_TO_HIGHLIGHTS} onClick={() => onNavigate('published')}>
         {c.goToFinished}
       </Button>
     </div>

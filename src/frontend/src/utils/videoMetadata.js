@@ -250,6 +250,19 @@ export class VideoAssetMissingError extends Error {
 }
 
 /**
+ * T17280 (bug 62p): the file has sound but this browser cannot decode its picture.
+ * Windows Chrome without an HEVC decoder loads an iPhone HEVC file as audio only:
+ * loadedmetadata fires with a real duration and a 0x0 picture, and no media error.
+ */
+export class VideoPictureUnsupportedError extends Error {
+  constructor(fileName) {
+    super(`This browser cannot decode the picture of ${fileName || 'this video'} (sound only)`);
+    this.name = 'VideoPictureUnsupportedError';
+    this.code = 'VIDEO_PICTURE_UNSUPPORTED';
+  }
+}
+
+/**
  * Extract metadata from a video URL using fetch() + MP4 box parsing.
  *
  * Why not use a `<video>` element? Chrome defers cross-origin `<video>` element
@@ -502,6 +515,16 @@ export async function extractVideoMetadata(videoSource) {
     video.onloadedmetadata = () => {
       settled = true;
       clearTimeout(timeoutId);
+
+      // T17280: sound with a 0x0 picture means this browser cannot draw the video
+      // track (iPhone HEVC on a computer without an HEVC decoder). Refuse it here so
+      // the upload dialog says so before anything is uploaded or charged.
+      if (video.duration > 0 && !video.videoWidth && !video.videoHeight) {
+        console.warn(`[videoMetadata] Picture not decodable in this browser (sound only): ${videoSource.name}`);
+        cleanup();
+        reject(new VideoPictureUnsupportedError(videoSource.name));
+        return;
+      }
 
       // Extract all available metadata from the video element
       const metadata = {

@@ -1,0 +1,4 @@
+{"criteria": {
+  "T17140:C1": {"kind": "browser"},
+  "T17140:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/hooks/useReEditReel.keepsFinished.test.js -t 'T17140:C2'"}
+}}

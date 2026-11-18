@@ -29,15 +29,6 @@ export const RATING_MEANINGS = {
   1: 'A decision or focus moment to learn from.',
 };
 
-// Rating notation symbols (chess-style)
-export const RATING_NOTATION = {
-  1: '??',   // Blunder
-  2: '?',    // Weak
-  3: '!?',   // Interesting
-  4: '!',    // Good
-  5: '!!',   // Excellent
-};
-
 // Rating badge colors (color-blind safe palette P2, owner ruling H15 2026-09-24)
 // T11110: Highlight (5) is gold (#F5B700). Gold clashes with the old amber
 // 2-star, so the whole set was re-picked to stay color-blind distinguishable:
@@ -59,8 +50,8 @@ export const RATING_BACKGROUND_COLORS = {
   5: 'rgba(245, 183, 0, 0.15)',   // Gold
 };
 
-// T11110: color for the notation glyph drawn ON the solid badge face
-// (RatingIcon). White reads on every dark face, but rating 5's gold (#F5B700)
+// T11110: color for the star-count text drawn ON the solid badge face
+// (RatingIcon; T17170 replaced the chess glyphs with the count). White reads on every dark face, but rating 5's gold (#F5B700)
 // needs a dark glyph for legible contrast - never white on gold.
 export const RATING_GLYPH_COLORS = {
   1: '#ffffff',
@@ -160,12 +151,11 @@ export function getRatingLabel(rating) {
 /**
  * Get rating display info for a given rating value
  * @param {number|null} rating - Rating value (1-5), or null for "not rated"
- * @returns {Object} - { notation, badgeColor, backgroundColor }
+ * @returns {Object} - { badgeColor, backgroundColor }
  */
 export function getRatingDisplay(rating) {
   rating = displayRating(rating);
   return {
-    notation: RATING_NOTATION[rating],
     badgeColor: RATING_BADGE_COLORS[rating],
     backgroundColor: RATING_BACKGROUND_COLORS[rating],
   };

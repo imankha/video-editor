@@ -9,6 +9,9 @@ import { ConfidenceBanner } from './ranking/ConfidenceBanner';
 import { RankingGame } from './ranking/RankingGame';
 import { toPlayerReel } from './collections/playerReels';
 import { useReEditReel } from '../hooks/useReEditReel';
+import { useRedoHighlight } from '../hooks/useRedoHighlight';
+import { useProjectsStore } from '../stores/projectsStore';
+import { EDITOR_MODES } from '../stores/editorStore';
 import { useDownloads } from '../hooks/useDownloads';
 import { useCollections } from '../hooks/useCollections';
 import { useMoveReels } from '../hooks/useMoveReels';
@@ -176,8 +179,8 @@ export function PublishedReelsPanel({
   // State for before/after export
   const [exportingBeforeAfter, setExportingBeforeAfter] = useState(null);
 
-  // T3940: one restore-then-navigate path shared by the My Reels card, the in-player
-  // Re-edit button, and the ranker replay. Navigation = open the editor (T66 restore
+  // T3940: one open-then-navigate path shared by the Highlights tile, the in-player
+  // Re-edit button, and the ranker replay. Navigation = open the editor (T66
   // resumes Framing) + tear down the story player if it's open. T8545: no longer
   // closes a gallery drawer -- navigating away unmounts the whole Home screen
   // (and this panel with it), so there is nothing left to "close".
@@ -186,11 +189,6 @@ export function PublishedReelsPanel({
     closeStoryPlayer();
   }, [onOpenProject, closeStoryPlayer]);
   const { openReelAsProject, restoringId } = useReEditReel(navigateToProject);
-  // T13870: "Open as Draft" from this panel. When the restore changed the DB but did
-  // NOT navigate (503 sync_failed: unpublished locally, cloud push pending), this
-  // panel is still on screen holding the member cache, so it applies the same
-  // member change events delete does -- drop the tile now, refresh the summary
-  // aggregate. A navigating restore unmounts the panel; a failed one changed nothing.
   // T16530: the story player's edit button opens the Finished screen for this
   // highlight (Add or Redo spotlight, Edit zoom). A redo keeps it in Highlights until
   // the new version replaces it, so this path no longer unpublishes it as a draft.
@@ -204,14 +202,21 @@ export function PublishedReelsPanel({
       clip_count: reel.clip_count,
     }, { alreadyPublished: true });
   }, [closeStoryPlayer]);
-  const openAsDraft = useCallback(async (download) => {
-    const outcome = await openReelAsProject(download);
-    if (outcome.restored && !outcome.navigated) {
-      collections.removeMember(download.id);
-      collections.fetchSummary('restore');
-    }
-    return outcome;
-  }, [openReelAsProject, collections]);
+  // T17180: the player's labeled Add/Edit spotlight button opens Spotlight for the highlight on
+  // screen, keeping it in Highlights (the same open-for-redo the Finished screen uses).
+  const projects = useProjectsStore((state) => state.projects);
+  const { openForRedo } = useRedoHighlight();
+  const [spotlightOpeningId, setSpotlightOpeningId] = useState(null);
+  const openSpotlight = useCallback(async (reel) => {
+    setSpotlightOpeningId(reel.id);
+    const opened = await openForRedo(EDITOR_MODES.OVERLAY, reel.id);
+    setSpotlightOpeningId(null);
+    if (opened) closeStoryPlayer();
+  }, [openForRedo, closeStoryPlayer]);
+  const reelHasSpotlight = useCallback(
+    (reel) => !!projects.find((p) => p.id === reel.project_id)?.has_overlay_edits,
+    [projects],
+  );
 
   // T4030: author re-ranks a reel while watching it. The tap is the only write
   // trigger (gesture-only): POST /api/rank/reopen re-opens the reel for ranking
@@ -693,7 +698,7 @@ export function PublishedReelsPanel({
   // Card folder button -> same shared restore-then-navigate path as the players (T3940).
   const handleOpenProject = (e, download) => {
     e.stopPropagation();
-    if (onOpenProject) openAsDraft(download);
+    if (onOpenProject) openReelAsProject(download);
   };
 
   // Check if folder button should be shown for a download. T11220: canReEditReel
@@ -966,7 +971,7 @@ export function PublishedReelsPanel({
       {showRankingGame && (
         <RankingGame
           onClose={closeRankingGame}
-          onReEdit={onOpenProject ? openAsDraft : undefined}
+          onReEdit={onOpenProject ? openReelAsProject : undefined}
         />
       )}
 
@@ -993,6 +998,9 @@ export function PublishedReelsPanel({
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
           onReEdit={openFinished}
+          onSpotlight={openSpotlight}
+          hasSpotlight={reelHasSpotlight}
+          spotlightLoadingId={spotlightOpeningId}
           onReRank={handleReRank}
           reRankLoadingId={reRankingId}
           handleGlyph={storyPlayerHandleGlyph}

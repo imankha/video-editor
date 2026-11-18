@@ -3,6 +3,12 @@ import { EXPORT_PROGRESS } from '../config/displayNames';
 import { useToastStore } from '../components/shared/Toast';
 import { track } from '../utils/analytics';
 import { recordSync } from '../utils/syncTrace';
+import { useGalleryStore } from './galleryStore';
+
+// T17020: export types whose completion changes Highlights. The server finishes a
+// sharpened highlight (framing, T16520) and the spotlight render publishes (overlay)
+// BEFORE reporting complete, so the count and the grouped list are stale from here on.
+const HIGHLIGHT_EXPORT_TYPES = new Set(['framing', 'overlay']);
 
 /**
  * Export Store - Manages export progress and status tracking
@@ -259,6 +265,13 @@ export const useExportStore = create((set, get) => ({
   completeExport: (exportId, outputVideoId = null, outputFilename = null) => {
     const existing = get().activeExports[exportId];
     if (existing) track('export_complete', { type: existing.type });
+    // T17020: every completion path (WebSocket, poll, recovery) lands here, so Home's
+    // Highlights tab updates without a reload wherever the parent is. Read-only refresh.
+    if (existing && existing.status !== 'complete' && HIGHLIGHT_EXPORT_TYPES.has(existing.type)) {
+      const gallery = useGalleryStore.getState();
+      gallery.fetchCount({ force: true, reason: 'export-complete' });
+      gallery.notifyCollectionsChanged('export-complete');
+    }
     recordSync({ kind: 'write', holder: 'exportStore.activeExports', reason: 'export-complete', summary: { exportId, outputVideoId, type: existing?.type ?? null } });
     set((state) => {
       const existing = state.activeExports[exportId];

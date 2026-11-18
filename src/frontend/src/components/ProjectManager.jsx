@@ -17,7 +17,7 @@ import { compareGameTime } from '../utils/timeFormat';
 import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
-import { useCreditStore } from '../stores/creditStore';
+import { useFirstRunCredits } from '../hooks/useFirstRunCredits';
 import GuidanceToggle from './instructions/GuidanceToggle';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GUIDE_PULSE } from './instructions/guideTargets';
@@ -44,6 +44,8 @@ import { prioritizeUrls } from '../utils/cacheWarming';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
+import { useExportStore } from '../stores/exportStore';
+import { ExportStatus } from '../constants/exportStatus';
 import { useProfileStore } from '../stores/profileStore';
 import { UPLOAD_STATUS, useUploadStore } from '../stores/uploadStore';
 import { parseEditorPath, EDITOR_MODES } from '../stores/editorStore';
@@ -825,9 +827,13 @@ export function ProjectManager({
   // behind the opaque overlay) the whole time the viewer was open. It owns the guide
   // while open, same as the upload modal.
   const reelPreviewOpen = useReelPreviewStore((s) => s.payload != null);
-  // T17200: the first-run coach sentence names the free credit balance (null until loaded).
-  const creditBalance = useCreditStore((s) => s.balance);
-  const creditsLoaded = useCreditStore((s) => s.loaded);
+  // T17200 + T17090: the first-run coach sentence names the free credit balance, only on a one-profile account.
+  const firstRunCredits = useFirstRunCredits();
+  // T17190: a sharpen finished this session (its job is still listed), so Home's ready
+  // message is about a highlight the parent just made: the coach points at it.
+  const sharpenFinished = useExportStore((s) => Object.values(s.activeExports).some(
+    (e) => e.type === 'framing' && e.status === ExportStatus.COMPLETE,
+  ));
   // T12790: only the Games tab waits on the games fetch; a failed fetch has its own (Retry) guide.
   const homeTab = activeTab === 'projects' ? 'clips' : activeTab === 'published' ? 'finished' : 'games';
   // T16030: same null-gate as reelPreviewOpen above, for the shared-video overlay sibling.
@@ -841,8 +847,9 @@ export function ProjectManager({
     // A draft whose game is still uploading can't be opened yet, so it isn't one to "finish".
     drafts: clipDrafts.filter(p => !p.game_ids?.some(id => pendingGameIds.has(id))).length,
     finished: finishedCount,
+    highlightReady: sharpenFinished,
     ...reviewCounts(games),
-    credits: creditsLoaded ? creditBalance : null,
+    credits: firstRunCredits,
   }));
   useEffect(() => {
     if (clipsRingProjectId == null) return;

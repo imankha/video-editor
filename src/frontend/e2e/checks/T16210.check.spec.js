@@ -16,7 +16,7 @@
  *   1. Annotate play-count chip ("Show plays")             -- annotate test
  *   2. Annotate time labels (TrimTimeField start/end)      -- annotate test
  *   3. Annotate fullscreen Mark play                       -- annotate test
- *   4. Plays list View details + Jump to play              -- annotate test
+ *   4. Plays list View details + row (jump)                 -- annotate test
  *   5. Plays list Hide plays (drawer close)                -- annotate test
  *   6. Frame's Portrait/Landscape shape buttons (Settings "Shape" row, T17230) -- frame test
  *   7. Spotlight number chips (DetectionMarkerLayer markers, the 24x24 boxes with the
@@ -169,12 +169,12 @@ for (const vp of VIEWPORTS) {
       const firstRow = drawer.getByTestId('clip-row').first();
       await firstRow.waitFor({ timeout: 30000 });
 
-      // Plays list: View details + Jump to play (mobile-only row actions). Both are
+      // Plays list: View details + the row itself (mobile-only row actions). Both are
       // required: a missing View details is a failure, not a skip.
       const viewDetails = firstRow.getByTitle('View details');
       await assertAtLeast44(viewDetails, 'Plays list "View details"');
-      const jumpToClip = firstRow.getByTitle('Jump to play');
-      await assertAtLeast44(jumpToClip, 'Plays list "Jump to play"');
+      // T17170: the whole row is the jump target (the separate button is gone).
+      await assertAtLeast44(firstRow, 'Plays list row (jumps to the play)');
 
       // Hide plays (drawer close X).
       await assertAtLeast44(page.getByTestId('annotate-plays-drawer-close'), 'Plays drawer "Hide plays"');
