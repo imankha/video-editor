@@ -89,9 +89,14 @@ export function useFootageIntake() {
           height: meta.height ?? null,
           file,
         };
-      } catch {
+      } catch (err) {
         // A probe failure is kept (so the user sees it) but excluded from order.
-        item = { name: file.name, size: file.size, duration: null, creationTime: null, file, probeError: true };
+        // T17370: probeErrorCode lets the picker name a known cause
+        // (VIDEO_PICTURE_UNSUPPORTED: sound only, 0x0 picture).
+        item = {
+          name: file.name, size: file.size, duration: null, creationTime: null, file,
+          probeError: true, probeErrorCode: err?.code ?? null,
+        };
       }
       const key = dedupeKey(item);
       if (seen.has(key)) {

@@ -128,9 +128,16 @@ export const useUploadStore = create((set, get) => {
     if (!entry) return; // cancelled
     console.error('[UploadStore] Upload failed:', error);
     if (error.insufficientCredits) {
-      // The insufficient-credits modal is the failure surface; retire the entry (no
-      // retry — the user must buy credits) and let the queue advance.
-      retireEntry(id);
+      // T17380: the pending game already exists (created before the credit check) and
+      // may be kept (T8180 annotate binding, T7470 only-if-empty), so the entry STAYS
+      // as a failed upload that names credits; Retry after buying credits finishes it.
+      // The credits modal is the loud surface, so no second toast.
+      patchEntry(id, {
+        status: UPLOAD_STATUS.ERROR,
+        phase: UPLOAD_PHASE.ERROR,
+        message: ERROR_COPY.UPLOAD_INSUFFICIENT_CREDITS,
+        insufficientCredits: true,
+      });
       set({ insufficientCredits: { required: error.uploadCost, balance: error.balance } });
       advanceQueue();
       return;
@@ -156,6 +163,7 @@ export const useUploadStore = create((set, get) => {
       phase: UPLOAD_PHASE.HASHING,
       progress: 0,
       message: UPLOAD_PROGRESS_COPY.PREPARING,
+      insufficientCredits: false, // T17380: a retry clears the credits failure
       // T7820 review: re-stamp at RUN start (not enqueue) so the tile's ETA
       // extrapolation isn't poisoned by queue wait or a retry gap — a queued
       // upload promoted after 20 min would otherwise show hours of ETA.
@@ -223,8 +231,8 @@ export const useUploadStore = create((set, get) => {
     uploads: [],
 
     // T1580: insufficient-credits info (shown when an upload is blocked). App-level
-    // modal concern — stays top-level, not per-entry (the user must buy credits, not
-    // retry a specific entry).
+    // modal concern — stays top-level. T17380: the failed entry itself is also kept
+    // (status:error) so the user can Retry it after buying credits.
     insufficientCredits: null,
 
     /**

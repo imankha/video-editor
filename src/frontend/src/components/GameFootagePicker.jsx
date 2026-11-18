@@ -259,6 +259,14 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
     </div>
   );
 
+  // T17370: a file this browser can play only the sound of (iPhone HEVC) gets the
+  // same plain message as the first upload (T17280); it is already out of `order`.
+  const pictureNote = items.some((it) => it.probeErrorCode === 'VIDEO_PICTURE_UNSUPPORTED') && (
+    <p role="alert" className="text-sm text-red-400 mt-2" data-testid="footage-picture-unsupported">
+      {UPLOAD.VIDEO_PICTURE_UNSUPPORTED}
+    </p>
+  );
+
   const oversizeNote = oversizeMessage && (
     <p className="text-sm text-red-400 mt-2" data-testid="footage-oversize-error">
       {oversizeMessage}
@@ -342,6 +350,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           </div>
         </div>
         {zipNotes}
+        {pictureNote}
         {oversizeNote}
       </div>
     );
@@ -376,6 +385,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           />
         </div>
         {zipNotes}
+        {pictureNote}
         {oversizeNote}
         {/* A junk-only "add more" selection must still surface feedback here. */}
         {error && (
@@ -455,6 +465,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       </button>
 
       {zipNotes}
+      {pictureNote}
       {oversizeNote}
       {error && (
         <p className="text-sm text-red-400 mt-2" data-testid="footage-error">

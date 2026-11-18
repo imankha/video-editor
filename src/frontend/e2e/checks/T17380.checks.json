@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T17380:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/stores/uploadStore.insufficientCredits.test.js src/components/__tests__/UploadingGameTile.insufficientCredits.test.jsx -t 'T17380:C1'"},
+    "T17380:C2": {"kind": "browser"},
+    "T17380:C3": {"kind": "code", "command": "test -f src/frontend/src/stores/uploadStore.insufficientCredits.test.js && grep -q 'insufficientCredits = true' src/frontend/src/stores/uploadStore.insufficientCredits.test.js && cd src/frontend && npx vitest run src/stores/uploadStore.insufficientCredits.test.js"}
+  }
+}

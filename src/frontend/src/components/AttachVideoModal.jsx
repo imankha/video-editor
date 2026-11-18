@@ -15,6 +15,7 @@ import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 import { userErrorMessage } from '../utils/userError';
+import { extractVideoMetadata } from '../utils/videoMetadata';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 
@@ -37,6 +38,8 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState(null); // { phase, percent, message }
   const [showBuyCredits, setShowBuyCredits] = useState(false);
+  // T17370: the picked file failed the same probe the first upload runs.
+  const [fileError, setFileError] = useState(null);
   const fileInputRef = useRef(null);
   const creditBalance = useCreditStore(state => state.balance);
   const creditsLoaded = useCreditStore(state => state.loaded);
@@ -60,7 +63,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
 
   const handleFileSelect = useCallback((event) => {
     const file = event.target.files?.[0];
-    if (file) setSelectedFile(file);
+    if (file) { setSelectedFile(file); setFileError(null); }
   }, []);
 
   const handleDragOver = useCallback((e) => { e.preventDefault(); e.stopPropagation(); }, []);
@@ -75,12 +78,13 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
     setIsDragging(false);
     if (isAttaching) return;
     const file = getVideoFile(e.dataTransfer);
-    if (file) setSelectedFile(file);
+    if (file) { setSelectedFile(file); setFileError(null); }
   }, [isAttaching, getVideoFile]);
 
   const resetAndClose = useCallback(() => {
     if (isAttaching) return; // don't drop an in-flight upload
     setSelectedFile(null);
+    setFileError(null);
     setProgress(null);
     setIsDragging(false);
     onClose();
@@ -97,6 +101,20 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
     }
 
     setProgress({ phase: UPLOAD_PHASE.HASHING, percent: 0, message: 'Preparing…' });
+    // T17370: the same probe as the first upload (GameDetailsModal, T17280), so a
+    // file this browser can play only the sound of is named and never attached.
+    // Runs under the busy state above so a second click cannot start a second attach.
+    try {
+      await extractVideoMetadata(selectedFile);
+    } catch (err) {
+      console.warn('[AttachVideoModal] Footage probe failed:', err);
+      setProgress(null);
+      setFileError(err?.code === 'VIDEO_PICTURE_UNSUPPORTED'
+        ? UPLOAD.VIDEO_PICTURE_UNSUPPORTED
+        : UPLOAD.INVALID_VIDEO_FILE);
+      return;
+    }
+
     try {
       await attachVideoToExistingGame(game.id, selectedFile, (p) => setProgress(p));
       toast.success('Video added to game');
@@ -204,6 +222,10 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
               )}
             </div>
           </div>
+
+          {fileError && (
+            <p role="alert" className="text-sm text-red-400" data-testid="attach-file-error">{fileError}</p>
+          )}
 
           {/* Progress */}
           {progress && progress.phase !== UPLOAD_PHASE.ERROR && (() => {
