@@ -1544,6 +1544,8 @@ export const SHARE_COPY = {
   GAME_LINK_OFF: 'Game link turned off',
   NO_GAME_LINK: "This game doesn't have a link.",
   PUBLIC_GAME_HELP: 'Watches the game plays. No account needed.',
+  // T17080: the link shows team plays only; a game whose plays are all "My athlete" has none.
+  NO_TEAM_PLAYS_FOR_LINK: `The link shows team plays, and this game has none yet. Open the game, pick a play, and set "${ANNOTATE.LAYER_LABEL}" to ${ANNOTATE.LAYER_TEAM}.`,
   EMAILS_SENT: 'Emails sent',
   LOADING_PEOPLE: 'Loading people...',
   LINK_UPDATED: 'Link updated',
