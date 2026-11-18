@@ -180,7 +180,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
         for (const { file } of footage.files) await extractVideoMetadata(file);
       } catch (err) {
         console.warn('[GameDetailsModal] Footage probe failed:', err);
-        setFileError(UPLOAD.INVALID_VIDEO_FILE);
+        setFileError(err?.code === 'VIDEO_PICTURE_UNSUPPORTED'
+          ? UPLOAD.VIDEO_PICTURE_UNSUPPORTED
+          : UPLOAD.INVALID_VIDEO_FILE);
         return;
       }
 

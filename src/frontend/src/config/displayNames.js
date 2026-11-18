@@ -1464,6 +1464,10 @@ export const SPORT_PICK = {
 export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
   INVALID_VIDEO_FILE: "This file isn't a video we can open. Use an MP4, MOV or WebM.",
+  // T17280: the file has sound but this browser cannot draw its picture (iPhone HEVC).
+  VIDEO_PICTURE_UNSUPPORTED:
+    "This browser can't show this video's picture, only its sound. iPhone videos saved as High Efficiency "
+    + 'play in Safari, or set iPhone Settings > Camera > Formats to Most Compatible and record again.',
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   FOOTAGE_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   // T14610: AttachVideoModal (add another half or camera to a game).
@@ -1841,6 +1845,11 @@ export const APP_SHELL_COPY = {
 };
 
 export const ERROR_COPY = {
+  // T17280 (bug 62p): the browser loads the sound but cannot draw the picture
+  // (an iPhone video saved as High Efficiency / HEVC on a computer without an HEVC decoder).
+  VIDEO_PICTURE_UNSUPPORTED:
+    "This browser can't show this video's picture, only its sound. iPhone videos saved as "
+    + 'High Efficiency play in Safari, or set iPhone Settings > Camera > Formats to Most Compatible and record again.',
   CONNECTION: "We couldn't connect. Check your internet and try again.",
   CONNECTING: 'Connecting...',
   WAKING_UP: 'Getting things ready, one moment...',

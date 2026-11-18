@@ -35,3 +35,34 @@ Not investigated. Start from the knowledge doc `.claude/knowledge/annotate.md` a
 - [ ] C1: The cause of bug 62p is identified and written in the task notes with evidence.
 - [ ] C2: A game uploaded from an iPhone (the cause's file type) shows its picture and plays with sound in Annotate.
 - [ ] C3: A regression test covers the cause.
+
+## Notes
+
+### Cause (C1, 2026-11-18)
+
+Evidence (from bug 62p, fetched by the owner): Windows Chrome/Edge 157 desktop. At open, Annotate warned
+`Game 1: video dimensions unknown (no element metadata and no game row video_width/video_height)`. The
+client logs had no `VIDEO_LOAD` lines and no video element errors. Later uploads retried and finally
+failed with `Insufficient credits: need 2, have 1`.
+
+Mechanism: an iPhone records HEVC (High Efficiency) by default. Chrome on Windows can decode HEVC only with
+a hardware decoder. Without one, it loads the file as audio only: `loadedmetadata` fires with a real
+duration, `videoWidth`/`videoHeight` are 0, and no media error is raised. The code accepted that:
+
+- `utils/videoMetadata.extractVideoMetadata` (the Upload dialog's probe, T12830) resolved `{width: 0, height: 0}`.
+- `uploadGame` sends `width: options.videoWidth || null`, so the game row stored no dimensions. That is the
+  "dimensions unknown" warning.
+- `useVideo` played the sound over a blank stage with no message.
+
+The retries and the credit failure follow from the parent trying again after seeing no picture.
+
+Fix: the probe rejects a file with sound but a 0x0 picture (`VideoPictureUnsupportedError`,
+code `VIDEO_PICTURE_UNSUPPORTED`). The Upload dialog then tells the parent plainly, before anything is
+uploaded or charged: use Safari, or set iPhone Camera > Formats to Most Compatible.
+For a game already uploaded this way, `useVideo` shows the same message as a video error instead of playing
+sound over a blank stage. `handleLoadedData` no longer clears that error.
+
+Not done (follow-up): no transcoded H.264 copy is made, so such a game still cannot show its picture in that
+browser. Also, `uploadStore.onEntryError`'s insufficient-credits branch retires the entry even when
+`uploadGame` kept the pending game (T8180, the user was annotating), which leaves a pending game with no
+Retry/Discard.
