@@ -74,7 +74,7 @@ export function ChannelsTable({ data, onRowClick, onCountryClick, selectedOrigin
         rows={data?.channels}
         labelHeader={by === 'origin' ? 'Campaign' : label}
         rowKey={ch => ch[by]}
-        renderLabel={ch => <OriginLabel origin={ch[by]} campaignName={ch.campaign_name} group={ch.group} />}
+        renderLabel={ch => <OriginLabel origin={ch[by]} campaignName={ch.campaign_name} group={ch.group} markUnregistered={by === 'origin'} />}
         isSelectable={() => filtersUsers}
         onRowClick={by === 'country' ? onCountryClick : onRowClick}
         selectedKey={{ origin: selectedOrigin, country: selectedCountry }[by]}

@@ -1167,6 +1167,14 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   Doubles that replace the client never fire the hooks.
 
 ## Admin attribution dimensions (T13980 / T13990 / T14000)
+- **Counts that must agree (T17150):** `GET /api/admin/users` returns `deleted_users` = how many of `total_users`'
+  rows are deleted-account tombstones (Paying adds ledger-only payers, a Journey drill adds de-identified segments);
+  UserTable shows `total_users - deleted_users` as "users total" plus "N deleted accounts", so a filter never raises
+  the total. `total_users` stays the row count (pagination; T8657 tests assert it). Dimension tables print
+  "<successes> of <tries>" (was "tries / successes", misread). Campaigns-table origin rows with no `campaign_name`
+  (raw ?ref/utm values, source buckets, Referral programme) carry "not in Manage Campaigns" (OriginLabel
+  `markUnregistered`). Dev DB trap: a pytest that finalizes without prepare-upload can leave a success with no
+  attempt (test_t2580_955a9951 was flagged is_test_account for this).
 - Admin filter panel shows ONE dimension at a time (Campaigns | Cohorts | Builds); selections are
   mutually exclusive (frontend `setSegmentFilter(origin, from, to, build = null)` -- omitting `build` clears it).
 - **Campaigns (v038):** `campaigns(id, name)`; `id` is the short `?ref=` code stored in `user_segments.origin`,

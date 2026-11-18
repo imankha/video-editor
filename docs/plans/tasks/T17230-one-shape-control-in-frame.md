@@ -1,6 +1,6 @@
 # T17230: Frame: one place to choose the shape
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-11-17

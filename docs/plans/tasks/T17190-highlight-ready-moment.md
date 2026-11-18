@@ -1,6 +1,6 @@
 # T17190: Highlight ready: point to it, say you can leave
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-17

@@ -1,6 +1,6 @@
 # T17220: One Share game window
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-17

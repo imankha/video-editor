@@ -202,3 +202,22 @@ describe('ChannelsTable medium, term and referring website (T16900)', () => {
     expect(screen.queryByText(/organic: source unknown/)).toBeNull();
   });
 });
+
+describe('ChannelsTable origins not in Manage Campaigns (T17150)', () => {
+  it('marks an origin row with no registered campaign and says why', () => {
+    render(<ChannelsTable by="origin" data={{ channels: [{ ...CH, origin: 'abc', campaign_name: null }] }} />);
+    const badge = screen.getByText('not in Manage Campaigns');
+    expect(badge.getAttribute('title')).toMatch(/no campaign was created/);
+  });
+
+  it('does not mark a registered campaign row', () => {
+    render(<ChannelsTable by="origin" data={{ channels: [{ ...CH, origin: 'c1x9', campaign_name: 'Spring push' }] }} />);
+    expect(screen.getByText('Spring push')).toBeTruthy();
+    expect(screen.queryByText('not in Manage Campaigns')).toBeNull();
+  });
+
+  it('does not mark rows of a non-origin dimension', () => {
+    render(<ChannelsTable by="utm_source" onByChange={() => {}} data={{ channels: [{ ...CH, utm_source: 'abc', campaign_name: null }] }} />);
+    expect(screen.queryByText('not in Manage Campaigns')).toBeNull();
+  });
+});

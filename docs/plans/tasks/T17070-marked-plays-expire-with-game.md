@@ -1,6 +1,6 @@
 # T17070: Marked plays expire with game
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-11-17

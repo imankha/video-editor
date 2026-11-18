@@ -1,6 +1,6 @@
 # T17170: Mark plays: next play, row taps, star markers
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-11-17

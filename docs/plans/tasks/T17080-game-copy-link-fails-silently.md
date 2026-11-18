@@ -1,6 +1,6 @@
 # T17080: Game Copy link fails silently
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-17

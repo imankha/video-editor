@@ -69,7 +69,7 @@ export function DimensionTable({
             <th className="text-right px-3 py-2.5" title="Account deleted, analytics kept (T15290)">Deleted</th>
             <th className="text-right px-3 py-2.5">Revenue</th>
             <th className="text-center px-3 py-2.5">Upload Success</th>
-            <th className="text-center px-3 py-2.5" title="Upload tries / successes since 2026-09-22, the counts Upload Success divides (tries were not recorded before then, so older uploads count on neither side)">Upload tries</th>
+            <th className="text-center px-3 py-2.5" title="Upload successes of tries since 2026-09-22 (3 of 7: 3 succeeded out of 7 tries), the counts Upload Success divides (tries were not recorded before then, so older uploads count on neither side)">Upload tries</th>
             <th className="text-center px-3 py-2.5" title="Of sign-ups at least 14 days old, the share who rendered within 14 days (hit/aged)">First highlight 14d</th>
             {COUNT_COLS.map(c => (
               <th key={c.key} className="text-right px-3 py-2.5">{c.label}</th>
@@ -105,7 +105,8 @@ export function DimensionTable({
                     )}
                 </td>
                 <td className="px-3 py-2 text-center text-gray-300 text-xs whitespace-nowrap">
-                  {row.upload_tries} / {row.upload_successes}
+                  {/* T17150: successes first, worded, so "7 / 3" is never read as 7 of 3. */}
+                  {row.upload_successes} of {row.upload_tries}
                 </td>
                 <td className="px-3 py-2 text-center whitespace-nowrap">
                   <FirstHighlightCell value={row.first_highlight_14d} />

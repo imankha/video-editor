@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { OriginLabel } from './OriginLabel';
 import { formatAdminDateTime, screenName, TEST_SIGN_IN_NOTE } from './adminLabels';
@@ -231,6 +231,13 @@ function SessionExitTrail({ exits }) {
 export function UserDetailPanel({ data, onClose }) {
   const [actionFilter, setActionFilter] = useState('all');
   const [searchText, setSearchText] = useState('');
+
+  // T17160: Esc closes the journey window, like every other window in the app.
+  useEffect(() => {
+    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   const milestoneMap = useMemo(() => {
     if (!data?.milestones) return {};

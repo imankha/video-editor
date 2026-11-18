@@ -4,6 +4,7 @@ vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 
 import { useProjectsStore } from './projectsStore';
 import apiFetch from '../utils/apiFetch';
+import { getProjectDisplayName } from '../utils/clipDisplayName';
 
 // Captured before any test swaps the action for a stub.
 const realFetchProject = useProjectsStore.getState().fetchProject;
@@ -132,6 +133,17 @@ describe('projectsStore.renameProject (T4230)', () => {
     const project = useProjectsStore.getState().projects[0];
     expect(project.name).toBe('New Name');
     expect(project.is_auto_created).toBe(true);
+  });
+
+  it('T17240: a rename replaces the shown "game plus time" label', async () => {
+    useProjectsStore.setState({
+      projects: [{ id: 7, name: 'Play 1', display_name: 'Vs Oceanside 0:14', aspect_ratio: '9:16' }],
+    });
+    vi.mocked(apiFetch).mockResolvedValue({ ok: true });
+
+    await useProjectsStore.getState().renameProject(7, 'Bicycle kick');
+
+    expect(getProjectDisplayName(useProjectsStore.getState().projects[0])).toBe('Bicycle kick');
   });
 });
 

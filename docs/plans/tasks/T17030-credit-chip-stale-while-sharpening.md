@@ -1,6 +1,6 @@
 # T17030: Credit chip stale while sharpening
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-11-17

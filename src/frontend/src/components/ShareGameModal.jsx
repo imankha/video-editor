@@ -18,6 +18,7 @@ import {
 } from '../constants/shareClipScope';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { Z } from '../constants/zLayers';
 import { formatInstant, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
@@ -191,6 +192,9 @@ function RevokeConfirmDialog({ busy, onKeep, onConfirm }) {
 
 export function ShareGameModal({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
+  // T17220: a valid address typed but not yet added (UserPicker reports it), so
+  // tapping Send shares it without Enter first.
+  const [pendingEmail, setPendingEmail] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // per-recipient state, keyed by email
@@ -350,7 +354,10 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose, confirmRevoke]);
 
-  const canSubmit = emails.length > 0 && !isSubmitting;
+  const recipientEmails = pendingEmail && !emails.includes(pendingEmail)
+    ? [...emails, pendingEmail]
+    : emails;
+  const canSubmit = recipientEmails.length > 0 && !isSubmitting;
 
   // Recipients set to "Only clips they're tagged in" whose resolved tagged set is
   // empty — surfaced in a send-time banner so a zero-clip send is never silent.
@@ -362,10 +369,10 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   }).length;
 
   const handleSubmit = async () => {
-    if (emails.length === 0) return;
+    if (recipientEmails.length === 0) return;
     setIsSubmitting(true);
     try {
-      const recipients = emails.map((email) => ({
+      const recipients = recipientEmails.map((email) => ({
         email,
         scope: scopeByEmail[email] || DEFAULT_SHARE_CLIP_SCOPE,
       }));
@@ -380,7 +387,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
       }
       const data = await resp.json();
       if (data.all_sent) {
-        toast.success(SHARE_COPY.gameSharedWith(emails.length));
+        toast.success(SHARE_COPY.gameSharedWith(recipientEmails.length));
         onClose();
       } else {
         const failed = data.results.filter((r) => !r.sent).map((r) => r.email);
@@ -398,7 +405,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
 
   return (
     <GuideScope guides={[guide]}>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className={`fixed inset-0 ${Z.SHARE} flex items-center justify-center bg-black/60 backdrop-blur-sm`}>
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white truncate pr-4">
@@ -421,6 +428,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
             onChange={handleEmailsChange}
             contacts={contacts}
             placeholder={SHARE_COPY.EMAIL_HINT}
+            onPendingEmailChange={setPendingEmail}
           />
         </div>
 
@@ -509,7 +517,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
           layout="modal"
           primary={{
             icon: isSubmitting ? Loader : undefined,
-            title: isSubmitting ? 'Sharing...' : `Share with ${emails.length}`,
+            title: isSubmitting ? SHARE_COPY.SENDING : SHARE_COPY.SEND,
             onClick: handleSubmit,
             disabled: !canSubmit,
             loading: isSubmitting,

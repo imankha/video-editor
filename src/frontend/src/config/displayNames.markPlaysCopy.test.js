@@ -8,7 +8,7 @@ const { GUIDE, ANNOTATE, DIVISION_OF_WORK } = names;
 describe('Mark plays copy (T17170:C2)', () => {
   it('the four strings read as written', () => {
     expect(GUIDE.annotate.watch.title).toBe(
-      'Tap Play to watch the game. Tap Mark play at any moment worth keeping, a great play or one to learn from.'
+      'Press Play to watch the game. Press Mark play at any moment worth keeping, a great play or one to learn from.'
     );
     expect(GUIDE.annotate.watchPlaying.title).toBe('See a play worth keeping? Tap Mark play.');
     expect(ANNOTATE.MODE_DESCRIPTION).toBe('Mark plays: tap Mark play right after a moment worth keeping.');

@@ -1,6 +1,6 @@
 # T17120: Desktop wording says tap
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 2
 **Complexity:** 2
 **Created:** 2026-11-17

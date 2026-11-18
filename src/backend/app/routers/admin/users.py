@@ -141,13 +141,18 @@ def list_users(
         # inner join here made such users invisible in GET /api/admin/users.
         # An origin/date filter (where_clause) still legitimately excludes NULL
         # segment fields, so filtered views are unchanged.
+        # T17150: Paying (and a Journey drill) also list deleted-account tombstones, which
+        # the unfiltered list never has; count them apart so the live users total a
+        # filter shows stays a subset of the unfiltered one.
         cur.execute(f"""
-            SELECT COUNT(*) AS cnt
+            SELECT COUNT(*) AS cnt, COUNT(*) FILTER (WHERE u.is_deleted) AS deleted
             FROM {population}
             LEFT JOIN user_segments s ON u.user_id = s.user_id
             {where_clause}
         """, params)
-        total_users = cur.fetchone()["cnt"]
+        count_row = cur.fetchone()
+        total_users = count_row["cnt"]
+        deleted_users = count_row["deleted"]
         total_pages = max(1, math.ceil(total_users / page_size))
         page = min(page, total_pages)
 
@@ -396,6 +401,7 @@ def list_users(
         "page": page,
         "page_size": page_size,
         "total_users": total_users,
+        "deleted_users": deleted_users,
         "total_pages": total_pages,
         "funnel_totals": funnel_totals,
     }

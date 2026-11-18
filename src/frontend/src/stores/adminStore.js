@@ -46,6 +46,8 @@ export const useAdminStore = create((set, get) => ({
   currentPage: 1,
   totalPages: 1,
   totalUsers: 0,
+  // T17150: how many of totalUsers' rows are deleted-account tombstones (Paying, Journey drill).
+  deletedUsers: 0,
   pageSize: 10,
 
   grantState: {},
@@ -333,6 +335,7 @@ export const useAdminStore = create((set, get) => ({
         currentPage: data.page,
         totalPages: data.total_pages,
         totalUsers: data.total_users,
+        deletedUsers: data.deleted_users,
         pageSize: data.page_size,
         funnelTotals: data.funnel_totals || null,
         usersLoading: false,
@@ -375,6 +378,7 @@ export const useAdminStore = create((set, get) => ({
         currentPage: data.users.page,
         totalPages: data.users.total_pages,
         totalUsers: data.users.total_users,
+        deletedUsers: data.users.deleted_users,
         pageSize: data.users.page_size,
         funnelTotals: data.users.funnel_totals || null,
         pulseData: data.pulse,

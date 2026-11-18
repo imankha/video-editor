@@ -44,7 +44,7 @@ vi.mock('../stores/authStore', () => {
   return { useAuthStore };
 });
 vi.mock('../stores/profileStore', () => {
-  const state = { currentProfileId: 'p1', switchProfile: vi.fn() };
+  const state = { currentProfileId: 'p1', profiles: [{ id: 'p1' }], isInitialized: true, switchProfile: vi.fn() };
   const useProfileStore = (sel) => sel(state);
   useProfileStore.getState = () => state;
   return { useProfileStore };

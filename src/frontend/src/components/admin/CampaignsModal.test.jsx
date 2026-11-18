@@ -106,3 +106,13 @@ describe('CampaignsModal (T13980)', () => {
     expect(screen.getByText(/updated 2026-11-08/)).toBeTruthy();
   });
 });
+
+describe('CampaignsModal Esc (T17160)', () => {
+  it('T17160: Esc closes the window', () => {
+    useAdminStore.setState({ campaigns: [], campaignsLoading: false, campaignsError: null });
+    const onClose = vi.fn();
+    render(<CampaignsModal onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

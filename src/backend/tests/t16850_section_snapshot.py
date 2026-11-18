@@ -12,9 +12,10 @@ from unittest.mock import patch
 
 TEST_BUILD = 16850
 SEEDED = ["t16850-hockey-a", "t16850-hockey-b", "t16850-lax-a", "t16850-direct"]
-# Keys added beside the numbers after the base revision (not numbers themselves):
-# sport_applied (T16850); highlight_finished_count and joined_at (T17270 admin user columns).
-ADDED_KEYS = {"sport_applied", "highlight_finished_count", "joined_at"}
+# Keys added beside the base revision's numbers (not changes to them): this task's
+# sport_applied, T17150's users.deleted_users (deleted-payer tombstones counted apart),
+# and T17270's admin user columns highlight_finished_count and joined_at.
+ADDED_KEYS = {"sport_applied", "deleted_users", "highlight_finished_count", "joined_at"}
 
 ENDPOINTS = [
     ("pulse", "/api/admin/analytics/pulse", {"build": TEST_BUILD}),

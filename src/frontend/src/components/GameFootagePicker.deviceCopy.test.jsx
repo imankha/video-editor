@@ -22,7 +22,7 @@ describe('T15620 GameFootagePicker device-correct heading', () => {
     const dropHeading = screen.getByText('Drop any game video here.');
     expect(dropHeading.className).toContain('coarse-pointer:hidden');
 
-    const tapHeading = screen.getByText('Tap to add a game video.');
+    const tapHeading = screen.getByText('Tap to choose your game video');
     expect(tapHeading.className).toContain('fine-pointer:hidden');
   });
 

@@ -5,9 +5,9 @@ import { GUIDE_PULSE as P } from './guideTargets';
 // T12800 layer 3: a sentence that names a control must point the card away from it. Every control
 // phrase below maps to the rule's `pulse` or its `keepClear`, or carries a documented reason in
 // NAMES_OFFSCREEN. Explicit table on purpose (greppable, no registry): a new sentence that tells the
-// user to tap/drag/pick/open something and matches no row fails here until a row is added.
+// user to tap/press/drag/pick/open something and matches no row fails here until a row is added.
 const CONTROL_PHRASES = [
-  { name: 'Play', re: /\bTap Play\b/, pulse: [P.ANNOTATE_PLAY, P.PLAY], keepClear: ['annotate-controls'] },
+  { name: 'Play', re: /\b(Tap|Press) Play\b/, pulse: [P.ANNOTATE_PLAY, P.PLAY], keepClear: ['annotate-controls'] },
   { name: 'Mark play', re: /\bMark play\b/, pulse: [P.MARK_PLAY] },
   { name: 'Make highlight', re: /\bTap Make highlight\b/, pulse: [P.CHOICE_NOW, P.MAKE_HIGHLIGHT] },
   { name: 'Edit play', re: /\bEdit play\b/, keepClear: ['annotate-primary-cta'] },
@@ -20,7 +20,7 @@ const CONTROL_PHRASES = [
   { name: 'tap a play', re: /\btap a play\b/, pulse: [P.FIRST_PLAY] },
   { name: 'tap a clip', re: /\bTap a (clip|play)\b/, pulse: [P.FIRST_CLIP] },
   { name: 'Tap it/one', re: /\bTap (it|one)\b/, pulse: [P.HIGHLIGHT_ROW, P.FIRST_FINISHED] },
-  { name: 'Upload game', re: /\bTap Upload game\b/, pulse: [P.UPLOAD_SUBMIT, P.UPLOAD_GAME, P.CLIP_SIZE_ADD_GAME] },
+  { name: 'Upload game', re: /\b(Tap|Press) Upload game\b/, pulse: [P.UPLOAD_SUBMIT, P.UPLOAD_GAME, P.CLIP_SIZE_ADD_GAME] },
   { name: 'Retry', re: /\bTap Retry\b/, pulse: [P.GAMES_RETRY, P.UPLOAD_RETRY, P.VIDEO_RETRY] },
   { name: 'Open it / your game', re: /\bOpen (it now|your game)\b/, pulse: [P.FIRST_GAME] },
   { name: 'Open Finished', re: /\bOpen Finished\b/, pulse: [P.TAB_PUBLISHED] },
@@ -37,7 +37,8 @@ const CONTROL_PHRASES = [
   { name: 'Share link', re: /\bTap Share link\b/, pulse: [P.SHARE_LINK] },
   { name: 'Download', re: /\bDownload to save\b/, pulse: [], keepClear: ['player-download'] },
   { name: 'Choose who can watch', re: /\bChoose who can watch\b/, pulse: [] },
-  { name: 'Share', re: /\btap Share\b(?! game)/, pulse: [P.SHARE_SUBMIT, P.SHARE_GAME_SUBMIT, P.COLLECTION_SHARE_SUBMIT, P.TEAMMATES_SHARE_SUBMIT, P.SHARE_PLAYBACK_SUBMIT] },
+  { name: 'Share', re: /\btap Share\b(?! game)/, pulse: [P.SHARE_SUBMIT, P.COLLECTION_SHARE_SUBMIT, P.TEAMMATES_SHARE_SUBMIT] },
+  { name: 'Send', re: /\btap Send\b/, pulse: [P.SHARE_GAME_SUBMIT] },
   { name: 'Tap your athlete', re: /\bTap your athlete\b/, pulse: [P.PICK_BOX] },
   { name: 'Add video', re: /\bTap Add video\b/, pulse: [P.ATTACH_SUBMIT] },
   { name: 'Continue', re: /\bTap Continue\b/, pulse: [P.CLIP_NOTICE_CONTINUE] },
@@ -57,7 +58,7 @@ const CONTROL_PHRASES = [
   { name: 'drag it back', re: /\bdrag it back\b/, pulse: [P.CROP_BOX] },
   { name: 'Back to full video', re: /\bTap Back to full video\b/, pulse: [] },
   { name: 'Preview again', re: /\bTap Preview again\b/, pulse: [] },
-  { name: 'Pick your game video', re: /\bPick your game video\b/, pulse: [] },
+  { name: 'Choose your game video', re: /\bChoose your game video\b/, pulse: [] },
   { name: 'Open a game (noPulse)', re: /\bOpen a game\b/, pulse: [] },
   { name: 'Open this play again', re: /\bopen this play again\b/, pulse: [] },
   { name: 'Tap (moment)', re: /\bstill needs a tap\b|\bneeds a tap\b/, pulse: [] },
@@ -81,10 +82,9 @@ const NAMES_OFFSCREEN = {
   'modal.move-profile.pick:Tap a/the (list item)': IN_DIALOG,
   'modal.collection-share.done:Tap Close/Done (dialog)': IN_DIALOG,
   'modal.teammates.done:Tap Close/Done (dialog)': IN_DIALOG,
-  'modal.share-playback.error:Tap Close/Done (dialog)': IN_DIALOG,
 };
 
-const VERBS = /\b(tap|click|drag|pick|choose|exit)\b|\bopen (it|a|your|this)\b/i;
+const VERBS = /\b(tap|press|click|drag|pick|choose|exit)\b|\bopen (it|a|your|this)\b/i;
 const titleOf = rule => rule.message?.title ?? '';
 const testidsOf = selectors => (selectors ?? []).map(s => /data-testid="([^"]+)"/.exec(s)?.[1]).filter(Boolean);
 const rules = GUIDE_RULES.filter(r => titleOf(r) && !r.silent);

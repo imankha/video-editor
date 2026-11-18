@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { RotateCw, ChevronDown } from 'lucide-react';
 import AspectRatioSelector from '../AspectRatioSelector';
+import ShapeSwitchConfirm from '../../modes/focus/ShapeSwitchConfirm';
 import { Toggle } from '../shared';
 import SettingRow from './SettingRow';
 import SettingsPanel from './SettingsPanel';
@@ -13,7 +14,9 @@ import { EDITOR_PANELS, FRAME_COPY } from '../../config/displayNames';
  * background dim) into the shared SettingRow / SettingsPanel anatomy, grouped
  * by WHAT EACH CONTROL CHANGES:
  *
- *   Highlight          - applies to every clip (aspect ratio, include audio)
+ *   Highlight          - applies to every clip (shape, include audio). T17230: the
+ *                        Shape row is the one lasting shape control; with box
+ *                        positions placed (`hasPositions`) a switch asks first.
  *   More options       - Fix a tilted camera (straighten) + Darken outside the
  *                        box (dim), T12180: one collapsed disclosure, plain labels.
  *                        T10395: zoom lives on the video's own Controls bar.
@@ -26,6 +29,7 @@ import { EDITOR_PANELS, FRAME_COPY } from '../../config/displayNames';
 export default function FocusSettingsPanel({
   globalAspectRatio,
   onAspectRatioChange,
+  hasPositions = false,
   includeAudio,
   onIncludeAudioChange,
   straightenVisible,
@@ -35,15 +39,37 @@ export default function FocusSettingsPanel({
   desktopOnly = true,
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const [pendingRatio, setPendingRatio] = useState(null);
+  const chooseShape = (ratio) => {
+    if (ratio === globalAspectRatio) return;
+    if (hasPositions) {
+      setPendingRatio(ratio);
+      return;
+    }
+    onAspectRatioChange(ratio);
+  };
+  const confirmShape = () => {
+    const ratio = pendingRatio;
+    setPendingRatio(null);
+    onAspectRatioChange(ratio);
+  };
   return (
     <>
       <SettingsPanel title={FRAME_COPY.SETTINGS_TITLE}>
-        <SettingRow label="Aspect ratio" value={ratioWithName(globalAspectRatio)}>
+        <SettingRow label={FRAME_COPY.SHAPE_LABEL} value={ratioWithName(globalAspectRatio)}>
           <AspectRatioSelector
             aspectRatio={globalAspectRatio}
-            onAspectRatioChange={onAspectRatioChange}
+            onAspectRatioChange={chooseShape}
           />
         </SettingRow>
+        {pendingRatio && (
+          <ShapeSwitchConfirm
+            fromRatio={globalAspectRatio}
+            toRatio={pendingRatio}
+            onConfirm={confirmShape}
+            onKeep={() => setPendingRatio(null)}
+          />
+        )}
         <SettingRow label="Include audio" value={includeAudio ? 'On' : 'Off'}>
           {/* T10820 (known-failures row 32): this Toggle renders on mobile too (not
               gated by desktopOnly), and its default h-7 track (28px) sits under the

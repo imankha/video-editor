@@ -34,7 +34,6 @@ const RETIRED = {
     'Revoke this game link?', 'Revoke link', 'Revoking', 'different URL', 'Link revoked', 'Game link revoked',
     'recipient${', 'team recap', 'toast.success(url)', 'Enter email addresses',
   ],
-  'components/SharePlaybackDialog.jsx': ['recipient${', 'press Enter', 'Enter email addresses'],
   'components/ShareWithTeammatesModal.jsx': [
     'Share With Teammates', 'claim', 'Press Enter', 'Enter email addresses', 'have been shared with',
     'email mappings...',

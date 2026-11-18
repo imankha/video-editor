@@ -275,14 +275,15 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 6');
   });
 
-  it('T15990: box positions that arrive after mount collapse the shape picker to the chip, and switching asks first', () => {
+  it('T17230 (was T15990): box positions that arrive after mount hide the shape chooser (no chip) and move the guide past it', () => {
     const { rerender } = render(<Harness initial={{ keyframes: [] }} />);
     expect(screen.getByTestId('focus-shape-option-landscape')).toBeTruthy();
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.shareWhere);
     // Positions loaded (or placed by the parent's drag) after the view mounted.
     rerender(<Harness initial={{ keyframes: [kf(10)] }} />);
-    expect(screen.queryByTestId('focus-shape-option-landscape')).toBeNull();
-    fireEvent.click(screen.getByTestId('focus-shape-chip'));
-    expect(screen.getByTestId('focus-shape-switch-confirm')).toBeTruthy();
+    expect(screen.queryByTestId('focus-shape-choice')).toBeNull();
+    expect(screen.queryByTestId('focus-shape-chip')).toBeNull();
+    expect(screen.getByTestId('framing-guide-text').textContent).not.toBe(GUIDE.focus.shareWhere);
   });
 
   it('ignores trim-origin keyframes when deciding the drag step is done', () => {

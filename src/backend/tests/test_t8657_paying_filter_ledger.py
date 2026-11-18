@@ -247,6 +247,31 @@ class TestDeletedPayerTombstone:
         assert tombstones[0]["total_spent_cents"] == 399
         assert _pulse_revenue(client, filter="paying", exclude_test=True) == 4695
 
+    def test_paying_live_count_never_exceeds_unfiltered(self, client):
+        """T17150: staging read "10 users total" unfiltered and 13 with Paying on. The
+        deleted-payer tombstones are listed only under Paying, so the response says how
+        many of its rows are deleted accounts and the live count stays a subset."""
+        create_user("live-payer", email="live-payer@paying.test")
+        create_user_segment("live-payer", "organic", None, "otp")
+        _seed_payment("live-payer", "purchase", 399, obj_id="pi_live_payer")
+        create_user("live-free", email="live-free@paying.test")
+        create_user_segment("live-free", "organic", None, "otp")
+        for n in range(3):
+            _seed_payment(f"gone-{n}", "purchase", 399, obj_id=f"pi_gone_{n}")
+
+        def users(**params):
+            resp = client.get("/api/admin/users", params={"exclude_test": "false", "page_size": 50, **params},
+                              headers=_auth())
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        unfiltered, paying = users(), users(filter="paying")
+        assert unfiltered.get("deleted_users") == 0, unfiltered.get("deleted_users")
+        assert paying.get("deleted_users") == 3, paying.get("deleted_users")
+        assert paying["total_users"] == 4  # every listed row, tombstones included
+        assert paying["total_users"] - paying["deleted_users"] == 1
+        assert paying["total_users"] - paying["deleted_users"] <= unfiltered["total_users"]
+
 
 class TestPayingSelectorFromLedger:
     def test_user_list_paying_count_counts_ledger_payer_with_zero_cache(self, client):

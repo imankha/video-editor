@@ -17,6 +17,7 @@ import { compareGameTime } from '../utils/timeFormat';
 import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
+import { useFirstRunCredits } from '../hooks/useFirstRunCredits';
 import GuidanceToggle from './instructions/GuidanceToggle';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GUIDE_PULSE } from './instructions/guideTargets';
@@ -826,6 +827,8 @@ export function ProjectManager({
   // behind the opaque overlay) the whole time the viewer was open. It owns the guide
   // while open, same as the upload modal.
   const reelPreviewOpen = useReelPreviewStore((s) => s.payload != null);
+  // T17200 + T17090: the first-run coach sentence names the free credit balance, only on a one-profile account.
+  const firstRunCredits = useFirstRunCredits();
   // T17190: a sharpen finished this session (its job is still listed), so Home's ready
   // message is about a highlight the parent just made: the coach points at it.
   const sharpenFinished = useExportStore((s) => Object.values(s.activeExports).some(
@@ -846,6 +849,7 @@ export function ProjectManager({
     finished: finishedCount,
     highlightReady: sharpenFinished,
     ...reviewCounts(games),
+    credits: firstRunCredits,
   }));
   useEffect(() => {
     if (clipsRingProjectId == null) return;
@@ -1686,15 +1690,14 @@ export function ProjectManager({
         data-testid="clip-upload-input"
       />
 
-      {/* Credits anchored far left. First-run hint derives "never uploaded a
-          game" from the loaded games list (T8500) - a pure render-time
-          derivation, no persisted view state. */}
+      {/* Credits anchored far left. T17200: the first-run "free credits" line is
+          the Home coach sentence (or plain text with Guidance off), not a caption here. */}
       {/* T9290: opaque backing plate (matches the gray-900 page surface) so
           scrolled tile content passes cleanly BEHIND the chip instead of
           bleeding through its translucent bg-white/10 pill. Invisible at rest. */}
       {isAuthenticated && (
         <div className="fixed top-4 left-4 z-30 rounded-lg bg-gray-900">
-          <CreditBalance showFirstRunHint={!gamesLoading && games.length === 0} />
+          <CreditBalance />
         </div>
       )}
 
@@ -2047,6 +2050,7 @@ export function ProjectManager({
             guide={homeGuide}
             gamesCount={games.length}
             onAddGame={handleAddGameClick}
+            onAddVideo={handleAddVideoClick}
             onNavigate={setActiveTab}
           />
         ) : (
