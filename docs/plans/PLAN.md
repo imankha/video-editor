@@ -199,6 +199,7 @@ From the same review. Deletions come first, because less false code makes every 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T17650 | [Trim control blocks deleting split](tasks/T17650-trim-control-blocks-delete-split.md) | 5 | 2 | 2.5 | TODO | [ ] | A parent splits a play and trims its last section. The control that restores the trimmed end sits over Delete split. Clicking Delete split cannot reach that button, so the parent must restore the trimmed section before removing the split. This repeated on all three fresh page loads. The two controls should both remain reachable. Done when deleting the split and restoring trimmed footage are separately reachable. |
 | T6600 | [Background controls cover profile dialogs](tasks/player-intro/T6600-modal-z-order-and-stacking-scale.md) | 7 | 4 | 1.8 | TODO | [ ] | Play and Share controls from background highlights appear above Manage profiles and can cover its profile rows. The owner reported the overlap, and it repeated on phone, tablet and desktop. On current staging the background Share button still receives input through the modal backdrop in three fresh loads. This reopens the existing layering task whose archive row says done. Done when every background control stays behind the dialog and its backdrop, including the nested Intro cards case. |
 
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
