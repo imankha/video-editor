@@ -33,6 +33,7 @@ const CONTROL_PHRASES = [
   { name: 'Exit fullscreen', re: /\bExit fullscreen\b/, pulse: [P.EXIT_FULLSCREEN] },
   { name: 'Finish', re: /\btap Finish\b/i, pulse: [P.OVERLAY_FINISH, P.FOCUS_ADD_SPOTLIGHT] },
   { name: 'Get link', re: /\bTap Get link\b/, pulse: [P.GET_LINK] },
+  { name: 'Share link', re: /\bTap Share link\b/, pulse: [P.SHARE_LINK] },
   { name: 'Download', re: /\bDownload to save\b/, pulse: [], keepClear: ['player-download'] },
   { name: 'Choose who can watch', re: /\bChoose who can watch\b/, pulse: [] },
   { name: 'Share', re: /\btap Share\b(?! game)/, pulse: [P.SHARE_SUBMIT, P.SHARE_GAME_SUBMIT, P.COLLECTION_SHARE_SUBMIT, P.TEAMMATES_SHARE_SUBMIT, P.SHARE_PLAYBACK_SUBMIT] },

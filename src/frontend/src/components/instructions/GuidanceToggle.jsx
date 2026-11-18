@@ -54,7 +54,9 @@ export default function GuidanceToggle() {
   return <>
     <div ref={slotRef} aria-hidden="true" className={`invisible flex-shrink-0 ${SWITCH_CLASS}`}><SwitchFace on={coachEnabled} /></div>
     {createPortal(
-      <div data-testid="guidance-toggle-layer" className={`fixed ${Z.TOAST}`} style={box && !box.covered ? { left: box.left, top: box.top } : { visibility: 'hidden' }}>
+      // T17010: the CSS :has() rule hides the layer in the same style pass that adds a covering
+      // surface; the rAF `covered` flag alone lagged a frame plus a render behind it.
+      <div data-testid="guidance-toggle-layer" className={`fixed ${Z.TOAST} [body:has([data-covers-header])_&]:invisible`} style={box && !box.covered ? { left: box.left, top: box.top } : { visibility: 'hidden' }}>
         <button type="button" role="switch" aria-label={GUIDANCE_COPY.LABEL} aria-checked={coachEnabled}
           data-testid="guidance-toggle" disabled={saving || !loaded}
           className={`${SWITCH_CLASS} cursor-pointer hover:bg-gray-800 disabled:cursor-wait`}
