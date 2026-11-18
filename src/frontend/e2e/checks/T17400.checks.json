@@ -1,0 +1,3 @@
+{"criteria": {
+  "T17400:C1": {"kind": "code", "command": "bash scripts/dev-verify.sh e2e/checks/T17250.check.spec.js --grep 'T17250:C2' --reporter=line", "why_not_browser": "the criterion IS the T17250:C2 browser check passing (it pays with the test card at 390x844 and 1440x900); this runs that same check, and the staging check runs it against staging"}
+}}

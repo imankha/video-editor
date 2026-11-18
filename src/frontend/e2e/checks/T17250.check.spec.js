@@ -15,7 +15,9 @@ async function payWithTestCard(page) {
   // '/home', not '/': a bare '/' restores the account's resume point (T14980/T16910).
   await page.goto('/home');
   await disableGuidanceForCheck(page);
-  const chip = page.getByTitle(/to buy more/i).first();
+  // By test id, not its title: T17120 reworded the title, and the old /to buy more/ match
+  // found nothing on staging (T17400).
+  const chip = page.getByTestId('credit-balance').locator('visible=true').first();
   await expect(chip).toBeVisible({ timeout: 60000 });
   const before = Number((await chip.textContent()).replace(/\D/g, ''));
   await chip.click();
