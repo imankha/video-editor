@@ -113,6 +113,7 @@ const TAB_PUBLISHED = tid('home-tab-published');
 const CLIPS_GALLERY = tid('clips-gallery');
 const UPLOAD_CLIP = tid('home-upload-clip');
 const PUBLISHED_PANEL = tid('published-tab-panel');
+const GO_TO_HIGHLIGHTS = tid('home-go-to-highlights');
 const CLIPS_KEEP_CLEAR = [CLIPS_GALLERY, TAB_GAMES, UPLOAD_CLIP];
 // T13570: a Games card that steers into a game keeps Upload game (the tab's other main button) lit and uncovered.
 const GAMES_KEEP_CLEAR = [UPLOAD_GAME];
@@ -150,8 +151,8 @@ const modalRule = (id, name, title, { when = () => true, pulse = null, noPulse, 
  * already holds (nothing stored): games, games with saved plays, in-flight
  * uploads, failed uploads, unfinished clip drafts, Finished highlights.
  */
-export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesReviewing = 0, gamesUnreviewed = 0, gamesError = false } = {}) {
-  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished, gamesReviewing, gamesUnreviewed }, local: { tab, modal, gamesError } };
+export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesReviewing = 0, gamesUnreviewed = 0, gamesError = false, highlightReady = false } = {}) {
+  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished, gamesReviewing, gamesUnreviewed }, local: { tab, modal, gamesError, highlightReady } };
 }
 
 /** A game counts as reviewed once its furthest playhead (`viewed_duration` high-water mark) reaches this share of the video. */
@@ -241,6 +242,8 @@ export const GUIDE_RULES = [
   { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.FIRST_GAME }) },
   { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.FIRST_GAME }) },
   { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', pulse: GUIDE_PULSE.FIRST_CLIP, keepClear: CLIPS_DRAFTS_KEEP_CLEAR, reveal: true }) },
+  // T17190: a sharpen finished this session (`highlightReady`) and the Plays tab shows the ready message: point at Go to Highlights.
+  { id: 'home.clips.ready', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts === 0 && hp(f).finished > 0 && f.local.highlightReady, ...home(GUIDE.home.clipsHighlightReady, GO_TO_HIGHLIGHTS, { id: 'home-clips-ready', pulse: GUIDE_PULSE.GO_TO_HIGHLIGHTS, keepClear: [GO_TO_HIGHLIGHTS] }) },
   { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.finished.many', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 1, ...home(GUIDE.home.finishedMany, HOME_HEADING, { id: 'home-finished-many', pulse: GUIDE_PULSE.FIRST_FINISHED, keepClear: [PUBLISHED_PANEL] }) },
@@ -473,6 +476,7 @@ export const GUIDE_STATES = [
     ['clips: none', { tab: 'clips' }, 'home.clips.empty'],
     ['clips: unfinished', { tab: 'clips', drafts: 2 }, 'home.clips.unfinished'],
     ['clips: all done', { tab: 'clips', finished: 1 }, 'home.clips.all-done'],
+    ['clips: a sharpen just finished', { tab: 'clips', finished: 1, highlightReady: true }, 'home.clips.ready'],
     ['finished: first', { tab: 'finished', finished: 1 }, 'home.finished.first'],
     ['finished: two or more', { tab: 'finished', finished: 2 }, 'home.finished.many'],
     ['finished: empty', { tab: 'finished' }, 'home.finished.empty'],

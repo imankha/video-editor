@@ -153,7 +153,7 @@ function FinishedPointer({ onNavigate }) {
       <Button variant="primary" size="lg" onClick={() => onNavigate('games')}>
         {c.markMorePlays}
       </Button>
-      <Button variant="secondary" size="md" onClick={() => onNavigate('published')}>
+      <Button variant="secondary" size="md" data-testid="home-go-to-highlights" guideTarget={GUIDE_PULSE.GO_TO_HIGHLIGHTS} onClick={() => onNavigate('published')}>
         {c.goToFinished}
       </Button>
     </div>

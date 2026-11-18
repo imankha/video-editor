@@ -717,6 +717,8 @@ export const EXPORT_JOBS = {
     completed: 'Your highlight is ready',
     // T16525: the server finished it (T16520), so it is already in Highlights.
     finished: 'Your highlight is in Highlights',
+    // T17190: shown on the progress card for the whole sharpen.
+    canLeave: 'You can leave. It will be in Highlights when it is ready.',
     jobNoun: 'Highlight',
   },
   overlay: {
@@ -746,7 +748,10 @@ export const EXPORT_PROGRESS = {
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.
-  ETA_VARIES: 'Time remaining varies.',
+  // T17190: says what is usual instead of "Time remaining varies."
+  ETA_VARIES: 'Usually a few minutes',
+  // T17190: card header while more than one job runs.
+  MANY_IN_PROGRESS: (n) => `${n} highlights in progress`,
 };
 
 // T11330: the explanatory popup shown when the T11320 preflight cost guard rejects an
@@ -985,6 +990,8 @@ export const GUIDE = {
     clipsEmpty: { title: 'Plays you’re turning into highlights wait here. Open a game in Games to start one.', body: '' },
     clipsUnfinished: { title: 'Pick up where you left off. Tap a play to make its highlight.', body: '' },
     clipsAllDone: { title: 'Every play is finished. Open a game to mark more plays.', body: '' },
+    // T17190: a sharpen just finished; point at the highlight, not away from it.
+    clipsHighlightReady: { title: 'Your highlight is ready. Tap Go to Highlights to watch or share it.', body: '' },
     finishedFirst: { title: 'Your highlight is ready. Tap it to share it or download it.', body: '' },
     finishedMany: { title: 'You have {n} highlights. Tap one to share it or download it, or open a game to mark another play.', body: '' },
     finishedEmpty: { title: 'Your highlights show here. Open a game to make your first one.', body: '' },

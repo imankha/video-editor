@@ -48,6 +48,7 @@ const TODAYS_TARGETS = {
   'upload.submit': P.UPLOAD_SUBMIT,
   'upload.failed': P.UPLOAD_RETRY,
   'home.clips.unfinished': P.FIRST_CLIP,
+  'home.clips.ready': P.GO_TO_HIGHLIGHTS, // T17190
   'home.finished.first': P.FIRST_FINISHED,
   'home.finished.many': P.FIRST_FINISHED,
   'focus.failed': P.EXPORT,
