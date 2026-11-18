@@ -15,6 +15,7 @@ This router handles game storage and management:
 import asyncio
 import json
 import logging
+import uuid
 from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
@@ -2157,7 +2158,10 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
         cost = calculate_extension_cost(game_size, request.days)
 
         # T16690: profile-scoped like game_upload -- game ids repeat across profiles.
-        ext_ref = f"{profile_id}:{game_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        # T17620: each extension is its own debit. The ledger key used to end at the
+        # second, so a second extension in the same second replayed the first debit
+        # (no charge) and still extended storage.
+        ext_ref = f"{profile_id}:{game_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
         try:
             result = deduct_credits(user_id, cost, source="storage_extension", reference_id=ext_ref)
         except CreditsUnavailable:
