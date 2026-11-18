@@ -41,7 +41,7 @@ class FakeRequest:
 def _patch_common(monkeypatch, calls):
     """Patch cookie issuance + session-init; record init calls into `calls`."""
     monkeypatch.setattr(auth_mod, "_issue_session_cookie",
-                        lambda user_id, payload: JSONResponse(content=payload))
+                        lambda user_id, payload, **_kw: JSONResponse(content=payload))
     monkeypatch.setattr(auth_mod, "set_current_user_id", lambda uid: None)
 
     def fake_init(user_id, hint_profile_id=None):
