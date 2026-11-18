@@ -916,6 +916,43 @@ class TestExtendEndpointHandler:
         assert result["success"] is True
         r_conn.close()
 
+    @pytest.mark.asyncio
+    async def test_t17620_two_extensions_in_one_second_are_both_charged(self, pg_conn, tmp_path):
+        """T17620: the ledger key was profile:game_<second>, so a second extension in the
+        same second replayed the first debit (no charge) and still extended storage."""
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
+        from app.services.credit_ledger import get_balance, grant
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash="same_second_hash",
+                               video_size=int(0.5 * 1024 ** 3))
+        _insert_game_video(r_conn, game_id, "same_second_hash", sequence=0,
+                           video_size=int(0.5 * 1024 ** 3))
+        grant("recipient-user", 100, "t17620_test", "t17620:seed")
+        cost = calculate_extension_cost(int(0.5 * 1024 ** 3), 360)
+
+        frozen = datetime(2026, 11, 18, 20, 51, 5, 123456)
+
+        class _FrozenDatetime(datetime):
+            @classmethod
+            def utcnow(cls):
+                return frozen
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.get_r2_client", return_value=None), \
+             patch("app.routers.games.datetime", _FrozenDatetime):
+            await extend_game_storage(game_id, ExtendStorageRequest(days=360))
+            await extend_game_storage(game_id, ExtendStorageRequest(days=360))
+
+        assert get_balance("recipient-user") == 100 - 2 * cost
+        r_conn.close()
+
 
 # ===========================================================================
 # Multi-video game extension
