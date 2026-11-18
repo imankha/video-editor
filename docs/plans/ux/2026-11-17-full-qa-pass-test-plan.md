@@ -31,13 +31,8 @@ Working files (local, gitignored): `qa/qa-pass-2026-11-17/` (REPORT.md, COVERAGE
 - [ ] 3.1 Every screen and window at 390x844, 360x640, 844x390, 768x1024, 1024x768, 1440x900, 1280x800, 1366x768, 1920x1080.
 - [ ] 3.2 File batch 3, update this file.
 
-## Step 4. Admin flow (`imankh@gmail.com`, last, one sitting)
-- [ ] 4.1 Reach via chip > Admin row and via `/admin`; header + staging badge.
-- [ ] 4.2 Open every section (Users, Journey, Activation, Retention Chart, Pack Mix, By Sport, Platform Breakdown, R2 Usage, Upload Failures, Revenue Reconciliation); load time, errors.
-- [ ] 4.3 Filters and dimensions; number consistency checks; e2e and new account rows match what was done; View journey.
-- [ ] 4.4 Grant 5 credits to e2e only; Log in as e2e only (banner, stop link); Manage Campaigns look only.
-- [ ] 4.5 Layout at 768x1024 and 390x844. Sign out.
-- [ ] 4.6 File batch 4, update this file.
+## Step 4. Admin flow
+Done 2026-11-17 (admin signed out afterwards). Batch 3 filed: T17140 to T17160. Not done: Journey map section details, Revenue Reconciliation run (not pressed on purpose), By Sport "Run rollup" (not pressed).
 
 ## Step 5. Wrap up
 - [ ] 5.1 Cleanup: extra profiles, junk games (keep bug evidence).
