@@ -1952,7 +1952,6 @@ export const ERROR_COPY = {
   REMOVE_FROM_PROFILE: "We couldn't remove this from your profile. Try again.",
   MOVE_HIGHLIGHTS: "We couldn't move your highlights. Try again.",
   DELETE_HIGHLIGHT_NOT_SYNCED: "We couldn't delete your highlight. Try again.",
-  REOPEN_NOT_SYNCED: "We couldn't finish saving. Your highlight is back in progress on this device and finishes saving when you tap Retry.",
   CHANGES_NOT_SYNCED: "Some changes didn't save.",
   VERIFY_PAYMENT: "We couldn't confirm your payment yet. Your credits may still be added shortly.",
   FINISH_TITLE: "We couldn't finish your highlight",

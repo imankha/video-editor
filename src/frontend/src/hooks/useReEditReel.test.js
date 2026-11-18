@@ -27,7 +27,7 @@ import { useToastStore } from '../components/shared/Toast';
 
 const reel = { id: 7, project_id: 3, clip_count: 1 };
 
-describe('useReEditReel (T13800)', () => {
+describe('useReEditReel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useToastStore.setState({ toasts: [] });
@@ -35,21 +35,19 @@ describe('useReEditReel (T13800)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  it('refreshes count, collections and projects, then navigates, on a successful restore', async () => {
+  // T17140: opening keeps the highlight finished, so nothing needs refreshing.
+  it('navigates to the returned project without refreshing any holder', async () => {
     apiFetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ project_id: 3 }) });
     const nav = vi.fn();
     const { result } = renderHook(() => useReEditReel(nav));
     await act(async () => { await result.current.openReelAsProject(reel); });
-    expect(fetchCountMock).toHaveBeenCalledTimes(1);
-    expect(fetchCountMock).toHaveBeenCalledWith({ force: true, reason: 'restore' });
-    expect(notifyMock).toHaveBeenCalledTimes(1);
-    expect(fetchProjectsMock).toHaveBeenCalledTimes(1);
-    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true, reason: 'restore' });
+    expect(fetchCountMock).not.toHaveBeenCalled();
+    expect(notifyMock).not.toHaveBeenCalled();
+    expect(fetchProjectsMock).not.toHaveBeenCalled();
     expect(nav).toHaveBeenCalledWith(3);
-    expect(fetchCountMock.mock.invocationCallOrder[0]).toBeLessThan(nav.mock.invocationCallOrder[0]);
   });
 
-  it('503 sync_failed does not navigate (change events covered in useReEditReel.failedRestore.test.js)', async () => {
+  it('503 sync_failed does not navigate', async () => {
     apiFetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({ code: 'sync_failed' }) });
     const nav = vi.fn();
     const { result } = renderHook(() => useReEditReel(nav));
