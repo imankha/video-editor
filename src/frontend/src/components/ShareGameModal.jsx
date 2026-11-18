@@ -31,6 +31,9 @@ import { serverError, userErrorMessage } from '../utils/userError';
 // and REVOKED after a confirmed revoke, which drives the General access UI.
 const LINK_STATUS = { UNKNOWN: 'unknown', ACTIVE: 'active', REVOKED: 'revoked' };
 
+// The share-link 409 code for a game with no team plays (backend games.py create_game_link).
+const EMPTY_TEAM_LAYER = 'empty_team_layer';
+
 // A clip preview position -- an instant. T9480 Stage C2: mechanical move.
 function fmtTimestamp(seconds) {
   if (seconds == null || Number.isNaN(seconds)) return '';
@@ -199,6 +202,8 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   const [copied, setCopied] = useState(false);
   const [linkStatus, setLinkStatus] = useState(LINK_STATUS.UNKNOWN);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  // T17080: a game with no team plays can't have a link; say so where the button is.
+  const [noTeamPlays, setNoTeamPlays] = useState(false);
 
   // Fetch the per-scope clip preview for one recipient. A READ triggered by the
   // ADD gesture (below), never a reactive state-watcher — the preview list must
@@ -271,13 +276,16 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   // a zero-team-clip game with an actionable 409.
   const handleCopyLink = useCallback(async () => {
     setLinkBusy(true);
+    setNoTeamPlays(false);
     try {
       const resp = await apiFetch(`${API_BASE}/api/games/${gameId}/share-link`, {
         method: 'POST',
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => null);
-        toast.error(serverError(resp, data, ERROR_COPY.CREATE_LINK).message);
+        const err = serverError(resp, data, ERROR_COPY.CREATE_LINK);
+        if (resp.status === 409 && data?.detail?.error === EMPTY_TEAM_LAYER) setNoTeamPlays(true);
+        else toast.error(err.message);
         return;
       }
       const data = await resp.json();
@@ -472,6 +480,16 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
                 </Button>
               </div>
             </>
+          )}
+          {noTeamPlays && (
+            <div
+              data-testid="share-link-blocked"
+              role="status"
+              className="mt-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-800/50"
+            >
+              <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-200">{SHARE_COPY.NO_TEAM_PLAYS_FOR_LINK}</p>
+            </div>
           )}
         </div>
 
