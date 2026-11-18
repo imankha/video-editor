@@ -1,6 +1,6 @@
 # T17300: Staging check failed: T17110:C1 C1: At 390x844 touch, the storage banner's two controls, failed-upload
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

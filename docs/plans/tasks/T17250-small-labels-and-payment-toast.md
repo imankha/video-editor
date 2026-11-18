@@ -1,6 +1,6 @@
 # T17250: Line up label and payment confirmation
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-11-17

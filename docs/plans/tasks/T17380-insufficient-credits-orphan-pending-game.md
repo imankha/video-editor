@@ -1,6 +1,6 @@
 # T17380: A failed upload for lack of credits leaves a stuck game
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-11-18

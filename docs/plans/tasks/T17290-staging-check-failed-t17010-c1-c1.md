@@ -1,6 +1,6 @@
 # T17290: Staging check failed: T17010:C1 C1: At 390x844 with Guidance on, the "Tags and Notes"
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

@@ -1,6 +1,6 @@
 # T17350: Staging check failed: T17230:C2 C2: Changing the shape after positions exist asks to confirm,
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

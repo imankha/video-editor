@@ -1,6 +1,6 @@
 # T17260: Explain what a profile is
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-11-17
