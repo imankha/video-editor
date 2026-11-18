@@ -196,7 +196,7 @@ export function UploadingGameTile({
       )}
 
       {/* Bottom scrim: name + meta line, same typography slots as GameTile. */}
-      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${state === TILE_STATE.FAILED ? 'pb-9' : 'pb-2.5'}`}>
+      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${state === TILE_STATE.FAILED ? 'pb-9 coarse-pointer:pb-11' : 'pb-2.5'}`}>
         <h3 className="text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={name}>
           {name}
         </h3>
@@ -281,7 +281,7 @@ export function UploadingGameTile({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setConfirmDiscard(false); onRetry?.(); }}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] coarse-pointer:min-h-[44px] px-2 rounded-md
                        bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold
                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 transition-colors ${retryPulse}`}
             aria-label={`Retry upload of ${name}`}
@@ -296,7 +296,7 @@ export function UploadingGameTile({
               if (confirmDiscard) { onDiscard?.(); }
               else { setConfirmDiscard(true); }
             }}
-            className={`inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md text-xs font-semibold
+            className={`inline-flex items-center justify-center gap-1.5 min-h-[36px] coarse-pointer:min-h-[44px] px-2 rounded-md text-xs font-semibold
                         focus-visible:outline-none focus-visible:ring-2 transition-colors ${
               confirmDiscard
                 ? 'flex-[1.6] bg-red-600 hover:bg-red-500 text-white focus-visible:ring-red-300'

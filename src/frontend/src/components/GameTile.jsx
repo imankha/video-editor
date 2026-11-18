@@ -365,7 +365,7 @@ export function GameTile({
           to its content (bottom-anchored with padding), so it still fully covers a
           2-line name on the shortest tile. The gradient is opaque enough at the base
           to stay legible over a bright poster frame. */}
-      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${isUploadFailed ? 'pb-9' : 'pb-1.5'}`}>
+      <div className={`absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 ${isUploadFailed ? 'pb-9 coarse-pointer:pb-11' : 'pb-1.5'}`}>
         {/* T6890: the edit (rename) pencil sits beside the game name it edits,
             instead of only inside the top-right kebab. Same "icon touches the name"
             placement as DraftTile/ReelTile (ManageProfilesModal reference pattern:
@@ -453,7 +453,7 @@ export function GameTile({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setShowDiscardConfirm(false); onRetryUpload?.(); }}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] coarse-pointer:min-h-[44px] px-2 rounded-md
                        bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold
                        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 transition-colors ${retryPulse}`}
             aria-label={`Retry upload of ${game.name}`}
@@ -471,7 +471,7 @@ export function GameTile({
               if (showDiscardConfirm) { onDiscardFailed?.(); }
               else { setShowDiscardConfirm(true); }
             }}
-            className={`inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md text-xs font-semibold
+            className={`inline-flex items-center justify-center gap-1.5 min-h-[36px] coarse-pointer:min-h-[44px] px-2 rounded-md text-xs font-semibold
                         focus-visible:outline-none focus-visible:ring-2 transition-colors ${
               showDiscardConfirm
                 ? 'flex-[1.6] bg-red-600 hover:bg-red-500 text-white focus-visible:ring-red-300'
