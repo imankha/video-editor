@@ -37,12 +37,48 @@ async function findFrameableProject(page) {
   return null;
 }
 
-/** Open Frame on a highlight that has a box position. If it has none yet, place the
- *  first one the way a parent does: drag the box (saved by the drag's own POST). */
+/** No playable project (T17340: staging's projects sit on a game whose upload never
+ *  finished): make one from a play on a game whose video is active, the request the
+ *  play's "Make highlight" sends. Returns the new project's id, deleted by the test. */
+async function makeFrameableProject(page) {
+  const gamesRes = await page.request.get(checkApi('/games'));
+  expect(gamesRes.ok(), `GET /games -> ${gamesRes.status()}`).toBeTruthy();
+  for (const game of (await gamesRes.json()).games || []) {
+    if (game.storage_status !== 'active') continue;
+    const gameRes = await page.request.get(checkApi(`/games/${game.id}`));
+    if (!gameRes.ok()) continue;
+    const play = ((await gameRes.json()).annotations || []).find((a) => a.auto_project_id == null);
+    if (!play) continue;
+    const res = await page.request.put(checkApi(`/clips/raw/${play.id}`), { data: { create_project: true } });
+    expect(res.ok(), `PUT /clips/raw/${play.id} create_project -> ${res.status()}`).toBeTruthy();
+    const projectId = (await res.json()).project_id;
+    expect(projectId, 'the new highlight\'s project id').toBeTruthy();
+    return projectId;
+  }
+  return null;
+}
+
+/** In-page DELETE: page.request after the app started its own session got 401 on staging (T16100). */
+async function deleteProject(page, projectId) {
+  const status = await page.evaluate(async (url) => (await fetch(url, { method: 'DELETE', credentials: 'include' })).status,
+    checkApi(`/projects/${projectId}`));
+  expect([200, 404], `DELETE /projects/${projectId}`).toContain(status);
+}
+
+/** Open Frame on a highlight whose game video plays. Returns the id of a project made
+ *  for the test (to delete), or null. */
 async function openFrameWithPositions(page) {
-  const project = await findFrameableProject(page);
-  expect(project, 'a project whose game video Frame can play').toBeTruthy();
-  await page.goto(`/focus/p/${project.id}`);
+  const existing = await findFrameableProject(page);
+  const made = existing ? null : await makeFrameableProject(page);
+  const projectId = existing?.id ?? made;
+  expect(projectId, 'a project whose game video Frame can play').toBeTruthy();
+  await page.goto(`/focus/p/${projectId}`);
+  return made;
+}
+
+/** Give the open highlight a box position. If it has none yet, place the first one the
+ *  way a parent does: drag the box (saved by the drag's own POST). */
+async function placeFirstPosition(page) {
   const cropHandles = page.locator('.crop-handle');
   await cropHandles.first().waitFor({ timeout: 180000 });
   const chooser = page.getByTestId('focus-shape-option-portrait');
@@ -63,38 +99,48 @@ async function openFrameWithPositions(page) {
 
 test('T17230:C1 - after the first position, Frame shows exactly one shape control, in Settings, labeled "Shape"', async ({ context, page }) => {
   await loginForCheck(context);
-  await openFrameWithPositions(page);
+  const made = await openFrameWithPositions(page);
+  try {
+    await placeFirstPosition(page);
 
-  // One Portrait/Landscape pair on the page: the Settings one.
-  await expect.poll(() => shapeButtons(page).count(), { timeout: 60000 }).toBe(2);
-  await expect(page.getByTestId('focus-shape-choice')).toHaveCount(0);
-  await expect(page.getByTestId('focus-shape-chip')).toHaveCount(0);
-  await expect(page.getByText('Where will you share it?')).toHaveCount(0);
+    // One Portrait/Landscape pair on the page: the Settings one.
+    await expect.poll(() => shapeButtons(page).count(), { timeout: 60000 }).toBe(2);
+    await expect(page.getByTestId('focus-shape-choice')).toHaveCount(0);
+    await expect(page.getByTestId('focus-shape-chip')).toHaveCount(0);
+    await expect(page.getByText('Where will you share it?')).toHaveCount(0);
 
-  const row = page.getByRole('group', { name: /^Shape/ }).locator('xpath=ancestor::div[contains(@class,"justify-between")][1]');
-  await expect(row.getByText('Shape', { exact: true })).toBeVisible();
-  await expect(row.getByText(/^(Portrait \(9:16\)|Landscape \(16:9\))$/)).toBeVisible();
-  await expect(page.getByText('Aspect ratio', { exact: true })).toHaveCount(0);
+    const row = page.getByRole('group', { name: /^Shape/ }).locator('xpath=ancestor::div[contains(@class,"justify-between")][1]');
+    await expect(row.getByText('Shape', { exact: true })).toBeVisible();
+    await expect(row.getByText(/^(Portrait \(9:16\)|Landscape \(16:9\))$/)).toBeVisible();
+    await expect(page.getByText('Aspect ratio', { exact: true })).toHaveCount(0);
+  } finally {
+    if (made) await deleteProject(page, made);
+  }
 });
 
 test('T17230:C2 - changing the shape after positions exist asks to confirm', async ({ context, page }) => {
   await loginForCheck(context);
-  await openFrameWithPositions(page);
+  const made = await openFrameWithPositions(page);
+  try {
+    await placeFirstPosition(page);
 
-  const current = shapeButtons(page).and(page.locator('[aria-pressed="true"]')).first();
-  const other = shapeButtons(page).and(page.locator('[aria-pressed="false"]')).first();
-  await other.waitFor({ timeout: 60000 });
-  const currentName = await current.textContent();
-  const writes = [];
-  page.on('request', (r) => { if (r.method() === 'POST' && /aspect-ratio/.test(r.url())) writes.push(r.url()); });
-  await other.click();
+    const current = shapeButtons(page).and(page.locator('[aria-pressed="true"]')).first();
+    const other = shapeButtons(page).and(page.locator('[aria-pressed="false"]')).first();
+    await other.waitFor({ timeout: 60000 });
+    const currentName = await current.textContent();
+    const writes = [];
+    page.on('request', (r) => { if (r.method() === 'POST' && /aspect-ratio/.test(r.url())) writes.push(r.url()); });
+    await other.click();
 
-  const dialog = page.getByTestId('focus-shape-switch-confirm');
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText(/Switch to (portrait|landscape)\?/);
-  // Keep: nothing is written and the shape stays.
-  await page.getByTestId('focus-shape-switch-keep').click();
-  await expect(dialog).toHaveCount(0);
-  await expect(current).toHaveText(currentName);
-  expect(writes, 'no shape change was sent').toEqual([]);
+    const dialog = page.getByTestId('focus-shape-switch-confirm');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(/Switch to (portrait|landscape)\?/);
+    // Keep: nothing is written and the shape stays.
+    await page.getByTestId('focus-shape-switch-keep').click();
+    await expect(dialog).toHaveCount(0);
+    await expect(current).toHaveText(currentName);
+    expect(writes, 'no shape change was sent').toEqual([]);
+  } finally {
+    if (made) await deleteProject(page, made);
+  }
 });
