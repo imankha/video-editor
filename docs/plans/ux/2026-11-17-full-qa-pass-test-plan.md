@@ -1,0 +1,38 @@
+# Full QA pass 2026-11-17: remaining test plan
+
+Source instructions: [2026-11-17-full-qa-pass-prompt.md](2026-11-17-full-qa-pass-prompt.md) (section numbers below refer to it).
+Working files (local, gitignored): `qa/qa-pass-2026-11-17/` (REPORT.md, COVERAGE.md, bugs/, ux/, ux-review.html).
+
+**How to use this file.** It holds only steps NOT yet done. Each time a batch of bugs is filed (PLAN.md + task files committed), the finished steps are deleted from here in the same commit. To resume after an interruption: read `qa/qa-pass-2026-11-17/REPORT.md` for findings so far, then continue from the first step below.
+
+**Fixed facts.** App `https://staging.reelballers.com`. API `https://api-staging.reelballers.com/api`. Build at start `1e4e0998f (#7952)`. New parent account `imankh+qa-2026-11-17b@gmail.com` (the `imankh+qa-2026-11-17@` one already existed from an earlier run). Advanced `e2e@test.local`. Admin `imankh@gmail.com` (last). Sharpen budget: 8 total, plays of 10 s or less. Sharpens used so far: 3 (all on the new parent account).
+
+**Done so far.** Step 0 (setup, COVERAGE.md) and Step 1 (new parent flow on phone, desktop, iPad; credits 88 to 211; 17.2 min and about 72 taps to a shared link). Batch 1 filed: T17010 to T17060 (ids jumped to T17010 because another session was filing T16910+ at the same time). Evidence files for this run are prefixed `r2-` in `qa/qa-pass-2026-11-17/bugs/` (an earlier run left files there). Confusion candidates so far are listed in REPORT.md under "U-candidate"; they still need U numbers and screenshots in `ux/`.
+
+**Advanced flow done so far (desktop):** /admin block, profiles (add, odd name, separation, move highlight both ways, delete), account settings (Download My Data, delete dialog cancelled), credit history, Report a problem (sent once, do not send again), signed-out pages, unknown addresses, upload + leave warning + same file twice, Mark Plays keys, Add video + line up, Share game (email, Copy link fails = T17080), highlight Copy link, expired game (T17070), offline rating change (correct), ranking game, layout sweep script on Home and Mark Plays at 390, 360, 768. Batch 2 filed: T17070 to T17130. Account e2e now 79 credits; test profile deleted; game "Vs QA Adv United" (id 19, 2 videos, 2 plays) created and kept.
+
+## Step 2. Advanced parent flow (`e2e@test.local`, Guidance off), desktop 1440x900, then phone, then iPad
+- [ ] 2.3 Remaining Home chrome: Invite a friend, Install App, Continue Where You Left Off cards.
+- [ ] 2.4 Remaining Games items: cancel/resume/retry an upload, failed tile Retry/Discard, Keep only marked plays, Restore full video, Extend storage (price vs charge), Delete game, Turn off link + signed-out game link (blocked by T17080 on game 19; try a game with a Team play), Watch plays window.
+- [ ] 2.5 Remaining Mark Plays: double-tap skip, typed trim times, filters, Watch plays review mode.
+- [ ] 2.6 Frame: portrait/landscape switch confirm, box drag/resize/positions, copy/delete position, Undo, tight box warning, Preview, Trim and slow motion (split, 0.5x, trim end, delete split), tilt fix, Dim outside, audio switch, timeline zoom, Sharpen price vs credits, "Is your athlete in the box?", sharpening progress, ready panel buttons, desktop keys (Space, arrows, Shift+arrow, Ctrl+C/V). Several highlights from one play; portrait and landscape of the same play. Sharpens #4-#5.
+- [ ] 2.7 Spotlight: all settings, circle drag/toggle/duration/delete, Add text all options, Pick cover, Redo spotlight, Edit zoom (cancel once, do once; share link still works and shows new version), unsaved-changes window. Download and check frames. Sharpen #6.
+- [ ] 2.8 Plays tab: Upload a play, filters, Clear filters, grouping, every tile action.
+- [ ] 2.9 Highlights tab: grouping, every tile action, finished player, link flow, share window, highlight reels + length slider + locked cards, ranking game, intro cards.
+- [ ] 2.10 Shared pages signed out at phone and desktop: highlight, reel, game; turned-off link page; shared player keys.
+- [ ] 2.11 Profiles: add second, separation, edit, move highlight between profiles, delete.
+- [ ] 2.12 Account: settings email/method, Download My Data, Delete account up to type-DELETE then cancel, links, sign out and back in. Buy smallest pack, credit history adds up, Extend storage price vs taken.
+- [ ] 2.13 Saving and connection: offline rating change, offline during sharpen (#7) and upload, two pages editing Frame.
+- [ ] 2.14 Rough handling (section 9) desktop and phone: double taps, reload mid-step, Back/Forward, Esc and outside clicks, long/emoji/`<b>` names, empty tabs, expired game.
+- [ ] 2.15 Repeat main checks on phone 390x844 touch (incl. Mark Plays and Frame cockpits at 844x390, rotate hint) and iPad 768x1024 touch.
+- [ ] 2.16 File batch 2, update this file.
+
+## Step 3. Layout sweep (section 8) as advanced parent
+- [ ] 3.1 Every screen and window at 390x844, 360x640, 844x390, 768x1024, 1024x768, 1440x900, 1280x800, 1366x768, 1920x1080.
+- [ ] 3.2 File batch 3, update this file.
+
+## Step 4. Admin flow
+Done 2026-11-17 (admin signed out afterwards). Batch 3 filed: T17140 to T17160. Not done: Journey map section details, Revenue Reconciliation run (not pressed on purpose), By Sport "Run rollup" (not pressed).
+
+## Step 5. Wrap up
+Done: test profile deleted, review page published (https://claude.ai/artifact/QDjidEXfCW1HuNXby2RYLC, 22 findings awaiting the owner's answers), COVERAGE.md filled (every cell has a value; "not reached: budget" cells are the remaining work above), REPORT.md complete. Owner answered the review page on 2026-11-17; a UX expert pass (Fable) refined the agreed changes; filed as T17170 to T17270. Rejected and not to be re-raised: U02 (short spotlight is intended), U16 (end card length). Still to do if the pass resumes: everything listed in steps 2 and 3 above, then add any new confusion findings to the review page.

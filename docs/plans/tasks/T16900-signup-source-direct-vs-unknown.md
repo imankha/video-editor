@@ -1,6 +1,6 @@
 # T16900: Tell direct sign-ups from unknown sources
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Tier:** L (schema change: one nullable column on `user_segments`; backend + admin frontend; Migration agent)

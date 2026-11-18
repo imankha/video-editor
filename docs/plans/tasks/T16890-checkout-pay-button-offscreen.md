@@ -1,6 +1,6 @@
 # T16890: Checkout payment button is unreachable
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-11-17
