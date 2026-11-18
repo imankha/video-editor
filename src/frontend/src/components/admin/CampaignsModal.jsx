@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Copy, Check, Pencil } from 'lucide-react';
 import { useAdminStore } from '../../stores/adminStore';
 
@@ -20,7 +20,7 @@ const CHANNEL_OPTIONS = [
  * the name the admin typed, never the id as the label. Create inserts the new
  * row at the top (store insert, no refetch); the pencil renames inline. No
  * delete: user_segments.origin stores the id. NO backdrop-click close (project
- * rule) — only the X button dismisses.
+ * rule) — the X button or Esc dismisses (T17160).
  */
 export function CampaignsModal({ onClose }) {
   const campaigns = useAdminStore(s => s.campaigns);
@@ -31,6 +31,13 @@ export function CampaignsModal({ onClose }) {
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
+
+  // T17160: Esc closes the window, like every other window in the app.
+  useEffect(() => {
+    const onKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   async function handleCreate(e) {
     e.preventDefault();
