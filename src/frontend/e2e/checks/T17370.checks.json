@@ -1,0 +1,5 @@
+{"criteria": {
+  "T17370:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/annotate/AddFootageButton.pictureUnsupported.test.jsx src/components/AttachVideoModal.pictureUnsupported.test.jsx -t 'shows the first-upload message'"},
+  "T17370:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/annotate/AddFootageButton.pictureUnsupported.test.jsx src/components/AttachVideoModal.pictureUnsupported.test.jsx src/components/AttachVideoModal.test.jsx -t 'still attaches|calls attachVideoToExistingGame'"},
+  "T17370:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/annotate/AddFootageButton.pictureUnsupported.test.jsx src/components/AttachVideoModal.pictureUnsupported.test.jsx"}
+}}

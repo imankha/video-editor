@@ -22,6 +22,11 @@ vi.mock('../stores/creditStore', () => {
   return { useCreditStore };
 });
 
+// T17370: the modal probes the file before attaching; jsdom cannot decode one.
+vi.mock('../utils/videoMetadata', () => ({
+  extractVideoMetadata: vi.fn(() => Promise.resolve({ width: 1920, height: 1080, duration: 60 })),
+}));
+
 vi.mock('./shared', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
