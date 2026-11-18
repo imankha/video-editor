@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { loginForCheck, checkApi, disableGuidanceForCheck } from '../helpers/checkAuth';
 
 /**
- * T17090: the "You start with N free credits" bubble under the credit chip is a
+ * T17090: the "You have N free credits" sentence (T17200: the Home first-run coach line, or its plain-text twin with Guidance off) is a
  * brand new account's welcome. A second profile on an existing account has no
  * games yet, but its credits are the account's own, so it must not show there.
  * The profile is added and switched to through the UI (Sport and profile chip,
@@ -44,14 +44,14 @@ test('T17090:C1 a new second profile on an existing account shows no free-credit
   const name = `T17090 ${Date.now().toString(36)}`;
   try {
     await disableGuidanceForCheck(page);
-    await expect(page.getByTestId('credit-first-run-hint')).toHaveCount(0);
+    await expect(page.getByTestId('home-credits-line')).toHaveCount(0);
 
     // Record every moment the bubble is in the DOM from here on, so a flash during the
     // in-app switch (stores cleared, profile list not yet refetched) is caught too.
     await page.evaluate(() => {
       window.__t17090HintSeen = 0;
       const seen = () => {
-        if (document.querySelector('[data-testid="credit-first-run-hint"]')) window.__t17090HintSeen += 1;
+        if (/free credits/i.test(document.body.textContent || '')) window.__t17090HintSeen += 1;
       };
       new MutationObserver(seen).observe(document.body, { childList: true, subtree: true });
     });
@@ -78,7 +78,7 @@ test('T17090:C1 a new second profile on an existing account shows no free-credit
     // Absence check: give the games list time to load (the bubble keys off it) first.
     await page.waitForTimeout(3000);
     expect(await page.evaluate(() => window.__t17090HintSeen), 'bubble never appeared during or after the switch').toBe(0);
-    await expect(page.getByTestId('credit-first-run-hint')).toHaveCount(0);
+    await expect(page.getByTestId('home-credits-line')).toHaveCount(0);
     await expect(page.getByText(/free credits/i)).toHaveCount(0);
   } finally {
     const now = await pageApi(page, '/profiles');

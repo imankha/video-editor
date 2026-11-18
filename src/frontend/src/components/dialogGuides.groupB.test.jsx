@@ -7,7 +7,6 @@ import { GUIDE } from '../config/displayNames';
 import { ShareGameModal } from './ShareGameModal';
 import { CollectionShareModal } from './CollectionShareModal';
 import { ShareWithTeammatesModal } from './ShareWithTeammatesModal';
-import { SharePlaybackDialog } from './SharePlaybackDialog';
 import { SharedVideoOverlay } from './SharedVideoOverlay';
 
 vi.mock('./shared/Toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
@@ -86,16 +85,6 @@ describe('dialog guides, group B', () => {
     unmount();
     render(<ShareWithTeammatesModal {...props} sharedTagData={{ Jake: new Set([1, 2]) }} />);
     await waitFor(() => expect(guideText()).toBe(GUIDE.modal.teammatesDone));
-  });
-
-  it('share-playback: form and error', async () => {
-    const { unmount } = render(<SharePlaybackDialog gameId={1} gameName="G" onClose={() => {}} />);
-    expect(guideText()).toBe(GUIDE.modal.sharePlayback);
-    fireEvent.click(screen.getByTestId('add-email'));
-    await waitFor(() => expect(pulsing('share-playback-submit')).toContain('coach-target-pulse'));
-    unmount();
-    render(<SharePlaybackDialog gameId={null} gameName="G" onClose={() => {}} />);
-    expect(guideText()).toBe(GUIDE.modal.sharePlaybackError);
   });
 
   // T16030: a shared reel link is the top-of-funnel page for people who may never have used

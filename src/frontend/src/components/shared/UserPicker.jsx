@@ -4,7 +4,10 @@ import { SHARE_COPY } from '../../config/displayNames';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function UserPicker({ emails, onChange, contacts, placeholder }) {
+// T17220: `onPendingEmailChange(email | null)` reports a VALID address that is
+// typed but not yet added as a chip, so the parent's Send can include it
+// (tapping Send must not require Enter first).
+export function UserPicker({ emails, onChange, contacts, placeholder, onPendingEmailChange }) {
   const [inputValue, setInputValue] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
@@ -29,15 +32,22 @@ export function UserPicker({ emails, onChange, contacts, placeholder }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const updateInput = useCallback((value) => {
+    setInputValue(value);
+    if (!onPendingEmailChange) return;
+    const normalized = value.trim().toLowerCase();
+    onPendingEmailChange(EMAIL_REGEX.test(normalized) ? normalized : null);
+  }, [onPendingEmailChange]);
+
   const addEmail = useCallback((email) => {
     const normalized = email.trim().toLowerCase();
     if (!normalized || !EMAIL_REGEX.test(normalized)) return false;
     if (emails.includes(normalized)) return false;
     onChange([...emails, normalized]);
-    setInputValue('');
+    updateInput('');
     setShowDropdown(false);
     return true;
-  }, [emails, onChange]);
+  }, [emails, onChange, updateInput]);
 
   const removeEmail = useCallback((email) => {
     onChange(emails.filter((e) => e !== email));
@@ -86,10 +96,10 @@ export function UserPicker({ emails, onChange, contacts, placeholder }) {
         const deduped = [...new Set(toAdd)];
         onChange([...emails, ...deduped]);
       }
-      setInputValue(parts[parts.length - 1] || '');
+      updateInput(parts[parts.length - 1] || '');
       return;
     }
-    setInputValue(val);
+    updateInput(val);
     setShowDropdown(true);
   };
 
@@ -121,6 +131,8 @@ export function UserPicker({ emails, onChange, contacts, placeholder }) {
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={() => setShowDropdown(true)}
+          // T17220: leaving the field adds a valid typed address, not only Enter.
+          onBlur={() => { if (inputValue.trim()) addEmail(inputValue); }}
           placeholder={emails.length === 0 ? (placeholder || SHARE_COPY.EMAIL_HINT) : ''}
           className="flex-1 min-w-[120px] bg-transparent text-white placeholder-gray-500 text-sm outline-none py-0.5"
         />

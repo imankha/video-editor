@@ -58,13 +58,14 @@ export function getClipDisplayName(clip, fallback = '') {
 
 /**
  * Get display name for a project.
- * For auto-created single-clip projects, returns the clip name (or auto-generated name).
- * For regular projects, returns the project name.
+ * T17240: the backend's display_name, which reads an unnamed play ("Play 1") as its
+ * game plus time ("Vs Oceanside 0:14"); `name` stays the stored name a rename edits.
+ * A project built in the client before the list refetch has no display_name yet.
  *
- * @param {object} project - Project object with is_auto_created, clips, name
+ * @param {object} project - Project object with display_name, name
  * @returns {string} Display name
  */
 export function getProjectDisplayName(project) {
   if (!project) return '';
-  return project.name || '';
+  return project.display_name ?? project.name ?? '';
 }

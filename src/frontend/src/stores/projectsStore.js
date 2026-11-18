@@ -247,7 +247,9 @@ export const useProjectsStore = create((set, get) => ({
     // surface. See T8360-design.md Sec 0.
     set(state => ({
       projects: state.projects.map(p =>
-        p.id === projectId ? { ...p, name: newName } : p
+        // T17240: display_name is what the tile shows; a rename replaces the
+        // "Vs Oceanside 0:14" default label with the new name.
+        p.id === projectId ? { ...p, name: newName, display_name: newName } : p
       ),
     }));
   },

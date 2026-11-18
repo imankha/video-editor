@@ -34,7 +34,7 @@ vi.mock('../containers', () => ({ AnnotateContainer: () => safeBag({ clipRegions
 vi.mock('../modes', () => ({ AnnotateModeView: (p) => { modeViewProps.current = p; return null; } }));
 vi.mock('../modes/annotate', () => ({ ClipsSidePanel: (p) => { panelProps.push(p); return <div data-testid="panel" data-hide={String(p.hideLayerFilter)} />; } }));
 vi.mock('../components/ShareWithTeammatesModal', () => ({ ShareWithTeammatesModal: () => null }));
-vi.mock('../components/SharePlaybackDialog', () => ({ SharePlaybackDialog: () => null }));
+vi.mock('../components/ShareGameModal', () => ({ ShareGameModal: () => null }));
 vi.mock('../components/UploadPreviewNotice', () => ({ UploadPreviewNotice: () => null }));
 vi.mock('../components/shared/ConfirmationDialog', () => ({ ConfirmationDialog: () => null }));
 vi.mock('../components/shared/Toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));

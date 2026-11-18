@@ -64,14 +64,14 @@
  *                             that rung. Just above TOAST, below SHARE.
  *                             T12580: the guide shade layer also uses this rung; it
  *                             sits below the coach card by DOM order, not by value.
+ *   SHARE             z-[115] the Share game window (ShareGameModal), opened from
+ *                             Home, from Mark Plays (incl. its fullscreen editor,
+ *                             TOAST) and nested in the recap player (TOAST), so it
+ *                             needs its own rung above TOAST. T17220: below NOTICE so
+ *                             its copy-link / send-failure toasts stay readable.
  *   NOTICE            z-[120] the global toast stack (ToastContainer): above the guide
  *                             shade (POPOVER) so a toast stays readable while a coach is
- *                             up (T13540), below the share dialog.
- *   SHARE             z-[200] the share-playback dialog (SharePlaybackDialog) —
- *                             opened as a nested overlay from within the recap
- *                             player (TOAST) as well as standalone from
- *                             AnnotateScreen, so it needs its own rung above TOAST
- *                             rather than relying on inherited stacking context.
+ *                             up (T13540), and above the share window (T17220).
  *   SYSTEM            z-[9999] app-wide system banners: impersonation, the blocking
  *                             PWA update gate.
  *
@@ -106,8 +106,8 @@ export const Z = {
   ALERT: 'z-[90]',
   TOAST: 'z-[100]',
   POPOVER: 'z-[110]',
+  SHARE: 'z-[115]',
   NOTICE: 'z-[120]',
-  SHARE: 'z-[200]',
   SYSTEM: 'z-[9999]',
 };
 
@@ -126,8 +126,8 @@ export const Z_INDEX = {
   ALERT: 90,
   TOAST: 100,
   POPOVER: 110,
+  SHARE: 115,
   NOTICE: 120,
-  SHARE: 200,
   SYSTEM: 9999,
 };
 

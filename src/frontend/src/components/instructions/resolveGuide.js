@@ -114,6 +114,8 @@ const TAB_GAMES = tid('home-tab-games');
 const TAB_PUBLISHED = tid('home-tab-published');
 const CLIPS_GALLERY = tid('clips-gallery');
 const UPLOAD_CLIP = tid('home-upload-clip');
+// T17200: the first-run sentence names the free credits, so the chip it counts stays out of the shade.
+const CREDIT_CHIP = tid('credit-balance');
 const PUBLISHED_PANEL = tid('published-tab-panel');
 const GO_TO_HIGHLIGHTS = tid('home-go-to-highlights');
 const CLIPS_KEEP_CLEAR = [CLIPS_GALLERY, TAB_GAMES, UPLOAD_CLIP];
@@ -151,10 +153,11 @@ const modalRule = (id, name, title, { when = () => true, pulse = null, noPulse, 
  * T12250: Home / Upload-modal facts. `tab` is 'games' | 'clips' | 'finished';
  * `modal` is null | 'choose' | 'submit'. Counts come from lists the Home screen
  * already holds (nothing stored): games, games with saved plays, in-flight
- * uploads, failed uploads, unfinished clip drafts, Finished highlights.
+ * uploads, failed uploads, unfinished clip drafts, Finished highlights, and the credit
+ * balance (null until loaded; T17200 puts it in the first-run sentence).
  */
-export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesReviewing = 0, gamesUnreviewed = 0, gamesError = false, highlightReady = false } = {}) {
-  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished, gamesReviewing, gamesUnreviewed }, local: { tab, modal, gamesError, highlightReady } };
+export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesReviewing = 0, gamesUnreviewed = 0, gamesError = false, highlightReady = false, credits = null } = {}) {
+  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished, gamesReviewing, gamesUnreviewed, credits }, local: { tab, modal, gamesError, highlightReady } };
 }
 
 /** A game counts as reviewed once its furthest playhead (`viewed_duration` high-water mark) reaches this share of the video. */
@@ -233,7 +236,7 @@ export const GUIDE_RULES = [
   // T12790: the games list failed to load; the error panel's Retry is the only way forward.
   { id: 'home.games.error', screen: 'home', when: (f) => f.local.tab === 'games' && f.local.gamesError, ...home(GUIDE.home.gamesError, tid('home-games-retry'), { id: 'home-games-error', tone: 'strong', pulse: GUIDE_PULSE.GAMES_RETRY }) },
   { id: 'upload.failed', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).failed > 0, ...home(GUIDE.upload.failed, FAILED_GAME, { id: 'upload-failed', tone: 'strong', pulse: GUIDE_PULSE.UPLOAD_RETRY }) },
-  { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty', pulse: GUIDE_PULSE.UPLOAD_GAME }) },
+  { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty', keepClear: [CREDIT_CHIP], pulse: GUIDE_PULSE.UPLOAD_GAME }) },
   { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.FIRST_GAME }) },
   // After the first finished highlight (before it, the plays rules below steer to making one): a started game
   // under 90% watched still has plays in it. Then, every game watched and every clip finished: congrats, an END
@@ -330,8 +333,6 @@ export const GUIDE_RULES = [
   modalRule('collection-share', 'collection-share', M.collectionShare, { pulse: GUIDE_PULSE.COLLECTION_SHARE_SUBMIT }),
   modalRule('teammates.done', 'teammates', M.teammatesDone, { when: (l) => l.allShared, noPulse: CLOSE_ONLY }),
   modalRule('teammates', 'teammates', M.teammates, { pulse: GUIDE_PULSE.TEAMMATES_SHARE_SUBMIT }),
-  modalRule('share-playback.error', 'share-playback', M.sharePlaybackError, { when: (l) => l.error, noPulse: CLOSE_ONLY }),
-  modalRule('share-playback', 'share-playback', M.sharePlayback, { pulse: GUIDE_PULSE.SHARE_PLAYBACK_SUBMIT }),
   modalRule('buy-credits.pay', 'buy-credits', M.buyCreditsPay, { when: (l) => l.step === 'pay', pulse: GUIDE_PULSE.CREDITS_PAY }),
   modalRule('buy-credits.pick', 'buy-credits', M.buyCreditsPick, { noPulse: PICK_ONE }),
   modalRule('insufficient-credits', 'insufficient-credits', M.insufficientCredits, { pulse: GUIDE_PULSE.INSUFFICIENT_BUY }),
@@ -359,6 +360,7 @@ export function resolveGuide(facts) {
   const gotIt = rule.gotIt ?? !end;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   if (id === 'annotate.has-highlights.many') message = hasHighlightsMany(facts.progress.highlightCount);
+  if (id === 'home.games.empty' && hp(facts).credits != null) message = { ...rule.message, title: `${rule.message.title} ${GUIDE.home.freeCredits(hp(facts).credits)}` };
   if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
   // T14760: a box already on the athlete (AI-proposed, or copied from an earlier highlight)
   // gets the "check it" wording instead of "drag it onto" -- step 1 still shows, it is not skipped.
@@ -494,7 +496,6 @@ export const GUIDE_STATES = [
     ['link-clip', {}, 'modal.link-clip'], ['link-clip', { empty: true }, 'modal.link-clip.empty'],
     ['share-game', {}, 'modal.share-game'], ['collection-share', {}, 'modal.collection-share'], ['collection-share', { done: true }, 'modal.collection-share.done'],
     ['teammates', {}, 'modal.teammates'], ['teammates', { allShared: true }, 'modal.teammates.done'],
-    ['share-playback', {}, 'modal.share-playback'], ['share-playback', { error: true }, 'modal.share-playback.error'],
     ['buy-credits', {}, 'modal.buy-credits.pick'], ['buy-credits', { step: 'pay' }, 'modal.buy-credits.pay'],
     ['insufficient-credits', {}, 'modal.insufficient-credits'], ['credit-history', {}, 'modal.credit-history'],
     ['storage-extension', {}, 'modal.storage-extension'], ['export-too-large', {}, 'modal.export-too-large'],

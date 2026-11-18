@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { List, X } from 'lucide-react';
 import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
-import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
+import { ShareGameModal } from '../components/ShareGameModal';
 import { toast } from '../components/shared/Toast';
 import { ANNOTATE, HOME_TILE, PLAYS_ONLY, UPLOAD, ERROR_COPY } from '../config/displayNames';
 import { AnnotateModeView } from '../modes';
@@ -1111,8 +1111,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           onSharedTagsChange={setSharedTagData}
         />
       )}
+      {/* T17220: the same Share game window as the Home game menu. */}
       {showPlaybackShareDialog && (
-        <SharePlaybackDialog
+        <ShareGameModal
           gameId={annotateGameId}
           gameName={annotateGameName || HOME_TILE.UNTITLED_GAME}
           onClose={() => setShowPlaybackShareDialog(false)}

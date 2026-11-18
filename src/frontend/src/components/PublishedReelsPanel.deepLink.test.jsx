@@ -16,6 +16,7 @@ vi.mock('../utils/apiFetch', () => ({
 const SAMPLE_DOWNLOAD = {
   id: 42,
   project_name: 'Test Reel',
+  display_name: 'Test Reel',
   filename: 'test.mp4',
   created_at: '2026-08-01T00:00:00Z',
   duration: 12.5,

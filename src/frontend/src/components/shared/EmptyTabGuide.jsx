@@ -4,7 +4,8 @@ import { HOME_COACH } from '../instructions/catalog';
 import { Plus } from 'lucide-react';
 import { Button } from './Button';
 import { GUIDE_PULSE } from '../instructions/guideTargets';
-import { CLIP_UPLOAD, LIBRARY_ACTIONS, SECTION_NAMES_SHORT } from '../../config/displayNames';
+import { CLIP_UPLOAD, GUIDE, LIBRARY_ACTIONS, SECTION_NAMES_SHORT } from '../../config/displayNames';
+import { useFirstRunCredits } from '../../hooks/useFirstRunCredits';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
 /**
@@ -79,7 +80,7 @@ export function EmptyTabGuide({
       )}
 
       <div className="w-full mt-5 mb-4">
-        {tab === 'games' && <GamesActions onAddGame={onAddGame} onNavigate={onNavigate} />}
+        {tab === 'games' && <GamesActions onAddGame={onAddGame} onAddVideo={onAddVideo} />}
         {tab === 'published' && (
           <Button variant="primary" size="lg" onClick={() => onNavigate('games')}>
             {copy.cta}
@@ -129,24 +130,27 @@ const STEP_ACCENT_BORDER = {
   published: 'border-t-amber-600',
 };
 
-// T14810: "Skip ahead to Plays." moved from a grey footer caption to a REAL
-// secondary button beside Upload game (same row, same height) -- the
-// walk-through found the old text link easy to miss, outside the modal and
-// below the fold. Same onNavigate('projects') behavior as before.
-function GamesActions({ onAddGame, onNavigate }) {
+// T17200: ONE start for a brand-new parent. Upload game is the only button; short
+// videos get a small text link to the play upload (it replaced T14810's equal-weight
+// "Skip ahead to Plays." button). With Guidance off the free-credits sentence shows
+// here as plain text; with it on the Home coach says it, so it is never drawn twice.
+function GamesActions({ onAddGame, onAddVideo }) {
   const c = EMPTY_TAB_GUIDE.games;
+  const { coachEnabled } = useGuidanceSettings();
+  const credits = useFirstRunCredits();
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="flex items-center gap-2">
-        <Button guideTarget={GUIDE_PULSE.UPLOAD_GAME} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
-          {LIBRARY_ACTIONS.UPLOAD_GAME}
-        </Button>
-        {onNavigate && (
-          <Button variant="secondary" size="lg" onClick={() => onNavigate('projects')}>
-            {c.footerLink}
-          </Button>
-        )}
-      </div>
+      {!coachEnabled && credits != null && (
+        <p data-testid="home-credits-line" className="text-sm text-gray-300 mb-2">{GUIDE.home.freeCredits(credits)}</p>
+      )}
+      <Button guideTarget={GUIDE_PULSE.UPLOAD_GAME} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
+        {LIBRARY_ACTIONS.UPLOAD_GAME}
+      </Button>
+      {onAddVideo && (
+        <button type="button" data-testid="home-upload-play-link" onClick={onAddVideo} className="text-sm text-cyan-400 hover:text-cyan-300 hover:underline">
+          {c.uploadPlayLink}
+        </button>
+      )}
       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}
     </div>
   );

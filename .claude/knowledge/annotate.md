@@ -936,6 +936,12 @@ code change needed — `ExportButtonContainer`'s `estimatedSeconds`/`estimatedCr
 clip's actual start/end via `estimateExportCredits(clip)` (T11240: single-clip, was
 `sumEffectiveDurations`/`estimateExportCredits(clips)` over a list), so they follow the
 new window automatically; there was never a separately hardcoded 12. Prior:)
+**T17220 (2026-11-18): SharePlaybackDialog is gone.** Mark Plays (`onSharePlayback`) and the recap
+player both open `ShareGameModal`, the same window as the Home game menu (POST `/share` with
+per-recipient scope, default all_team; public link). It sits on `Z.SHARE` (now z-[115], below the
+toast stack NOTICE). `UserPicker` adds a valid typed email on blur and reports it via
+`onPendingEmailChange`, so Send works without Enter; the button reads "Send". The backend
+`/share-playback` endpoint has no frontend caller now. The T9810 notes below are history.
 updated: 2026-09-14 (T9810 — repaired the game-invitation entry points + documented the
 two-share-features split. **THE LANDMINE (this is the thing a future task trips over):** the
 Annotate action bar has TWO DIFFERENT share features that look like one. (1) **Game invitations**
@@ -963,7 +969,7 @@ Close, fail-visible instead of POSTing to `/api/games/null/...`), header retitle
 `.catch(() => {})`). Cancel/Escape/Close remain side-effect-free (only `handleSubmit` calls the API).
 **Dead but deliberately kept:** `SHARING.SETTINGS`/`SETTINGS_SHORT` now have no production callers —
 left in place to avoid merge friction with T9840's concurrent `displayNames.js` edit. Tests:
-`AnnotateModeView.shareWiring.test.jsx` (4) + `SharePlaybackDialog.test.jsx` (disclosure/open-error/
+`AnnotateModeView.shareWiring.test.jsx` (4) + `SharePlaybackDialog.test.jsx` (deleted T17220) (disclosure/open-error/
 contacts). QA: no backend/browser in this container (same limit as T9630) — real-browser live-drive
 on staging owed; unit tests fire real clicks on the rendered buttons, which is the fix's actual
 mechanism. Prior:)

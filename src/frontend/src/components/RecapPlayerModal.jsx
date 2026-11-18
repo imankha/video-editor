@@ -9,7 +9,7 @@ import { useHighlightsPlayback } from './recap/useHighlightsPlayback';
 import { RecapClipsSidebar } from './recap/RecapClipsSidebar';
 import { PlaybackControls } from '../modes/annotate/components/PlaybackControls';
 import { NotesOverlay } from '../modes/annotate/components/NotesOverlay';
-import { SharePlaybackDialog } from './SharePlaybackDialog';
+import { ShareGameModal } from './ShareGameModal';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -780,7 +780,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
       )}
 
       {showShareDialog && (
-        <SharePlaybackDialog
+        <ShareGameModal
           gameId={game.id}
           gameName={game.name || HOME_TILE.UNTITLED_GAME}
           onClose={() => setShowShareDialog(false)}

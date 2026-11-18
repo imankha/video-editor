@@ -37,7 +37,8 @@ const CONTROL_PHRASES = [
   { name: 'Share link', re: /\bTap Share link\b/, pulse: [P.SHARE_LINK] },
   { name: 'Download', re: /\bDownload to save\b/, pulse: [], keepClear: ['player-download'] },
   { name: 'Choose who can watch', re: /\bChoose who can watch\b/, pulse: [] },
-  { name: 'Share', re: /\btap Share\b(?! game)/, pulse: [P.SHARE_SUBMIT, P.SHARE_GAME_SUBMIT, P.COLLECTION_SHARE_SUBMIT, P.TEAMMATES_SHARE_SUBMIT, P.SHARE_PLAYBACK_SUBMIT] },
+  { name: 'Share', re: /\btap Share\b(?! game)/, pulse: [P.SHARE_SUBMIT, P.COLLECTION_SHARE_SUBMIT, P.TEAMMATES_SHARE_SUBMIT] },
+  { name: 'Send', re: /\btap Send\b/, pulse: [P.SHARE_GAME_SUBMIT] },
   { name: 'Tap your athlete', re: /\bTap your athlete\b/, pulse: [P.PICK_BOX] },
   { name: 'Add video', re: /\bTap Add video\b/, pulse: [P.ATTACH_SUBMIT] },
   { name: 'Continue', re: /\bTap Continue\b/, pulse: [P.CLIP_NOTICE_CONTINUE] },
@@ -57,7 +58,7 @@ const CONTROL_PHRASES = [
   { name: 'drag it back', re: /\bdrag it back\b/, pulse: [P.CROP_BOX] },
   { name: 'Back to full video', re: /\bTap Back to full video\b/, pulse: [] },
   { name: 'Preview again', re: /\bTap Preview again\b/, pulse: [] },
-  { name: 'Pick your game video', re: /\bPick your game video\b/, pulse: [] },
+  { name: 'Choose your game video', re: /\bChoose your game video\b/, pulse: [] },
   { name: 'Open a game (noPulse)', re: /\bOpen a game\b/, pulse: [] },
   { name: 'Open this play again', re: /\bopen this play again\b/, pulse: [] },
   { name: 'Tap (moment)', re: /\bstill needs a tap\b|\bneeds a tap\b/, pulse: [] },
@@ -81,7 +82,6 @@ const NAMES_OFFSCREEN = {
   'modal.move-profile.pick:Tap a/the (list item)': IN_DIALOG,
   'modal.collection-share.done:Tap Close/Done (dialog)': IN_DIALOG,
   'modal.teammates.done:Tap Close/Done (dialog)': IN_DIALOG,
-  'modal.share-playback.error:Tap Close/Done (dialog)': IN_DIALOG,
 };
 
 const VERBS = /\b(tap|click|drag|pick|choose|exit)\b|\bopen (it|a|your|this)\b/i;

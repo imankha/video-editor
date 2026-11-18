@@ -564,7 +564,7 @@ export function PublishedReelsPanel({
     playerTrace.settled();
     setStoryPlayer({
       reels: [toPlayerReel(download)],
-      title: download.project_name,
+      title: download.display_name,
       downloadId: download.id,
       intro,
     });
@@ -788,7 +788,7 @@ export function PublishedReelsPanel({
   const sharePlayerReel = (reel) => {
     setSharingDownload({
       id: reel.id,
-      project_name: reel.name,
+      display_name: reel.name,
       resolved_intro_has_photo: reel.resolved_intro_has_photo,
     });
   };
@@ -796,7 +796,9 @@ export function PublishedReelsPanel({
   // Rename gesture -> surgical PATCH + keep the cached member list honest.
   const renameReel = (id, name) => {
     renameDownload(id, name);
-    collections.patchMember(id, { project_name: name });
+    // T17240: display_name is what the tile shows; a rename replaces the
+    // "Vs Oceanside 0:14" default label with the new name.
+    collections.patchMember(id, { project_name: name, display_name: name });
   };
 
   // T5215: reel intro-card picker gestures. Consent is a legal attestation
@@ -839,7 +841,7 @@ export function PublishedReelsPanel({
       posterUrl={`${API_BASE}/api/downloads/${download.id}/poster.jpg?profile_id=${currentProfileId}`}
       isUnwatched={!download.watched_at}
       unwatchedStyle={getUnwatchedStyle(download.id)}
-      displayName={download.project_name}
+      displayName={download.display_name}
       metaLine={reelMetaLine(download)}
       onPlay={handlePlay}
       onWebShare={webShareReel}
@@ -911,7 +913,7 @@ export function PublishedReelsPanel({
 
       <ConfirmationDialog
         isOpen={!!deletingDownload}
-        title={`Delete "${deletingDownload?.project_name}"?`}
+        title={`Delete "${deletingDownload?.display_name}"?`}
         message={"This can't be undone. The highlight will be deleted for good and any links to it will stop working."}
         onClose={() => setDeletingDownload(null)}
         buttons={[
@@ -924,7 +926,7 @@ export function PublishedReelsPanel({
       {sharingDownload && (
         <ShareModal
           videoId={sharingDownload.id}
-          videoName={sharingDownload.project_name}
+          videoName={sharingDownload.display_name}
           hasIntroPhoto={!!sharingDownload.resolved_intro_has_photo}
           overPlayer={!!storyPlayer}
           onClose={() => setSharingDownload(null)}

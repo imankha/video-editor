@@ -22,8 +22,8 @@ const LADDER = [
   'ALERT',
   'TOAST',
   'POPOVER',
-  'NOTICE',
   'SHARE',
+  'NOTICE',
   'SYSTEM',
 ];
 
@@ -59,9 +59,10 @@ describe('zLayers scale (T6600)', () => {
     expect(num(Z.ALERT)).toBeGreaterThan(num(Z.INTRO));
     // Toasts and system banners are top-most.
     expect(num(Z.TOAST)).toBeGreaterThan(num(Z.ALERT));
-    // The share-playback dialog outranks the recap player (TOAST) it nests inside.
+    // The share window outranks the recap player (TOAST) it nests inside; toasts
+    // stay readable over it (T17220).
     expect(num(Z.NOTICE)).toBeGreaterThan(num(Z.POPOVER));
-    expect(num(Z.SHARE)).toBeGreaterThan(num(Z.NOTICE));
+    expect(num(Z.NOTICE)).toBeGreaterThan(num(Z.SHARE));
     expect(num(Z.SHARE)).toBeGreaterThan(num(Z.TOAST));
     expect(num(Z.SYSTEM)).toBeGreaterThan(num(Z.SHARE));
   });

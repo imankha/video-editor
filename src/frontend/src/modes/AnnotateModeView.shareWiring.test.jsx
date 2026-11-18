@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
  * T9810 — game-invitation entry points.
  *
  * The normal-view "Share game" buttons (promoted + compact) must open the
- * game-scoped SharePlaybackDialog via onSharePlayback — NOT onShare, which opens
+ * game share window (T17220: ShareGameModal) via onSharePlayback — NOT onShare, which opens
  * the tagged-player modal (ShareWithTeammatesModal) that renders nothing when there
  * are no tagged clips (the reported "three clicks, no response" bug). Tagged-player
  * sharing keeps its own affordance, shown only when tagged clips exist so it can

@@ -135,7 +135,7 @@ export function JustPublishedCard({
         <span className={`self-start text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${REEL.bgSubtle} ${REEL.accentMuted}`}>
           Just finished
         </span>
-        <h3 className="text-white text-base font-semibold truncate">{highlight.project_name}</h3>
+        <h3 className="text-white text-base font-semibold truncate">{highlight.display_name}</h3>
         {gameLine && <div className="text-xs text-gray-400 truncate">{gameLine}</div>}
 
         <div className="mt-1 flex items-center gap-2 flex-wrap">

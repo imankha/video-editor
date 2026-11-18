@@ -1,5 +1,6 @@
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
+import { approxHighlights } from './pricing';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 
 // T9520 / T14600: the canonical vocabulary, single source. The word list is
@@ -337,20 +338,12 @@ export const SHARING = {
   SETTINGS: 'Sharing settings',     // state-neutral: manage/adjust an existing share
   SETTINGS_SHORT: 'Sharing',        // narrow-viewport state label
   // T9810: the "Share game" buttons (fullscreen bar + normal-view promoted/compact)
-  // all open the game-scoped SharePlaybackDialog now. Tagged-player sharing (T2820,
-  // ShareWithTeammatesModal) keeps its OWN honest affordance, rendered only when
-  // tagged clips exist so it can never silently no-op.
+  // open the game share window (T17220: ShareGameModal, the same one as the Home
+  // game menu). Tagged-player sharing (T2820, ShareWithTeammatesModal) keeps its
+  // OWN honest affordance, rendered only when tagged clips exist so it can never
+  // silently no-op.
   TAGGED_SHARE: 'Share with tagged teammates',       // T2820 tagged-player sharing entry
   TAGGED_SHARE_SHORT: 'Tagged teammates',            // narrow-viewport label
-  // T9810: scope disclosure for the game-invitation dialog. VERIFIED against
-  // POST /api/games/{id}/share-playback -> materialize_game_share/_copy_game +
-  // _materialize_clips: a recipient receives the FULL game recording (blake3_hash +
-  // all game_videos) PLUS every marked play (all raw_clips for the game), not a
-  // subset. Do NOT narrow this to "only invited plays" without re-checking that grant.
-  SCOPE_DISCLOSURE: "Anyone you invite can watch this entire game and every play you've marked in it.",
-  // T9810: open-failure state (dialog reached without a game context). Distinct from
-  // the per-recipient send-failure toast ("Failed to send to: ...").
-  OPEN_ERROR: "Game invitations couldn't open. Try again.",
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep): the editor MODE noun,
@@ -864,6 +857,9 @@ export const FOCUS_PREVIEW = {
 
 // T14620: Frame screen strings that used to sit inline in the components.
 export const FRAME_COPY = {
+  // T17230: the Settings row for the reel's portrait/landscape choice ("shape", as the
+  // switch dialog says).
+  SHAPE_LABEL: 'Shape',
   LENGTH_CHANGED: 'Length of your highlight. Credits are based on this.',
   LENGTH_UNCHANGED: 'Length of your highlight (no slow motion or trim).',
   LENGTH_LABEL: 'Length',
@@ -977,7 +973,13 @@ export const GUIDE = {
   },
   // T12250: Home tabs and the Upload modal. Each value is { title, body }.
   home: {
-    gamesEmpty: { title: 'Start with your game video. Tap Upload game.', body: '' },
+    gamesEmpty: { title: 'Upload your game to start.', body: '' },
+    // T17200: the first-run credits sentence, appended to gamesEmpty in the coach and shown
+    // alone as plain text in the empty Games state with Guidance off.
+    freeCredits: (credits) => {
+      const n = approxHighlights(credits);
+      return n > 0 ? `You have ${credits} free credits, enough for about ${n} highlights.` : `You have ${credits} free credits.`;
+    },
     gamesUploading: { title: 'Your game is uploading. Open it now to start marking plays.', body: '' },
     gamesError: { title: 'Your games didn’t load. Tap Retry.', body: '' },
     gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
@@ -995,7 +997,7 @@ export const GUIDE = {
     finishedEmpty: { title: 'Your highlights show here. Open a game to make your first one.', body: '' },
   },
   upload: {
-    choose: { title: 'Pick your game video. Name and details are optional.', body: '' },
+    choose: { title: 'Choose your game video. Name and details are optional.', body: '' },
     submit: { title: 'Tap Upload game. You can start marking plays while it uploads.', body: '' },
     failed: { title: 'That upload didn’t finish. Tap Retry to try again.', body: '' },
   },
@@ -1066,13 +1068,11 @@ export const GUIDE = {
     editGame: 'Change what you need, then tap Save Changes.',
     linkClip: 'Tap the game this highlight came from.',
     linkClipEmpty: 'You have no games to link to yet. Add a game first, then link this highlight.',
-    shareGame: 'Add people or copy the link, then tap Share.',
+    shareGame: 'Add people or copy the link, then tap Send.',
     collectionShare: 'Add people, then tap Share.',
     collectionShareDone: 'Shared. Tap Done.',
     teammates: 'Pick who gets each tagged play, then tap Share.',
     teammatesDone: 'Every tagged play is already shared. Tap Close.',
-    sharePlayback: 'Add people, then tap Share to send them these plays.',
-    sharePlaybackError: 'These plays can’t be shared right now. Tap Close.',
     buyCreditsPick: 'Tap a credit pack to buy it.',
     buyCreditsPay: 'Enter your card, then tap Pay.',
     insufficientCredits: 'You need more credits for this. Tap Buy credits.',
@@ -1491,7 +1491,7 @@ export const UPLOAD = {
   // T15620: this toggle renders in the Upload game modal on every device,
   // desktop included, so "phone" was wrong there.
   NO_VIDEO_TOGGLE: "Don't have the game video on this device?",
-  NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here. A highlights zip works too.",
+  NO_VIDEO_STEPS: "Download the game from your camera's app or website, then come back here.",
   NO_VIDEO_STEPS_LINK: 'See the steps for your camera',
   NO_VIDEO_SWITCH: 'Upload a play instead',
   NO_VIDEO_OTHER_DEVICE: 'On another device? Open reelballers.com there. Your account is the same.',
@@ -1533,9 +1533,11 @@ export const RESULT_SURFACE = {
 // T14640: sharing copy. Share, link, people; one dead-link message for every shared page.
 export const SHARE_COPY = {
   ADD_PEOPLE: 'Add people',
+  // T17220: the share window's send button; disabled until an email is added.
+  SEND: 'Send',
+  SENDING: 'Sending...',
   PEOPLE_WITH_ACCESS: 'People with access',
   EMAIL_HINT: 'Add emails, separated by commas',
-  CONTACTS_FAILED: "We couldn't load your contacts. You can still type emails.",
   DEAD_LINK: 'This link no longer works.',
   RESTRICTED: 'Only people it was shared with can watch. Sign in with the email the link was sent to.',
   COPY_LINK: 'Copy link',
@@ -1566,7 +1568,6 @@ export const SHARE_COPY = {
   peopleCount: (n) => `${n} ${n === 1 ? 'person' : 'people'}`,
   sharedWith: (n) => `Shared with ${SHARE_COPY.peopleCount(n)}`,
   gameSharedWith: (n) => `Game shared with ${SHARE_COPY.peopleCount(n)}`,
-  playsSharedWith: (n) => `Plays shared with ${SHARE_COPY.peopleCount(n)}`,
   teammatesSharedWith: (n) => `Shared with ${n} teammate${n === 1 ? '' : 's'}`,
   playAt: (time) => `Play at ${time}`,
   playsFor: (email) => `Plays for ${email}`,
