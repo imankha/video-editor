@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 /**
  * T10970: `showTextLane` gates BOTH halves of the Text lane (the label in the
@@ -64,5 +64,16 @@ describe('OverlayMode -- showTextLane (T10970)', () => {
     const highlightRegions = [{ detections: [{ boxes: [{ x: 0, y: 0, w: 1, h: 1 }] }] }];
     render(<OverlayMode {...baseProps({ highlightRegions, showTextLane: false })} />);
     expect(lastTotalLayerHeight()).toBe('10.5rem');
+  });
+});
+
+describe('OverlayMode -- touch Text lane height (T17780)', () => {
+  const originalMatchMedia = window.matchMedia;
+  afterEach(() => { window.matchMedia = originalMatchMedia; });
+
+  it('on a coarse pointer the playhead line covers the taller (6rem) Text lane', () => {
+    window.matchMedia = (query) => ({ matches: query.includes('coarse'), media: query });
+    render(<OverlayMode {...baseProps()} />);
+    expect(lastTotalLayerHeight()).toBe('14.5rem');
   });
 });

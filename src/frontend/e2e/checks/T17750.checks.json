@@ -1,0 +1,4 @@
+{"criteria": {
+  "T17750:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/StorageExtensionModal.dates.test.jsx -t \"T17750:C1\""},
+  "T17750:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/StorageExtensionModal.dates.test.jsx -t \"T17750:C2\""}
+}}
