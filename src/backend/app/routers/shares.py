@@ -832,8 +832,17 @@ async def get_shared_game_link(
 
     # Presign the TEAM recap master ONLY -- never the game source. None (recap
     # object evicted) is an explicit state: the edge requires recap_url and
-    # falls through to the SPA, which shows a graceful message.
-    recap_url = generate_presigned_url_global(_team_recap_r2_key(share), expires_in=14400)
+    # falls through to the SPA, which shows a graceful message. T17770: presigning
+    # never checks the key, so HEAD it first -- a signed URL to a missing object
+    # gave viewers a silent, nonplaying player.
+    team_recap_key = _team_recap_r2_key(share)
+    recap_url = None
+    if r2_head_object_global(team_recap_key) is not None:
+        recap_url = generate_presigned_url_global(team_recap_key, expires_in=14400)
+    else:
+        logger.warning(
+            f"[Share] game link token={share_token[:8]} team recap missing: {team_recap_key}"
+        )
 
     clip_names = share["clip_names"] or []
     clips = [

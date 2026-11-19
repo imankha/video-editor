@@ -104,7 +104,7 @@ KNOWN_STRAYS = {
     'qa/FunnelChart.test.jsx', 'qa/paywallBeacons.test.jsx', 'qa/storageCost.test.js',
     'qa/test_T13340_logo_lockup.mjs', 'qa/test_T13350_hero_spotlight.mjs',
     'qa/test_t13310_storage_per_gb.py', 'qa/test_t13330_paywall_funnel.py',
-    'work/qa18-runtime.mjs',  # T17780: owner QA scratch, untracked (work/ is gitignored)
+    'work/qa18-runtime.mjs',  # owner's hand-run staging QA helper (absolute C:/Users paths)
 }
 
 

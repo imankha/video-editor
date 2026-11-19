@@ -396,7 +396,7 @@ def get_active_game_link_share(game_id: int, sharer_user_id: str) -> dict | None
     with get_sharing_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            """SELECT s.share_token, s.recipient_email
+            """SELECT s.share_token, s.recipient_email, s.sharer_profile_id
                FROM shares s
                JOIN share_games sg ON sg.share_id = s.id
                WHERE sg.game_id = %s

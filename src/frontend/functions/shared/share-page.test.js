@@ -418,3 +418,22 @@ describe('T11520: no presigned video URL in cacheable share HTML', () => {
     expect(html).toContain('<meta property="og:video" content="https://api.example.com/api/shared/tok/video.mp4">');
   });
 });
+
+describe('T17740: footer Download saves a file', () => {
+  // The page is served from the app host and the video from the API host, so the
+  // anchor's `download` attribute is ignored (cross-origin) and the browser obeys
+  // only the response headers. video.mp4 redirects to an inline R2 object; the
+  // /download endpoint answers Content-Disposition: attachment.
+  it('T17740:C1 Download links to the attachment endpoint, not the inline video', () => {
+    const share = stabilizeVideoUrl(
+      { video_name: 'Legends vs Rivals', video_url: 'https://r2.example.com/a.mp4?sig=x', is_public: true },
+      'https://api.example.com',
+      'tok 1',
+    );
+    const html = renderSharePage(share, 'https://app.reelballers.com/');
+    const href = html.match(/<a class="dl" href="([^"]+)"/)[1];
+    expect(href).toBe('https://api.example.com/api/shared/tok%201/download');
+    // The player still streams the inline proxy.
+    expect(html).toMatch(/<video id="v" src="https:\/\/api\.example\.com\/api\/shared\/tok%201\/video\.mp4"/);
+  });
+});

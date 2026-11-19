@@ -2270,6 +2270,15 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
     }
 
 
+def _has_live_game_link(game_id: int, user_id: str, profile_id: str) -> bool:
+    """True when this profile's game has an unrevoked public game link (T17770).
+    Game ids repeat across profiles (T16690), so the share's profile must match."""
+    from app.services.sharing_db import get_active_game_link_share
+
+    share = get_active_game_link_share(game_id, user_id)
+    return bool(share) and share["sharer_profile_id"] == profile_id
+
+
 def _plays_only_conflict(code: str, message: str) -> HTTPException:
     return HTTPException(status_code=409, detail={"code": code, "error": message})
 
@@ -2370,8 +2379,14 @@ async def restore_full_video(
         if storage_status != 'active':
             raise _plays_only_conflict("source_expired", "The full video has expired and can't be restored.")
 
+        # T17770: a live public game link presigns the TEAM recap on every view, so
+        # keep that layer while one exists for this game in this profile (the link's
+        # clip rail is frozen at creation anyway; the next export overwrites it).
+        layers = [None]
+        if not _has_live_game_link(game_id, user_id, get_current_profile_id()):
+            layers.append(RecapLayer.TEAM)
         keys = []
-        for layer in (None, RecapLayer.TEAM):
+        for layer in layers:
             keys.extend(recap_r2_keys(game_id, layer))
         failed = [k for k in keys if not delete_from_r2(user_id, k)]
         if failed:

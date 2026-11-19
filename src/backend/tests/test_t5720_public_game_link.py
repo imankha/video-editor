@@ -122,7 +122,7 @@ class TestAnonymousScopeStructural:
 class TestResolve:
     def test_payload_is_team_only_no_full_game_url(self, client):
         token = _seed_game_link()
-        with patch(
+        with patch("app.routers.shares.r2_head_object_global", return_value={}), patch(
             "app.routers.shares.generate_presigned_url_global",
             return_value="https://r2.example.com/recaps/1_team.mp4?sig",
         ):

@@ -617,6 +617,14 @@ export const CLIP_UPLOAD = {
   NOTICE_BODY: 'You can link the play to a game from the Plays tab.',
   // T13247: Add Clip takes a zip of clips (unzipped into loose videos, utils/zipClips.js).
   NOTICE_PICK: 'Pick videos or a zip of plays.',
+  // T17760: an upload is charged, so the price is stated before the picker opens and the
+  // total is confirmed after the pick (ClipUploadCostModal). The rule mirrors
+  // clips.py upload_clips_batch: ONE charge on the batch's summed bytes (storageCost.js).
+  NOTICE_PRICE: 'Uploading costs 1 credit per GB, at least 1 credit. You see the total before it starts.',
+  costTitle: (n, name) => (n === 1 ? `Upload ${name}?` : `Upload ${n} plays?`),
+  COST_NOTE: 'Charged once for the whole upload.',
+  COST_CONFIRM: 'Upload',
+  COST_CANCEL: 'Cancel',
   // Immediate confirmation when files are picked, before the first progress tick.
   uploadingToast: (n, name) => (n === 1 ? `Uploading ${name}...` : `Uploading ${n} plays...`),
   UPLOADING_BUTTON: 'Uploading...',
@@ -1622,6 +1630,7 @@ export const SHARE_COPY = {
   LOADING_SHARED_PLAYS: 'Loading shared plays...',
   LOADING_GAME_PLAYS: 'Loading game plays...',
   GAME_PLAYS_UNAVAILABLE: "These game plays aren't available right now.",
+  GAME_PLAYS_UNAVAILABLE_HINT: 'Ask the person who shared this link to send it again.',
   INVITE_FRIEND: 'Invite a friend to ReelBallers',
   NO_HIGHLIGHTS_YET: 'No highlights yet. Check back soon.',
 };
