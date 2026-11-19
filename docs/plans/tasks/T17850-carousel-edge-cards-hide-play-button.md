@@ -1,6 +1,6 @@
 # T17850: Carousel edge cards hide their play button under the arrows
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-19
@@ -12,7 +12,7 @@ On Home, a game's highlights sit in a sideways carousel (for example under "Game
 
 ## Ruling
 
-Owner, 2026-11-19: for the items at the edges of the carousel, don't show the play buttons.
+Owner, 2026-11-19: for the items at the edges of the carousel, don't show the play buttons, or the Share button.
 
 ## Repro
 
@@ -23,7 +23,7 @@ Owner, 2026-11-19: for the items at the edges of the carousel, don't show the pl
 ## Solution
 
 - A card that is only partly visible at either end of the carousel shows no play button. Once scrolled fully into view it shows its play button as usual.
-- Apply the same to the card's other overlay controls (Share, the pencil) wherever they would sit under an arrow; the owner's words name the play button, so it is the minimum.
+- Edge cards also show no Share button (owner ruling). The pencil may stay unless it sits under an arrow.
 - Fix it once in the shared carousel (`src/frontend/src/components/shared/CardCarousel.jsx`, which already knows which cards are clipped, since it fades them) rather than in each card type, so every carousel using edge cards gets it.
 - Tapping the faded edge card itself can keep doing what it does today (e.g. scroll it into view); only the overlapping buttons go.
 
@@ -35,5 +35,5 @@ Owner, 2026-11-19: for the items at the edges of the carousel, don't show the pl
 
 ## Acceptance Criteria
 
-- [ ] C1: In a Home highlights carousel with cards cut off at both ends, neither edge card shows a play button, and no card control overlaps the previous or next arrow, at phone and desktop widths.
+- [ ] C1: In a Home highlights carousel with cards cut off at both ends, neither edge card shows a play button or a Share button, and no card control overlaps the previous or next arrow, at phone and desktop widths.
 - [ ] C2: After scrolling so a previously cut-off card is fully visible, its play button appears and still plays that highlight; fully visible cards keep their play and Share buttons as before.
