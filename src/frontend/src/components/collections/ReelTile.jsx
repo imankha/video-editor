@@ -393,7 +393,11 @@ export function ReelTile({
           isCoarsePointer || isDownloading
             ? 'opacity-100'
             : 'opacity-0 group-hover/tile:opacity-100 focus:opacity-100'
-        } ${menuOpen ? 'opacity-100' : ''} ${CAROUSEL_EDGE_HIDE}`}
+        } ${menuOpen ? 'opacity-100' : ''} ${
+          // T17850 edge-hide yields to the T7100 in-flight spinner and an open
+          // menu: both must stay visible even on a cut-off carousel card.
+          isDownloading || menuOpen ? '' : CAROUSEL_EDGE_HIDE
+        }`}
       >
         {isDownloading
           ? <Loader size={16} className="text-cyan-300 animate-spin" />
