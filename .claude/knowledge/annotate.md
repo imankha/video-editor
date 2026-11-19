@@ -1,5 +1,16 @@
 ---
 domain: annotate
+updated: 2026-11-19 (T17690 - Videos bar picks never move the playhead. Owner rule: only a video
+covering the playhead moment is choosable. `SourceBar` draws any other non-active video
+`aria-disabled` + `opacity-40` with `ANNOTATE.notCoveringTitle`; its tap still reaches `onPick`
+and `AnnotateContainer.pickSource` answers with `notCoveringNotice` and returns false (the
+landscape Videos sheet stays open on false). The active video's tap only confirms (notice +
+pulse, no seek; it used to seek to the video's start). In a sequential game only the active video
+covers the playhead, so nothing else is choosable there. 4+ prev/next step to the nearest
+covering video. The desktop `VideoLane` keeps jump-to-start through its own `jumpToSource`.
+Check `e2e/checks/T17690.check.spec.js` swaps a real game's `/load` videos for ffmpeg solid-colour
+files and reads the colour drawn by `video[aria-hidden="false"]`; Playwright won't click an
+`aria-disabled` element without `force: true`.)
 updated: 2026-11-11 (T15980 — fixed the staging failure of T15630:C1's check: the shared
 `e2e-gate@test.local` account has Guidance ON by default, and its coach guide-shade intercepts
 clicks on the Forward/Back 5s transport buttons (not a named cutout target), silently swallowing

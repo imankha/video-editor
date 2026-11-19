@@ -691,13 +691,15 @@ export function AnnotateContainer({
     return { videos, activeSequence };
   }, [gameVideos, isOverlapTimeline, fullTimeline, effectiveCurrentTime, activeSourceSequence, videoSegments, currentVideoSequence]);
 
-  // Tap on a video in the bar or the lane. Inside a conflicted region the tap
-  // switches cameras at this very moment; anywhere else (and in every sequential
-  // game) it jumps to that video's start. Every tap, including one on the video
-  // already playing, answers with the notice and a pulse: no tap is silent.
+  // Tap on a video in the Videos bar. T17690 (owner rule 2026-11-18): only a video
+  // covering the playhead moment can be chosen, so a switch never moves the playhead.
+  // Inside a conflicted region the tap switches cameras at this very moment; a video
+  // that does not cover it is refused with the reason (the bar draws it disabled); the
+  // video already playing just confirms. Every tap answers with a notice, and a
+  // pulse unless refused: no tap is silent. Returns whether the video was chosen.
   const pickSource = useCallback((sequence) => {
     const v = sourceVideos?.videos.find((x) => x.sequence === sequence);
-    if (!v) return;
+    if (!v) return false;
     // While Fix timing is open, every pick (bar segment, lane block, 4+ prev/next)
     // would seek the COMMITTED timeline -- for the clip being moved, its OLD spot
     // (measured 2026-10-22: drag, then select the clip = playhead at the end of the
@@ -705,19 +707,41 @@ export function AnnotateContainer({
     // seek, no pulse. Done/X own the session.
     if (fixTiming) {
       showSourceNotice(ANNOTATE.FINISH_FIX_TIMING_FIRST);
+      return false;
+    }
+    const isActive = sequence === sourceVideos.activeSequence;
+    if (!isActive && !v.coversPlayhead) {
+      showSourceNotice(ANNOTATE.notCoveringNotice(v.name));
+      return false;
+    }
+    // Only an overlap game has a covering video other than the active one.
+    if (!isActive && isOverlapTimeline) {
+      switchToSource(sequence, effectiveCurrentTime);
+      rememberChoice(sequence, effectiveCurrentTime);
+    }
+    showSourceNotice(ANNOTATE.nowWatching(v.name));
+    pulse(sequence);
+    return true;
+  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveCurrentTime, showSourceNotice, pulse, fixTiming, rememberChoice]);
+
+  // Click on a block in the desktop timeline's VideoLane (a map of the added videos
+  // along the game): jumps to that video's start, like any other click on the timeline.
+  const jumpToSource = useCallback((sequence) => {
+    const v = sourceVideos?.videos.find((x) => x.sequence === sequence);
+    if (!v) return;
+    // Same reason as pickSource: a seek now would land on the committed (old) spot.
+    if (fixTiming) {
+      showSourceNotice(ANNOTATE.FINISH_FIX_TIMING_FIRST);
       return;
     }
     if (isOverlapTimeline) {
-      const inPlace = v.coversPlayhead && sequence !== sourceVideos.activeSequence;
-      const at = inPlace ? effectiveCurrentTime : v.virtualStart;
-      switchToSource(sequence, at);
-      rememberChoice(sequence, at);
+      switchToSource(sequence, v.virtualStart);
     } else {
       effectiveSeek(v.virtualStart);
     }
     showSourceNotice(ANNOTATE.nowWatching(v.name));
     pulse(sequence);
-  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveCurrentTime, effectiveSeek, showSourceNotice, pulse, fixTiming, rememberChoice]);
+  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveSeek, showSourceNotice, pulse, fixTiming]);
 
   // ---- T8900: Fix-timing (nudge an angle into alignment) --------------------
   // A/B play stop timer: each preview plays ~3s from the current playhead in a
@@ -3096,7 +3120,7 @@ export function AnnotateContainer({
       ? {
           videos: sourceVideos.videos.filter((v) => v.kind === 'main' && v.virtualStart > 0),
           activeSequence: sourceVideos.activeSequence,
-          onPick: pickSource,
+          onPick: jumpToSource,
           pulseSequence,
           // T13280 follow-up: drag-to-reposition. Only the fix-target block binds
           // pointer handlers in VideoLane, mirroring AngleLanes' drag-in-mode -- a
