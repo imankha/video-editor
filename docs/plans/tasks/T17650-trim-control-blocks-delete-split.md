@@ -51,3 +51,7 @@ Found by searching for the on-screen Delete split label:
 
 - [ ] C1: The steps above allow deleting the split while keeping the end trimmed at 1440 x 900.
 - [ ] C2: The same interaction remains reachable on phone and tablet touch layouts.
+
+## Ruling
+
+**(b)** (owner, 2026-11-18): at a trim edge (the split that is the trim edge), show only Undo end trim; Delete split is not offered there and the trim stays until the parent undoes it. Remove the path where Delete split clears the trim on screen while the server keeps it. Delete split stays available, with no overlap, for splits that are not a trim edge.
