@@ -28,10 +28,16 @@ async function openClippedGame(context, page) {
   if (!target) return null;
   await openGameInAnnotate(page, target.id);
   await expect(page.locator('.clip-marker').first()).toBeVisible({ timeout: 90000 });
-  // Playhead 0:00 sits inside the first play, which swaps Mark play for Edit play and hides
-  // the whole-game tiles. Step into open video (same move as T15460's check).
+  // A playhead inside a play swaps Mark play for Edit play and hides the whole-game tiles.
+  // Step forward only until open video shows them: a fixed 150 s clamps at the end of a short
+  // game, inside its last play (T17820, staging's 1:29 game-desktop).
+  const markPlay = page.getByTestId('annotate-mark-play-button');
   const forward = page.getByTitle('Forward 5 seconds (Right arrow)');
-  for (let i = 0; i < 30; i++) await forward.click({ timeout: 5000 });
+  for (let i = 0; i < 60 && !(await markPlay.isVisible()); i++) {
+    await forward.click({ timeout: 5000 });
+    await markPlay.waitFor({ state: 'visible', timeout: 1000 }).catch(() => {});
+  }
+  await expect(markPlay, `[T17790] no open video (gap between plays) in game ${target.id}`).toBeVisible({ timeout: 5000 });
   return target;
 }
 
