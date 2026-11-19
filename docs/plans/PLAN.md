@@ -207,6 +207,8 @@ From the same review. Deletions come first, because less false code makes every 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T17740 | [Shared Download opens another video](tasks/T17740-shared-download-opens-inline-video.md) | 7 | 3 | 2.3 | TODO | [ ] | A viewer opens a public highlight and presses Download. The browser leaves the shared page and opens the video in its built-in viewer instead of saving a file. This repeated on three fresh signed-out page loads. The Download action should start a file download. Done when pressing Download saves the video file from the public page. |
+| T17750 | [Storage extension dates disagree](tasks/T17750-storage-extension-dates-disagree.md) | 5 | 3 | 1.7 | TODO | [ ] | A parent opens an expired game to buy thirty more days of storage. Before confirming, the window says the video will be available until December 18. After the purchase, the success message says December 19. This repeated on three games, although each one correctly charged one credit. The date shown before and after the purchase should agree. Done when the extension quote, confirmation and retained-until date use the same date for the chosen period. |
 
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
 
