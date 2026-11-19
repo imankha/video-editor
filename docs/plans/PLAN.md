@@ -217,6 +217,7 @@ From the same review. Deletions come first, because less false code makes every 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T17840 | [Old multi-play highlights say not supported](tasks/T17840-old-multi-play-highlights-say-not-supported.md) | 5 | 2 | 2.5 | TODO | [ ] | A parent opens Home and sees an old highlight made from several plays. It looks editable (In progress badge, pencil), but clicking it shows a long toast that vanishes in 5 seconds and says "Focus". Owner wants these to stay frozen but say so plainly. Done when the card says such highlights are no longer supported, looks read-only, and any toast is one short sentence. |
 
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
 
