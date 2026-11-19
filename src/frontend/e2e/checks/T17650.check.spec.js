@@ -66,17 +66,34 @@ async function press(page, locator) {
   else await locator.click();
 }
 
+/**
+ * Press `locator` and wait for THAT gesture's own save (a POST .../actions whose body names one of
+ * `actions`), asserting it succeeded. Matching any /actions response is not enough: framing saves
+ * queue per clip, so an earlier gesture's response can arrive first, and reloading before the queued
+ * save is sent aborts it (the verifier's phone run lost its remove_segment_split to a 409 that way).
+ */
+async function pressAndSave(page, locator, actions, act = () => press(page, locator)) {
+  const saved = page.waitForResponse((r) => {
+    if (r.request().method() !== 'POST' || !/\/clips\/.*\/actions/.test(r.url())) return false;
+    try { return actions.includes(r.request().postDataJSON()?.action); } catch { return false; }
+  }, { timeout: 30000 });
+  await act();
+  const res = await saved;
+  expect(res.ok(), `${actions.join('/')} saved (HTTP ${res.status()})`).toBe(true);
+}
+
 /** Put the clip back to one untrimmed section (undo trims, delete splits). */
 async function resetClip(page) {
   for (let i = 0; i < 6; i += 1) {
-    if (await undoEnd(page).count()) { await press(page, undoEnd(page).first()); }
-    else if (await undoStart(page).count()) { await press(page, undoStart(page).first()); }
+    const untrim = ['set_trim_range', 'clear_trim_range'];
+    if (await undoEnd(page).count()) { await pressAndSave(page, undoEnd(page).first(), untrim); }
+    else if (await undoStart(page).count()) { await pressAndSave(page, undoStart(page).first(), untrim); }
     else if (await deleteSplits(page).count()) {
       const btn = deleteSplits(page).first();
       await btn.locator('..').hover().catch(() => {});
-      await press(page, btn);
+      await pressAndSave(page, btn, ['remove_segment_split']);
     } else return;
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(500);
   }
   expect(await deleteSplits(page).count(), 'clip reset to one section').toBe(0);
 }
@@ -88,7 +105,8 @@ async function splitAt(page, fraction) {
   const box = await track.boundingBox();
   const x = 20 + (box.width - 40) * fraction;
   const before = await page.getByTestId('speed-track').locator('[title^="Split at"]').count();
-  await track.click({ position: { x, y: Math.min(10, box.height / 3) } });
+  await pressAndSave(page, track, ['split_segment'],
+    () => track.click({ position: { x, y: Math.min(10, box.height / 3) } }));
   await expect.poll(
     () => page.getByTestId('speed-track').locator('[title^="Split at"]').count(),
     { message: `split added at ${fraction}`, timeout: 30000 },
@@ -110,7 +128,7 @@ async function runScenario(page, { isTouch = false } = {}) {
   // Trim the last section (its Trim section button is the last one).
   const trimButtons = page.getByTestId('speed-track').locator('button[title="Trim section"]');
   await expect(trimButtons).toHaveCount(2, { timeout: 30000 });
-  await press(page, trimButtons.last());
+  await pressAndSave(page, trimButtons.last(), ['set_trim_range']);
   await expect(undoEnd(page)).toHaveCount(1, { timeout: 30000 });
   await page.waitForTimeout(1500);
 
@@ -130,9 +148,7 @@ async function runScenario(page, { isTouch = false } = {}) {
   expect(overlaps, 'Delete split and Undo end trim do not overlap').toBe(false);
 
   // Deleting that split works and the end stays trimmed.
-  const saved = page.waitForResponse((r) => /\/clips\/.*\/actions/.test(r.url()) && r.request().method() === 'POST', { timeout: 30000 });
-  await press(page, del);
-  expect((await saved).ok(), 'remove split saved').toBe(true);
+  await pressAndSave(page, del, ['remove_segment_split']);
   await expect(deleteSplits(page)).toHaveCount(0, { timeout: 30000 });
   await expect(undoEnd(page)).toHaveCount(1);
 
