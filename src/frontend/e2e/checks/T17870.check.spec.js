@@ -9,12 +9,31 @@
  * Run: bash scripts/dev-verify.sh e2e/checks/T17870.check.spec.js --reporter=line
  */
 import { test, expect } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { loginForCheck, checkApi } from '../helpers/checkAuth';
 
 test.setTimeout(240000);
 
 const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
+const FRONTEND_SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'src');
+const DIM_CODE = /dimOpacity|onToggleDim|DARKEN_OUTSIDE/;
+
+/** Every `file:line` under src/frontend/src naming a removed dim identifier. */
+function dimCodeLeftovers(dir = FRONTEND_SRC) {
+  const hits = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) { hits.push(...dimCodeLeftovers(full)); continue; }
+    if (!/\.(jsx?|tsx?)$/.test(entry.name)) continue;
+    fs.readFileSync(full, 'utf8').split('\n').forEach((line, i) => {
+      if (DIM_CODE.test(line)) hits.push(`${path.relative(FRONTEND_SRC, full)}:${i + 1}`);
+    });
+  }
+  return hits;
+}
 
 /** A project Frame can edit: its game video still exists (same lookup as T17230's check). */
 async function findFrameableProject(page) {
@@ -70,6 +89,11 @@ async function openFrame(context, page) {
   await page.getByTestId('crop-rect').waitFor({ timeout: 180000 });
   return made;
 }
+
+test('T17870:C3 - no dim code left in src/frontend/src (dimOpacity, onToggleDim, DARKEN_OUTSIDE)', () => {
+  expect(fs.existsSync(path.join(FRONTEND_SRC, 'modes', 'focus')), `source tree at ${FRONTEND_SRC}`).toBe(true);
+  expect(dimCodeLeftovers()).toEqual([]);
+});
 
 test.describe('desktop', () => {
   test.use({ viewport: DESKTOP });
