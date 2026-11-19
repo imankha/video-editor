@@ -2838,6 +2838,11 @@ The full checklist for an 11th→Nth sport:
 
 ## Landmines & history
 
+- **T17820/T17830 whole-game tiles need open video (2026-11-19).** With the playhead inside a
+  play, the action strip swaps Mark play for Edit play / Make new highlight and the four tiles
+  (`annotate-mark-play-button`, review, share, add footage) do not render. An e2e that needs them
+  must step forward only until `annotate-mark-play-button` is visible and fail loudly otherwise;
+  a fixed seek clamps at the end of a short game (staging's 1:29 `game-desktop`), inside its last play.
 - **T12000 blob: URL teardown order (2026-10-08).** Any helper that creates a
   temporary `URL.createObjectURL(file)` for an offscreen `<video>` element must
   detach the element from the URL (`video.removeAttribute('src'); video.load();`)
