@@ -141,8 +141,9 @@ async function framedProject(page) {
   const projects = await listProjects(page);
   const framed = projects.find((p) => p.has_working_video);
   if (framed || process.env.E2E_BASE_URL) {
-    expect(framed, 'a project with a sharpened video (FIXTURE-CONTRACT.md item 2a); seed the gate account, '
-      + 'this check does not spend credits sharpening one').toBeTruthy();
+    expect(framed, 'a Drafts project with a sharpened video (FIXTURE-CONTRACT.md item 2a): a sharpened single '
+      + 'play finishes into a reel and leaves Drafts, so move it back from My Reels; this check does not spend '
+      + 'credits sharpening one').toBeTruthy();
     return framed;
   }
   const draft = await sharpenableDraft(page);
