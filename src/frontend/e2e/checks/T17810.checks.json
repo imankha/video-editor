@@ -1,0 +1,1 @@
+{"criteria": {"T17810:C1": {"kind": "code", "command": "bash scripts/check_staging_spec_passes.sh e2e/checks/T17780.check.spec.js 'T17780:C1'"}}}

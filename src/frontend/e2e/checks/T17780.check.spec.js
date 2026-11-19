@@ -12,7 +12,9 @@
  * hit-pad (the RegionLayer T15600 pattern) the same as a bigger visible chip.
  *
  * Setup: opens Spotlight on the account's first framed project; with none, it first sharpens a
- * single-play draft the way a parent does (T16525's setup).
+ * single-play draft on a READY game the way a parent does (T16525's setup). The staging gate
+ * account's own single-play drafts sat on a game stuck uploading, where Frame shows no Sharpen
+ * (T17810), so the draft comes from sharpenableDraft, which makes one from a ready game's play.
  * If that project has no text, the check taps "Add text" (a real user gesture) and deletes that
  * region again with the control under test, so the account is left as it was found.
  *
@@ -21,6 +23,7 @@
 import { test, expect } from '@playwright/test';
 import { loginForCheck, checkApi, disableGuidanceForCheck } from '../helpers/checkAuth';
 import { waitForRealVideoReady } from '../helpers/videoRoute';
+import { sharpenableDraft } from '../helpers/returnAfterSharpen';
 
 test.setTimeout(120000);
 
@@ -119,13 +122,13 @@ async function listProjects(page) {
   return Array.isArray(res.body) ? res.body : res.body.projects || [];
 }
 
-/** A project Spotlight can open: one already framed, or a single-play draft sharpened here the way a parent does. */
+/** A project Spotlight can open: one already framed, or a sharpenable single-play draft sharpened here the way a parent does. */
 async function framedProject(page) {
   const projects = await listProjects(page);
   const framed = projects.find((p) => p.has_working_video);
   if (framed) return framed;
-  const draft = projects.find((p) => (p.clip_count || 0) === 1 && !p.has_final_video);
-  expect(draft, 'a framed project, or a single-play draft to sharpen').toBeTruthy();
+  const draft = await sharpenableDraft(page);
+  expect(draft, 'a framed project, or a single-play draft on a ready game to sharpen').toBeTruthy();
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/focus/p/${draft.id}`);
   await page.getByTestId('focus-video-stage').waitFor({ timeout: 90000 });
