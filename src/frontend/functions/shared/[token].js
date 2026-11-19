@@ -68,9 +68,15 @@ export function absolutizePosterUrl(share, api) {
 // The API's video_url is a 4h presigned R2 URL; the edge HTML is cached and
 // crawlers refetch later, so render a STABLE proxy path that 302s to a fresh
 // presign per request.
+// T17740: Download needs its own URL. The page and the API are different origins,
+// so the anchor's `download` attribute is ignored and video.mp4 (an inline R2
+// object) opened in the browser's player. /download answers
+// Content-Disposition: attachment, which saves the file on desktop and phone.
 export function stabilizeVideoUrl(share, api, token) {
   if (share.video_url) {
-    share.video_url = `${api}/api/shared/${encodeURIComponent(token)}/video.mp4`;
+    const base = `${api}/api/shared/${encodeURIComponent(token)}`;
+    share.video_url = `${base}/video.mp4`;
+    share.download_url = `${base}/download`;
   }
   return share;
 }
@@ -320,7 +326,7 @@ ${introCard.html}
 </div>
 </main>
 <footer>
-<a class="dl" href="${videoUrl}" download>Download</a>
+<a class="dl" href="${escapeHtml(share.download_url)}" download>Download</a>
 <a class="cta" href="${escapeHtml(share.sharer_invite_code ? endcardCtaUrl(appHome, share.sharer_invite_code, share.sport) : appHome)}">Open ReelBallers</a>
 </footer>
 <script>
