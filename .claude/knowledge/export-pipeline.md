@@ -1182,6 +1182,16 @@ it logs `[Finish] FAILED project= step=` and the highlight keeps the old manual 
   success path's no-INFO/no-HEAD contract).
 
 ## Active/upcoming work
+- **T17770 — a live public game link pins its TEAM recap (2026-11-19):** `GET /api/shared/game/{token}`
+  presigns `recaps/{game_id}_team.mp4` on every view, and a presign never checks the key. So
+  (a) `games.py: restore_full_video` (DELETE `/plays-only`) deletes only the athlete recap while
+  `_has_live_game_link(game_id, user_id, profile_id)` is true (unrevoked `game_link` whose
+  `sharer_profile_id` matches: game ids repeat across profiles); (b) the resolver HEADs the team
+  recap first and returns `recap_url: null` when it is gone (edge falls through to the SPA, which
+  shows `SHARE_COPY.GAME_PLAYS_UNAVAILABLE` + `_HINT`); (c) both viewers (edge `#unavailable`,
+  `SharedGameView` `onError`) swap a failed `<video>` for that message. A repeat "Copy link" still
+  returns the existing token WITHOUT re-stitching, so a link whose recap was deleted before this
+  fix stays unavailable until the next export rebuilds the team recap.
 - **T5710 — per-layer recaps (2026-08-01):** the single combined recap is replaced by two
   independently-stitched, layer-filtered recaps. `_get_annotated_clips(conn, game_id, layer)`
   (`auto_export.py:138`) takes a layer predicate: athlete = `my_athlete = 1 OR my_athlete IS NULL`

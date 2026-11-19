@@ -1630,6 +1630,7 @@ export const SHARE_COPY = {
   LOADING_SHARED_PLAYS: 'Loading shared plays...',
   LOADING_GAME_PLAYS: 'Loading game plays...',
   GAME_PLAYS_UNAVAILABLE: "These game plays aren't available right now.",
+  GAME_PLAYS_UNAVAILABLE_HINT: 'Ask the person who shared this link to send it again.',
   INVITE_FRIEND: 'Invite a friend to ReelBallers',
   NO_HIGHLIGHTS_YET: 'No highlights yet. Check back soon.',
 };

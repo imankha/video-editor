@@ -93,3 +93,22 @@ describe('escapeHtml', () => {
     expect(escapeHtml(`<script>&"'`)).toBe('&lt;script&gt;&amp;&quot;&#39;');
   });
 });
+
+// T17770: a recap object that is gone must produce a readable message on the edge
+// page, not an empty player. The message is in the page from the start (hidden) and
+// the page script reveals it on the <video> error event.
+describe('T17770 unavailable video', () => {
+  it('renders a hidden readable message and reveals it on video error', async () => {
+    const { JSDOM } = await import('jsdom');
+    const dom = new JSDOM(renderGamePage({ ...RESOLVE }, 'tok9'), { runScripts: 'dangerously' });
+    const doc = dom.window.document;
+    const msg = doc.getElementById('unavailable');
+    expect(msg).toBeTruthy();
+    expect(msg.hidden).toBe(true);
+    expect(msg.textContent).toContain("These game plays aren't available right now.");
+    expect(msg.textContent).toContain('Ask the person who shared this link to send it again.');
+    doc.getElementById('v').dispatchEvent(new dom.window.Event('error'));
+    expect(msg.hidden).toBe(false);
+    expect(doc.getElementById('v').hidden).toBe(true);
+  });
+});
