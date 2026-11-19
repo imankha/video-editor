@@ -1,6 +1,6 @@
 # T17650: Trim control blocks deleting split
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-18

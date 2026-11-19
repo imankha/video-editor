@@ -1,6 +1,6 @@
 # T17660: Multiple videos cost more than shown
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-11-18

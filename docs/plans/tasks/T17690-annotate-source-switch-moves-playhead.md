@@ -1,6 +1,6 @@
 # T17690: Switching video source in Annotate moves the playhead
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-18
