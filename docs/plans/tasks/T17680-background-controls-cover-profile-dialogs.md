@@ -30,3 +30,10 @@ Start from T6600's file for the ladder module and the modal components (`ManageP
 - [ ] C2: While the dialog is open, tapping where a background Play or Share button sits hits the backdrop, not the button.
 - [ ] C3: The nested Intro cards dialog (Manage profiles, then Intro cards, then a confirmation) still orders correctly.
 - [ ] C4: The fix uses the z-index ladder module; no new ad-hoc z-index value.
+
+
+## Progress Log
+
+### 2026-11-18: Possible nested confirmation variant
+
+After automatic Spotlight completion, the finished player's Edit zoom action once opened Sharpen it again? behind the full-screen player. Hit-testing the Cancel button center returned the video element, so it could not be clicked. Escape recovered. Three later reentries via the ready message did not reproduce that exact state; they opened Frame directly. Treat this as possible, not a repeated failure. Evidence: qa/qa-pass-2026-11-18/bugs/B05-redo-confirm-behind-player.png and B05-confirm-geometry.json. This may share the dialog ordering problem; verify rather than assume.

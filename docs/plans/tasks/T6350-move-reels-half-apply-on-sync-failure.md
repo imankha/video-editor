@@ -104,3 +104,10 @@ makes the phase-2 sync fail. Staging was restored by deleting the test profile.
 - [ ] Regression test forces a phase-2 sync failure (T4120's `FORCE_R2_SYNC_FAILURE` seam) and
       asserts the resulting state + message agree
 - [ ] Re-run the staging reproduction above and confirm it no longer half-applies
+
+
+## Progress Log
+
+### 2026-11-18: Returning parent reproduction
+
+On staging build 91f0e6792 (#8105), desktop 1440 x 900, moving the QA-created finished highlight (download 16) from Default into QA18 Test Athlete returned 500 with Could not move highlights. Three observed responses failed. Request ids include afc39fe0 and 06dcd038. After switching profiles, the destination had the highlight and a reference game, while Default still had its original highlight. This matches this existing failure family. Retained the destination profile and both copies for investigation. Evidence: qa/qa-pass-2026-11-18/bugs/B09-move-profile.json, B09-move-profile-current.png, B09-move-profile-repro3.png, B09-target-after-failure.png. Fly logs show target already has filename and skipping re-insert on retry, and source database checkpoint busy warnings. Those logs support partial state but do not establish the precise cause of the API 500. No duplicate task was filed because this task file still says TODO, though its archive row says DONE.
