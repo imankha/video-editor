@@ -698,14 +698,20 @@ def deduct_credits(
     reference_id: str | None = None,
     video_seconds: float | None = None,
 ) -> dict:
-    """Old contract: returns {success, balance, required}."""
+    """Old contract: returns {success, balance, required}, plus `applied` (False when
+    this reference_id was already debited and the call changed nothing)."""
     key = credit_key(source, reference_id)
     # M5 fix: reference_id was being dropped on the floor here -- game_upload
     # and storage_extension debit rows landed with NULL reference_id,
     # regressing GDPR export / credit history / admin forensics, and making
     # this path inconsistent with reserve_credits (which DOES preserve it).
     result = debit(user_id, amount, source, key, video_seconds=video_seconds, reference_id=reference_id)
-    return {"success": result["ok"], "balance": result["balance"], "required": result["required"]}
+    return {
+        "success": result["ok"],
+        "applied": result["applied"],
+        "balance": result["balance"],
+        "required": result["required"],
+    }
 
 
 def refund_credits(

@@ -98,6 +98,56 @@ describe('StorageExtensionModal', () => {
     });
   });
 
+  // T17670: the server keys the charge by request_id, so a resend of one tap is one
+  // charge. Each tap carries its own id; a double tap sends one request.
+  describe('T17670 request id per tap', () => {
+    function okFetch() {
+      return vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ success: true, new_expires_at: new Date().toISOString() }),
+      }));
+    }
+    const sentIds = (fetchMock) => fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body).request_id);
+
+    it('sends a request_id with the extend request', async () => {
+      const fetchMock = okFetch();
+      globalThis.fetch = fetchMock;
+      render(<StorageExtensionModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /Extend storage/ }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const [id] = sentIds(fetchMock);
+      expect(typeof id).toBe('string');
+      expect(id.length).toBeGreaterThan(0);
+      expect(id.length).toBeLessThanOrEqual(64);
+    });
+
+    it('a double tap sends one request', async () => {
+      const fetchMock = okFetch();
+      globalThis.fetch = fetchMock;
+      render(<StorageExtensionModal {...defaultProps} />);
+      const button = screen.getByRole('button', { name: /Extend storage/ });
+      fireEvent.click(button);
+      fireEvent.click(button);
+      await waitFor(() => expect(defaultProps.onClose).toHaveBeenCalled());
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(sentIds(fetchMock)[0]).toBeTruthy();
+    });
+
+    it('two separate taps send two different request ids', async () => {
+      const fetchMock = okFetch();
+      globalThis.fetch = fetchMock;
+      render(<StorageExtensionModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /Extend storage/ }));
+      await waitFor(() => expect(defaultProps.onClose).toHaveBeenCalledTimes(1));
+      fireEvent.click(screen.getByRole('button', { name: /Extend storage/ }));
+      await waitFor(() => expect(defaultProps.onClose).toHaveBeenCalledTimes(2));
+      const [first, second] = sentIds(fetchMock);
+      expect(first).toBeTruthy();
+      expect(second).toBeTruthy();
+      expect(second).not.toBe(first);
+    });
+  });
+
   // The backend rejects days > 365 with a 422 (ExtendStorageRequest), so the largest
   // slider position must never send more, whatever the game size does to the step.
   it.each([

@@ -130,7 +130,7 @@ export async function retryCreditsRefusedUpload(context, page, { minStartBalance
     if (left <= 1) break;
     const days = Math.min(360, 30 * (left - 1));
     const r = await pageApi(page, `/games/${setupGame.id}/extend-storage`, {
-      method: 'POST', body: JSON.stringify({ days }),
+      method: 'POST', body: JSON.stringify({ days, request_id: `setup-${Date.now()}-${i}` }),
     });
     expect(r.status, `extend-storage ${days}d`).toBe(200);
   }
