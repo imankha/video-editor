@@ -40,6 +40,10 @@ Found by the full QA continuation on 2026-11-18 on staging, build ce8988c54 (#80
 
 Both the trim restore control and Delete split remain visible and separately reachable after an end section is trimmed.
 
+## Ruling
+
+Owner, 2026-11-18: at a trim edge (the split that IS the trim edge), show only Undo end trim (or Undo start trim); do not offer Delete split there. The trim stays until the parent undoes it. Remove the path where Delete split clears the trim on the frontend while the server keeps it, so screen and server can never disagree. Delete split stays available for splits that are not a trim edge, with no overlap from any trim control. C1 is read under this ruling: the end stays trimmed and the trim edge offers only the undo control.
+
 ## Relevant Files
 
 Found by searching for the on-screen Delete split label:

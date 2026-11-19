@@ -884,8 +884,10 @@ export function FocusContainer({
    */
   const handleRemoveSplit = useCallback(async (time) => {
     const callerClipId = projectClipId;
+    // T17650: a trim-edge split is refused (and logged) by the hook; nothing changed,
+    // so nothing is persisted and screen and server keep the same trim.
+    if (!removeSegmentBoundary(time)) return;
     clipHasUserEditsRef.current = true;
-    removeSegmentBoundary(time);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
