@@ -732,8 +732,8 @@ class TestExtendEndpointHandler:
         with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
              patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
              patch("app.routers.games.get_db_connection", mock_db_conn), \
-             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 9}):
-            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "applied": True, "balance": 9}):
+            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30, request_id="tap"))
 
         assert result["success"] is True
         assert result["cost_credits"] == calculate_extension_cost(int(5.0 * 1024 ** 3), 30)
@@ -766,8 +766,8 @@ class TestExtendEndpointHandler:
         with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
              patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
              patch("app.routers.games.get_db_connection", mock_db_conn), \
-             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 5}):
-            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "applied": True, "balance": 5}):
+            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30, request_id="tap"))
 
         assert result["success"] is True
         ref = get_game_storage_ref("recipient-user", "recipient-profile", "expired_ep_hash")
@@ -821,8 +821,8 @@ class TestExtendEndpointHandler:
              patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
              patch("app.routers.games.get_db_connection", mock_db_conn), \
              patch("app.database.get_db_connection", lambda: _conn_for(r_conn)), \
-             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
-            await extend_game_storage(game_id, ExtendStorageRequest(days=60))
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "applied": True, "balance": 10}):
+            await extend_game_storage(game_id, ExtendStorageRequest(days=60, request_id="tap"))
 
         with patch("app.database.get_db_connection", lambda: _conn_for(s_conn)):
             sharer_ref = get_game_storage_ref("sharer-user", "sharer-profile", "isolate_hash")
@@ -851,7 +851,7 @@ class TestExtendEndpointHandler:
              patch("app.routers.games.get_db_connection", mock_db_conn), \
              patch("app.routers.games.deduct_credits", return_value={"success": False, "balance": 0}):
             with pytest.raises(HTTPException) as exc_info:
-                await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+                await extend_game_storage(game_id, ExtendStorageRequest(days=30, request_id="tap"))
             assert exc_info.value.status_code == 402
 
         r_conn.close()
@@ -875,7 +875,7 @@ class TestExtendEndpointHandler:
         def mock_db_conn():
             yield r_conn
 
-        deduct = MagicMock(return_value={"success": True, "balance": 10})
+        deduct = MagicMock(return_value={"success": True, "applied": True, "balance": 10})
         with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
              patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
              patch("app.routers.games.get_db_connection", mock_db_conn), \
@@ -883,7 +883,7 @@ class TestExtendEndpointHandler:
              patch("app.routers.games.r2_head_object_global", return_value=False), \
              patch("app.routers.games.deduct_credits", deduct):
             with pytest.raises(HTTPException) as exc_info:
-                await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+                await extend_game_storage(game_id, ExtendStorageRequest(days=30, request_id="tap"))
             assert exc_info.value.status_code == 410
 
         deduct.assert_not_called()
@@ -910,27 +910,25 @@ class TestExtendEndpointHandler:
              patch("app.routers.games.get_db_connection", mock_db_conn), \
              patch("app.routers.games.get_r2_client", return_value=MagicMock()), \
              patch("app.routers.games.r2_head_object_global", return_value=True), \
-             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
-            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "applied": True, "balance": 10}):
+            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30, request_id="tap"))
 
         assert result["success"] is True
         r_conn.close()
 
-    @pytest.mark.asyncio
-    async def test_t17620_two_extensions_in_one_second_are_both_charged(self, pg_conn, tmp_path):
-        """T17620: the ledger key was profile:game_<second>, so a second extension in the
-        same second replayed the first debit (no charge) and still extended storage."""
-        from app.routers.games import ExtendStorageRequest, extend_game_storage
-        from app.services.credit_ledger import get_balance, grant
+    def _same_second_game(self, tmp_path, seed_key):
+        from app.services.credit_ledger import grant
 
         r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
         game_id = _insert_game(r_conn, blake3_hash="same_second_hash",
                                video_size=int(0.5 * 1024 ** 3))
         _insert_game_video(r_conn, game_id, "same_second_hash", sequence=0,
                            video_size=int(0.5 * 1024 ** 3))
-        grant("recipient-user", 100, "t17620_test", "t17620:seed")
-        cost = calculate_extension_cost(int(0.5 * 1024 ** 3), 360)
+        grant("recipient-user", 100, "t17620_test", seed_key)
+        return r_conn, game_id
 
+    @contextmanager
+    def _frozen_request_context(self, r_conn):
         frozen = datetime(2026, 11, 18, 20, 51, 5, 123456)
 
         class _FrozenDatetime(datetime):
@@ -947,10 +945,68 @@ class TestExtendEndpointHandler:
              patch("app.routers.games.get_db_connection", mock_db_conn), \
              patch("app.routers.games.get_r2_client", return_value=None), \
              patch("app.routers.games.datetime", _FrozenDatetime):
-            await extend_game_storage(game_id, ExtendStorageRequest(days=360))
-            await extend_game_storage(game_id, ExtendStorageRequest(days=360))
+            yield frozen
+
+    @pytest.mark.asyncio
+    async def test_t17620_two_extensions_in_one_second_are_both_charged(self, pg_conn, tmp_path):
+        """T17620/T17670:C2: two taps (two request ids) in the same second are two
+        charges and two extensions. The ledger key used to be profile:game_<second>, so
+        the second one replayed the first debit (no charge) and still extended storage."""
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
+        from app.services.credit_ledger import get_balance
+
+        r_conn, game_id = self._same_second_game(tmp_path, "t17620:seed")
+        cost = calculate_extension_cost(int(0.5 * 1024 ** 3), 360)
+
+        with self._frozen_request_context(r_conn) as frozen:
+            await extend_game_storage(game_id, ExtendStorageRequest(days=360, request_id="tap-one"))
+            second = await extend_game_storage(game_id, ExtendStorageRequest(days=360, request_id="tap-two"))
 
         assert get_balance("recipient-user") == 100 - 2 * cost
+        assert second["new_expires_at"] == storage_expires_at(from_dt=frozen, days=720).isoformat()
+        r_conn.close()
+
+    @pytest.mark.asyncio
+    async def test_t17670_resent_request_charges_and_extends_once(self, pg_conn, tmp_path):
+        """T17670:C1: the same request id sent twice (a resend of one tap) is one charge
+        and one extension; the resend returns the first call's result."""
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
+        from app.services.credit_ledger import get_balance
+
+        r_conn, game_id = self._same_second_game(tmp_path, "t17670:seed:c1")
+        cost = calculate_extension_cost(int(0.5 * 1024 ** 3), 360)
+
+        with self._frozen_request_context(r_conn) as frozen:
+            first = await extend_game_storage(game_id, ExtendStorageRequest(days=360, request_id="one-tap"))
+            resend = await extend_game_storage(game_id, ExtendStorageRequest(days=360, request_id="one-tap"))
+
+        assert get_balance("recipient-user") == 100 - cost
+        once = storage_expires_at(from_dt=frozen, days=360).isoformat()
+        assert first["new_expires_at"] == once
+        assert resend["new_expires_at"] == once
+        ref = get_game_storage_ref("recipient-user", "recipient-profile", "same_second_hash")
+        stored = ref["storage_expires_at"]
+        stored = stored if isinstance(stored, datetime) else datetime.fromisoformat(stored)
+        assert stored.replace(tzinfo=None).isoformat() == once
+        r_conn.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("body", [{"days": 30}, {"days": 30, "request_id": ""}])
+    async def test_t17670_missing_request_id_is_400_and_charges_nothing(self, pg_conn, tmp_path, body):
+        """T17670:C3: no request id is a client bug: refused loudly, nothing charged."""
+        from fastapi import HTTPException
+
+        from app.routers.games import ExtendStorageRequest, extend_game_storage
+        from app.services.credit_ledger import get_balance
+
+        r_conn, game_id = self._same_second_game(tmp_path, f"t17670:seed:c3:{len(body)}")
+
+        with self._frozen_request_context(r_conn), pytest.raises(HTTPException) as exc_info:
+            await extend_game_storage(game_id, ExtendStorageRequest(**body))
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail["code"] == "request_id_required"
+        assert get_balance("recipient-user") == 100
         r_conn.close()
 
 
@@ -986,8 +1042,8 @@ class TestMultiVideoExtend:
         with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
              patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
              patch("app.routers.games.get_db_connection", mock_db_conn), \
-             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
-            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "applied": True, "balance": 10}):
+            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30, request_id="tap"))
 
         assert result["success"] is True
 
@@ -1022,8 +1078,8 @@ class TestMultiVideoExtend:
         with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
              patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
              patch("app.routers.games.get_db_connection", mock_db_conn), \
-             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
-            await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "applied": True, "balance": 10}):
+            await extend_game_storage(game_id, ExtendStorageRequest(days=30, request_id="tap"))
 
         assert "grace_mv1" not in get_grace_deletion_hashes()
         assert "grace_mv2" not in get_grace_deletion_hashes()

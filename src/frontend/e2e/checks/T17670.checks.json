@@ -1,0 +1,6 @@
+{"criteria": {
+  "T17670:C1": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_shared_game_extension.py -p no:cacheprovider -q -k t17670_resent_request"},
+  "T17670:C2": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_shared_game_extension.py -p no:cacheprovider -q -k t17620_two_extensions"},
+  "T17670:C3": {"kind": "code", "command": "cd src/backend && timeout 300 python -m pytest tests/test_shared_game_extension.py -p no:cacheprovider -q -k t17670_missing_request_id"},
+  "T17670:C4": {"kind": "code", "command": "cd src/frontend && timeout 300 npx vitest run src/components/StorageExtensionModal.test.jsx -t T17670"}
+}}
