@@ -218,9 +218,9 @@ test.describe('T17690 switching source keeps the playhead', () => {
 
     const camera = page.getByTestId('source-seg-2');
     await expect(camera).toHaveAttribute('aria-disabled', 'true');
-    await expect(camera).toHaveAttribute('title', /doesn.t cover this moment/i);
+    await expect(camera).toHaveAttribute('title', /doesn.t cover this part of the game/i);
     await camera.click({ force: true }); // a tap on the disabled video
-    await expect(page.getByTestId('source-readout').first()).toContainText(/doesn.t cover this moment/i);
+    await expect(page.getByTestId('source-readout').first()).toContainText(/doesn.t cover this part of the game/i);
     await expect(page.getByTestId('source-seg-1')).toHaveAttribute('aria-pressed', 'true');
     expect(Math.abs((await gameTime(page, offsets)) - 10), 'a disabled tap does not move the playhead').toBeLessThanOrEqual(FRAME);
 

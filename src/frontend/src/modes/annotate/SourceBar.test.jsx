@@ -202,7 +202,7 @@ describe('SourceBar (T17690) only covering videos are choosable', () => {
     const seg = screen.getByTestId('source-seg-2');
     expect(seg.getAttribute('aria-disabled')).toBe('true');
     expect(seg.className).toContain('opacity-40');
-    expect(seg.getAttribute('title')).toBe("Sideline doesn't cover this moment. Move the playhead into it to switch to it");
+    expect(seg.getAttribute('title')).toBe("Sideline doesn't cover this part of the game. Move the playhead into it to switch to it");
     expect(screen.queryByTestId('source-swap-2')).toBeNull();
     const active = screen.getByTestId('source-seg-1');
     expect(active.getAttribute('aria-disabled')).toBe('false');
