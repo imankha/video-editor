@@ -41,6 +41,10 @@ export const ANNOTATE = {
   nowWatching: (name) => `Now watching ${name}`,
   jumpToVideoTitle: (name) => `Jump to the start of ${name}`,
   switchHereTitle: (name) => `Switch to ${name} here`,
+  // T17690 (owner rule 2026-11-18): only a video covering the playhead moment can be
+  // chosen in the Videos bar, so a switch never moves the playhead.
+  notCoveringTitle: (name) => `${name} doesn't cover this moment. Move the playhead into it to switch to it`,
+  notCoveringNotice: (name) => `${name} doesn't cover this moment`,
   // T14610: "Fix timing" is retired; the action names the parent's goal.
   LINE_UP_VIDEO: 'Line up this video with the game',
   // T17250: the words on the line-up control (was a bare clock icon).
@@ -50,7 +54,7 @@ export const ANNOTATE = {
   // Shown (in the Videos bar's notice slot) when a video is picked while line-up
   // is open: picking would seek the COMMITTED timeline, i.e. the video's old spot.
   FINISH_FIX_TIMING_FIRST: 'Tap Done to keep the move first, or X to undo it',
-  VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cameras filmed at the same time, tapping switches cameras without moving.',
+  VIDEOS_HELP: 'The videos in this game. Where two cameras filmed at the same time, tapping one switches cameras without moving. A video that doesn\'t cover this moment can\'t be chosen.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',
   MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a moment worth keeping.', // N04/T11850 mode-switcher help
