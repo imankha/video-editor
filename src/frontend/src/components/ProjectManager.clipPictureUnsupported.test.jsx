@@ -163,6 +163,7 @@ describe('ProjectManager direct clip upload of a sound-only file (T17500)', () =
     probe.unsupported = new Set(['iphone.mov']);
     renderOnClipsTab();
     await pickClipFiles([mp4('iphone.mov'), mp4('h264.mp4')]);
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     await waitFor(() => expect(uploadClipsMock).toHaveBeenCalledTimes(1));
     expect(uploadClipsMock.mock.calls[0][0].map((f) => f.name)).toEqual(['h264.mp4']);
@@ -172,6 +173,7 @@ describe('ProjectManager direct clip upload of a sound-only file (T17500)', () =
   it('an H.264 file shows no message and uploads as before', async () => {
     renderOnClipsTab();
     await pickClipFiles([mp4('h264.mp4')]);
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     await waitFor(() => expect(uploadClipsMock).toHaveBeenCalledTimes(1));
     expect(toastError).not.toHaveBeenCalled();

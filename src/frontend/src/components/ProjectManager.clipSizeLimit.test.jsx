@@ -190,6 +190,7 @@ describe('ProjectManager clip size limit + completion nav (T10250/T10260)', () =
     renderOnClipsTab();
     const input = await openPicker();
     fireEvent.change(input, { target: { files: [bytesFile('ok.mp4', CAP - 1)] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     await waitFor(() => expect(uploadClipsMock).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('clip-size-limit-modal')).toBeNull();
@@ -204,6 +205,7 @@ describe('ProjectManager clip size limit + completion nav (T10250/T10260)', () =
     renderOnClipsTab();
     const input = await openPicker();
     fireEvent.change(input, { target: { files: [bytesFile('long.mp4', 1024)] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     // The server reason (parameterized by the 600s => 10-minute cap) is visible.
     expect(await screen.findByText(/10-minute limit/i)).toBeTruthy();
@@ -226,6 +228,7 @@ describe('ProjectManager clip size limit + completion nav (T10250/T10260)', () =
     renderOnClipsTab();
     const input = await openPicker();
     fireEvent.change(input, { target: { files: [bytesFile('huge.mp4', 1024)] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     const modal = await screen.findByTestId('clip-upload-too-large-modal');
     const withinModal = within(modal);
@@ -246,6 +249,7 @@ describe('ProjectManager clip size limit + completion nav (T10250/T10260)', () =
     renderOnClipsTab({ onSelectProjectWithMode });
     const input = await openPicker();
     fireEvent.change(input, { target: { files: [bytesFile('clip.mp4', 1024)] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     await waitFor(() => expect(onSelectProjectWithMode).toHaveBeenCalledWith(55, { mode: 'framing' }));
   });
@@ -257,6 +261,7 @@ describe('ProjectManager clip size limit + completion nav (T10250/T10260)', () =
     renderOnClipsTab({ onSelectProjectWithMode });
     const input = await openPicker();
     fireEvent.change(input, { target: { files: [bytesFile('clip.mp4', 1024)] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     // User leaves the Clips tab before the upload resolves.
     fireEvent.click(screen.getByRole('button', { name: /^Games/i }));

@@ -115,6 +115,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
+    await page.getByTestId('clip-upload-cost-confirm').click(); // T17760 price confirm
 
     // The tail state reads "Preparing your clip..." while the batch creates the
     // clip record — the bar never jumps to a bare 100% before the tile exists.
@@ -134,6 +135,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
+    await page.getByTestId('clip-upload-cost-confirm').click(); // T17760 price confirm
 
     // Leave the Clips tab before the upload finishes.
     await expect(page.getByTestId('clip-uploading-rail')).toBeVisible({ timeout: 15000 });

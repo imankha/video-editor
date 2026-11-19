@@ -34,6 +34,7 @@ test('T17640:C1 T17500:C4 an H.264 video shows no message in Frame or on a play 
   await page.route(/\/api\/games\/prepare-upload/, (route) => route.abort('internetdisconnected'));
   await openClipPicker(page);
   await page.getByTestId('clip-upload-input').setInputFiles(H264);
+  await page.getByTestId('clip-upload-cost-confirm').click(); // T17760 price confirm
   await expect(page.getByText('Uploading T17500-h264.mp4...').first()).toBeVisible({ timeout: 60000 });
   await expect(page.getByText(MESSAGE)).toHaveCount(0);
 });
