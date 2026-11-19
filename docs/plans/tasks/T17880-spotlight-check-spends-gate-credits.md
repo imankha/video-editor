@@ -1,6 +1,6 @@
 # T17880: The Spotlight staging check spends the gate account's credits and then cannot run
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-19
@@ -35,3 +35,7 @@ Make the check not depend on spending credits at check time:
 
 - [ ] C1: The T17780 check, run against staging as `e2e-gate@test.local`, reaches the Spotlight text timeline and measures the Delete text control without sharpening anything, so the account's credit balance is the same before and after the run.
 - [ ] C2: Run twice in a row against staging, both T17780 checks (C1, C2) pass both times.
+
+## Ruling
+
+Owner, 2026-11-19: option (a). The worker may sharpen "Play 6" on staging as e2e-gate@test.local once, trimmed to 7 seconds, spending the account's 7 credits, to create the one sharpened project the reworked check uses. One time only; no credit top-up.
