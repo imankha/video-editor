@@ -19,6 +19,15 @@ import { UserFacingError, userErrorMessage } from '../utils/userError';
 // Mirrors ExtendStorageRequest.days (le=365) in routers/games.py; a larger request 422s.
 const MAX_EXTENSION_DAYS = 365;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// T17750: the server returns naive UTC ISO strings (Python utcnow().isoformat(), no
+// offset). `new Date()` reads an offset-less date-time as LOCAL time, which shifted the
+// success date a day past the quote wherever the local and UTC dates differ.
+function parseServerUtc(iso) {
+  return new Date(/(Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`);
+}
+
 function formatDate(date) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -45,23 +54,23 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
 
   const currentExpiry = useMemo(() => {
     if (game.storage_expires_at) {
-      const d = new Date(game.storage_expires_at);
+      const d = parseServerUtc(game.storage_expires_at);
       return d > new Date() ? d : new Date();
     }
     return new Date();
   }, [game.storage_expires_at]);
 
-  const newExpiry = useMemo(() => {
-    const d = new Date(currentExpiry);
-    d.setDate(d.getDate() + extensionDays);
-    return d;
-  }, [currentExpiry, extensionDays]);
+  // Whole 24-hour days, like the server's timedelta(days), not local calendar days.
+  const newExpiry = useMemo(
+    () => new Date(currentExpiry.getTime() + extensionDays * DAY_MS),
+    [currentExpiry, extensionDays],
+  );
 
   const daysLeft = useMemo(() => {
     if (!game.storage_expires_at) return null;
     const now = new Date();
-    const expiry = new Date(game.storage_expires_at);
-    return Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+    const expiry = parseServerUtc(game.storage_expires_at);
+    return Math.ceil((expiry - now) / DAY_MS);
   }, [game.storage_expires_at]);
 
   const isExpired = daysLeft !== null && daysLeft <= 0;
@@ -87,7 +96,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
       }
       const data = await res.json();
       await fetchCredits();
-      toast.success(`Storage extended until ${formatDate(new Date(data.new_expires_at))}`);
+      toast.success(`Storage extended until ${formatDate(parseServerUtc(data.new_expires_at))}`);
       onExtensionSuccess?.();
       onClose();
     } catch (err) {
@@ -146,7 +155,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
               {isExpired
                 ? 'Expired'
                 : daysLeft !== null
-                  ? `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} (${formatDate(new Date(game.storage_expires_at))})`
+                  ? `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} (${formatDate(parseServerUtc(game.storage_expires_at))})`
                   : 'No expiry set'}
             </p>
           </div>
