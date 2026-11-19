@@ -40,6 +40,48 @@ const TARGET_PEEK_FRACTION = 0.35;
 // coaching tile rather than a sliver. Matches the filler wrapper's min-w-[280px];
 // the filler only mounts while at least this much space is free beside the tiles.
 const MIN_FILLER_WIDTH = 280;
+// T17850: how far a drawn arrow reaches into the row. The arrow is w-9 (36px)
+// at -left-2 (<640px; -left-4 from sm), so it covers the row's first 28px at
+// most. While arrows are drawn the row is inset by this much on both sides
+// (padding + scroll-padding), so a fully visible card -- at the row start, the
+// end, or snapped -- never sits under an arrow; only a cut-off card reaches it.
+const ARROW_INSET = 28;
+const BASE_PAD = 4; // the row's px-1 when no arrows are drawn
+
+/**
+ * T17850: classes for a card's overlay controls (Play, Share, the pencil, the
+ * kebab) that must hide while the card is cut off at either end of the row, so
+ * they never sit under the previous/next arrow. CardCarousel marks such a tile
+ * `data-carousel-clipped` (markClippedTiles); a card opts its controls in by
+ * adding this class. Opacity + pointer-events, not visibility: a keyboard focus
+ * still lands on the control, which scrolls its tile fully into view and so
+ * shows it again.
+ */
+export const CAROUSEL_EDGE_HIDE =
+  '[[data-carousel-clipped]_&]:opacity-0 [[data-carousel-clipped]_&]:pointer-events-none';
+
+/**
+ * Mark each tile that is not fully inside the row's visible box (inset by
+ * `inset` px on both sides: the arrows' reach while they are drawn) with
+ * `data-carousel-clipped` and clear the mark on every other tile (T17850). A
+ * DOM attribute, not React state: it changes on every scroll frame and only
+ * drives CSS, so it must not re-render the row. The tile's box is its
+ * untransformed one (offsetWidth around the rect's center): a hovered tile's
+ * `scale` grows its rect past the row edge without the tile being cut off.
+ */
+function markClippedTiles(el, inset) {
+  const rowRect = el.getBoundingClientRect();
+  const left = rowRect.left + inset;
+  const right = rowRect.right - inset;
+  for (const tile of tileChildren(el)) {
+    const rect = tile.getBoundingClientRect();
+    const center = rect.left + rect.width / 2;
+    const half = tile.offsetWidth / 2;
+    const clipped = center - half < left - SCROLL_EPS || center + half > right + SCROLL_EPS;
+    if (clipped) tile.setAttribute('data-carousel-clipped', '');
+    else tile.removeAttribute('data-carousel-clipped');
+  }
+}
 
 /**
  * Decide whether the trailing `fillerSlot` (T8990) fits beside the row's tiles.
@@ -117,6 +159,9 @@ export function pickPeekGap(tileW, containerW, childCount) {
 
 export function CardCarousel({ children, ariaLabel, className = '', fillerSlot = null }) {
   const scrollRef = useRef(null);
+  // T17850: the arrows' reach into the row while they are drawn (else 0). A ref
+  // so the stable recompute/computeGap callbacks read this render's value.
+  const arrowInsetRef = useRef(0);
   const [scrollState, setScrollState] = useState({ canScrollLeft: false, canScrollRight: false });
   const [isOverflowing, setIsOverflowing] = useState(false);
   const [isFinePointer, setIsFinePointer] = useState(false);
@@ -148,6 +193,7 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
     if (!el) return;
     const { scrollLeft, scrollWidth, clientWidth } = el;
     const maxScroll = scrollWidth - clientWidth;
+    markClippedTiles(el, arrowInsetRef.current);
     const overflow = maxScroll > SCROLL_EPS;
 
     setIsOverflowing((prev) => (prev === overflow ? prev : overflow));
@@ -188,7 +234,9 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
     // untransformed layout box (offsetWidth) is what the peek math actually wants
     // and a scale transition can never perturb it.
     const tileW = firstChild.offsetWidth;
-    const containerW = el.clientWidth;
+    // T17850: while arrows are drawn the peek is measured inside the inset box
+    // (the strip under each arrow is extra on top of it).
+    const containerW = el.clientWidth - 2 * arrowInsetRef.current;
     // Exclude the trailing filler (T8990) from the peek-gap child count -- the
     // peek is a property of the real tiles, and counting the filler would let it
     // change its own row's gap.
@@ -265,6 +313,10 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
 
   // Only show chevrons on fine pointer (desktop) when row is overflowing
   const showChevrons = isFinePointer && isOverflowing;
+  // Inset only ever grows the overflow it depends on, so it cannot flip
+  // showChevrons back off (no layout loop).
+  arrowInsetRef.current = showChevrons ? ARROW_INSET : 0;
+  const rowPad = showChevrons ? ARROW_INSET : BASE_PAD;
   const useDots = progress.pages <= 6;
 
   return (
@@ -273,8 +325,8 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
         ref={scrollRef}
         role="group"
         aria-label={ariaLabel}
-        style={{ gap: `${gap}px` }}
-        className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth px-1 pb-1"
+        style={{ gap: `${gap}px`, paddingLeft: `${rowPad}px`, paddingRight: `${rowPad}px`, scrollPaddingLeft: `${rowPad}px`, scrollPaddingRight: `${rowPad}px` }}
+        className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth pb-1"
       >
         {children}
         {/* T8990: trailing coaching filler, mounted only while it fits beside the
@@ -295,9 +347,11 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
           math and can land at the same vertical center as this arrow, producing a
           visual collision where the pill and the circular control fight for the
           same pixels. A pointer-events-none fade masks the card edge behind the
-          arrow (Netflix-row pattern) instead of leaving the raw overlap visible. */}
+          arrow (Netflix-row pattern), and (T17850) the cut-off card hides those
+          controls outright (CAROUSEL_EDGE_HIDE). The scrim is only as wide as
+          the row's arrow inset, so it never dims a fully visible card. */}
       {showChevrons && (
-        <div className="absolute left-0 top-0 bottom-0 w-14 z-[15] pointer-events-none bg-gradient-to-r from-gray-900 via-gray-900/70 to-transparent rounded-l-lg" />
+        <div style={{ width: `${ARROW_INSET}px` }} className="absolute left-0 top-0 bottom-0 z-[15] pointer-events-none bg-gradient-to-r from-gray-900 via-gray-900/70 to-transparent rounded-l-lg" />
       )}
       {showChevrons && (
         <button
@@ -318,7 +372,7 @@ export function CardCarousel({ children, ariaLabel, className = '', fillerSlot =
 
       {/* Right scrim + arrow — mirrors the left pair above. */}
       {showChevrons && (
-        <div className="absolute right-0 top-0 bottom-0 w-14 z-[15] pointer-events-none bg-gradient-to-l from-gray-900 via-gray-900/70 to-transparent rounded-r-lg" />
+        <div style={{ width: `${ARROW_INSET}px` }} className="absolute right-0 top-0 bottom-0 z-[15] pointer-events-none bg-gradient-to-l from-gray-900 via-gray-900/70 to-transparent rounded-r-lg" />
       )}
       {showChevrons && (
         <button
