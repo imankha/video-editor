@@ -176,6 +176,9 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17780 | [Spotlight text deletion is tiny](tasks/T17780-spotlight-text-delete-small-touch-target.md) | 5 | 2 | 2.5 | STAGING | [ ] | A parent removes text from a highlight on a phone. The timeline delete control is only 20 by 20 pixels, making a destructive action unnecessarily hard to target. Done when the listed controls have a 44 by 44 touch target without overlap. |
 | T17790 | [Landscape controls miss finger size](tasks/T17790-mark-plays-landscape-small-touch-controls.md) | 5 | 2 | 2.5 | STAGING | [ ] | A parent turns a phone sideways to mark plays. The four main action buttons are only 38 pixels high, and the All filter is only 34 pixels wide. These controls fall below the required 44 by 44 touch target. Done when the listed controls have a 44 by 44 touch target without overlap. |
 | T17750 | [Storage extension dates disagree](tasks/T17750-storage-extension-dates-disagree.md) | 5 | 3 | 1.7 | STAGING | [ ] | A parent opens an expired game to buy thirty more days of storage. Before confirming, the window says the video will be available until December 18. After the purchase, the success message says December 19. This repeated on three games, although each one correctly charged one credit. The date shown before and after the purchase should agree. Done when the extension quote, confirmation and retained-until date use the same date for the chosen period. |
+| T17810 | [Staging check failed: T17780:C1 C1: A browser check at the stated real-touch sizes confirms](tasks/T17810-staging-check-failed-t17780-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17820 | [Staging check failed: T17790:C1 C1: A browser check at the stated real-touch sizes confirms](tasks/T17820-staging-check-failed-t17790-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17830 | [Staging check failed: T17790:C2 C2: The expanded hit areas do not overlap other controls](tasks/T17830-staging-check-failed-t17790-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 
 ### Bugs found by /dotask verify
 
@@ -184,10 +187,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
-| T17800 | [Branch CI failed after a clean verdict](tasks/T17800-branch-ci-failed-after-a-clean.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask verify. |
-| T17810 | [Staging check failed: T17780:C1 C1: A browser check at the stated real-touch sizes confirms](tasks/T17810-staging-check-failed-t17780-c1-c1.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T17820 | [Staging check failed: T17790:C1 C1: A browser check at the stated real-touch sizes confirms](tasks/T17820-staging-check-failed-t17790-c1-c1.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T17830 | [Staging check failed: T17790:C2 C2: The expanded hit areas do not overlap other controls](tasks/T17830-staging-check-failed-t17790-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
+| T17800 | [Branch CI failed after a clean verdict](tasks/T17800-branch-ci-failed-after-a-clean.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask verify. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
