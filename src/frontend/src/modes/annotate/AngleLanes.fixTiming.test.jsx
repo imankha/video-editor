@@ -87,6 +87,8 @@ describe('AngleLanes — Fix-timing entry menu', () => {
     render(<AngleLanes {...baseProps} onRequestFixTiming={onRequestFixTiming} />);
     fireEvent.contextMenu(screen.getByTestId('angle-bar-3'));
     expect(screen.getByTestId('fix-timing-menu')).toBeTruthy();
+    // T17700: the item says Sync and names both cameras.
+    expect(screen.getByTestId('fix-timing-menu-item').textContent).toBe('Sync sideline with Main camera');
     fireEvent.click(screen.getByTestId('fix-timing-menu-item'));
     expect(onRequestFixTiming).toHaveBeenCalledWith(3);
   });

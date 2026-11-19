@@ -112,30 +112,23 @@ describe('SourceBar (T13280)', () => {
     expect(screen.queryByTestId('source-swap-1')).toBeNull();
     expect(screen.getByTestId('source-seg-2').getAttribute('title')).toMatch(/switch to sideline here/i);
     expect(screen.getByTestId('source-seg-2').getAttribute('data-kind')).toBe('angle');
-    // Fix timing is offered only while an angle is the active source.
-    expect(screen.queryByTestId('source-bar-fix-timing')).toBeNull();
+    // T17700: Sync is offered on the main camera too while a camera covers this moment.
+    expect(screen.getByTestId('source-bar-fix-timing')).toBeTruthy();
   });
 
-  it('offers Fix timing when an angle is active', () => {
+  it('offers Sync when an angle is active', () => {
     const onFixTiming = vi.fn();
     render(<SourceBar videos={overlap} activeSequence={2} index={2} count={2} onFixTiming={onFixTiming} />);
     fireEvent.click(screen.getByTestId('source-bar-fix-timing'));
     expect(onFixTiming).toHaveBeenCalledWith(2);
   });
 
-  // T13280 follow-up (2026-10-22, user ask): Fix Timing -- drag/reposition -- is
-  // reachable for any ADDED video, not only angles, so an appended (sequential)
-  // video can be manually placed too. Only the game's own original video
-  // (virtualStart 0) never offers it, since there's nothing to align it against.
-  // The fix button lives on the bar's own row in both collapsed and expanded state.
-  it('offers Fix timing for a sequential (non-angle) added video, but never for the original', () => {
-    const onFixTiming = vi.fn();
-    // Active = the added clip (video 2): button shows even collapsed.
-    const a = render(<SourceBar videos={sequential} activeSequence={2} index={2} count={2} onFixTiming={onFixTiming} />);
-    fireEvent.click(screen.getByTestId('source-bar-fix-timing'));
-    expect(onFixTiming).toHaveBeenCalledWith(2);
+  // T17700 (owner ruling 2026-11-18): back-to-back videos play in upload order, so
+  // moving one changed nothing; Sync is for cameras only (was T13280's any-added-video).
+  it('never offers Sync for a back-to-back video or the original', () => {
+    const a = render(<SourceBar videos={sequential} activeSequence={2} index={2} count={2} onFixTiming={() => {}} />);
+    expect(screen.queryByTestId('source-bar-fix-timing')).toBeNull();
     a.unmount();
-    // Active = the original video (video 1, virtualStart 0): no button at all.
     render(<SourceBar videos={sequential} activeSequence={1} index={1} count={2} onFixTiming={() => {}} />);
     expect(screen.queryByTestId('source-bar-fix-timing')).toBeNull();
   });
@@ -146,7 +139,7 @@ describe('SourceBar (T13280)', () => {
     expect(screen.getByTestId('source-bar-fix-timing').className).toContain('coarse-pointer:h-11');
   });
 
-  it('4+ videos: trigger, prev/next and a list with Fix timing rows for every non-original video', () => {
+  it('4+ videos: trigger, prev/next and a list with Sync rows for cameras', () => {
     const onPick = vi.fn();
     const onFixTiming = vi.fn();
     const four = [
@@ -171,7 +164,7 @@ describe('SourceBar (T13280)', () => {
     expect(screen.queryByTestId('source-list')).toBeNull();
   });
 
-  it('4+ videos: the list offers Fix timing for sequential add-ons too, never for the original', () => {
+  it('4+ videos: the list offers Sync for cameras only, never back-to-back videos or the original', () => {
     const onFixTiming = vi.fn();
     const four = [
       ...sequential,
@@ -180,11 +173,10 @@ describe('SourceBar (T13280)', () => {
     ];
     render(<SourceBar videos={four} activeSequence={3} index={3} count={4} onFixTiming={onFixTiming} />);
     fireEvent.click(screen.getByTestId('source-trigger'));
-    expect(screen.getByTestId('source-fix-timing-2')).toBeTruthy();
-    expect(screen.getByTestId('source-fix-timing-3')).toBeTruthy();
+    expect(screen.queryByTestId('source-fix-timing-2')).toBeNull();
+    expect(screen.queryByTestId('source-fix-timing-3')).toBeNull();
     expect(screen.queryByTestId('source-fix-timing-1')).toBeNull();
-    fireEvent.click(screen.getByTestId('source-fix-timing-3'));
-    expect(onFixTiming).toHaveBeenCalledWith(3);
+    expect(screen.getByTestId('source-fix-timing-4').textContent).toBe('Sync Sideline with IMG_4412');
   });
 });
 

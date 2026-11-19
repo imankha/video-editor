@@ -1,50 +1,64 @@
 import { useEffect } from 'react';
-import { X, Video, Film, RotateCcw, Check } from 'lucide-react';
+import { X, Video, Film, RotateCcw, Check, AudioLines, MapPin } from 'lucide-react';
 import { ANNOTATE } from '../../config/displayNames';
 
 /**
- * FixTimingStrip (T8900) — the yellow mode-swap strip that replaces the primary
- * "Add Play" CTA block under the canvas while the user is nudging ONE angle into
- * alignment. Follows the T8600 under-canvas mode-swap pattern (a strip that takes
- * the CTA block's place, not a modal); the timeline stays visible above so the
- * user can also drag the bar itself.
+ * FixTimingStrip (T8900; T17700 "Sync") — the yellow mode-swap strip that replaces the
+ * primary "Add Play" CTA block under the canvas while the parent moves ONE camera
+ * until both cameras show the same moment. Follows the T8600 under-canvas mode-swap
+ * pattern (a strip that takes the CTA block's place, not a modal); the timeline stays
+ * visible above so the parent can also drag the camera's bar.
  *
- * All state is LOCAL to the Fix-timing session (owned by AnnotateContainer): the
- * nudge/drag mutate a pending offset that previews through the T8880 lane model
- * WITHOUT touching loaded gameVideos. Persistence is gesture-based: exactly one
- * PATCH fires from onDone, never reactively as the offset changes.
+ * Two steps:
+ *  - 'place' (a video we placed at the end, after "Same time"): play the main camera
+ *    to about where it begins, tap Starts here (onPlace, the one write of that step).
+ *  - 'sync': Earlier / Later in 10s, 1s and 0.1s steps, compare buttons, Done.
  *
- * Esc discards (two-layer Esc precedent, T8600): this strip owns the outer layer
- * here — Esc cancels Fix-timing. X does the same. Reset restores the loaded value.
+ * All state is LOCAL to the session (owned by AnnotateContainer): nudges and drags
+ * mutate a pending offset that previews through the T8880 lane model WITHOUT touching
+ * loaded gameVideos. Persistence is gesture-based: Done is the only save of a move
+ * (owner ruling 2026-11-18 Q4: a drop no longer saves), never reactive.
+ *
+ * Esc discards (two-layer Esc precedent, T8600): this strip owns the outer layer here.
+ * X does the same. Undo moves restores the loaded value.
+ *
+ * T17710 (sync by sound) will add a status line under the header; not shown yet.
  */
 
-// Format the running "moved" delta as +/-Ns, rounded to 0.1s (nudge granularity)
-// so float accumulation (0.1+0.1+0.1) never leaks noise into the readout.
+// The running move in words, rounded to 0.1s (nudge granularity) so float
+// accumulation (0.1+0.1+0.1) never leaks noise into the readout. A negative
+// delta moves the camera earlier on the game's timeline.
 export function formatMoved(seconds) {
   const rounded = Math.round(seconds * 10) / 10;
-  if (rounded === 0) return 'Moved 0s';
-  const sign = rounded > 0 ? '+' : ''; // negatives already carry '-'
-  // String(rounded) already drops a trailing .0 (1.0 -> "1", 1.5 -> "1.5").
-  return `Moved ${sign}${rounded}s`;
+  if (rounded === 0) return ANNOTATE.SYNC_NOT_MOVED;
+  // String() drops a trailing .0 (1.0 -> "1").
+  return ANNOTATE.syncMoved(String(Math.abs(rounded)), rounded < 0);
 }
 
+const STEPS = [10, 1, 0.1];
+
 export default function FixTimingStrip({
+  step = 'sync',
   angleName,
+  mainName = ANNOTATE.MAIN_CAMERA,
   moved = 0,
+  // false while the playhead is outside the part both cameras filmed: the compare
+  // buttons would have nothing shared to play.
+  canCompare = true,
+  // true after a placed-at-end video was given a rough spot with Starts here: X then
+  // keeps that spot (owner ruling Q3), and the strip says so.
+  placed = false,
+  placeDisabledReason = null,
   onNudge,
   onPlayAngle,
   onPlayMain,
+  onPlace,
   onReset,
   onDone,
   onCancel,
-  // T13280 follow-up: a sequential (appended) video has nothing playing
-  // simultaneously to compare by ear, so the A/B play row and its description
-  // only apply once there's a genuine angle to line up against (onPlayAngle/
-  // onPlayMain both present). Drag it on the timeline or nudge it below either way.
 }) {
-  const hasPlayRow = !!(onPlayAngle || onPlayMain);
-  // Outer-layer Esc: cancel Fix-timing (discard). Registered at the document so
-  // it fires whether or not a strip control has focus.
+  // Outer-layer Esc: cancel (discard). Registered at the document so it fires
+  // whether or not a strip control has focus.
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') {
@@ -56,99 +70,150 @@ export default function FixTimingStrip({
     return () => document.removeEventListener('keydown', onKey);
   }, [onCancel]);
 
-  const nudgeBtn = 'px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold min-w-[52px] transition-colors';
+  // Desktop keys while focus is inside the strip: Left/Right = 0.1s, Shift = 1s,
+  // Enter on the strip itself = Done. Buttons keep their own Enter/Space.
+  const onStripKey = (e) => {
+    if (step !== 'sync') return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const s = e.shiftKey ? 1 : 0.1;
+      onNudge?.(e.key === 'ArrowLeft' ? -s : s);
+    } else if (e.key === 'Enter' && e.target === e.currentTarget) {
+      e.preventDefault();
+      onDone?.();
+    }
+  };
+
+  const nudgeBtn = 'px-3 py-2 coarse-pointer:min-h-11 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold min-w-[52px] tabular-nums transition-colors';
+  const rowLabel = 'w-16 shrink-0 text-xs font-semibold text-yellow-200 uppercase tracking-wide';
+  const title = step === 'place' ? ANNOTATE.placeStepTitle(angleName) : ANNOTATE.syncWith(angleName, mainName);
+
+  const header = (
+    <div className="flex items-start justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2 text-yellow-200">
+        {step === 'place' ? <MapPin size={18} className="shrink-0" /> : <AudioLines size={18} className="shrink-0" />}
+        <h3 className="text-base font-bold truncate">{title}</h3>
+      </div>
+      <button
+        type="button"
+        data-testid="fix-timing-cancel"
+        onClick={onCancel}
+        aria-label={ANNOTATE.SYNC_CANCEL}
+        title={ANNOTATE.SYNC_CANCEL}
+        className="shrink-0 p-1.5 coarse-pointer:min-h-11 coarse-pointer:min-w-11 inline-flex items-center justify-center rounded-lg text-yellow-200/80 hover:text-white hover:bg-yellow-900/40 transition-colors"
+      >
+        <X size={18} />
+      </button>
+    </div>
+  );
+
+  const container = 'mt-3 sm:mt-6 rounded-xl border bg-yellow-950/20 border-yellow-800/40 p-3 sm:p-4';
+
+  if (step === 'place') {
+    return (
+      <div data-testid="fix-timing-strip" data-step="place" className={container}>
+        {header}
+        <p className="mt-1 text-sm text-yellow-100/80">{ANNOTATE.placeStepText(angleName)}</p>
+        {placeDisabledReason && <p className="mt-1 text-sm text-amber-200">{placeDisabledReason}</p>}
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            data-testid="fix-timing-place-confirm"
+            onClick={onPlace}
+            disabled={!!placeDisabledReason}
+            className="flex items-center gap-1.5 px-4 py-2 coarse-pointer:min-h-11 rounded-lg bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:hover:bg-green-500 text-white text-sm font-bold transition-colors"
+          >
+            <MapPin size={16} /> {ANNOTATE.PLACE_STEP_CONFIRM}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const hasPlayRow = !!(onPlayAngle || onPlayMain);
+  const nudgeRow = (earlier) => (
+    <div className="flex items-center gap-2">
+      <span className={rowLabel}>{earlier ? ANNOTATE.SYNC_EARLIER : ANNOTATE.SYNC_LATER}</span>
+      {(earlier ? STEPS : [...STEPS].reverse()).map((s) => (
+        <button
+          key={s}
+          type="button"
+          data-testid={`fix-timing-${earlier ? 'earlier' : 'later'}-${s}`}
+          aria-label={ANNOTATE.syncNudgeAria(angleName, s, earlier)}
+          onClick={() => onNudge?.(earlier ? -s : s)}
+          className={nudgeBtn}
+        >
+          {s}s
+        </button>
+      ))}
+    </div>
+  );
 
   return (
-    <div
-      data-testid="fix-timing-strip"
-      className="mt-3 sm:mt-6 rounded-xl border bg-yellow-950/20 border-yellow-800/40 p-3 sm:p-4"
-    >
-      {/* Header: title + X to cancel */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 text-yellow-200">
-          <Video size={18} className="shrink-0" />
-          <h3 className="text-base font-bold truncate">{ANNOTATE.fixTimingFor(angleName)}</h3>
+    // tabIndex so the desktop arrow keys work once the parent clicks into the strip.
+    <div data-testid="fix-timing-strip" data-step="sync" tabIndex={-1} onKeyDown={onStripKey} className={`${container} outline-none`}>
+      {header}
+      <p className="mt-1 text-sm text-yellow-100/80">{ANNOTATE.SYNC_INSTRUCTION}</p>
+      {placed && <p className="mt-1 text-xs text-yellow-200/70">{ANNOTATE.PLACE_STEP_CANCEL_NOTE}</p>}
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        {/* Compare: the same game moment from each camera, ~3s each. */}
+        {hasPlayRow && (
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="fix-timing-play-angle"
+                onClick={onPlayAngle}
+                disabled={!canCompare}
+                className="flex items-center gap-1.5 px-3 py-2 coarse-pointer:min-h-11 rounded-lg bg-violet-700 hover:bg-violet-600 disabled:opacity-50 disabled:hover:bg-violet-700 text-white text-sm font-medium transition-colors"
+              >
+                <Video size={16} /> {ANNOTATE.playCamera(angleName)}
+              </button>
+              <button
+                type="button"
+                data-testid="fix-timing-play-main"
+                onClick={onPlayMain}
+                disabled={!canCompare}
+                className="flex items-center gap-1.5 px-3 py-2 coarse-pointer:min-h-11 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:hover:bg-gray-700 text-white text-sm font-medium transition-colors"
+              >
+                <Film size={16} /> {ANNOTATE.PLAY_MAIN_CAMERA}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-yellow-100/70">
+              {canCompare ? ANNOTATE.SYNC_COMPARE_CAPTION : ANNOTATE.SYNC_NEED_OVERLAP}
+            </p>
+          </div>
+        )}
+
+        {/* Move: two labeled rows (flex-wrap so nothing overflows at 320px). */}
+        <div className="flex flex-col gap-2">
+          {nudgeRow(true)}
+          {nudgeRow(false)}
+          <span data-testid="fix-timing-moved" className="text-sm font-semibold text-yellow-100 tabular-nums">
+            {formatMoved(moved)}
+          </span>
+          <span className="text-xs text-yellow-100/70">{ANNOTATE.syncDragHint(angleName)}</span>
         </div>
-        <button
-          type="button"
-          data-testid="fix-timing-cancel"
-          onClick={onCancel}
-          title="Cancel (Esc)"
-          className="p-1.5 rounded-lg text-yellow-200/80 hover:text-white hover:bg-yellow-900/40 transition-colors"
-        >
-          <X size={18} />
-        </button>
       </div>
 
-      <p className="mt-1 text-sm text-yellow-100/80">
-        {hasPlayRow
-          ? 'Line it up: find a sound you can hear in both, like a whistle or a big cheer, then nudge until they match.'
-          : 'Drag it on the timeline to where it happened, or nudge it below and tap Done.'}
-      </p>
-
-      {/* Nudge controls row (flex-wrap so it never overflows at 320px). */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button type="button" data-testid="fix-timing-nudge--1" onClick={() => onNudge?.(-1)} className={nudgeBtn}>
-          -1s
-        </button>
-        <button type="button" data-testid="fix-timing-nudge--0.1" onClick={() => onNudge?.(-0.1)} className={nudgeBtn}>
-          -0.1s
-        </button>
-        <span
-          data-testid="fix-timing-moved"
-          className="px-2 min-w-[92px] text-center text-sm font-semibold text-yellow-100"
-        >
-          {formatMoved(moved)}
-        </span>
-        <button type="button" data-testid="fix-timing-nudge-0.1" onClick={() => onNudge?.(0.1)} className={nudgeBtn}>
-          +0.1s
-        </button>
-        <button type="button" data-testid="fix-timing-nudge-1" onClick={() => onNudge?.(1)} className={nudgeBtn}>
-          +1s
-        </button>
-      </div>
-
-      {/* A/B play row: same game moment from each source, ~3s each. Only when there's a
-          genuine overlap to compare (an appended/sequential video has no second source
-          playing at the same moment to A/B against). */}
-      {hasPlayRow && (
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid="fix-timing-play-angle"
-          onClick={onPlayAngle}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-700 hover:bg-violet-600 text-white text-sm font-medium transition-colors"
-        >
-          <Video size={16} /> {ANNOTATE.PLAY_THIS_CAMERA}
-        </button>
-        <button
-          type="button"
-          data-testid="fix-timing-play-main"
-          onClick={onPlayMain}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors"
-        >
-          <Film size={16} /> Play main camera
-        </button>
-      </div>
-      )}
-
-      {/* Reset / Done row. */}
-      <div className="mt-3 flex items-center justify-between gap-2">
+      <p className="mt-3 text-sm text-yellow-100/80">{ANNOTATE.SYNC_DONE_HINT}</p>
+      <div className="mt-2 flex items-center justify-between gap-2">
         <button
           type="button"
           data-testid="fix-timing-reset"
           onClick={onReset}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-yellow-200/90 hover:text-white hover:bg-yellow-900/40 text-sm font-medium transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 coarse-pointer:min-h-11 rounded-lg text-yellow-200/90 hover:text-white hover:bg-yellow-900/40 text-sm font-medium transition-colors"
         >
-          <RotateCcw size={16} /> Reset
+          <RotateCcw size={16} aria-hidden="true" /><span>{ANNOTATE.SYNC_UNDO}</span>
         </button>
         <button
           type="button"
           data-testid="fix-timing-done"
           onClick={onDone}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-500 hover:bg-green-400 text-white text-sm font-bold shadow-lg shadow-green-900/40 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2 coarse-pointer:min-h-11 rounded-lg bg-green-500 hover:bg-green-400 text-white text-sm font-bold shadow-lg shadow-green-900/40 transition-colors"
         >
-          <Check size={18} /> Done
+          <Check size={18} /> {ANNOTATE.SYNC_DONE}
         </button>
       </div>
     </div>

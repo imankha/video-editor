@@ -53,7 +53,7 @@ describe('T14610 Mark plays copy', () => {
     expect(ANNOTATE.DETAILS).toBe('Details');
     expect(ANNOTATE.NAME_PLACEHOLDER).toBe('Name this play');
     expect(LIBRARY_ACTIONS.ADD_FOOTAGE).toBe('Add video');
-    expect(ANNOTATE.LINE_UP_VIDEO).toBe('Line up this video with the game');
+    expect(ANNOTATE.SYNC_VIDEO).toBe('Make both cameras show the same moment');
   });
 
   it('T14610:C6 no retired word anywhere in Mark plays copy', () => {

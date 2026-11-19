@@ -428,6 +428,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // T8890: angle strip + source switching (null for angle-free games)
     angleData,
     sourceBar,
+    syncPrompts,
     // T8900: Fix-timing strip data (null unless the mode is open)
     fixTiming,
     // T8910: Add-footage-from-Annotate
@@ -1081,6 +1082,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // T8890: angle strip + source switching (null for angle-free games)
         angleData={angleData}
         sourceBar={sourceBar}
+        syncPrompts={syncPrompts}
         // T8900: Fix-timing strip (mode-swaps the primary CTA block)
         fixTiming={fixTiming}
         // T8910: Add footage from inside Annotate (button + drop + amber bars)

@@ -82,5 +82,35 @@
     "word": "moment",
     "text": "Press Play to watch the game. Press Mark play at any moment worth keeping, a great play or one to learn from.",
     "reason": "Owner-specified wording (T17170 task file C2): a moment in the game worth marking, before it is a play, not the retired noun for a marked play."
+  },
+  {
+    "source": "displayNames:ANNOTATE.SYNC_VIDEO",
+    "word": "moment",
+    "text": "Make both cameras show the same moment",
+    "reason": "Owner ruling (T17700 task file, 2026-11-18): Sync is phrased in what the parent sees, 'make both cameras show the same moment' -- a moment in the game's time, not the retired noun for a marked play."
+  },
+  {
+    "source": "displayNames:ANNOTATE.SYNC_TIP",
+    "word": "moment",
+    "text": "This game has a second camera. If the two don't show the same moment, tap Sync.",
+    "reason": "Owner ruling (T17700 task file, 2026-11-18): Sync is phrased in what the parent sees, 'make both cameras show the same moment' -- a moment in the game's time, not the retired noun for a marked play."
+  },
+  {
+    "source": "displayNames:ANNOTATE.SYNC_INSTRUCTION",
+    "word": "moment",
+    "text": "Move it earlier or later until both cameras show the same moment.",
+    "reason": "Owner ruling (T17700 task file, 2026-11-18): Sync is phrased in what the parent sees, 'make both cameras show the same moment' -- a moment in the game's time, not the retired noun for a marked play."
+  },
+  {
+    "source": "displayNames:ANNOTATE.SYNC_DONE_HINT",
+    "word": "moment",
+    "text": "When both cameras show the same moment, tap Done.",
+    "reason": "Owner ruling (T17700 task file, 2026-11-18): Sync is phrased in what the parent sees, 'make both cameras show the same moment' -- a moment in the game's time, not the retired noun for a marked play."
+  },
+  {
+    "source": "displayNames:ANNOTATE.SYNC_NEED_OVERLAP",
+    "word": "moment",
+    "text": "Move the playhead to a moment both cameras filmed.",
+    "reason": "Owner ruling (T17700 task file, 2026-11-18): Sync is phrased in what the parent sees, 'make both cameras show the same moment' -- a moment in the game's time, not the retired noun for a marked play."
   }
 ]

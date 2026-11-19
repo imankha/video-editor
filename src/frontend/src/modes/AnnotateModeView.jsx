@@ -12,6 +12,7 @@ import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay
 import { overlayRegionAtPlayhead } from './annotate/regionAtTime';
 import SourceBar from './annotate/SourceBar';
 import FixTimingStrip from './annotate/FixTimingStrip';
+import { SecondCameraTip, PlacedAtEndPrompt } from './annotate/SyncPrompts';
 import AddFootageButton from './annotate/AddFootageButton';
 import { SuggestedPlaysPanel, VeoAlignCard } from './annotate/components/SuggestedPlaysPanel';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
@@ -273,6 +274,8 @@ export function AnnotateModeView({
   angleData = null,
   // T13280: the Videos control (null for single-video games)
   sourceBar = null,
+  // T17700: the rows under the Videos bar that explain Sync (null for single-video games)
+  syncPrompts = null,
   videoLane = null,
   // T8900: Fix-timing strip data (null unless the mode is open)
   fixTiming = null,
@@ -1183,6 +1186,15 @@ export function AnnotateModeView({
                       the game has 2+ videos. Fixed-width surface, so it does not move with
                       the stage aspect (square footage is letterboxed above it). */}
                   {sourceBar && <SourceBar {...sourceBar} compact={annotateFullscreen} />}
+                  {/* T17700: what Sync is for, before the tap (windowed only). */}
+                  {!annotateFullscreen && syncPrompts?.showTip && <SecondCameraTip />}
+                  {!annotateFullscreen && syncPrompts?.placedAtEnd && (
+                    <PlacedAtEndPrompt
+                      key={`${syncPrompts.placedAtEnd.gameId}-${syncPrompts.placedAtEnd.sequence}`}
+                      {...syncPrompts.placedAtEnd}
+                      onSameTime={syncPrompts.onSameTime}
+                    />
+                  )}
                   {/* T13220/T13240: the post-import alignment check sits with the frame it asks
                       about (windowed only; an import is never started from fullscreen). */}
                   {!annotateFullscreen && suggested?.align && (
@@ -1500,11 +1512,17 @@ export function AnnotateModeView({
             place; the timeline above stays visible so the bar can be dragged). */}
         {!annotateFullscreen && !underCanvasEditor && fixTiming && (
           <FixTimingStrip
+            step={fixTiming.step}
             angleName={fixTiming.angleName}
+            mainName={fixTiming.mainName}
             moved={fixTiming.moved}
+            placed={fixTiming.placed}
+            canCompare={fixTiming.canCompare}
+            placeDisabledReason={fixTiming.placeDisabledReason}
             onNudge={fixTiming.onNudge}
             onPlayAngle={fixTiming.onPlayAngle}
             onPlayMain={fixTiming.onPlayMain}
+            onPlace={fixTiming.onPlace}
             onReset={fixTiming.onReset}
             onDone={fixTiming.onDone}
             onCancel={fixTiming.onCancel}

@@ -1,0 +1,6 @@
+{"criteria": {
+  "T17700:C1": {"kind": "code", "command": "f=docs/plans/tasks/T17700-design.md; t=docs/plans/tasks/T17700-line-up-hard-to-understand.md; test -s $f && grep -q 'recommended)' $f && grep -q '^\\*\\*Recommendation: D.\\*\\*' $f && grep -q '^\\*\\*Recommendation: B.\\*\\*' $f && grep -q '^### Entry mockups' $f && grep -q '^### Sync mockups' $f && grep -q '^Phone 390x844' $f && grep -q '^Desktop 1440x900' $f && grep -q '^## Ruling' $t && grep -q 'Owner, 2026-11-18 (complete)' $t"},
+  "T17700:C2": {"kind": "browser"},
+  "T17700:C3": {"kind": "browser"},
+  "T17700:C4": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/annotate/SourceBar.lineUp.test.jsx src/modes/annotate/FixTimingStrip.test.jsx src/modes/annotate/AngleLanes.fixTiming.test.jsx"}
+}}
