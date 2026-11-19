@@ -221,6 +221,7 @@ From the same review. Deletions come first, because less false code makes every 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T17880 | [Spotlight check spends gate credits](tasks/T17880-spotlight-check-spends-gate-credits.md) | 4 | 2 | 2.0 | TODO | [ ] | The staging check for the Spotlight delete button has never run: the test account has no sharpened project, so the check sharpens one itself, spending real credits each time. It has now run out (needs 8, has 7) and stops at Buy credits. Done when the check runs on staging without spending credits and passes twice in a row. |
 
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
 
