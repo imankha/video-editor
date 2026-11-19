@@ -1,6 +1,6 @@
 # T17820: Staging check failed: T17790:C1 C1: A browser check at the stated real-touch sizes confirms
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-19
