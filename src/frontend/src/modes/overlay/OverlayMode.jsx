@@ -8,6 +8,9 @@ import PosterMarkerLayer from './layers/PosterMarkerLayer';
 import { openPlayWindow, selectPosterFrame } from '../../utils/posterWindow';
 import { SPOTLIGHT_COPY, TEXT_COPY } from '../../config/displayNames';
 
+// The same media query as tailwind.config's `coarse-pointer:` variant.
+const COARSE_POINTER_QUERY = '(hover: none) and (pointer: coarse)';
+
 /**
  * OverlayMode - Container component for Overlay mode.
  *
@@ -120,8 +123,11 @@ export function OverlayMode({
 
   // Calculate total layer height for playhead line
   // Video track (h-12=3rem) + Detection layer (h-8=2rem if present) + gap + Highlight regions (h-20=5rem) + Text layer (h-20=5rem, T6630 round 9; was h-24=6rem since round 8 item 4, h-28=7rem since T6610)
+  // T17780: on touch the Text lane is 6rem (TextLayer's coarse-pointer:h-24, room for
+  // its 44px delete hit-pad under the track), so the playhead line follows it.
+  const textLaneRem = window.matchMedia?.(COARSE_POINTER_QUERY).matches ? 6 : 5;
   const getTotalLayerHeight = () => {
-    const textLaneHeight = showTextLane ? 5.25 : 0; // Text (5rem) + its gap (0.25rem)
+    const textLaneHeight = showTextLane ? textLaneRem + 0.25 : 0; // Text lane + its gap (0.25rem)
     if (hasDetectionData) {
       return `${10.5 + textLaneHeight}rem`; // Video (3rem) + Detection (2rem) + gaps + Highlight regions (5rem)
     }
@@ -187,7 +193,7 @@ export function OverlayMode({
           view-only toggle (memory), never persisted. */}
       {showTextLane && (
         <div
-          className={`mt-0.5 lg:mt-1 h-20 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
+          className={`mt-0.5 lg:mt-1 h-20 coarse-pointer:h-24 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
             textLayerHidden ? 'bg-gray-900 hover:bg-gray-800' : 'bg-cyan-900/30 hover:bg-cyan-900/40'
           }`}
           title={textLayerHidden ? TEXT_COPY.SHOW : TEXT_COPY.HIDE}
