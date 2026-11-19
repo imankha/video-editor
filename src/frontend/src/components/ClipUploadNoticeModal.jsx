@@ -44,6 +44,7 @@ export function ClipUploadNoticeModal({ isOpen, onCancel, onContinue }) {
         <Guide guide={guide} inline testId="modal-guide" />
         <p className="text-sm text-gray-300 leading-relaxed">{CLIP_UPLOAD.NOTICE_PICK}</p>
         <p className="text-sm text-gray-300 leading-relaxed mt-2">{CLIP_UPLOAD.NOTICE_BODY}</p>
+        <p className="text-sm text-gray-300 leading-relaxed mt-2">{CLIP_UPLOAD.NOTICE_PRICE}</p>
       </div>
 
       <div className="p-4 border-t border-gray-700 flex gap-3 justify-end">

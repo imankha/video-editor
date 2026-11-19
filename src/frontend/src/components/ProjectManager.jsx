@@ -27,6 +27,7 @@ import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, HOME_TILE, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG, UPLOAD } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
+import { ClipUploadCostModal } from './ClipUploadCostModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
 import { VeoZipRouter } from './VeoZipRouter';
@@ -870,6 +871,8 @@ export function ProjectManager({
   // retry re-invokes uploadClips and resets progressByFile (the T8380 seam).
   const clipFileInputRef = useRef(null);
   const [showClipNotice, setShowClipNotice] = useState(false);
+  // T17760: the picked files waiting on the price confirm (ClipUploadCostModal).
+  const [clipsAwaitingCost, setClipsAwaitingCost] = useState(null);
   // T10250: `failedClips` rows now carry their failure CLASS. `retryable` rows keep
   // a File + a Retry button; refused rows (over-cap already filtered pre-flight, or
   // a server refusal like duration_exceeds_cap) carry the server `message` and get
@@ -1389,11 +1392,17 @@ export function ProjectManager({
         ];
       });
     }
-    if (drawable.length > 0) {
-      toast.info(CLIP_UPLOAD.uploadingToast(drawable.length, drawable[0].name));
-      runClipUpload(drawable);
-    }
-  }, [runClipUpload, maxClipUploadBytes]);
+    // T17760: an upload is charged, so it waits on the price confirm; its Upload click
+    // (handleClipCostConfirm) is the gesture that starts it.
+    if (drawable.length > 0) setClipsAwaitingCost(drawable);
+  }, [maxClipUploadBytes]);
+
+  const handleClipCostConfirm = useCallback(() => {
+    const files = clipsAwaitingCost;
+    setClipsAwaitingCost(null);
+    toast.info(CLIP_UPLOAD.uploadingToast(files.length, files[0].name));
+    runClipUpload(files);
+  }, [clipsAwaitingCost, runClipUpload]);
 
   const handleClipFilesChange = useCallback(async (e) => {
     const picked = Array.from(e.target.files || []);
@@ -2697,6 +2706,13 @@ export function ProjectManager({
         isOpen={showClipNotice}
         onCancel={() => setShowClipNotice(false)}
         onContinue={handleClipNoticeContinue}
+      />
+
+      {/* T17760: the upload's price, confirmed before anything uploads or is charged. */}
+      <ClipUploadCostModal
+        files={clipsAwaitingCost}
+        onCancel={() => setClipsAwaitingCost(null)}
+        onConfirm={handleClipCostConfirm}
       />
 
       {extensionGame && (

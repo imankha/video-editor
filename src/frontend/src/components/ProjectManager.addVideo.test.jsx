@@ -181,6 +181,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
 
     const input = screen.getByTestId('clip-upload-input');
     fireEvent.change(input, { target: { files: [mp4('a.mp4'), mp4('b.mp4')] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     await waitFor(() => expect(uploadClipsMock).toHaveBeenCalledTimes(1));
     const passed = uploadClipsMock.mock.calls[0][0];
@@ -197,6 +198,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Upload a play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [mp4('a.mp4')] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     await waitFor(() => expect(toastInfo).toHaveBeenCalledWith('Uploading a.mp4...'));
     finish({ results: [], charged: 0, balance: null });
@@ -215,6 +217,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [mp4('bad.mp4')] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
 
     // The rail shows the failed file with a Retry (never a silent loss).
     const retry = await screen.findByRole('button', { name: 'Retry' });
@@ -266,6 +269,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     expect(screen.getByText('Pick videos or a zip of plays.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [new File(['z'], 'phone.zip')] } });
+    fireEvent.click(await screen.findByTestId('clip-upload-cost-confirm')); // T17760 price confirm
     await waitFor(() => expect(uploadClipsMock).toHaveBeenCalledTimes(1));
     expect(uploadClipsMock.mock.calls[0][0].map((f) => f.name)).toEqual(['a.mp4', 'b.mov', 'c.mp4']);
     expect(screen.queryByTestId('veo-route')).toBeNull();
