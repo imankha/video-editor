@@ -203,7 +203,7 @@ export function ClipsSidePanel({
                   type="button"
                   aria-pressed={layerFilter === value}
                   onClick={() => onSetLayerFilter?.(value)}
-                  className={`px-2.5 py-1 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] text-xs rounded transition-colors ${
+                  className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
                     layerFilter === value
                       ? activeCls
                       : 'bg-gray-700/50 text-gray-400 hover:bg-gray-700 hover:text-gray-200'

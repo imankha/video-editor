@@ -291,7 +291,7 @@ export default function TextLayer({
   // an h-20 row) -- reusing it here keeps content bottom -> row bottom
   // margin consistent across both lanes instead of a new one-off value.
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-20 coarse-pointer:h-24 pb-2">
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-20 pb-2">
       <div
         ref={trackRef}
         className="text-track absolute inset-x-0 top-0 h-10 overflow-visible rounded-r-lg cursor-pointer"
@@ -352,27 +352,18 @@ export default function TextLayer({
                   deletion, so this button was never actually mirroring it;
                   the mismatch also forced the row taller than its content
                   (round 8 item 4 sized the row for this button's touch
-                  hit-box, which no longer exists).
-                  T17780: touch gets RegionLayer's T15600 44px floor after all, as
-                  a transparent hit-pad around the unchanged red chip. On a coarse
-                  pointer the chip drops 14px below the track so the pad (42-86px)
-                  never covers the block body or its levers (0-40px), and the row
-                  grows to h-24 to hold it (OverlayMode mirrors that height). */}
-              <div className="absolute top-full mt-1 coarse-pointer:mt-3.5 left-1/2 transform -translate-x-1/2 z-10">
+                  hit-box, which no longer exists). */}
+              <div className="absolute top-full mt-1 left-1/2 transform -translate-x-1/2 z-10">
                 <button
                   type="button"
                   data-testid={`text-delete-region-${region.index}`}
-                  className="relative p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
+                  className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDeleteTextRegion && onDeleteTextRegion(region.id);
                   }}
                   title={TEXT_COPY.DELETE}
                 >
-                  <span
-                    aria-hidden="true"
-                    className="hidden coarse-pointer:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11"
-                  />
                   <Trash2 size={12} />
                 </button>
               </div>

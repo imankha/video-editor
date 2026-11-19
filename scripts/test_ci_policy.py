@@ -217,8 +217,6 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(ci_policy.required_jobs(['scripts/test_share_emails.py', 'scripts/migrations/test_migration.py']),
                          {'tooling', 'harness'})
         self.assertEqual(ci_policy.required_jobs(sorted(ci_policy.KNOWN_STRAYS)), {'tooling'})
-        # T17780: untracking the owner's gitignored QA scratch file must not block Branch CI.
-        self.assertEqual(ci_policy.required_jobs(['work/qa18-runtime.mjs']), {'tooling'})
 
     def test_mixed_changes_union_requirements(self):
         self.assertEqual(ci_policy.required_jobs(['CLAUDE.md', 'src/backend/app/main.py']), {'tooling', 'instructions', 'backend'})

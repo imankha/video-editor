@@ -139,5 +139,3 @@ qa-evidence/
 # T13910: rendered subscriber-email previews (scripts/email_subscribers.py --preview)
 docs/emails/*.preview.html
 /analytics_data
-# Owner QA scratch scripts (local paths; not part of any CI job)
-work/
