@@ -16,17 +16,18 @@ import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/cl
 export const ANNOTATE = {
   // T13270: footage placed by prefix-sum (no usable recorded time) plays right after the
   // previous video. The bar hint + toast say so in words; one canonical copy.
-  appendedFootageTitle: (name) => `${name}. We couldn't tell when it was filmed, so it was added at the end of the game. Tap to jump to the start of this video`,
-  appendedFootageToast: (name) => `Added ${name} after the previous video; it plays through continuously. We couldn't tell when it was filmed, so it went at the end.`,
+  appendedFootageTitle: (name) => `${name}. We couldn't tell when this was filmed, so it plays after the other videos. Tap to watch it.`,
+  appendedFootageToast: (name) => `Added ${name} after the other videos, because we couldn't tell when it was filmed.`,
   // T13280: the Videos control for a game with 2+ videos (SourceBar under the player on
   // every width, VideoLane on the desktop timeline). Blue = main footage, violet = angle.
   VIDEOS_LABEL: 'Videos',
   // T14610: other cameras filmed at the same time (code: "angles"). Never "angle" in copy.
   CAMERAS_LABEL: 'Cameras',
-  CAMERAS_HELP: 'Other cameras filmed at the same time. Pick a bar to switch.',
+  CAMERAS_HELP: 'Other cameras filmed at the same time. Tap a bar to switch, or press and hold it to sync.',
   moreCameras: (n) => `${n} more camera${n === 1 ? '' : 's'}`,
   cameraLabel: (name) => `Camera: ${name}`,
-  PLAY_THIS_CAMERA: 'Play this camera',
+  playCamera: (name) => `Play ${name}`,
+  PLAY_MAIN_CAMERA: 'Play main camera',
   // T13280 follow-up (2026-10-22, user: "the main video doesn't need any visual
   // indication, only added footage does"): the game's own original video, when it
   // has no stored filename to show, should never fall through to `videoDisplayName`'s
@@ -41,15 +42,41 @@ export const ANNOTATE = {
   nowWatching: (name) => `Now watching ${name}`,
   jumpToVideoTitle: (name) => `Jump to the start of ${name}`,
   switchHereTitle: (name) => `Switch to ${name} here`,
-  // T14610: "Fix timing" is retired; the action names the parent's goal.
-  LINE_UP_VIDEO: 'Line up this video with the game',
-  // T17250: the words on the line-up control (was a bare clock icon).
-  LINE_UP: 'Line up',
-  fixTimingFor: (name) => `Line up ${name} with the game`,
-  dragToRepositionTitle: (name) => `Drag to reposition ${name}`,
-  // Shown (in the Videos bar's notice slot) when a video is picked while line-up
-  // is open: picking would seek the COMMITTED timeline, i.e. the video's old spot.
-  FINISH_FIX_TIMING_FIRST: 'Tap Done to keep the move first, or X to undo it',
+  // T17700 (owner ruling 2026-11-18): the control is Sync. Parents read "line up" as a
+  // team lineup, and they are never asked to sync by ear: every line says what they SEE.
+  SYNC: 'Sync',
+  SYNC_WIDE_SUFFIX: ' cameras', // desktop (lg up) reads "Sync cameras"
+  SYNC_VIDEO: 'Make both cameras show the same moment',
+  syncWith: (name, mainName) => `Sync ${name} with ${mainName}`,
+  SYNC_TIP: "This game has a second camera. If the two don't show the same moment, tap Sync.",
+  SYNC_TIP_DISMISS: 'Got it',
+  SYNC_INSTRUCTION: 'Move it earlier or later until both cameras show the same moment.',
+  SYNC_COMPARE_CAPTION: 'Each plays the same 3 seconds.',
+  SYNC_EARLIER: 'Earlier',
+  SYNC_LATER: 'Later',
+  syncNudgeAria: (name, seconds, earlier) => `Move ${name} ${seconds} seconds ${earlier ? 'earlier' : 'later'}`,
+  SYNC_NOT_MOVED: 'Not moved',
+  syncMoved: (seconds, earlier) => `Moved ${seconds}s ${earlier ? 'earlier' : 'later'}`,
+  syncDragHint: (name) => `Or drag ${name}'s bar on the timeline.`,
+  SYNC_DONE_HINT: 'When both cameras show the same moment, tap Done.',
+  SYNC_NEED_OVERLAP: 'Move the playhead to a moment both cameras filmed.',
+  SYNC_UNDO: 'Undo moves',
+  SYNC_DONE: 'Done',
+  SYNC_CANCEL: 'Cancel and undo moves (Esc)',
+  syncResult: (name, seconds, earlier) => `Moved ${name} ${seconds}s ${earlier ? 'earlier' : 'later'}`,
+  dragToRepositionTitle: (name) => `Drag to move ${name} earlier or later`,
+  // A video placed at the end (no usable recorded time): one plain question instead of Sync.
+  placedAtEndQuestion: (name) => `We put ${name} after the other videos because we couldn't tell when it was filmed. Filmed at the same time as another video?`,
+  PLACED_AT_END_NO: 'It comes after',
+  PLACED_AT_END_YES: 'Same time',
+  placeStepTitle: (name) => `Where does ${name} start?`,
+  placeStepText: (name) => `Play the main camera to about where ${name} begins, then tap Starts here.`,
+  PLACE_STEP_CONFIRM: 'Starts here',
+  placeStepInsideTarget: (name) => `Go back to the main camera first: the playhead is on ${name}.`,
+  PLACE_STEP_CANCEL_NOTE: 'X keeps it where you started it.',
+  // Shown (in the Videos bar's notice slot) when a video is picked while Sync is
+  // open: picking would seek the COMMITTED timeline, i.e. the video's old spot.
+  FINISH_FIX_TIMING_FIRST: 'Finish syncing first: tap Done to keep it, or X to undo it.',
   VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cameras filmed at the same time, tapping switches cameras without moving.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',
@@ -1984,7 +2011,7 @@ export const ERROR_COPY = {
   OPEN_DRAFT: "We couldn't open this highlight",
   OPEN_HIGHLIGHT_TITLE: "We couldn't open this highlight",
   SAVE_VIDEO_CHOICE: "We couldn't change the camera. Try again.",
-  SAVE_TIMING: "We couldn't line up this video. Try again.",
+  SAVE_TIMING: "We couldn't sync this video. Try again.",
   LOAD_GAME: "We couldn't load this game. Try again.",
   SAVE_PLAY: "We couldn't save this play",
   SAVE_THIS_CHANGE: "We couldn't save this change",

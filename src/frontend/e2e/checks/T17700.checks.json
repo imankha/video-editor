@@ -1,0 +1,6 @@
+{"criteria": {
+  "T17700:C1": {"kind": "code", "command": "test -f docs/plans/tasks/T17700-design.md && grep -q '^## Ruling' docs/plans/tasks/T17700-line-up-hard-to-understand.md && grep -q 'Owner, 2026-11-18 (complete)' docs/plans/tasks/T17700-line-up-hard-to-understand.md"},
+  "T17700:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/annotate/T17700.sync.test.jsx -t 'T17700:C2'", "why_not_browser": "Sync appears only on a game with a second camera overlapping the main one, and no check account holds one (staging or dev presets); the test mounts the real SourceBar, SyncPrompts and copy the Annotate screen renders"},
+  "T17700:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/annotate/T17700.sync.test.jsx -t 'T17700:C3'", "why_not_browser": "needs a two-camera game no check account holds; the test mounts the real Sync strip: nudges never save, Done saves once, X/Esc cancel; the 390x844 and 1440x900 layouts are in the human test guide"},
+  "T17700:C4": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/annotate/SourceBar.lineUp.test.jsx src/modes/annotate/FixTimingStrip.test.jsx src/modes/annotate/AngleLanes.fixTiming.test.jsx"}
+}}

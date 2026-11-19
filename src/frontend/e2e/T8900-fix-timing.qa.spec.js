@@ -155,8 +155,8 @@ test('open Fix-timing, +1s, Done -> one PATCH; reload shows the corrected placem
   await saveEvidence(page, 't8900-mode-open');
 
   // Nudge +1s -> moved counter reflects it.
-  await page.getByTestId('fix-timing-nudge-1').click();
-  await expect(page.getByTestId('fix-timing-moved')).toContainText('+1s');
+  await page.getByTestId('fix-timing-later-1').click();
+  await expect(page.getByTestId('fix-timing-moved')).toContainText('Moved 1s later');
   await saveEvidence(page, 't8900-nudged');
 
   // Done -> exactly one PATCH with the final offset (8 + 1 = 9).
@@ -194,7 +194,7 @@ test('Esc discards Fix-timing without any write', async ({ browser }) => {
   await item.dispatchEvent('click');
   await expect(page.getByTestId('fix-timing-strip')).toBeVisible();
 
-  await page.getByTestId('fix-timing-nudge-1').click();
+  await page.getByTestId('fix-timing-later-1').click();
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('fix-timing-strip')).toHaveCount(0);
   // No PATCH fired, and the primary CTA is back.
@@ -279,7 +279,7 @@ test('T5380 guard: a REAL pointer drag INSIDE Fix-timing mode moves the bar; Don
   // state update. A raw el.evaluate() read straight after would race that
   // render (this is exactly the class of jsdom-vs-real-browser timing gap
   // T5380 warns about: a plain read has no retry, an `expect(...)` does).
-  await expect(page.getByTestId('fix-timing-moved')).not.toContainText('Moved 0s');
+  await expect(page.getByTestId('fix-timing-moved')).not.toContainText('Not moved');
   // Now the render has landed — the bar's rendered position previews the drag live.
   const leftDuringDrag = await target.evaluate((el) => el.style.left);
   expect(leftDuringDrag).not.toBe(leftBefore);

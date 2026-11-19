@@ -243,10 +243,6 @@ export function AnnotateTimeline({
           duration={duration}
           onPick={videoLane.onPick}
           pulseSequence={videoLane.pulseSequence}
-          fixSequence={videoLane.fixSequence}
-          fixPendingOffset={videoLane.fixPendingOffset}
-          onFixDragTo={videoLane.onFixDragTo}
-          onFixDragEnd={videoLane.onFixDragEnd}
           edgePadding={EDGE_PADDING}
         />
       )}
@@ -266,7 +262,6 @@ export function AnnotateTimeline({
           fixSequence={angleData.fixSequence}
           fixPendingOffset={angleData.fixPendingOffset}
           onFixDragTo={angleData.onFixDragTo}
-          onFixDragEnd={angleData.onFixDragEnd}
           pulseSequence={angleData.pulseSequence}
           pulseNonce={angleData.pulseNonce}
         />

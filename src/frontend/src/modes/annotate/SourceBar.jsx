@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Film, Video, Clock, ArrowLeftRight, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Film, Video, Clock, ArrowLeftRight, ChevronLeft, ChevronRight, ChevronDown, AudioLines } from 'lucide-react';
 import { PULSE_CLASS } from './hooks/usePulseHighlight';
 import { ANNOTATE } from '../../config/displayNames';
+import { syncTargetFor } from './syncCameras';
 
 /**
  * SourceBar (T13280) - the Videos control for a game with 2+ videos. One row directly
@@ -23,7 +24,7 @@ import { ANNOTATE } from '../../config/displayNames';
  *    to switch to right here (T13280 follow-up, user 2026-10-22: "only show this when
  *    the playhead is on a frame with overlapping videos").
  *  - 4+ videos: always a trigger showing the active video, prev/next, and a portalled
- *    list with the same rows plus the Fix timing rows for angles (segments would be
+ *    list with the same rows plus the Sync rows for cameras (segments would be
  *    unreadable at that count; collapsing has no additional benefit to add there).
  *
  * Feedback contract: the container answers EVERY tap (including one on the already
@@ -101,8 +102,10 @@ export default function SourceBar({
 
   const active = videos.find((v) => v.sequence === activeSequence) ?? videos[0];
   const activeIdx = videos.indexOf(active);
-  // T13280 follow-up: any non-original video can be repositioned, not just angles.
-  const fixable = videos.filter((v) => v.virtualStart > 0);
+  // T17700: Sync is for cameras only (angles); a back-to-back video plays in upload
+  // order, so moving it changes nothing and it gets no Sync.
+  const syncable = videos.filter((v) => v.kind === 'angle');
+  const mainName = videos.find((v) => v.kind === 'main')?.name ?? ANNOTATE.MAIN_CAMERA;
 
   const pick = (seq) => {
     setOpen(false);
@@ -123,21 +126,22 @@ export default function SourceBar({
   // PHONE_LANDSCAPE_* compaction) the stacked layout needs this row's height back.
   const rowClass = `flex items-center gap-2 px-2 lg:px-4 min-h-[40px] coarse-pointer:min-h-[52px] [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!min-h-[30px] [@media(max-width:1023px)_and_(orientation:landscape)_and_(max-height:500px)]:!py-0 ${surface}`;
 
-  // T13280 follow-up: reachable for ANY active video that isn't the game's own
-  // original recording (virtualStart 0) -- an angle (line it up by ear) or a
-  // sequential/appended one (drag it on the VideoLane, or nudge it here).
-  const fixButton = onFixTiming && active.virtualStart > 0 ? (
+  // T17700: Sync shows whenever a second camera covers this moment, whichever camera
+  // is playing (inside an overlap the parent is usually on the main camera). It
+  // names both cameras before the tap; its own icon, so the amber Clock keeps
+  // meaning only "time unknown".
+  const syncTarget = syncTargetFor(videos, active.sequence);
+  const fixButton = onFixTiming && syncTarget ? (
     <button
       type="button"
       data-testid="source-bar-fix-timing"
-      aria-label={ANNOTATE.fixTimingFor(active.name)}
-      title={ANNOTATE.LINE_UP_VIDEO}
-      onClick={() => onFixTiming(active.sequence)}
+      aria-label={ANNOTATE.syncWith(syncTarget.name, mainName)}
+      title={ANNOTATE.SYNC_VIDEO}
+      onClick={() => onFixTiming(syncTarget.sequence)}
       className="shrink-0 inline-flex items-center justify-center gap-1 px-2 h-8 coarse-pointer:min-w-11 coarse-pointer:h-11 rounded text-xs font-medium text-yellow-300 hover:bg-gray-700 transition-colors"
     >
-      {/* T17250: words next to the clock; the icon alone read as decoration. */}
-      <Clock size={16} className="shrink-0" />
-      <span>{ANNOTATE.LINE_UP}</span>
+      <AudioLines size={16} className="shrink-0" aria-hidden="true" />
+      <span>{ANNOTATE.SYNC}<span className="hidden lg:inline">{ANNOTATE.SYNC_WIDE_SUFFIX}</span></span>
     </button>
   ) : null;
 
@@ -316,9 +320,9 @@ export default function SourceBar({
               </button>
             );
           })}
-          {onFixTiming && fixable.length > 0 && (
+          {onFixTiming && syncable.length > 0 && (
             <div className="mt-1 border-t border-gray-700 pt-1">
-              {fixable.map((a) => (
+              {syncable.map((a) => (
                 <button
                   key={`fix-${a.sequence}`}
                   type="button"
@@ -326,8 +330,8 @@ export default function SourceBar({
                   onClick={() => { setOpen(false); onFixTiming(a.sequence); }}
                   className="flex w-full items-center gap-1.5 px-3 py-2 coarse-pointer:min-h-[44px] text-left text-yellow-200 hover:bg-gray-800 transition-colors"
                 >
-                  <Clock size={12} className="shrink-0" />
-                  <span className="truncate">{ANNOTATE.fixTimingFor(a.name)}</span>
+                  <AudioLines size={12} className="shrink-0" aria-hidden="true" />
+                  <span className="truncate">{ANNOTATE.syncWith(a.name, mainName)}</span>
                 </button>
               ))}
             </div>

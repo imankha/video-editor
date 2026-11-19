@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Video, Clock } from 'lucide-react';
+import { Video, AudioLines } from 'lucide-react';
 import { PULSE_CLASS } from './hooks/usePulseHighlight';
 import { ANNOTATE } from '../../config/displayNames';
 
@@ -21,12 +21,13 @@ import { ANNOTATE } from '../../config/displayNames';
  * the only unclaimed hue on the Annotate screen.
  *
  * T8900 Fix-timing: an angle bar is an ENTRY POINT for Fix-timing (long-press
- * 500ms or right-click -> a one-item "Fix timing" menu -> onRequestFixTiming).
+ * 500ms or right-click -> a one-item "Sync" menu -> onRequestFixTiming).
  * While Fix-timing is open for a bar (`fixSequence === a.sequence`) that ONE bar
  * becomes horizontally draggable (Pointer Events + setPointerCapture + touch-none,
  * orange styling) and its click-to-switch is suppressed. Drag is attached ONLY to
  * the fix-target bar, so a bare drag outside the mode is structurally impossible
  * — there is no code path that binds pointer-move to a bar when fixSequence is null.
+ * T17700: letting go of a drag saves nothing; Done in the strip is the only save.
  */
 
 // Max angle lane ROWS shown on desktop; deeper concurrency collapses to a +N
@@ -55,7 +56,6 @@ export default function AngleLanes({
   fixSequence = null,        // the sequence currently in Fix-timing drag mode, or null
   fixPendingOffset = 0,      // the pending offset (seconds) at drag start
   onFixDragTo,               // (absoluteOffsetSeconds) => void
-  onFixDragEnd,              // () => void, pointer up after a real drag: the drop saves
   onRequestFixTiming,        // (sequence) => void — open Fix-timing for this angle
   pulseSequence = null,      // a sequence to pulse-highlight (lane changed on Done)
   pulseNonce = 0,            // bumps so the same sequence re-pulses
@@ -137,9 +137,7 @@ export default function AngleLanes({
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
-    const wasDragging = !!dragRef.current;
     dragRef.current = null;
-    if (wasDragging) onFixDragEnd?.();
   };
 
   const renderBar = (a) => {
@@ -211,7 +209,7 @@ export default function AngleLanes({
         data-fix-target={isFixTarget ? 'true' : 'false'}
         aria-label={ANNOTATE.cameraLabel(a.name)}
         aria-pressed={isActive}
-        title={isFixTarget ? `Drag to nudge ${a.name}` : a.name}
+        title={isFixTarget ? ANNOTATE.dragToRepositionTitle(a.name) : a.name}
         onClick={onBarClick}
         {...entryProps}
         {...dragProps}
@@ -237,7 +235,9 @@ export default function AngleLanes({
   // nearest transformed ancestor, not the viewport, and the timeline/canvas has
   // transformed ancestors (same stacking-context landmine as T5700/T8600) — that
   // made the menu drift + detach under Playwright. Portalling escapes it.
-  const fixMenu = menu ? createPortal(
+  // The menu names the camera it syncs (its bar can vanish if the timeline rebuilds).
+  const menuAngle = menu ? angles.find((x) => x.sequence === menu.sequence) : null;
+  const fixMenu = menuAngle ? createPortal(
     <div
       ref={menuRef}
       data-testid="fix-timing-menu"
@@ -251,7 +251,8 @@ export default function AngleLanes({
         onClick={() => { const seq = menu.sequence; setMenu(null); onRequestFixTiming?.(seq); }}
         className="flex items-center gap-2 px-3 py-1.5 text-left text-gray-100 hover:bg-gray-800 w-full"
       >
-        <Clock size={14} className="text-yellow-300" /> {ANNOTATE.LINE_UP_VIDEO}
+        <AudioLines size={14} className="text-yellow-300" aria-hidden="true" />
+        {ANNOTATE.syncWith(menuAngle.name, ANNOTATE.MAIN_CAMERA)}
       </button>
     </div>,
     document.body,

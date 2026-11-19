@@ -2,20 +2,22 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import FixTimingStrip, { formatMoved } from './FixTimingStrip';
 
-// T8900 — FixTimingStrip: gesture -> callback mapping (no persistence at this
-// layer), moved-counter formatting, and the outer-layer Esc = discard.
+// T8900 / T17700 — FixTimingStrip (Sync): gesture -> callback mapping (no persistence
+// at this layer), moved readout in words, the outer-layer Esc = discard, desktop keys.
 
-describe('formatMoved (moved-counter formatting)', () => {
-  it('formats zero, positive, and negative with a sign and s suffix', () => {
-    expect(formatMoved(0)).toBe('Moved 0s');
-    expect(formatMoved(1)).toBe('Moved +1s');
-    expect(formatMoved(-1)).toBe('Moved -1s');
-    expect(formatMoved(1.5)).toBe('Moved +1.5s');
-    expect(formatMoved(-0.1)).toBe('Moved -0.1s');
+describe('formatMoved (moved readout)', () => {
+  it('says not moved, earlier or later, without a sign', () => {
+    expect(formatMoved(0)).toBe('Not moved');
+    expect(formatMoved(1)).toBe('Moved 1s later');
+    expect(formatMoved(-1)).toBe('Moved 1s earlier');
+    expect(formatMoved(1.5)).toBe('Moved 1.5s later');
+    expect(formatMoved(-0.1)).toBe('Moved 0.1s earlier');
+    expect(formatMoved(10)).toBe('Moved 10s later');
   });
 
-  it('rounds float accumulation noise to 0.1s (0.1+0.1+0.1 -> +0.3s)', () => {
-    expect(formatMoved(0.1 + 0.1 + 0.1)).toBe('Moved +0.3s');
+  it('rounds float accumulation noise to 0.1s (0.1+0.1+0.1 -> 0.3s)', () => {
+    expect(formatMoved(0.1 + 0.1 + 0.1)).toBe('Moved 0.3s later');
+    expect(formatMoved(0.04)).toBe('Not moved');
   });
 });
 
@@ -23,6 +25,7 @@ describe('FixTimingStrip', () => {
   const setup = (overrides = {}) => {
     const props = {
       angleName: 'sideline',
+      mainName: 'Main camera',
       moved: 0,
       onNudge: vi.fn(),
       onPlayAngle: vi.fn(),
@@ -36,24 +39,26 @@ describe('FixTimingStrip', () => {
     return props;
   };
 
-  it('renders the title with the angle name and the help copy', () => {
+  it('renders the title naming both cameras and the compare buttons naming the camera', () => {
     setup();
-    expect(screen.getByText('Line up sideline with the game')).toBeTruthy();
-    expect(screen.getByText(/find a sound you can hear in both/i)).toBeTruthy();
+    expect(screen.getByText('Sync sideline with Main camera')).toBeTruthy();
+    expect(screen.getByTestId('fix-timing-play-angle').textContent).toContain('Play sideline');
+    expect(screen.getByTestId('fix-timing-play-main').textContent).toContain('Play main camera');
+    expect(screen.getByText('Each plays the same 3 seconds.')).toBeTruthy();
   });
 
   it('shows the current moved delta', () => {
     setup({ moved: 1.5 });
-    expect(screen.getByTestId('fix-timing-moved').textContent).toContain('Moved +1.5s');
+    expect(screen.getByTestId('fix-timing-moved').textContent).toBe('Moved 1.5s later');
   });
 
-  it('nudge buttons call onNudge with the right delta and NEVER onDone (no persist per nudge)', () => {
+  it('nudge buttons carry a spoken label and never call onDone (no persist per nudge)', () => {
     const props = setup();
-    fireEvent.click(screen.getByTestId('fix-timing-nudge-1'));
-    fireEvent.click(screen.getByTestId('fix-timing-nudge-0.1'));
-    fireEvent.click(screen.getByTestId('fix-timing-nudge--1'));
-    fireEvent.click(screen.getByTestId('fix-timing-nudge--0.1'));
-    expect(props.onNudge.mock.calls).toEqual([[1], [0.1], [-1], [-0.1]]);
+    const earlier1 = screen.getByTestId('fix-timing-earlier-1');
+    expect(earlier1.getAttribute('aria-label')).toBe('Move sideline 1 seconds earlier');
+    fireEvent.click(earlier1);
+    fireEvent.click(screen.getByTestId('fix-timing-later-10'));
+    expect(props.onNudge.mock.calls).toEqual([[-1], [10]]);
     expect(props.onDone).not.toHaveBeenCalled();
   });
 
@@ -63,7 +68,7 @@ describe('FixTimingStrip', () => {
     expect(props.onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('Reset calls onReset; A/B buttons call their handlers', () => {
+  it('Undo moves calls onReset; compare buttons call their handlers', () => {
     const props = setup();
     fireEvent.click(screen.getByTestId('fix-timing-reset'));
     fireEvent.click(screen.getByTestId('fix-timing-play-angle'));
@@ -86,44 +91,22 @@ describe('FixTimingStrip', () => {
     expect(props.onCancel).toHaveBeenCalledTimes(1);
     expect(props.onDone).not.toHaveBeenCalled();
   });
-});
 
-// T13280 follow-up (2026-10-22, user: "user should be able to drag the video to
-// different spots on the timeline"): a sequential (appended) video has no second
-// source playing at the same moment to A/B against, so onPlayAngle/onPlayMain are
-// both omitted for it -- distinct from the angle case above, where both are always
-// provided.
-describe('FixTimingStrip — sequential (non-angle) target', () => {
-  const setupSequential = (overrides = {}) => {
-    const props = {
-      angleName: 'video (6)',
-      moved: 0,
-      onNudge: vi.fn(),
-      onReset: vi.fn(),
-      onDone: vi.fn(),
-      onCancel: vi.fn(),
-      ...overrides,
-    };
-    render(<FixTimingStrip {...props} />);
-    return props;
-  };
-
-  it('hides the A/B play row and swaps the description when there is nothing to compare against', () => {
-    setupSequential();
-    expect(screen.queryByTestId('fix-timing-play-angle')).toBeNull();
-    expect(screen.queryByTestId('fix-timing-play-main')).toBeNull();
-    expect(screen.getByText(/drag it on the timeline/i)).toBeTruthy();
-    expect(screen.getByText(/to where it happened/i)).toBeTruthy();
-    expect(screen.queryByText(/find a sound you can hear in both/i)).toBeNull();
+  it('desktop keys inside the strip: arrows nudge 0.1s, Shift+arrows 1s, Enter is Done', () => {
+    const props = setup();
+    const strip = screen.getByTestId('fix-timing-strip');
+    fireEvent.keyDown(strip, { key: 'ArrowLeft' });
+    fireEvent.keyDown(strip, { key: 'ArrowRight', shiftKey: true });
+    expect(props.onNudge.mock.calls).toEqual([[-0.1], [1]]);
+    fireEvent.keyDown(strip, { key: 'Enter' });
+    expect(props.onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('nudge, reset, done and cancel all still work without the play row', () => {
-    const props = setupSequential();
-    fireEvent.click(screen.getByTestId('fix-timing-nudge-1'));
-    fireEvent.click(screen.getByTestId('fix-timing-reset'));
-    fireEvent.click(screen.getByTestId('fix-timing-done'));
-    expect(props.onNudge).toHaveBeenCalledWith(1);
-    expect(props.onReset).toHaveBeenCalledTimes(1);
-    expect(props.onDone).toHaveBeenCalledTimes(1);
+  it('place step: Starts here is disabled with the reason while the playhead is on the video itself', () => {
+    const props = setup({ step: 'place', angleName: 'video (6)', onPlace: vi.fn(), placeDisabledReason: 'Go back to the main camera first: the playhead is on video (6).' });
+    expect(screen.getByTestId('fix-timing-place-confirm').disabled).toBe(true);
+    expect(screen.getByText('Go back to the main camera first: the playhead is on video (6).')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('fix-timing-place-confirm'));
+    expect(props.onPlace).not.toHaveBeenCalled();
   });
 });
