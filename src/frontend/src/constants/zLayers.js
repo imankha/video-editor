@@ -80,6 +80,10 @@
  * parent (e.g. the delete-card ConfirmationDialog lives inside the intro-card
  * modal's MODAL_ELEVATED subtree, so its MODAL value renders above the grid). Only
  * raise a dialog's own rung when it is a SIBLING of what it must cover.
+ * The reverse trap: a dialog mounted under a LOWER rung is capped by it. Home's
+ * top-right controls cluster is `fixed ... z-30`, the same value as a highlight
+ * tile's Play/Share buttons, so a dialog opened from that cluster must portal to
+ * document.body (ManageProfilesModal, T17680; IntroCardsModal, T6600).
  *
  * OUT OF SCOPE (intentionally not on this ladder): local intra-component stacking
  * (z-10/z-20/z-30 badges, scrims, and hover lifts WITHIN a single card/tile). Those
