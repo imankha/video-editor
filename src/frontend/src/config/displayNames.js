@@ -1144,6 +1144,11 @@ export const FRAMING_GUIDE = {
   TRIM_ADJUST: GUIDE.focus.trimAdjust,
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
   TRIM_BUTTON: 'Trim and slow motion',
+  // T17860 (owner ruling 2026-11-19): while the track is open the button says what a tap does.
+  TRIM_BUTTON_DONE: 'Done trimming',
+  TRIM_BUTTON_DESC: 'Adjust timing and playback speed.',
+  TRIM_BUTTON_DONE_DESC: 'Your trim and speed changes stay.',
+  TRIM_BUTTON_DONE_HINT: 'Hide the trim and slow motion track. Your changes stay.',
 };
 
 // T10850 (design D14): the two discovery hints that bracket the landscape flip.
