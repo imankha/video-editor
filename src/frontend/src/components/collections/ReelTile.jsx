@@ -16,6 +16,7 @@ import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/intr
 import { RESULT_SURFACE, HOME_TILE, SHARE_COPY, RANKING_COPY } from '../../config/displayNames';
 import { useGuidePulse } from '../instructions/GuideScope';
 import { Button } from '../shared/Button';
+import { CAROUSEL_EDGE_HIDE } from '../shared/CardCarousel';
 
 // T7100: compact byte readout for the in-flight download scrim row (mirrors
 // CollectionHeader's formatBytes, minus the GB rung a single reel never needs).
@@ -329,7 +330,7 @@ export function ReelTile({
               onClick={(e) => { e.stopPropagation(); startRename(); }}
               title="Rename highlight"
               aria-label="Rename highlight"
-              className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
+              className={`flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] ${CAROUSEL_EDGE_HIDE}`}
             >
               <Pencil size={14} />
             </button>
@@ -351,7 +352,7 @@ export function ReelTile({
           the kebab). Share ALSO stays in the kebab below (both pointer variants)
           for muscle memory -- this is an additional surface, not a move. */}
       {!isRenaming && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex items-center gap-2">
+        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex items-center gap-2 transition-opacity ${CAROUSEL_EDGE_HIDE}`}>
           <button
             type="button"
             onClick={(e) => { preview.stop(); onPlay(e, download); }}
@@ -392,7 +393,7 @@ export function ReelTile({
           isCoarsePointer || isDownloading
             ? 'opacity-100'
             : 'opacity-0 group-hover/tile:opacity-100 focus:opacity-100'
-        } ${menuOpen ? 'opacity-100' : ''}`}
+        } ${menuOpen ? 'opacity-100' : ''} ${CAROUSEL_EDGE_HIDE}`}
       >
         {isDownloading
           ? <Loader size={16} className="text-cyan-300 animate-spin" />
