@@ -23,6 +23,9 @@ import { SHARE_COPY } from '../config/displayNames';
 export function SharedGameView({ token }) {
   const [state, setState] = useState('loading');
   const [data, setData] = useState(null);
+  // T17770: the recap object can be gone (a presigned URL never checks the key);
+  // a failed load swaps the player for a readable message.
+  const [videoFailed, setVideoFailed] = useState(false);
 
   const handleClaim = useCallback(() => {
     window.location.assign(`/claim/game/${token}`);
@@ -80,9 +83,10 @@ export function SharedGameView({ token }) {
           </div>
         )}
         <main className="flex-1 flex items-center justify-center bg-black overflow-hidden min-h-[40vh]">
-          {data.recap_url ? (
+          {data.recap_url && !videoFailed ? (
             <video
               src={data.recap_url}
+              onError={() => setVideoFailed(true)}
               poster={data.poster_url || undefined}
               autoPlay
               muted
@@ -92,7 +96,10 @@ export function SharedGameView({ token }) {
               className="max-w-full max-h-full w-auto h-auto bg-black"
             />
           ) : (
-            <p className="text-gray-400 px-6 text-center">{SHARE_COPY.GAME_PLAYS_UNAVAILABLE}</p>
+            <div className="px-6 text-center" role="status">
+              <p className="text-gray-300">{SHARE_COPY.GAME_PLAYS_UNAVAILABLE}</p>
+              <p className="mt-1 text-sm text-gray-400">{SHARE_COPY.GAME_PLAYS_UNAVAILABLE_HINT}</p>
+            </div>
           )}
         </main>
         {clips.length > 0 && (

@@ -132,6 +132,9 @@ main{flex:1;display:flex;align-items:center;justify-content:center;background:#0
 video{max-width:100%;max-height:100%;width:auto;height:auto;display:block;background:#000}
 #unmute{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:8px;padding:10px 18px;border:0;border-radius:9999px;background:rgba(34,211,238,.92);color:#03151a;font-size:14px;font-weight:600;cursor:pointer;backdrop-filter:blur(4px)}
 #unmute:hover{background:#22d3ee}
+#unavailable{padding:24px;text-align:center;color:#d1d5db;font-size:15px}
+#unavailable[hidden],video[hidden]{display:none}
+#unavailable .sub{margin-top:6px;font-size:13px;color:#9ca3af}
 #rail{list-style:none;padding:8px 12px;margin:0;display:flex;gap:8px;overflow-x:auto;background:#0b1220;border-top:1px solid #1f2937}
 #rail li{flex:0 0 auto;display:flex;flex-direction:column;gap:2px;padding:8px 12px;background:#111827;border:1px solid #f59e0b55;border-radius:8px;min-width:120px}
 .rn{font-size:13px;font-weight:600;color:#fde68a}
@@ -149,6 +152,7 @@ footer{display:flex;align-items:center;justify-content:center;gap:12px;padding:1
 <div class="attr">${escapeHtml(attribution)}</div>
 <main>
 <video id="v" src="${recapUrl}"${posterAttr} autoplay muted playsinline controls preload="auto"></video>
+<div id="unavailable" role="status" hidden><p>These game plays aren't available right now.</p><p class="sub">Ask the person who shared this link to send it again.</p></div>
 <button id="unmute" type="button">Turn sound on</button>
 </main>
 ${clipRail}
@@ -162,6 +166,8 @@ function hide(){b.style.display="none"}
 if(!v||v.muted===false)hide();
 if(b){b.addEventListener("click",function(){v.muted=false;v.play();hide()});}
 if(v){v.addEventListener("volumechange",function(){if(!v.muted)hide()});}
+// T17770: a recap object that is gone must read as a message, never an empty player.
+if(v){v.addEventListener("error",function(){v.hidden=true;hide();var u=document.getElementById("unavailable");if(u)u.hidden=false});}
 })();
 </script>
 </body>
