@@ -47,9 +47,8 @@ export default function CropOverlay({
   panOffset = { x: 0, y: 0 },
   selectedKeyframeIndex = null,
   isFullscreen = false,
-  dimOpacity = 0.2,
   interactive = true,
-  // T9950 Slice 3: suppresses the reticule, handles, badges, dim shadow, OOB
+  // T9950 Slice 3: suppresses the reticule, handles, badges, OOB
   // rotation mask and straighten tool while the output-aspect preview is on.
   // The rotation useLayoutEffect below and its cleanup are UNTOUCHED by this
   // prop — CropOverlay must stay MOUNTED during preview, or its unmount
@@ -639,35 +638,11 @@ export default function CropOverlay({
         </svg>
       )}
 
-      {/* Dimmed overlay outside crop area + the crop rectangle itself (reticule,
-          grid, badges, handles) — all suppressed together while chromeHidden
-          (T9950 Slice 3 preview). */}
+      {/* The crop rectangle itself (reticule, grid, badges, handles), suppressed
+          while chromeHidden (T9950 Slice 3 preview). T17870: no dimming outside
+          the box; Preview shows the framed result. */}
       {!chromeHidden && (
         <>
-      <svg
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        style={{ position: 'absolute', top: 0, left: 0 }}
-      >
-        <defs>
-          <mask id="cropMask">
-            <rect width="100%" height="100%" fill="white" />
-            <rect
-              x={screenCrop.x}
-              y={screenCrop.y}
-              width={screenCrop.width}
-              height={screenCrop.height}
-              fill="black"
-            />
-          </mask>
-        </defs>
-        <rect
-          width="100%"
-          height="100%"
-          fill={`rgba(0, 0, 0, ${dimOpacity})`}
-          mask="url(#cropMask)"
-        />
-      </svg>
-
       {/* Crop rectangle */}
       <div
         data-testid="crop-rect"
@@ -677,7 +652,6 @@ export default function CropOverlay({
           top: `${screenCrop.y}px`,
           width: `${screenCrop.width}px`,
           height: `${screenCrop.height}px`,
-          boxShadow: `0 0 0 9999px rgba(0, 0, 0, ${dimOpacity})`,
           touchAction: 'none'
         }}
         onPointerDown={handleCropPointerDown}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RotateCw, ChevronDown } from 'lucide-react';
+import { RotateCw } from 'lucide-react';
 import AspectRatioSelector from '../AspectRatioSelector';
 import ShapeSwitchConfirm from '../../modes/focus/ShapeSwitchConfirm';
 import { Toggle } from '../shared';
@@ -10,21 +10,20 @@ import { EDITOR_PANELS, FRAME_COPY } from '../../config/displayNames';
 
 /**
  * FocusSettingsPanel (T9270) — the Focus "Settings" tab body. Re-homes the controls
- * that used to live in the above-video toolbar (aspect selector, audio, straighten,
- * background dim) into the shared SettingRow / SettingsPanel anatomy, grouped
- * by WHAT EACH CONTROL CHANGES:
+ * that used to live in the above-video toolbar (aspect selector, audio, straighten)
+ * into the shared SettingRow / SettingsPanel anatomy:
  *
  *   Highlight          - applies to every clip (shape, include audio). T17230: the
  *                        Shape row is the one lasting shape control; with box
  *                        positions placed (`hasPositions`) a switch asks first.
- *   More options       - Fix a tilted camera (straighten) + Darken outside the
- *                        box (dim), T12180: one collapsed disclosure, plain labels.
- *                        T10395: zoom lives on the video's own Controls bar.
+ *   Fix a tilted camera - the straighten tool, plain label (T12180). T17870: shown
+ *                        directly (the panel has room; no 'More options' disclosure)
+ *                        and the dim setting is removed (Preview shows the framed
+ *                        result). T10395: zoom lives on the video's own Controls bar.
  *
- * The dim toggle and the straighten line-drag tool stay DESKTOP-ONLY exactly as
- * they were gated in the old toolbar: `desktopOnly` is false in the mobile
- * drawer, which drops the More options group and the straighten tool entirely
- * (Step 4). One accent: blue-600.
+ * The straighten line-drag tool stays DESKTOP-ONLY exactly as it was gated in the
+ * old toolbar: `desktopOnly` is false in the mobile drawer, which drops the
+ * straighten row entirely (Step 4). One accent: blue-600.
  */
 export default function FocusSettingsPanel({
   globalAspectRatio,
@@ -34,11 +33,8 @@ export default function FocusSettingsPanel({
   onIncludeAudioChange,
   straightenVisible,
   onToggleStraighten,
-  dimOpacity,
-  onToggleDim,
   desktopOnly = true,
 }) {
-  const [moreOpen, setMoreOpen] = useState(false);
   const [pendingRatio, setPendingRatio] = useState(null);
   const chooseShape = (ratio) => {
     if (ratio === globalAspectRatio) return;
@@ -77,7 +73,7 @@ export default function FocusSettingsPanel({
               that paints the track, so `coarse-pointer:min-h-11` grows the track itself
               to 44px tall on touch (the pill reads taller there; the thumb stays
               centred) — it does nothing on a fine pointer, where the 28px track ships
-              unchanged. Same pattern as the straighten/dim buttons below. */}
+              unchanged. Same pattern as the straighten button below. */}
           <Toggle
             checked={includeAudio}
             onChange={onIncludeAudioChange}
@@ -87,62 +83,26 @@ export default function FocusSettingsPanel({
         </SettingRow>
       </SettingsPanel>
 
-      {/* T12180: straighten + dim sit behind one collapsed 'More options' disclosure
-          (memory-only state). The line-drag straighten TOOL and dim stay desktop-only
-          exactly as before (a phone has no pillarbox to dim). */}
+      {/* T17870: Fix a tilted camera shows directly (no disclosure). The line-drag
+          straighten TOOL stays desktop-only exactly as before. */}
       {desktopOnly && (
-        <section className="space-y-3">
+        <SettingRow label={EDITOR_PANELS.FIX_TILT} value={EDITOR_PANELS.FIX_TILT_HELP}>
           <button
             type="button"
-            onClick={() => setMoreOpen((o) => !o)}
-            aria-expanded={moreOpen}
-            className="flex items-center gap-1.5 text-sm font-medium text-gray-300 hover:text-white transition-colors coarse-pointer:min-h-11"
+            onClick={onToggleStraighten}
+            aria-pressed={straightenVisible}
+            aria-label={EDITOR_PANELS.FIX_TILT}
+            title={EDITOR_PANELS.FIX_TILT_HELP}
+            className={`flex items-center gap-1.5 border rounded-lg px-3 py-2 text-sm font-medium transition-colors coarse-pointer:min-h-11 ${
+              straightenVisible
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+            }`}
           >
-            <ChevronDown
-              size={14}
-              aria-hidden="true"
-              className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`}
-            />
-            {EDITOR_PANELS.MORE_OPTIONS}
+            <RotateCw size={14} aria-hidden="true" />
+            {straightenVisible ? 'On' : 'Off'}
           </button>
-          {moreOpen && (
-            <div className="space-y-4">
-              <SettingRow label={EDITOR_PANELS.FIX_TILT} value={EDITOR_PANELS.FIX_TILT_HELP}>
-                <button
-                  type="button"
-                  onClick={onToggleStraighten}
-                  aria-pressed={straightenVisible}
-                  aria-label={EDITOR_PANELS.FIX_TILT}
-                  title={EDITOR_PANELS.FIX_TILT_HELP}
-                  className={`flex items-center gap-1.5 border rounded-lg px-3 py-2 text-sm font-medium transition-colors coarse-pointer:min-h-11 ${
-                    straightenVisible
-                      ? 'bg-blue-600 border-blue-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
-                  }`}
-                >
-                  <RotateCw size={14} aria-hidden="true" />
-                  {straightenVisible ? 'On' : 'Off'}
-                </button>
-              </SettingRow>
-
-              <SettingRow label={EDITOR_PANELS.DARKEN_OUTSIDE} value={EDITOR_PANELS.DARKEN_OUTSIDE_HELP}>
-                <button
-                  onClick={onToggleDim}
-                  className="relative w-8 h-4 rounded-full transition-colors coarse-pointer:min-h-11"
-                  style={{ backgroundColor: dimOpacity === 0.7 ? '#2563eb' : '#4b5563' }}
-                  aria-label={EDITOR_PANELS.DARKEN_OUTSIDE}
-                  title={EDITOR_PANELS.DARKEN_OUTSIDE_HELP}
-                  aria-pressed={dimOpacity === 0.7}
-                >
-                  <span
-                    className="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform"
-                    style={{ transform: dimOpacity === 0.7 ? 'translateX(16px)' : 'translateX(0)' }}
-                  />
-                </button>
-              </SettingRow>
-            </div>
-          )}
-        </section>
+        </SettingRow>
       )}
     </>
   );

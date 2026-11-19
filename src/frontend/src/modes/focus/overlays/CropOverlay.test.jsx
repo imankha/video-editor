@@ -181,6 +181,16 @@ describe('T5380 CropOverlay first-drag gesture', () => {
   });
 });
 
+describe('T17870 no dimming outside the crop box', () => {
+  it('draws no dim mask and no dim box-shadow around the box', () => {
+    const { container } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} />
+    );
+    expect(container.querySelector('mask#cropMask')).toBeNull();
+    expect(getCropBox(container).style.boxShadow).toBe('');
+  });
+});
+
 describe('T9950 Slice 3 chromeHidden (output-aspect preview)', () => {
   it('hides the reticule, handles and dim mask when chromeHidden', () => {
     const { container } = render(

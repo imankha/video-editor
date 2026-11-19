@@ -378,7 +378,6 @@ export function FocusModeView({
   cockpit = false,
   onExitToHome,
 }) {
-  const [dimOpacity, setDimOpacity] = useState(0.2);
   const [touchMode, setTouchMode] = useState('crop');
   const isMobile = useIsMobile();
   // T15340: `/focus/p/{id}?t=37` resume seek -- one shot, once the player has a
@@ -624,10 +623,9 @@ export function FocusModeView({
   }, [previewActive, globalAspectRatio]);
 
   // T9270: the Focus settings-rail tab (Settings) and its body. The Settings
-  // tab re-homes the old above-video toolbar (aspect, audio, straighten,
-  // background dim) into Reel / This clip / View-only groups. `desktopOnly` keeps
-  // dim + the straighten line-drag tool out of the mobile drawer (Step 4), exactly
-  // as the old toolbar gated them. T10395: zoom moved out of this rail entirely,
+  // tab re-homes the old above-video toolbar (aspect, audio, straighten).
+  // `desktopOnly` keeps the straighten line-drag tool out of the mobile drawer
+  // (Step 4), exactly as the old toolbar gated it (T17870 removed the dim setting). T10395: zoom moved out of this rail entirely,
   // onto the video's own Controls transport bar (matching Annotate, T10390).
   // T11240: the Clips tab (multi-clip UI) is gone — exactly one clip now, so
   // Settings is the only tab.
@@ -643,8 +641,6 @@ export function FocusModeView({
       onIncludeAudioChange={onIncludeAudioChange}
       straightenVisible={straightenVisible}
       onToggleStraighten={handleToggleStraighten}
-      dimOpacity={dimOpacity}
-      onToggleDim={() => setDimOpacity(dimOpacity === 0.2 ? 0.7 : 0.2)}
       desktopOnly={desktopOnly}
     />
   );
@@ -962,7 +958,6 @@ export function FocusModeView({
                     panOffset={previewActive ? { x: 0, y: 0 } : panOffset}
                     selectedKeyframeIndex={selectedCropKeyframeIndex}
                     isFullscreen={isFullscreen}
-                    dimOpacity={dimOpacity}
                     interactive={!mobileFs || touchMode === 'crop'}
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
@@ -1266,7 +1261,7 @@ export function FocusModeView({
               the band (T10820: `absolute bottom-full`, never `position:fixed`).
               Opened by the mobile-settings-row above; closed by its own 44x44
               header close. Holds the mobile-safe subset (Reel + This clip via
-              desktopOnly=false; no dim/zoom or straighten line-drag tool). */}
+              desktopOnly=false; no zoom or straighten line-drag tool). */}
           {isMobile && (
             <SettingsRail
               isMobile

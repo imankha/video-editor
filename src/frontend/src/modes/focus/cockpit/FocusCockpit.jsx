@@ -102,7 +102,6 @@ export default function FocusCockpit({
     },
   });
   const [straightenVisible, setStraightenVisible] = useState(false);
-  const [dimOpacity, setDimOpacity] = useState(0.2);
   const handleTogglePreview = useCallback(() => {
     if (previewing) {
       setPreviewing(false);
@@ -255,7 +254,6 @@ export default function FocusCockpit({
                   panOffset={previewing ? ZERO_PAN : panOffset}
                   selectedKeyframeIndex={selectedCropKeyframeIndex}
                   isFullscreen={false}
-                  dimOpacity={dimOpacity}
                   interactive
                   chromeHidden={previewing}
                   isPlaying={isPlaying}
@@ -371,8 +369,6 @@ export default function FocusCockpit({
               if (!next) onSetRotation?.(0);
               return next;
             })}
-            dimOpacity={dimOpacity}
-            onToggleDim={() => setDimOpacity(dimOpacity === 0.2 ? 0.7 : 0.2)}
             desktopOnly={false}
           />
           {exportCtrl.estimatedCredits != null && (

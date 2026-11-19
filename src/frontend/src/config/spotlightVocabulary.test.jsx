@@ -108,18 +108,16 @@ describe('T14630 Spotlight copy', () => {
     expect(document.body.textContent).not.toMatch(BANNED);
   });
 
-  it('T14630:C4 the Frame settings panel is Video, and both dim controls say Dim outside', () => {
+  it('T14630:C4 the Frame settings panel is Video, and Spotlight dim says Dim outside', () => {
     render(
       <FocusSettingsPanel
         globalAspectRatio="9:16" onAspectRatioChange={vi.fn()} includeAudio
         onIncludeAudioChange={vi.fn()} straightenVisible={false} onToggleStraighten={vi.fn()}
-        dimOpacity={0.5} onToggleDim={vi.fn()}
       />,
     );
     expect(screen.getByText('Video')).toBeTruthy();
     expect(screen.queryByText('Highlight')).toBeNull();
     expect(EDITOR_PANELS.DIM_BACKGROUND).toBe('Dim outside');
-    expect(EDITOR_PANELS.DARKEN_OUTSIDE).toBe('Dim outside');
   });
 
   it('T14630:C5 picking the athlete says tap, and the panel explains a missing spotlight plainly', () => {
