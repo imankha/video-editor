@@ -548,6 +548,12 @@ gesture (drag/resize/delete) in FocusContainer
   `update_crop_keyframe`, `delete_crop_keyframe`, `move_crop_keyframe`, `split_segment`,
   `remove_segment_split`, `set_segment_speed`, `set_trim_range`, `clear_trim_range`.
   Responses may carry `refresh_required`/`new_clip_id`.
+- **A trim-edge split is not deletable (T17650, owner ruling 2026-11-18).** The split at
+  `trimRange.start`/`.end` defines the trim; `SegmentLayer` renders no Delete split there (the
+  TimelineBase `TrimUndoButton` is the one control at that edge) and `useSegments.removeBoundary`
+  refuses it (returns `false`, logs an error; it used to clear `trimRange` in memory only, while
+  `remove_segment_split` kept the trim server-side). `FocusContainer.handleRemoveSplit` sends
+  nothing when `removeSegmentBoundary` returns false. Mocks of `removeSegmentBoundary` return `true`.
 - Full-state save: `PUT /projects/{pid}/clips/{cid}` (clips.py:2001-2124) only on explicit export
   gesture. If clip was exported AND framing changed AND data differs → INSERT new working_clips
   version row (v+1, L2053-2098); else in-place UPDATE.

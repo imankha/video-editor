@@ -67,7 +67,7 @@ function makeProps(overrides = {}) {
     trimRange: null,
     trimHistory: [],
     addSegmentBoundary: vi.fn(),
-    removeSegmentBoundary: vi.fn(),
+    removeSegmentBoundary: vi.fn(() => true),
     setSegmentSpeed: vi.fn(),
     toggleTrimSegment: vi.fn(),
     getSegmentExportData: vi.fn(() => null),
@@ -139,6 +139,14 @@ describe('T4400 C3: every Frame edit is saved by its own gesture', () => {
   it('removing a split sends remove_segment_split', async () => {
     await gesture(makeProps(), (c) => c.handleRemoveSplit(4));
     expect(h.actions.removeSegmentSplit).toHaveBeenCalledWith(7, 3, 4);
+  });
+
+  it('T17650: a split the hook refuses to remove (a trim edge) sends nothing', async () => {
+    await gesture(
+      makeProps({ trimRange: { start: 0, end: 4 }, removeSegmentBoundary: vi.fn(() => false) }),
+      (c) => c.handleRemoveSplit(4),
+    );
+    expect(h.actions.removeSegmentSplit).not.toHaveBeenCalled();
   });
 
   it('changing a segment speed sends set_segment_speed', async () => {

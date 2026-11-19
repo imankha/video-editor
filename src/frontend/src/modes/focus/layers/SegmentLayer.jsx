@@ -234,6 +234,16 @@ export default function SegmentLayer({
             return null;
           }
 
+          // T17650 (owner ruling 2026-11-18): the split that IS a trim edge offers no
+          // Delete split; the Undo trim control drawn over that edge is the one control there.
+          const isTrimEdge = trimRange && (
+            Math.abs(trimRange.start - time) < 0.01 ||
+            Math.abs(trimRange.end - time) < 0.01
+          );
+          if (isTrimEdge) {
+            return null;
+          }
+
           // Calculate pixel position to align with playhead center
           const containerWidth = segmentTrackRef.current?.getBoundingClientRect().width || 0;
           const usableWidth = containerWidth - (edgePadding * 2);

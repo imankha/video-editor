@@ -7,7 +7,7 @@
  *   - merged k  -> keep only if speeds[k] === speeds[k+1], else omit (plays 1x)
  *   - i > k + 1 -> speeds[i] moves to key (i - 1)
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useSegments, reindexSegmentSpeedsOnRemove } from './useSegments';
 
@@ -58,5 +58,50 @@ describe('useSegments.removeBoundary re-indexes speeds (T4220)', () => {
     // 0.5 (merged with a default segment) drops; 0.25 shifts from seg3 -> seg2.
     expect(result.current.segmentSpeeds).toEqual({ '0': 1, '2': 0.25 });
     expect(result.current.userSplits).toEqual([10, 30]);
+  });
+});
+
+describe('useSegments.removeBoundary never clears a trim (T17650 ruling)', () => {
+  function trimmedAtEnd() {
+    const { result } = renderHook(() => useSegments());
+    act(() => {
+      result.current.initializeWithDuration(7.5);
+    });
+    act(() => {
+      result.current.addBoundary(5.25);
+    });
+    act(() => {
+      result.current.toggleTrimSegment(1);
+    });
+    expect(result.current.trimRange).toEqual({ start: 0, end: 5.25 });
+    return result;
+  }
+
+  it('refuses to remove the split that is the trim edge and keeps the trim', () => {
+    const result = trimmedAtEnd();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let removed;
+    act(() => {
+      removed = result.current.removeBoundary(5.25);
+    });
+    expect(removed).toBe(false);
+    expect(result.current.trimRange).toEqual({ start: 0, end: 5.25 });
+    expect(result.current.userSplits).toEqual([5.25]);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('removes a split that is not the trim edge and reports it', () => {
+    const result = trimmedAtEnd();
+    act(() => {
+      result.current.addBoundary(2);
+    });
+    let removed;
+    act(() => {
+      removed = result.current.removeBoundary(2);
+    });
+    expect(removed).toBe(true);
+    expect(result.current.userSplits).toEqual([5.25]);
+    expect(result.current.trimRange).toEqual({ start: 0, end: 5.25 });
   });
 });

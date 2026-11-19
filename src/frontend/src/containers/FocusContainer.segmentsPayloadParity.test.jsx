@@ -40,7 +40,7 @@ function makeProps(overrides = {}) {
       { index: 1, start: 4, end: 10, isFirst: false, isLast: true, isTrimmed: false },
     ],
     segmentBoundaries: [0, 4, 10], segmentSpeeds: { 0: 2 }, trimRange: null, trimHistory: [],
-    addSegmentBoundary: vi.fn(), removeSegmentBoundary: vi.fn(), setSegmentSpeed: vi.fn(),
+    addSegmentBoundary: vi.fn(), removeSegmentBoundary: vi.fn(() => true), setSegmentSpeed: vi.fn(),
     toggleTrimSegment: vi.fn(), restoreTrim: vi.fn(), getSegmentExportData: vi.fn(() => null),
     detrimStart: vi.fn(), detrimEnd: vi.fn(), clampToVisibleRange: vi.fn((t) => t), isTimeVisible: vi.fn(() => true),
     clips: [clip], projectClipId: 3, projectClip: clip,

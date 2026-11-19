@@ -1,0 +1,5 @@
+{"criteria": {
+  "T17660:C1": {"kind": "browser"},
+  "T17660:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/services/uploadManager.attachCharge.test.js"},
+  "T17660:C3": {"kind": "browser"}
+}}

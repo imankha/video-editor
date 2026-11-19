@@ -306,25 +306,25 @@ export function useSegments() {
   }, [duration, userSplits]);
 
   /**
-   * Remove a segment boundary at the given time
-   * NOTE: This only removes user splits, never affects trim boundaries
-   * BUG FIX: Auto-clears trimRange if deleted boundary is referenced
+   * Remove a segment boundary at the given time. Returns true when a split was removed.
+   * NOTE: This only removes user splits, never affects trim boundaries.
+   * T17650 (owner ruling 2026-11-18): the split that IS a trim edge cannot be removed --
+   * the trim stays until the parent undoes it, so this never clears trimRange (the old
+   * auto-clear left the server holding a trim the screen had dropped).
    */
   const removeBoundary = useCallback((time) => {
-    if (!duration) return;
+    if (!duration) return false;
 
     // Can't remove start or end (they're implicit, not in userSplits)
-    if (time < 0.01 || Math.abs(time - duration) < 0.01) return;
+    if (time < 0.01 || Math.abs(time - duration) < 0.01) return false;
 
-    // Check if this boundary is referenced by trimRange
-    const isTrimBoundary = trimRange && (
+    const isTrimEdge = trimRange && (
       Math.abs(trimRange.start - time) < 0.01 ||
       Math.abs(trimRange.end - time) < 0.01
     );
-
-    if (isTrimBoundary) {
-      setTrimRange(null);
-      setTrimHistory([]); // BUG FIX: Also clear history when trimRange is cleared
+    if (isTrimEdge) {
+      console.error('[useSegments] removeBoundary refused: split is a trim edge (undo the trim instead):', time, trimRange);
+      return false;
     }
 
     // Locate the split being removed among the sorted splits. Its index k drives the
@@ -337,7 +337,7 @@ export function useSegments() {
       if (process.env.NODE_ENV === 'development') {
         console.warn('⚠️ INVARIANT WARNING: removeBoundary had no effect - boundary not found at time:', time);
       }
-      return;
+      return false;
     }
 
     setUserSplits(prev => prev.filter(s => Math.abs(s - time) > 0.01));
@@ -346,6 +346,7 @@ export function useSegments() {
     // split k merges segment k and segment k+1 into one segment at index k. Keep
     // unrelated speeds with shifted indices instead of dropping them.
     setSegmentSpeeds(prev => reindexSegmentSpeedsOnRemove(prev, k));
+    return true;
   }, [duration, trimRange, userSplits]);
 
   /**
@@ -844,7 +845,7 @@ export function useSegments() {
     reset,
     restoreState,        // Restore from saved state (for clip switching)
     addBoundary,         // Adds to userSplits
-    removeBoundary,      // Removes from userSplits (auto-clears trimRange if needed)
+    removeBoundary,      // Removes from userSplits; refuses a trim edge (T17650)
     setSegmentSpeed,
     toggleTrimSegment,   // Main trim operation
     trimStart,           // Explicit trim from start (pushes to history)
