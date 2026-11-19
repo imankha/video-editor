@@ -1,6 +1,6 @@
 # T17720: Staging check failed: T17650:C1 C1: The steps above allow deleting the split while keeping
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-19

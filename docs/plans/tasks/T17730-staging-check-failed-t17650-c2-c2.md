@@ -1,6 +1,6 @@
 # T17730: Staging check failed: T17650:C2 C2: The same interaction remains reachable on phone and tablet
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-19

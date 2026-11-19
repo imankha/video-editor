@@ -1,6 +1,6 @@
 # T17700: Sync cameras is hard to understand
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-18
