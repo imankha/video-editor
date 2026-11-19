@@ -2215,7 +2215,7 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
             logger.error(f"[extend_storage] refusing: game={game_id} request without request_id")
             raise HTTPException(
                 status_code=400,
-                detail={"code": "request_id_required", "error": "Extend request is missing its request_id."},
+                detail={"code": "request_id_required", "error": "Storage was not extended. Please try again."},
             )
 
         # T16690: profile-scoped like game_upload -- game ids repeat across profiles.
