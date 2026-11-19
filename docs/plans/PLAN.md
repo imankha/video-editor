@@ -179,6 +179,7 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17810 | [Staging check failed: T17780:C1 C1: A browser check at the stated real-touch sizes confirms](tasks/T17810-staging-check-failed-t17780-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 | T17820 | [Staging check failed: T17790:C1 C1: A browser check at the stated real-touch sizes confirms](tasks/T17820-staging-check-failed-t17790-c1-c1.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 | T17830 | [Staging check failed: T17790:C2 C2: The expanded hit areas do not overlap other controls](tasks/T17830-staging-check-failed-t17790-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
+| T17840 | [Old multi-play highlights say not supported](tasks/T17840-old-multi-play-highlights-say-not-supported.md) | 5 | 2 | 2.5 | WIP | [ ] | A parent opens Home and sees an old highlight made from several plays. It looks editable (In progress badge, pencil), but clicking it shows a long toast that vanishes in 5 seconds and says "Focus". Owner wants these to stay frozen but say so plainly. Done when the card says such highlights are no longer supported, looks read-only, and any toast is one short sentence. |
 
 ### Bugs found by /dotask verify
 
@@ -217,7 +218,7 @@ From the same review. Deletions come first, because less false code makes every 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T17840 | [Old multi-play highlights say not supported](tasks/T17840-old-multi-play-highlights-say-not-supported.md) | 5 | 2 | 2.5 | TODO | [ ] | A parent opens Home and sees an old highlight made from several plays. It looks editable (In progress badge, pencil), but clicking it shows a long toast that vanishes in 5 seconds and says "Focus". Owner wants these to stay frozen but say so plainly. Done when the card says such highlights are no longer supported, looks read-only, and any toast is one short sentence. |
+| T17850 | [Carousel edge cards hide play button](tasks/T17850-carousel-edge-cards-hide-play-button.md) | 5 | 2 | 2.5 | TODO | [ ] | A parent scrolls a game's highlights on Home. The cut-off cards at each end still show their play button, sitting right under the previous and next arrows, so the controls overlap. Done when edge cards show no play button and nothing overlaps the arrows. |
 
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
 
