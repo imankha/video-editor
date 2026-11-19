@@ -1,6 +1,6 @@
-# T17700: Line up is hard to understand
+# T17700: Sync cameras is hard to understand
 
-**Status:** TODO (UX design first, then owner approval)
+**Status:** TODO (design ruled by the owner 2026-11-18)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-18
@@ -35,6 +35,15 @@ Related: T17690 (switching source keeps the playhead; only covering videos choos
 ## Acceptance Criteria
 
 - [ ] C1: `T17700-design.md` exists with the UX expert's options, recommendation and mockups for phone and desktop, and the owner has approved it (recorded under `## Ruling`).
-- [ ] C2: A parent who has never used it can tell from the screen, before tapping, what Line up does and why their video might need it (checked against the approved design's wording).
+- [ ] C2: A parent who has never used it can tell from the screen, before tapping, what Sync does and why their video might need it (checked against the approved design's wording).
 - [ ] C3: The approved design is built at 390x844 and 1440x900; lining up a video still saves only on Done, and X still cancels.
 - [ ] C4: Existing Line up tests (`SourceBar.lineUp`, `FixTimingStrip`, `AngleLanes.fixTiming`) still pass or are updated to the approved behavior.
+
+## Ruling
+
+**Owner, 2026-11-18 (complete):**
+
+1. **Q1: Sync.** Drop the words "line up" everywhere in parent-facing copy. Parents read "line up" as a team lineup (think a baseball lineup). The control, panel and messages say Sync.
+2. **Parents are not asked to sync by ear.** Remove the listen-for-a-whistle instructions, the step numbering built around listening, and the "Heard it later? Tap Earlier" rule. Our technology tries to sync by sound when both videos have sound (T17710), and the parent drags (or nudges) the camera to adjust. Until T17710 ships, the panel is a plain drag/nudge adjustment: say what to do in terms of what the parent sees (make both cameras show the same moment), not what they hear.
+3. **Ideal:** the client analyses both waveforms and places the second camera at the best match as its starting position, which the parent then confirms or adjusts. The matcher must cope with microphones far apart across a field (sound arrives later at a far mic) and with a conversation or other noise right next to one mic. See T17710.
+4. **Q2 to Q6: approved as recommended.** Q2: "It comes after" is remembered on that device only. Q3: after "Starts here", X keeps the rough spot and the strip says so. Q4: only Done saves; letting go of a drag no longer saves for cameras. Q5: reordering videos uploaded in the wrong order is a separate task, only if a parent reports it. Q6: add 10-second steps.

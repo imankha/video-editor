@@ -1,6 +1,6 @@
 # T17700 Design: making "Line up" understandable
 
-**Status:** DRAFT, waiting on owner approval
+**Status:** RULED (2026-11-18): Q1 = Sync (no "line up" anywhere); parents are not asked to sync by ear. Everything in this doc about listening (Step 1 "Find a sound both cameras hear", the compare-by-ear caption, the "Heard it later? Tap Earlier" rule, the sound-based Done hint) is superseded; the panel becomes a drag/nudge adjustment phrased in what the parent sees, and automatic sound sync (T17710) gives the starting position. Q2 to Q6 approved as recommended. See the Ruling in T17700-line-up-hard-to-understand.md.
 **Author:** ui-designer agent, 2026-11-18
 **Task:** [T17700-line-up-hard-to-understand.md](T17700-line-up-hard-to-understand.md)
 

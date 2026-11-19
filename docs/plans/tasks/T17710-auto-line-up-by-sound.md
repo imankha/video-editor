@@ -1,6 +1,6 @@
-# T17710: Line up videos automatically by their sound
+# T17710: Sync videos automatically by their sound
 
-**Status:** TODO (future; not scheduled)
+**Status:** TODO (future; owner ruling 2026-11-18 sets the approach)
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-11-18
@@ -24,7 +24,17 @@ Not investigated. Placement write: `PATCH /api/games/{id}/videos/{seq}/placement
 
 ## Acceptance Criteria
 
-- [ ] C1: A prototype measures the offset on real pairs of game videos (two cameras, different phones, outdoor crowd noise) against a hand-lined-up truth, and reports accuracy (within 0.1 s?) and failure rate.
+- [ ] C1: A browser prototype measures the offset on real pairs of game videos against a hand-synced truth, including mics far apart on a field and a conversation close to one mic, and reports accuracy (within 0.1 s?), failure rate and time to compute for a 90-minute game.
 - [ ] C2: A design with the owner's approval picks where it runs, the confidence rule, and what the parent sees.
 - [ ] C3: Two overlapping videos with sound are lined up within the approved accuracy with no parent action, and the parent is told.
 - [ ] C4: A video without sound, or a weak match, is left to manual Line up with a clear message; nothing is moved silently.
+
+## Ruling
+
+**Owner, 2026-11-18:** parents are not asked to sync by ear (T17700). When both videos have sound, our technology tries to sync them, and the parent drags to adjust. Ideally the **client** (the parent's browser) analyses both waveforms and uses the best match as the second camera's **starting position**, which the parent then confirms or adjusts by dragging. The matcher must account for:
+
+- **Microphones far apart.** Two phones at opposite ends of a field hear the same whistle at different times (sound travels about 343 m per second, so 100 m adds about 0.3 s). The match is the offset that best explains the shared events, not a sample-exact identity; report it as an estimate the parent can adjust.
+- **Foreground sound at one mic.** A conversation, wind or a parent cheering right next to one phone is loud on that track only. Prefer events both mics hear (whistles, horns, crowd swells, ball strikes): for example, match on onset or energy envelopes in frequency bands where field sounds dominate rather than raw samples, weight by agreement across several windows of the game, and require a clear winner over the next-best offset.
+- **Confidence.** A weak or ambiguous match must not move the video silently: leave it where the clocks put it, tell the parent we could not sync by sound, and let them drag.
+
+Where it runs: client first (owner preference). A server or Modal fallback is a design question only if the prototype shows the browser cannot decode or process the audio fast enough (for example iPhone HEVC files in some browsers, see T17390).
