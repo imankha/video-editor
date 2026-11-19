@@ -1,6 +1,6 @@
 # T17700: Sync cameras is hard to understand
 
-**Status:** TODO (design ruled by the owner 2026-11-18)
+**Status:** TODO
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-11-18
