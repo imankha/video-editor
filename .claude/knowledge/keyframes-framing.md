@@ -1298,6 +1298,11 @@ keyframed** — camera tilt is constant for a recording.
   MAX_ROT range).
 
 ## Landmines & history
+- **A browser check that needs Frame's player must pick its play with `framePlayPath`
+  (`e2e/helpers/frameVideoCheck.js`), never "first /projects entry with a clip" (T17720/T17730,
+  2026-11-19).** On staging the e2e-gate account's listed projects sat on a game still uploading
+  (playback-url 409), so Frame showed "Game video still uploading" and the readyState poll timed out
+  at 90 s. The T17650 trim/split scenario lives in `e2e/helpers/trimSplitScenario.js`.
 - **Focus has NO working blob-playback path for a freshly-uploaded clip (T7280 finding,
   2026-08-20 — task abandoned mid-implementation, capturing for whoever revisits this via
   the Game Pools epic).** `getClipVideoConfig` (FocusScreen.jsx ~L416-456) resolves a game
