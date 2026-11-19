@@ -181,6 +181,7 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17830 | [Staging check failed: T17790:C2 C2: The expanded hit areas do not overlap other controls](tasks/T17830-staging-check-failed-t17790-c2-c2.md) | 5 | 3 | 1.7 | WIP | [ ] | Filed by /dotask staging check. |
 | T17840 | [Old multi-play highlights say not supported](tasks/T17840-old-multi-play-highlights-say-not-supported.md) | 5 | 2 | 2.5 | WIP | [ ] | A parent opens Home and sees an old highlight made from several plays. It looks editable (In progress badge, pencil), but clicking it shows a long toast that vanishes in 5 seconds and says "Focus". Owner wants these to stay frozen but say so plainly. Done when the card says such highlights are no longer supported, looks read-only, and any toast is one short sentence. |
 | T17850 | [Carousel edge cards hide play button](tasks/T17850-carousel-edge-cards-hide-play-button.md) | 5 | 2 | 2.5 | WIP | [ ] | A parent scrolls a game's highlights on Home. The cut-off cards at each end still show their play button, sitting right under the previous and next arrows, so the controls overlap. Done when edge cards show no play button and nothing overlaps the arrows. |
+| T17860 | [Trim button shows open state](tasks/T17860-trim-button-shows-open-state.md) | 5 | 2 | 2.5 | WIP | [ ] | A parent taps Trim and slow motion in Frame. The track opens but the button looks the same, and tapping it again closes the track with no sign it would. Done when the open button reads Done trimming with a check and a pressed look, and Preview shows the same pressed look. |
 
 ### Bugs found by /dotask verify
 
@@ -219,7 +220,7 @@ From the same review. Deletions come first, because less false code makes every 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T17860 | [Trim button shows open state](tasks/T17860-trim-button-shows-open-state.md) | 5 | 2 | 2.5 | TODO | [ ] | A parent taps Trim and slow motion in Frame. The track opens but the button looks the same, and tapping it again closes the track with no sign it would. Done when the open button reads Done trimming with a check and a pressed look, and Preview shows the same pressed look. |
+| T17870 | [Frame settings show all options](tasks/T17870-frame-settings-show-all-options.md) | 4 | 1 | 4.0 | TODO | [ ] | A parent opens Settings in Frame on a computer. Two of its four settings, Fix a tilted camera and Darken outside the box, hide behind a More options link although the panel is mostly empty. Done when both show directly and More options is gone; phones unchanged. |
 
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
 
