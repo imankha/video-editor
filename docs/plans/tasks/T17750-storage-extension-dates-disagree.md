@@ -1,6 +1,6 @@
 # T17750: Storage extension dates disagree
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-18

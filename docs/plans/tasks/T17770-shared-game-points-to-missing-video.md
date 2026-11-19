@@ -1,6 +1,6 @@
 # T17770: Shared game video is missing
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-18

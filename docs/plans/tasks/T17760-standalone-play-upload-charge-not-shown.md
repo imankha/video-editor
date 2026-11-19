@@ -1,6 +1,6 @@
 # T17760: Uploaded plays charge without a price
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-11-18

@@ -1,6 +1,6 @@
 # T17740: Shared Download opens another video
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-18

@@ -1,6 +1,6 @@
 # T17780: Spotlight text deletion is tiny
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-18
