@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "T17680:C1": {"kind": "browser"},
+    "T17680:C2": {"kind": "browser"},
+    "T17680:C3": {"kind": "browser"},
+    "T17680:C4": {"kind": "code", "command": "f=src/frontend/src/components/ManageProfilesModal.jsx; grep -q 'createPortal(' $f && grep -q '${Z.MODAL}' $f && ! grep -E 'className=.*[ \"{`]z-(\\[|[0-9])' $f"}
+  }
+}

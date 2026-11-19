@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Pencil, Trash2, ArrowLeft, Check, ShieldCheck } from 'lucide-react';
 import { Button, ConfirmationDialog, InlineSportSelect } from './shared';
 import { Z } from '../constants/zLayers';
@@ -290,7 +291,12 @@ export function ManageProfilesModal({ isOpen, onClose }) {
   const guide = resolveGuide({ screen: 'modal', local: { modal: 'profiles', mode } });
   const guideEl = <Guide guide={guide} inline testId="modal-guide" />;
 
-  return (
+  // T17680: portaled to document.body. ProfileSportButton mounts this modal inside
+  // ProjectManager's `fixed top-4 right-4 z-30` header cluster, so rendered inline its
+  // Z.MODAL is capped at that cluster's z-30, and the Home highlight tiles' z-30
+  // Play/Share buttons (later in the DOM) painted and took taps above the dialog.
+  // Same trap IntroCardsModal escaped in T6600.
+  return createPortal(
     <div
       className={`fixed inset-0 bg-black/70 flex items-center justify-center ${Z.MODAL}`}
     >
@@ -484,6 +490,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
           { label: PROFILE_COPY.DELETE, onClick: handleDeleteProfile, variant: 'danger' },
         ]}
       />
-    </div>
+    </div>,
+    document.body,
   );
 }
