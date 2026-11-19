@@ -180,9 +180,10 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17820 | [Staging check failed: T17790:C1 C1: A browser check at the stated real-touch sizes confirms](tasks/T17820-staging-check-failed-t17790-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17830 | [Staging check failed: T17790:C2 C2: The expanded hit areas do not overlap other controls](tasks/T17830-staging-check-failed-t17790-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17840 | [Old multi-play highlights say not supported](tasks/T17840-old-multi-play-highlights-say-not-supported.md) | 5 | 2 | 2.5 | WIP | [ ] | A parent opens Home and sees an old highlight made from several plays. It looks editable (In progress badge, pencil), but clicking it shows a long toast that vanishes in 5 seconds and says "Focus". Owner wants these to stay frozen but say so plainly. Done when the card says such highlights are no longer supported, looks read-only, and any toast is one short sentence. |
-| T17850 | [Carousel edge cards hide play button](tasks/T17850-carousel-edge-cards-hide-play-button.md) | 5 | 2 | 2.5 | WIP | [ ] | A parent scrolls a game's highlights on Home. The cut-off cards at each end still show their play button, sitting right under the previous and next arrows, so the controls overlap. Done when edge cards show no play button and nothing overlaps the arrows. |
+| T17850 | [Carousel edge cards hide play button](tasks/T17850-carousel-edge-cards-hide-play-button.md) | 5 | 2 | 2.5 | STAGING | [ ] | A parent scrolls a game's highlights on Home. The cut-off cards at each end still show their play button, sitting right under the previous and next arrows, so the controls overlap. Done when edge cards show no play button and nothing overlaps the arrows. |
 | T17860 | [Trim button shows open state](tasks/T17860-trim-button-shows-open-state.md) | 5 | 2 | 2.5 | WIP | [ ] | A parent taps Trim and slow motion in Frame. The track opens but the button looks the same, and tapping it again closes the track with no sign it would. Done when the open button reads Done trimming with a check and a pressed look, and Preview shows the same pressed look. |
 | T17870 | [Frame settings show all options](tasks/T17870-frame-settings-show-all-options.md) | 4 | 1 | 4.0 | WIP | [ ] | A parent opens Settings in Frame on a computer. Two of its four settings, Fix a tilted camera and Darken outside the box, hide behind a More options link although the panel is mostly empty. Done when Fix a tilted camera shows directly, More options is gone, and Darken outside the box is removed (Preview replaces it); phones unchanged. |
+| T17880 | [Spotlight check spends gate credits](tasks/T17880-spotlight-check-spends-gate-credits.md) | 4 | 2 | 2.0 | WIP | [ ] | The staging check for the Spotlight delete button has never run: the test account has no sharpened project, so the check sharpens one itself, spending real credits each time. It has now run out (needs 8, has 7) and stops at Buy credits. Done when the check runs on staging without spending credits and passes twice in a row. |
 
 ### Bugs found by /dotask verify
 
@@ -221,7 +222,6 @@ From the same review. Deletions come first, because less false code makes every 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T17880 | [Spotlight check spends gate credits](tasks/T17880-spotlight-check-spends-gate-credits.md) | 4 | 2 | 2.0 | TODO | [ ] | The staging check for the Spotlight delete button has never run: the test account has no sharpened project, so the check sharpens one itself, spending real credits each time. It has now run out (needs 8, has 7) and stops at Buy credits. Done when the check runs on staging without spending credits and passes twice in a row. |
 
 ### Full QA pass 2026-11-17: bugs and possible bugs (owner-requested, BUGS FIRST)
 

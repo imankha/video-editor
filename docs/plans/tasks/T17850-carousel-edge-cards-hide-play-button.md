@@ -1,6 +1,6 @@
 # T17850: Carousel edge cards hide their play button under the arrows
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-19
