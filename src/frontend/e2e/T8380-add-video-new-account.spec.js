@@ -149,6 +149,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
+    await page.getByTestId('clip-upload-cost-confirm').click(); // T17760 price confirm
 
     // The uploading rail appears while the file lands in R2 + registers.
     await expect(page.getByTestId('clip-uploading-rail')).toBeVisible({ timeout: 15000 });
@@ -189,6 +190,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
+    await page.getByTestId('clip-upload-cost-confirm').click(); // T17760 price confirm
 
     // AC: "Upload failures surface the standard Retry UX, never a silent loss".
     const rail = page.getByTestId('clip-uploading-rail');
