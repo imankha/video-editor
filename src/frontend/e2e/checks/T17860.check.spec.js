@@ -100,10 +100,16 @@ test.describe('at 1440 wide', () => {
       const [clip] = await res.json();
       return JSON.stringify(clip.segments_data ?? null);
     };
+    // The highlight's output length (post-trim, post-speed) as the Frame page shows it.
+    const lengthChip = page.getByTestId('output-length-chip').locator('visible=true').first();
+    const highlightLength = async () => (await lengthChip.textContent()).trim();
+    const slowSpeed = page.getByTestId('speed-track').getByText('0.5x slow motion');
     await openFrame(page, framePath);
     await trimButton(page).click();
     await expectOpen(page);
     await resetClip(page);
+    const normalSpeed = page.getByTestId('speed-track').locator('button[title^="Set speed to 1x"]');
+    while (await normalSpeed.count()) await pressAndSave(page, normalSpeed.first(), ['set_segment_speed']);
 
     // Edits while open: split, then trim the last section (shortens the highlight).
     await splitAt(page, 0.5);
@@ -111,8 +117,15 @@ test.describe('at 1440 wide', () => {
     await expect(trimSection).toHaveCount(2, { timeout: 30000 });
     await pressAndSave(page, trimSection.last(), ['set_trim_range']);
     await expect(page.locator('button[title^="Undo end trim"]')).toHaveCount(1, { timeout: 30000 });
+    // ...and slow the first section to 0.5x (lengthens the highlight).
+    const trimmedLength = await highlightLength();
+    await pressAndSave(page, page.getByTestId('speed-track').locator('button[title="Set speed to 0.5x"]').first(), ['set_segment_speed']);
+    await expect(slowSpeed).toHaveCount(1, { timeout: 30000 });
+    await expect.poll(highlightLength, { message: 'the 0.5x section lengthens the highlight', timeout: 10000 }).not.toBe(trimmedLength);
     await page.waitForTimeout(1500);
     const edited = await clipSegments();
+    const editedLength = await highlightLength();
+    expect(Object.values(JSON.parse(edited)?.segmentSpeeds ?? {}), 'the server holds the 0.5x speed').toContain(0.5);
 
     // Closing is not an edit: no save is sent and the track hides.
     const saves = [];
@@ -122,12 +135,16 @@ test.describe('at 1440 wide', () => {
     await expectClosed(page);
     await page.waitForTimeout(2000);
     expect(saves, 'closing the track sends no save').toEqual([]);
-    expect(await clipSegments(), 'the trim and split are unchanged by closing').toBe(edited);
+    expect(await clipSegments(), 'the trim, split and speed are unchanged by closing').toBe(edited);
+    expect(await highlightLength(), 'the highlight length is unchanged by closing').toBe(editedLength);
 
     // Reopening shows the same trim still applied.
     await trimButton(page).click();
     await expectOpen(page);
     await expect(page.locator('button[title^="Undo end trim"]')).toHaveCount(1, { timeout: 30000 });
+    await expect(slowSpeed, 'the 0.5x speed is still applied after reopening').toHaveCount(1);
+    expect(await highlightLength()).toBe(editedLength);
+    await pressAndSave(page, normalSpeed.first(), ['set_segment_speed']);
     await resetClip(page);
   });
 
