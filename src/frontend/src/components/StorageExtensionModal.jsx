@@ -68,11 +68,14 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
 
   const extendStorage = useCallback(async () => {
     setIsExtending(true);
+    // T17670: one id per tap; the server charges once per id, so a resend of this
+    // request (network or browser retry) can't charge twice.
+    const requestId = crypto.randomUUID();
     try {
       const res = await apiFetch(`${API_BASE}/api/games/${game.id}/extend-storage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ days: extensionDays }),
+        body: JSON.stringify({ days: extensionDays, request_id: requestId }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

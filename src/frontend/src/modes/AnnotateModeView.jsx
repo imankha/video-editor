@@ -1377,14 +1377,15 @@ export function AnnotateModeView({
 
           {/* T15370: the source chip's "Videos" sheet -- holds the existing
               SourceBar verbatim (it owns its own expand/pick state). Closes
-              on a pick so the chip doubles as its own toggle. */}
+              on a pick so the chip doubles as its own toggle; stays open on a
+              refused tap (T17690) so the reason shows next to the video. */}
           {mobileFsLandscape && videosSheetOpen && sourceBar && (
             <AnnotateSideSheet>
               <div className="p-2">
                 <h2 className="px-1 pb-2 text-sm font-semibold text-gray-100">{ANNOTATE_COCKPIT.SHEET_VIDEOS}</h2>
                 <SourceBar
                   {...sourceBar}
-                  onPick={(seq) => { sourceBar.onPick?.(seq); setVideosSheetOpen(false); }}
+                  onPick={(seq) => { if (sourceBar.onPick?.(seq)) setVideosSheetOpen(false); }}
                 />
               </div>
             </AnnotateSideSheet>

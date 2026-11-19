@@ -42,6 +42,10 @@ export const ANNOTATE = {
   nowWatching: (name) => `Now watching ${name}`,
   jumpToVideoTitle: (name) => `Jump to the start of ${name}`,
   switchHereTitle: (name) => `Switch to ${name} here`,
+  // T17690 (owner rule 2026-11-18): only a video covering the playhead can be
+  // chosen in the Videos bar, so a switch never moves the playhead.
+  notCoveringTitle: (name) => `${name} doesn't cover this part of the game. Move the playhead into it to switch to it`,
+  notCoveringNotice: (name) => `${name} doesn't cover this part of the game`,
   // T17700 (owner ruling 2026-11-18): the control is Sync. Parents read "line up" as a
   // team lineup, and they are never asked to sync by ear: every line says what they SEE.
   SYNC: 'Sync',
@@ -77,7 +81,7 @@ export const ANNOTATE = {
   // Shown (in the Videos bar's notice slot) when a video is picked while Sync is
   // open: picking would seek the COMMITTED timeline, i.e. the video's old spot.
   FINISH_FIX_TIMING_FIRST: 'Finish syncing first: tap Done to keep it, or X to undo it.',
-  VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cameras filmed at the same time, tapping switches cameras without moving.',
+  VIDEOS_HELP: 'The videos in this game. Where two cameras filmed at the same time, tapping one switches cameras without moving. A video that doesn\'t cover this part of the game can\'t be chosen.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',
   MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a moment worth keeping.', // N04/T11850 mode-switcher help

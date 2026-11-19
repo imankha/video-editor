@@ -15,7 +15,6 @@ This router handles game storage and management:
 import asyncio
 import json
 import logging
-import uuid
 from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
@@ -2138,6 +2137,32 @@ async def get_brilliant_clips(game_id: int):
 
 class ExtendStorageRequest(BaseModel):
     days: int = Field(..., ge=1, le=365)
+    # T17670: one id per Extend tap (StorageExtensionModal). A resend of the same tap
+    # replays its debit; optional here only so a missing id gets a clear 400, not a 422.
+    request_id: str | None = Field(None, max_length=64)
+
+
+def _replayed_extension(user_id, profile_id, game_id, request, game_video_rows, cost, result) -> dict:
+    expiries = []
+    for vr in game_video_rows:
+        ref = get_game_storage_ref(user_id, profile_id, vr["blake3_hash"])
+        if ref:
+            exp = ref["storage_expires_at"]
+            exp = exp if isinstance(exp, datetime) else datetime.fromisoformat(exp)
+            expiries.append(exp.replace(tzinfo=None))
+    if not expiries:
+        logger.critical(
+            f"[extend_storage] game={game_id} request_id={request.request_id} was charged "
+            f"but wrote no storage ref"
+        )
+        raise HTTPException(status_code=500, detail={"code": "extension_ref_missing"})
+    logger.info(f"[extend_storage] game={game_id} request_id={request.request_id} replayed, not re-extended")
+    return {
+        "success": True,
+        "new_expires_at": max(expiries).isoformat(),
+        "cost_credits": cost,
+        "new_balance": result["balance"],
+    }
 
 
 @router.post("/{game_id:int}/extend-storage")
@@ -2186,11 +2211,17 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
         game_size = game['video_size'] or 0
         cost = calculate_extension_cost(game_size, request.days)
 
+        if not request.request_id:
+            logger.error(f"[extend_storage] refusing: game={game_id} request without request_id")
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "request_id_required", "error": "Storage was not extended. Please try again."},
+            )
+
         # T16690: profile-scoped like game_upload -- game ids repeat across profiles.
-        # T17620: each extension is its own debit. The ledger key used to end at the
-        # second, so a second extension in the same second replayed the first debit
-        # (no charge) and still extended storage.
-        ext_ref = f"{profile_id}:{game_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        # T17670: keyed by the client's per-tap request id, so a resend of one tap
+        # replays its debit (applied=False) and a new tap is a new charge (T17620).
+        ext_ref = f"{profile_id}:{game_id}_{request.request_id}"
         try:
             result = deduct_credits(user_id, cost, source="storage_extension", reference_id=ext_ref)
         except CreditsUnavailable:
@@ -2213,6 +2244,10 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
             base = max(exp_dt.replace(tzinfo=None), datetime.utcnow())
         else:
             base = datetime.utcnow()
+        if not result["applied"]:
+            # A resend of a tap already charged and extended: report what that tap
+            # wrote (the refs below), don't extend again.
+            return _replayed_extension(user_id, profile_id, game_id, request, game_video_rows, cost, result)
         new_expiry = storage_expires_at(from_dt=base, days=request.days)
         new_expiry_str = new_expiry.isoformat()
 

@@ -1,8 +1,9 @@
 /**
  * T8910: attachVideoToExistingGame generalized from a single File to a list of
  * {file, recorded_at} entries (add footage from inside Annotate). This pins the
- * ATTACH PAYLOAD SHAPE: N sequential POSTs to /api/games/{id}/videos, each
- * carrying its own recorded_at + original_filename, server-assigned sequence
+ * ATTACH PAYLOAD SHAPE: ONE POST to /api/games/{id}/videos carrying every
+ * videoRef (T17660: the endpoint charges per request), each with its own
+ * recorded_at + original_filename, server-assigned sequence
  * (omitted client-side), plus "Video {i} of {n}" progress labels. Backward
  * compatibility with the bare-File call (T8700's AttachVideoModal) is also pinned.
  */
@@ -93,7 +94,7 @@ describe('attachVideoToExistingGame — T8910 multi-file payload', () => {
   });
   afterEach(() => { globalThis.URL = originalURL; });
 
-  it('POSTs one videoRef per file, each with its recorded_at + original_filename, no client sequence', async () => {
+  it('POSTs every videoRef in one request, each with its recorded_at + original_filename, no client sequence', async () => {
     const { attachVideoToExistingGame } = await import('./uploadManager');
     const files = [
       { file: new File(['a'], 'first.mp4', { type: 'video/mp4' }), recorded_at: '2026-07-18T18:00:00Z' },
@@ -102,15 +103,15 @@ describe('attachVideoToExistingGame — T8910 multi-file payload', () => {
     await attachVideoToExistingGame(42, files, () => {});
 
     const bodies = postedVideoBodies();
-    expect(bodies).toHaveLength(2);
-    // Each POST carries exactly one videoRef (append-only, one at a time).
-    expect(bodies[0].videos).toHaveLength(1);
+    expect(bodies).toHaveLength(1);
+    // One POST carries both videoRefs, in selection order.
+    expect(bodies[0].videos).toHaveLength(2);
     expect(bodies[0].videos[0].recorded_at).toBe('2026-07-18T18:00:00Z');
     expect(bodies[0].videos[0].original_filename).toBe('first.mp4');
     expect(bodies[0].videos[0].sequence).toBeUndefined(); // server assigns it
-    expect(bodies[1].videos[0].recorded_at).toBeNull();
-    expect(bodies[1].videos[0].original_filename).toBe('second.mp4');
-  });
+    expect(bodies[0].videos[1].recorded_at).toBeNull();
+    expect(bodies[0].videos[1].original_filename).toBe('second.mp4');
+  }, 30000); // the first hash-wasm init in a file can take several seconds
 
   it('emits "Video {i} of {n}" progress labels for a multi-file attach', async () => {
     const { attachVideoToExistingGame } = await import('./uploadManager');

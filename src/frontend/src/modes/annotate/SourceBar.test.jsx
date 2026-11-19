@@ -47,21 +47,22 @@ describe('SourceBar (T13280)', () => {
     expect(grid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
   });
 
-  it('every video stays reachable collapsed or expanded: tapping a segment, including the active one, calls onPick', () => {
+  it('every video stays listed: tapping a segment, including a disabled one and the active one, calls onPick', () => {
     const onPick = vi.fn();
     render(<SourceBar videos={sequential} activeSequence={2} index={2} count={2} onPick={onPick} />);
     fireEvent.click(screen.getByTestId('source-trigger'));
+    // T17690: a refused (disabled) tap still reaches the container, which answers with
+    // the reason, and leaves the bar expanded so the reason shows next to the video.
     fireEvent.click(screen.getByTestId('source-seg-1'));
-    fireEvent.click(screen.getByTestId('source-trigger')); // picking re-collapses; expand again
     fireEvent.click(screen.getByTestId('source-seg-2'));
     expect(onPick.mock.calls.map((c) => c[0])).toEqual([1, 2]);
   });
 
-  it('picking a segment collapses the bar back to compact', () => {
+  it('picking a choosable segment collapses the bar back to compact', () => {
     render(<SourceBar videos={sequential} activeSequence={2} index={2} count={2} />);
     fireEvent.click(screen.getByTestId('source-trigger'));
     expect(screen.getByTestId('source-seg-1')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('source-seg-1'));
+    fireEvent.click(screen.getByTestId('source-seg-2'));
     expect(screen.queryByTestId('source-seg-1')).toBeNull();
     expect(screen.getByTestId('source-trigger')).toBeTruthy();
   });
@@ -149,13 +150,15 @@ describe('SourceBar (T13280)', () => {
     render(<SourceBar videos={four} activeSequence={3} index={3} count={4} onPick={onPick} onFixTiming={onFixTiming} />);
     expect(screen.queryByTestId('source-seg-1')).toBeNull();
     expect(screen.getByTestId('source-readout').textContent).toBe('Watching Second half');
-    fireEvent.click(screen.getByTestId('source-prev'));
-    expect(onPick).toHaveBeenLastCalledWith(2);
+    // T17690: prev/next step only to a video covering the playhead (2 and 1 don't).
+    expect(screen.getByTestId('source-prev').hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByTestId('source-next'));
     expect(onPick).toHaveBeenLastCalledWith(4);
     fireEvent.click(screen.getByTestId('source-trigger'));
     expect(screen.getByTestId('source-list')).toBeTruthy();
     expect(screen.getByTestId('source-swap-4')).toBeTruthy();
+    expect(screen.getByTestId('source-seg-1').getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByTestId('source-seg-4').getAttribute('aria-disabled')).toBe('false');
     fireEvent.click(screen.getByTestId('source-fix-timing-4'));
     expect(onFixTiming).toHaveBeenCalledWith(4);
     expect(screen.queryByTestId('source-list')).toBeNull();
@@ -174,5 +177,39 @@ describe('SourceBar (T13280)', () => {
     expect(screen.queryByTestId('source-fix-timing-3')).toBeNull();
     expect(screen.queryByTestId('source-fix-timing-1')).toBeNull();
     expect(screen.getByTestId('source-fix-timing-4').textContent).toBe('Sync Sideline with IMG_4412');
+  });
+});
+
+// T17690 (owner rule 2026-11-18): only a video covering the playhead moment can be
+// chosen, so a switch never moves the playhead.
+describe('SourceBar (T17690) only covering videos are choosable', () => {
+  const angleOutside = [
+    { sequence: 1, name: 'Main camera', kind: 'main', virtualStart: 0, virtualEnd: 60, placedAtEnd: false, coversPlayhead: true },
+    { sequence: 2, name: 'Sideline', kind: 'angle', virtualStart: 20, virtualEnd: 50, placedAtEnd: false, coversPlayhead: false },
+  ];
+
+  it('a video not covering the playhead is visibly disabled with the reason; the active one is not', () => {
+    render(<SourceBar videos={angleOutside} activeSequence={1} index={1} count={2} />);
+    fireEvent.click(screen.getByTestId('source-trigger'));
+    const seg = screen.getByTestId('source-seg-2');
+    expect(seg.getAttribute('aria-disabled')).toBe('true');
+    expect(seg.className).toContain('opacity-40');
+    expect(seg.getAttribute('title')).toBe("Sideline doesn't cover this part of the game. Move the playhead into it to switch to it");
+    expect(screen.queryByTestId('source-swap-2')).toBeNull();
+    const active = screen.getByTestId('source-seg-1');
+    expect(active.getAttribute('aria-disabled')).toBe('false');
+    expect(active.className).not.toContain('opacity-40');
+  });
+
+  it('becomes choosable as soon as the playhead moves into its span', () => {
+    const { rerender } = render(<SourceBar videos={angleOutside} activeSequence={1} index={1} count={2} />);
+    fireEvent.click(screen.getByTestId('source-trigger'));
+    expect(screen.getByTestId('source-seg-2').getAttribute('aria-disabled')).toBe('true');
+    const inside = angleOutside.map((v) => ({ ...v, coversPlayhead: true }));
+    rerender(<SourceBar videos={inside} activeSequence={1} index={1} count={2} />);
+    const seg = screen.getByTestId('source-seg-2');
+    expect(seg.getAttribute('aria-disabled')).toBe('false');
+    expect(seg.className).not.toContain('opacity-40');
+    expect(seg.getAttribute('title')).toMatch(/switch to sideline here/i);
   });
 });

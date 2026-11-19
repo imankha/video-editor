@@ -16,8 +16,10 @@ import { syncTargetFor } from './syncCameras';
  *    stays out of the way when nothing is happening right now. It EXPANDS into one
  *    segment per video -- the one playing filled (blue = main footage, violet = an
  *    angle, the T8890 meanings), a non-active segment covering the playhead carrying
- *    the swap glyph (tap switches cameras in place), any other segment jumping to that
- *    video's start -- automatically whenever a genuine conflict exists at the playhead
+ *    the swap glyph (tap switches cameras in place), any other segment disabled with
+ *    the reason (T17690 owner rule: only a video covering the playhead moment can be
+ *    chosen, so a switch never moves the playhead; it becomes choosable again once the
+ *    playhead is inside it) -- automatically whenever a genuine conflict exists at the playhead
  *    (another source covers this exact moment), or manually via the trigger. Every
  *    video stays reachable at all times either way: collapsing never removes a video
  *    from the switcher, it only hides the always-visible picker when there is nothing
@@ -29,8 +31,9 @@ import { syncTargetFor } from './syncCameras';
  *
  * Feedback contract: the container answers EVERY tap (including one on the already
  * active video) with `notice` ("Now watching {name}", ~1.5s) and a pulse on the tapped
- * segment, so no tap is silent. The same notice slot shows "Back to main camera" on
- * auto-fallback. Nothing here writes: picks are seeks or camera switches.
+ * segment, so no tap is silent; a tap on a disabled video still reaches `onPick`, and
+ * the container answers it with the reason instead. The same notice slot shows "Back
+ * to main camera" on auto-fallback. Nothing here writes: picks are camera switches.
  */
 
 // Up to this many videos every one is a segment; beyond it the row becomes a trigger
@@ -54,12 +57,20 @@ function SourceIcon({ video, size = 12 }) {
   return <Film size={size} className="shrink-0" />;
 }
 
-function segmentTitle(video, isActive) {
-  if (video.placedAtEnd && !isActive) return ANNOTATE.appendedFootageTitle(video.name);
-  return video.coversPlayhead && !isActive
-    ? ANNOTATE.switchHereTitle(video.name)
-    : ANNOTATE.jumpToVideoTitle(video.name);
+// T17690: a video can be chosen only while it covers the playhead (the active one
+// always does).
+function isChoosable(video, isActive) {
+  return isActive || video.coversPlayhead;
 }
+
+function segmentTitle(video, isActive) {
+  if (isActive) return ANNOTATE.watchingSource(video.name);
+  return video.coversPlayhead
+    ? ANNOTATE.switchHereTitle(video.name)
+    : ANNOTATE.notCoveringTitle(video.name);
+}
+
+const UNAVAILABLE_CLASS = 'opacity-40 cursor-not-allowed';
 
 export default function SourceBar({
   videos = [],
@@ -108,10 +119,17 @@ export default function SourceBar({
   const mainName = videos.find((v) => v.kind === 'main')?.name ?? ANNOTATE.MAIN_CAMERA;
 
   const pick = (seq) => {
-    setOpen(false);
-    setUserExpanded(false);
+    const v = videos.find((x) => x.sequence === seq);
+    // A disabled video's tap keeps the bar as it is (so the reason shows next to it).
+    if (isChoosable(v, seq === active.sequence)) {
+      setOpen(false);
+      setUserExpanded(false);
+    }
     onPick?.(seq);
   };
+  // 4+ prev/next step to the nearest choosable video on that side.
+  const prevChoosable = videos.slice(0, activeIdx).reverse().find((v) => v.coversPlayhead);
+  const nextChoosable = videos.slice(activeIdx + 1).find((v) => v.coversPlayhead);
 
   // T13280 follow-up: a genuine conflict exists right now -- another source covers
   // this exact moment, so there IS something to switch to in place. Forces the 2-3
@@ -148,6 +166,7 @@ export default function SourceBar({
   const renderSegment = (v) => {
     const isActive = v.sequence === active.sequence;
     const isPulsing = v.sequence === pulseSequence;
+    const choosable = isChoosable(v, isActive);
     return (
       <button
         // The nonce in the key re-mounts a re-tapped segment so the pulse restarts.
@@ -156,9 +175,10 @@ export default function SourceBar({
         data-testid={`source-seg-${v.sequence}`}
         data-kind={v.kind}
         aria-pressed={isActive}
+        aria-disabled={!choosable}
         title={segmentTitle(v, isActive)}
         onClick={() => pick(v.sequence)}
-        className={`flex items-center justify-center gap-1 px-2 min-w-0 min-h-[32px] coarse-pointer:min-h-[44px] rounded text-xs font-medium transition-colors ${segmentClasses(v.kind, isActive)} ${isPulsing ? PULSE_CLASS : ''}`}
+        className={`flex items-center justify-center gap-1 px-2 min-w-0 min-h-[32px] coarse-pointer:min-h-[44px] rounded text-xs font-medium transition-colors ${segmentClasses(v.kind, isActive)} ${choosable ? '' : UNAVAILABLE_CLASS} ${isPulsing ? PULSE_CLASS : ''}`}
       >
         <SourceIcon video={v} />
         <span className="truncate">{v.name}</span>
@@ -251,8 +271,8 @@ export default function SourceBar({
         data-testid="source-prev"
         aria-label={ANNOTATE.PREV_VIDEO}
         title={ANNOTATE.PREV_VIDEO}
-        disabled={activeIdx <= 0}
-        onClick={() => pick(videos[activeIdx - 1].sequence)}
+        disabled={!prevChoosable}
+        onClick={() => pick(prevChoosable.sequence)}
         className={navClass}
       >
         <ChevronLeft size={16} />
@@ -277,8 +297,8 @@ export default function SourceBar({
         data-testid="source-next"
         aria-label={ANNOTATE.NEXT_VIDEO}
         title={ANNOTATE.NEXT_VIDEO}
-        disabled={activeIdx >= videos.length - 1}
-        onClick={() => pick(videos[activeIdx + 1].sequence)}
+        disabled={!nextChoosable}
+        onClick={() => pick(nextChoosable.sequence)}
         className={navClass}
       >
         <ChevronRight size={16} />
@@ -296,12 +316,14 @@ export default function SourceBar({
         >
           {videos.map((v) => {
             const isActive = v.sequence === active.sequence;
+            const choosable = isChoosable(v, isActive);
             return (
               <button
                 key={v.sequence}
                 type="button"
                 role="option"
                 aria-selected={isActive}
+                aria-disabled={!choosable}
                 data-testid={`source-seg-${v.sequence}`}
                 data-kind={v.kind}
                 title={segmentTitle(v, isActive)}
@@ -310,7 +332,7 @@ export default function SourceBar({
                   isActive
                     ? (v.kind === 'angle' ? 'bg-violet-600 text-white' : 'bg-blue-600 text-white')
                     : (v.kind === 'angle' ? 'text-violet-200 hover:bg-gray-800' : 'text-blue-100 hover:bg-gray-800')
-                }`}
+                } ${choosable ? '' : UNAVAILABLE_CLASS}`}
               >
                 <SourceIcon video={v} />
                 <span className="truncate">{v.name}</span>
