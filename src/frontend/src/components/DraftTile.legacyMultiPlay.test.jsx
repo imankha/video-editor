@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // jsdom lacks matchMedia. DraftTile's reveal mechanism runs through the REAL
@@ -127,6 +127,14 @@ describe('T17840 old multi-play highlight card', () => {
     renderTile({ clip_count: 3, has_final_video: true, is_published: true, final_video_id: 42 });
     fireEvent.click(screen.getByTitle(RESULT_SURFACE.WATCH_HIGHLIGHT));
     expect(openFinishedReel).toHaveBeenCalledTimes(1);
+  });
+
+  it('C3: a finished multi-play highlight keeps Download in its menu', async () => {
+    downloadsApi.downloadFile.mockClear();
+    renderTile({ clip_count: 3, has_final_video: true, is_published: false, final_video_id: 42 });
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download' })); });
+    expect(downloadsApi.downloadFile).toHaveBeenCalledWith(42);
   });
 
   it('C3: a single-play draft keeps its "In progress" badge and pencil exactly as before', () => {
