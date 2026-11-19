@@ -27,13 +27,15 @@ async function apiJson(page, apiPath) {
 // A play Frame can load: its playback-url answers 200 (a play on a game still uploading 409s
 // and one whose game footage is gone 410s; Frame then shows a panel, never a <video>). The
 // /projects list leaves out finished highlights, so candidates come from every play's
-// highlight. A play on an expired game comes first: Frame then plays its saved clip.
+// highlight. A play on an expired game comes first (Frame then plays its saved clip) unless
+// preferExpired is false (T17720: the trim scenario edits the play on live game footage).
 // API calls only before the first navigation (T16100).
-async function framePlayPath(page) {
+export async function framePlayPath(page, { preferExpired = true } = {}) {
   const games = await apiJson(page, '/games');
   const gameStatus = new Map((Array.isArray(games) ? games : games.games).map((g) => [g.id, g.storage_status]));
   const plays = (await apiJson(page, '/clips/raw')).filter((c) => c.auto_project_id);
-  plays.sort((a, b) => Number(gameStatus.get(b.game_id) === 'expired') - Number(gameStatus.get(a.game_id) === 'expired'));
+  const expired = (c) => Number(gameStatus.get(c.game_id) === 'expired');
+  plays.sort((a, b) => (preferExpired ? expired(b) - expired(a) : expired(a) - expired(b)));
   for (const play of plays) {
     const projectId = play.auto_project_id;
     const [clip] = await apiJson(page, `/clips/projects/${projectId}/clips`);
