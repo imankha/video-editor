@@ -64,7 +64,7 @@ describe('useProjectLoader.loadProject re-frame guard (T11220)', () => {
     expect(loaded.refused).toBe(true);
     expect(fetchClipsSpy).not.toHaveBeenCalled();           // expensive load skipped
     expect(apiFetchSpy).not.toHaveBeenCalled();             // no current_mode=framing PATCH
-    expect(toastInfoSpy).toHaveBeenCalledWith(LEGACY_MULTICLIP_REFRAME_MESSAGE);
+    expect(toastInfoSpy).toHaveBeenCalledWith(LEGACY_MULTICLIP_REFRAME_MESSAGE, expect.objectContaining({ duration: expect.any(Number) }));
   });
 
   it('a single-clip draft still defaults into Framing and loads normally (no false positive)', async () => {

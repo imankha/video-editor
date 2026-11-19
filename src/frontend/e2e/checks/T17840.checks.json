@@ -1,0 +1,7 @@
+{
+  "criteria": {
+    "T17840:C1": {"kind": "browser"},
+    "T17840:C2": {"kind": "code", "command": "cd src/frontend && npx vitest run src/utils/reelReEditable.legacyCopy.test.js"},
+    "T17840:C3": {"kind": "code", "command": "cd src/frontend && npx vitest run src/components/DraftTile.legacyMultiPlay.test.jsx src/components/collections/CollectionPlayer.test.jsx"}
+  }
+}

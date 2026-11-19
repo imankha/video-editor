@@ -529,7 +529,7 @@ describe('DraftTile (T5672)', () => {
       fireEvent.click(container.querySelector('[data-testid="project-card"]'));
       expect(onSelectWithMode).not.toHaveBeenCalled();
       expect(onSelect).not.toHaveBeenCalled();
-      expect(toast.info).toHaveBeenCalledWith(LEGACY_MULTICLIP_REFRAME_MESSAGE);
+      expect(toast.info).toHaveBeenCalledWith(LEGACY_MULTICLIP_REFRAME_MESSAGE, expect.objectContaining({ duration: expect.any(Number) }));
     });
 
     it('a multi-clip draft WITH a working video still opens Spotlight (overlay) on click', () => {

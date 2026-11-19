@@ -40,7 +40,7 @@ describe('allowEnterFraming (T11220 shared re-frame guard)', () => {
 
   it('REFUSES a legacy multi-clip project (clip_count > 1) and surfaces the clear toast', () => {
     expect(allowEnterFraming({ clip_count: 2 })).toBe(false);
-    expect(toast.info).toHaveBeenCalledWith(LEGACY_MULTICLIP_REFRAME_MESSAGE);
+    expect(toast.info).toHaveBeenCalledWith(LEGACY_MULTICLIP_REFRAME_MESSAGE, expect.objectContaining({ duration: expect.any(Number) }));
   });
 
   it('allows a single-clip project (clip_count === 1) with no toast', () => {
