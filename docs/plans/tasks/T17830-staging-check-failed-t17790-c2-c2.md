@@ -1,6 +1,6 @@
 # T17830: Staging check failed: T17790:C2 C2: The expanded hit areas do not overlap other controls
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-19
