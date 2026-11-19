@@ -1653,10 +1653,11 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
  * server assigns the sequence (append-only), so we do not send one.
  *
  * T8910 generalized this from a single File to a list: each entry uploads
- * sequentially (append-only server sequencing keeps order stable across the N
- * POSTs; dedup makes a retry safe) with a "Video {i} of {n}" progress label —
- * the SAME label shape the create-time multi-video path uses — and carries its
- * own embedded `recorded_at` (evidence for overlap placement, null when the
+ * sequentially to R2 with a "Video {i} of {n}" progress label, then all of them
+ * attach in ONE POST (T17660: the charge is per request, priced on the request's
+ * total size; append-only server sequencing keeps the list order; dedup makes a
+ * retry safe). The label is the SAME shape the create-time multi-video path
+ * uses, and each entry carries its own embedded `recorded_at` (evidence for overlap placement, null when the
  * intake found none — never fabricated).
  *
  * Backward compatible: a bare `File` (T8700's AttachVideoModal call site) is
@@ -1665,8 +1666,8 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
  * @param {number} gameId - Existing ready game to attach the video(s) to
  * @param {File|File[]|Array<{file:File, recorded_at?:string|null}>} filesOrFile
  * @param {function} [onProgress] - ({ phase, percent, message }) => void
- * @returns {Promise<Object>} - the LAST addVideosToGame result; its `videos`
- *   array is the full post-attach list (append-only), including every new row.
+ * @returns {Promise<Object>} - the addVideosToGame result; its `videos` array is
+ *   the full post-attach list (append-only), including every new row.
  */
 export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress) {
   const notify = (phase, percent, message) => {
@@ -1681,7 +1682,7 @@ export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress)
   );
   const total = entries.length;
 
-  let result = null;
+  const videoRefs = [];
   for (let i = 0; i < total; i++) {
     const { file, recorded_at } = entries[i];
     // Single attach keeps its bare progress messages (byte-identical to T8700);
@@ -1702,9 +1703,9 @@ export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress)
       precomputed: hashResult,
     });
 
-    // Step 3: attach to the game. The endpoint assigns the append-only sequence
-    // (MAX(sequence)+1) server-side, so we intentionally omit `sequence`.
-    const videoRef = {
+    // The endpoint assigns the append-only sequence (MAX(sequence)+1) server-side,
+    // so we intentionally omit `sequence`.
+    videoRefs.push({
       blake3_hash: r2Result.blake3_hash,
       file_size: r2Result.file_size,
       duration: null,
@@ -1715,9 +1716,14 @@ export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress)
       // T8892: the attached file's name -> the new angle's display name. `file`
       // is the attach param; File.name is authoritative here (see uploadGame).
       original_filename: file.name || null,
-    };
-    result = await addVideosToGame(gameId, [videoRef]);
+    });
   }
+
+  // Step 3: attach every video in ONE request. T17660: the endpoint charges
+  // calculate_upload_cost(sum of the request's sizes) per request, which is the
+  // total the Add video modal quotes; one request per file charged the minimum
+  // (2 credits) for each video instead.
+  const result = await addVideosToGame(gameId, videoRefs);
 
   // Step 4 (success only): re-load the game via /load so AnnotateContainer
   // re-derives gameVideos and buildFullVideoTimeline runs (single->multi). Also
