@@ -44,3 +44,9 @@ Not investigated.
 
 - [ ] C1: At 1440x900, within a few seconds of tapping "Sharpen my highlight", the chip equals GET /api/credits.
 - [ ] C2: The same at 390x844, on Frame and after going back to Home mid-sharpen.
+
+## Progress Log
+
+### 2026-11-18: Standalone uploads still leave the credit chip stale
+
+Current staging build 91f0e6792 (#8105), e2e@test.local, desktop1440 x900. The original sharpen deduction now updates the chip correctly: an eight-credit sharpen changed both API and chip from82 to74. A related spend path still fails: Upload a play automatically charged one credit, but the Frame header kept the previous balance on all three fresh-load checks. API balances51 to50,50 to49 and49 to48 were paired with chip values51,50 and49. Evidence: `qa/qa-pass-2026-11-18/bugs/B08-upload-play-prices.json` and the B08 after-upload screenshots. This is the same stale balance symptom on the standalone upload path; no duplicate balance task was filed. The undisclosed upload price itself is a separate new task.
