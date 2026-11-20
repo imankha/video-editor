@@ -4,6 +4,12 @@
 
 ## Current Focus
 
+### Staging check account (owner request 2026-11-20, BUGS FIRST)
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T18010 | [Staging check account has no play Frame can open](tasks/T18010-staging-check-account-has-no-frame-play.md) | 6 | 3 | 2.0 | TODO | [ ] | After each merge, /dotask checks the change on staging signed in as one shared test account, and that account has no play the Frame screen can open: one is already sharpened and two sit on a game whose upload never finished. On 2026-11-20 this failed all nine T17910 checks and filed nine false bugs, while the same checks passed C1 to C9 on another test account. We will give the account plays Frame can open and stop one run from using them up for the next. Done when the T17910 checks pass on staging as that account twice in a row. |
+
 ### Milestone: AI Coach (owner request 2026-11-12, runs before the Referral programme)
 
 **Why this section exists.** A parent who uploads a whole game must scrub up to ninety minutes to mark plays, and only 19 of 100 game uploaders go on to pay for a highlight, against 45 of 100 who arrive with clips already cut. On 2026-11-12 the owner finished a prototype that sends a game to a video model in five-minute pieces and gets back plays with tags, ratings and coaching notes for about $2.84 a game, and asked for it to be sold as a paid option before the referral programme starts. Epic: [mark-plays-with-ai/EPIC.md](tasks/mark-plays-with-ai/EPIC.md), with every screen state and string in [UX-FEEDBACK.md](tasks/mark-plays-with-ai/UX-FEEDBACK.md). Row order is the sequence. The owner approved the designs and ruled on the open decisions on 2026-11-12 (recorded in the epic). On 2026-11-14 the owner named it AI Coach and added four things: every change to what we ask the model is tried in the prototype and shown to them first; the five-minute pieces overlap by 30 seconds and are joined so no play is cut off; the result records which way each team attacked, as a check on which team is which; and one payment covers the team, with the offer moved out of the upload dialog into its own dialog. The owner ruled on the redrawn offer, starting-from-a-game and sharing screens the same day (decisions 35 to 44 in the epic), and approved the last screens after a second look. The owner turned on billing for the Google key on 2026-11-14.
