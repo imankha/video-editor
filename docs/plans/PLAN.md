@@ -9,6 +9,7 @@
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T18010 | [Staging check account has no play Frame can open](tasks/T18010-staging-check-account-has-no-frame-play.md) | 6 | 3 | 2.0 | TODO | [ ] | After each merge, /dotask checks the change on staging signed in as one shared test account, and that account has no play the Frame screen can open: one is already sharpened and two sit on a game whose upload never finished. On 2026-11-20 this failed all nine T17910 checks and filed nine false bugs, while the same checks passed C1 to C9 on another test account. We will give the account plays Frame can open and stop one run from using them up for the next. Done when the T17910 checks pass on staging as that account twice in a row. |
+| T18020 | [Deploy archive step removes the headers of sections that still have work](tasks/T18020-deploy-archive-removes-headers-of-live-sections.md) | 6 | 2 | 3.0 | TODO | [ ] | After the 2026-11-20 deploy, 10 sections that still had tasks lost their table headers, so the board could not read them and the AI Coach milestone vanished from it. No task was lost and the headers were restored by hand. Nothing checks the archive step, so it can happen again. Done when a check fails on a plan with that mistake and the deploy runs it before committing. |
 
 ### Milestone: AI Coach (owner request 2026-11-12, runs before the Referral programme)
 
