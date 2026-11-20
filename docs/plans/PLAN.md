@@ -183,7 +183,9 @@ Rows here are WIP or waiting on the owner; a merged row stays until it is DONE a
 | T17850 | [Carousel edge cards hide play button](tasks/T17850-carousel-edge-cards-hide-play-button.md) | 5 | 2 | 2.5 | STAGING | [ ] | A parent scrolls a game's highlights on Home. The cut-off cards at each end still show their play button, sitting right under the previous and next arrows, so the controls overlap. Done when edge cards show no play button and nothing overlaps the arrows. |
 | T17860 | [Trim button shows open state](tasks/T17860-trim-button-shows-open-state.md) | 5 | 2 | 2.5 | STAGING | [ ] | A parent taps Trim and slow motion in Frame. The track opens but the button looks the same, and tapping it again closes the track with no sign it would. Done when the open button reads Done trimming with a check and a pressed look, and Preview shows the same pressed look. |
 | T17870 | [Frame settings show all options](tasks/T17870-frame-settings-show-all-options.md) | 4 | 1 | 4.0 | STAGING | [ ] | A parent opens Settings in Frame on a computer. Two of its four settings, Fix a tilted camera and Darken outside the box, hide behind a More options link although the panel is mostly empty. Done when Fix a tilted camera shows directly, More options is gone, and Darken outside the box is removed (Preview replaces it); phones unchanged. |
-| T17880 | [Spotlight check spends gate credits](tasks/T17880-spotlight-check-spends-gate-credits.md) | 4 | 2 | 2.0 | WIP | [ ] | The staging check for the Spotlight delete button has never run: the test account has no sharpened project, so the check sharpens one itself, spending real credits each time. It has now run out (needs 8, has 7) and stops at Buy credits. Done when the check runs on staging without spending credits and passes twice in a row. |
+| T17880 | [Spotlight check spends gate credits](tasks/T17880-spotlight-check-spends-gate-credits.md) | 4 | 2 | 2.0 | STAGING | [ ] | The staging check for the Spotlight delete button has never run: the test account has no sharpened project, so the check sharpens one itself, spending real credits each time. It has now run out (needs 8, has 7) and stops at Buy credits. Done when the check runs on staging without spending credits and passes twice in a row. |
+| T17890 | [Staging check failed: T17860:C2 C2: Tapping it again hides the track and restores "Trim](tasks/T17890-staging-check-failed-t17860-c2-c2.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
+| T17900 | [Staging check failed: T17840:C1 C1: On Home, a highlight made from several plays shows,](tasks/T17900-staging-check-failed-t17840-c1-c1.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 
 ### Bugs found by /dotask verify
 
@@ -193,8 +195,6 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17800 | [Branch CI failed after a clean verdict](tasks/T17800-branch-ci-failed-after-a-clean.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask verify. |
-| T17890 | [Staging check failed: T17860:C2 C2: Tapping it again hides the track and restores "Trim](tasks/T17890-staging-check-failed-t17860-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
-| T17900 | [Staging check failed: T17840:C1 C1: On Home, a highlight made from several plays shows,](tasks/T17900-staging-check-failed-t17840-c1-c1.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 

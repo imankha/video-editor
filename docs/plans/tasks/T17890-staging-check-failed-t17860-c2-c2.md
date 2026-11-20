@@ -1,6 +1,6 @@
 # T17890: Staging check failed: T17860:C2 C2: Tapping it again hides the track and restores "Trim
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-20

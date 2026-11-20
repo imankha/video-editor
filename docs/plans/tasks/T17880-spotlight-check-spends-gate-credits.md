@@ -1,6 +1,6 @@
 # T17880: The Spotlight staging check spends the gate account's credits and then cannot run
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-19

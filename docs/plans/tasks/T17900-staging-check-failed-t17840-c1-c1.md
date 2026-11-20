@@ -1,6 +1,6 @@
 # T17900: Staging check failed: T17840:C1 C1: On Home, a highlight made from several plays shows,
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-20
