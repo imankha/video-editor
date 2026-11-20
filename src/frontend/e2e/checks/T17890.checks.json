@@ -1,5 +1,5 @@
 {
   "criteria": {
-    "T17890:C1": {"kind": "code", "command": "cd src/frontend && npx vitest run src/utils/clipSegments.partial.test.js"}
+    "T17890:C1": {"kind": "browser"}
   }
 }
