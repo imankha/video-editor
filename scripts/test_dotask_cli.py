@@ -2295,27 +2295,32 @@ class PlanOrderTest(unittest.TestCase):
         self.plan = Path(tmp.name) / "PLAN.md"
         self.plan.write_bytes(self.PLAN.replace("\n", "\r\n").encode())
 
-    def test_starting_a_task_pulls_its_row_to_the_top_once(self):
-        dotask_cli.pull_to_top(self.plan, ["T7"])
-        dotask_cli.pull_to_top(self.plan, ["T7"])  # already there: nothing moves
+    def test_starting_a_task_moves_its_whole_milestone_to_the_top_once(self):
+        # Owner correction 2026-11-20: the row stays in its milestone; the milestone moves.
+        before = self.PLAN.split("### 9. Retention")[1].split("## Environment")[0]
+        dotask_cli.pull_milestone_to_top(self.plan, ["T7"])
+        dotask_cli.pull_milestone_to_top(self.plan, ["T7", "T8"])  # already first: nothing moves
         text = self.plan.read_bytes().decode()
         self.assertNotIn("\n\n", text.replace("\r\n", "\r"))  # CRLF kept, no bare LF
         text = text.replace("\r\n", "\n")
-        top = text.index(dotask_cli.IN_PROGRESS_SECTION)
-        self.assertLess(text.index("## Current Focus"), top)
-        self.assertLess(top, text.index("| T7 | [Seven]"))  # ↳ dropped, the epic is in its link
-        self.assertLess(text.index("| T7 | [Seven]"), text.index("### Staging QA"))
+        self.assertNotIn(dotask_cli.IN_PROGRESS_SECTION, text)
+        self.assertLess(text.index("## Current Focus"), text.index("### 9. Retention"))
+        self.assertLess(text.index("### 9. Retention"), text.index("### Staging QA"))
+        self.assertIn("| T7 | ↳ [Seven]", text)  # the row is unchanged, still under its epic
         self.assertEqual(text.count("Seven"), 1)
-        self.assertIn("| T8 | ↳ [Eight]", text)  # the epic's other child stays put
+        self.assertEqual(text.count("### 9. Retention"), 1)
+        self.assertIn(before.strip(), text)  # the milestone moved whole, rows in order
+        self.assertLess(text.index("## Roadmap"), text.index("## Environment Configuration"))
 
-    def test_the_bug_section_is_created_under_the_work_in_flight(self):
+    def test_a_task_in_the_first_milestone_moves_nothing(self):
+        dotask_cli.pull_milestone_to_top(self.plan, ["T5"])
+        self.assertEqual(self.plan.read_bytes().decode(), self.PLAN.replace("\n", "\r\n"))
+
+    def test_the_bug_section_is_created_at_the_top_when_no_legacy_in_progress_section_exists(self):
         lines = self.PLAN.split("\n")
-        dotask_cli.pull_to_top(self.plan, ["T7"])
-        lines = self.plan.read_bytes().decode().replace("\r\n", "\n").split("\n")
         at = dotask_cli.ensure_top_section(lines, dotask_cli.BUG_SECTION, "intro", after=dotask_cli.IN_PROGRESS_SECTION)
         dotask_cli.append_row(lines, at, "| T9 | [Nine](tasks/T9.md) |")
         text = "\n".join(lines)
-        self.assertLess(text.index("| T7 | [Seven]"), text.index(dotask_cli.BUG_SECTION))
         self.assertLess(text.index("| T9 | [Nine]"), text.index("### Staging QA"))
 
 
