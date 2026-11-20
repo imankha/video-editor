@@ -101,7 +101,3 @@ Import inserts through the existing clip save path with `my_athlete=0` and empty
 - [ ] Importing 60 plays, several rated 5, creates no highlight project and no credit charge.
 - [ ] A shared game delivers imported Team-lane plays to the recipient with tags, note and rating.
 - [ ] `ai_team_chosen`, `ai_plays_imported` and `ai_play_team_flipped` appear in the admin Journey inspector.
-
-## Addendum (owner, 2026-11-20): player boxes
-
-The analysis now stores four boxes per noted player per play, from a pass on still frames (T16150 step 9). The import copies them into each play beside that player's mention in `ai_source.mentions[]`, unchanged, so the highlight on the athlete (T16203) and the one-click spotlight (T16204) can read them from the play. Boxes are optional: a mention without them imports as before.

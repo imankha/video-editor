@@ -77,3 +77,7 @@ The prototype lives outside this repo at `C:/Users/imank/projects/player-trackin
 - The test set is rebuilt with the prototype's `fetch_prod_data.py`; it is footage of children from a private account and must not be committed or copied to shared storage.
 - Knowledge docs: `.claude/knowledge/modal-gpu.md`, `.claude/knowledge/keyframes-framing.md`, `.claude/knowledge/persistence-sync.md`.
 - Stored detection boxes in production were found offset from the players on these clips (seen while building the test set). T16220 checks whether that is a display-only artefact of old data or a live bug, because the tap depends on those boxes.
+
+## Research that may help (2026-11-20)
+
+While prototyping AI Coach we measured what Gemini can and cannot do to find a player: tight boxes on still frames, re-finding a player from one picture, and why it cannot follow inside a video call or say a player is absent. It was removed from AI Coach for cost and is kept here in case this milestone can use it: [RESEARCH-gemini-boxes-2026-11-20.md](RESEARCH-gemini-boxes-2026-11-20.md). It is not a task and changes no plan.

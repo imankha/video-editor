@@ -18,7 +18,7 @@ Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Epic task 2 of 10. Run in an intera
 The prototype has measured cost and coverage for one piece of video. It has not run any of the following, and the server job (T16150) would otherwise be the first place they meet real video:
 
 - the qualities, the "what this shows" sentence and the social-media flag for each player's action;
-- where each player is on screen (first asked for inside the video call; moved to a pass on still frames on 2026-11-20, see step 6);
+- where each player is on screen (tried in the prototype and removed from this epic on 2026-11-20, see step 6);
 - the sentence telling the model that every time is on the whole video's clock;
 - telling later pieces the two kit colours in words;
 - overlapping pieces and joining them;
@@ -79,24 +79,9 @@ Each run writes one folder, and the session shows the owner these files:
 
 The owner comments, the prompt or format is changed, and the run is repeated until the owner approves a version. The approved version gets a number, and that number is the prompt version the server stores with each analysis.
 
-### 6. Where each player is: four boxes from still frames (owner, 2026-11-20)
+### 6. Where each player is: removed from this epic (owner, 2026-11-20)
 
-The first real run (S1) asked for one box per player inside the video call. Drawn on the frames, the boxes were not on the players, and no time shift or rescaling fixes them: the model does not locate anyone in a video call. Asked for boxes on one full-size still frame, the same model boxed every person on the field tightly (17 to 21 people in each of three frames). A tracking test then showed it re-finds a known player on a later still in 14 of 14 frames where the player is clear, for about $0.007 a frame at the low thinking level.
-
-So the box leaves the video call and becomes a second pass on still frames:
-
-- The video call returns no box. It keeps a time for each player's part (the moment of the action) so the stills pass knows who is meant.
-- For each play, for each player who has a note in that play, the stills pass returns **four boxes across the first two seconds of the play, at 0, 2/3, 1 1/3 and 2 seconds after the play's start**. Each is a time and a box in Gemini's 0 to 1000 format, or "not visible" for that moment. Four points over two seconds are enough to draw a moving highlight on the player by interpolating between them.
-- These boxes feed two features: a highlight on the athlete in their own plays (T16203) and a one-click spotlight (T16204).
-
-What the prototype must settle before T16150 builds it:
-
-1. **Picking the right person.** A still shows twenty players. The stills pass must put the box on the player the video call described ("the left winger who crossed"). This has not been tested. Try the description plus the frame, then the description plus numbered boxes of everyone on the field.
-2. **Players not on screen in the first two seconds.** A play can start before the player enters the picture. Record how often this happens; the fallback (boxes from the moment of the player's action) is the owner's call.
-3. **Cost.** At the measured $0.007 a frame, four frames for every noted player in every play of a 90-minute game is far above the $3.39 limit (roughly 200 plays, two or three noted players each). The prototype measures the real figure and prices the ways to bring it down: all four frames and every noted player of a play in one call; only plays rated 4 or 5; or only when a parent first opens the play.
-4. **Being wrong quietly.** The tracking test showed the model names somebody even when the player is not in the picture. Count wrong boxes by eye on the drawn frames; a highlight on the wrong child is worse than none.
-
-Every run draws the four boxes on their frames so the owner can judge them without reading numbers.
+The plan was for the analysis to say where each player is on screen. The prototype tried it three ways the same day. Boxes asked for inside the video call were not on the players. Boxes asked for on still frames were tight, but four boxes for every noted player cost $4.53 for a 90-minute game in the cheapest form, more than the analysis itself, and in about half the cases the player was not in the picture in a play's first two seconds. The owner removed boxes from AI Coach. The analysis returns no box, and nothing in this epic stores or draws one. What was learned is kept for the Click-once Spotlight milestone, which may or may not use it: [click-once-spotlight/RESEARCH-gemini-boxes-2026-11-20.md](../click-once-spotlight/RESEARCH-gemini-boxes-2026-11-20.md).
 
 ### 7. Proving the joining on real boundaries (owner, 2026-11-20)
 
@@ -137,7 +122,7 @@ Asking each piece "which way did this team attack in the first half" was ruled o
 
 Ruled on 2026-11-14, before the first run: a cut-off play with no whole version is kept only when it is rated 4 or 5; both direction wordings are run on the same video and the owner picks from the counts; a suspect piece gets the second question described above.
 
-Ruled on 2026-11-20, after the first real run: boxes asked for inside the video call are dropped, because drawn on the frames they are not on the players; each noted player in each play gets four boxes from still frames across the play's first two seconds (0, 2/3, 1 1/3, 2 s); calls stay separate until separate calls have shown everything they can do. Player tracking through a whole game was tried as a side prototype (`gemini_analysis_test/tracking/`): it re-finds a clear player from one reference picture but cannot say when the player is absent, so it is not part of this epic.
+Ruled on 2026-11-20: player boxes are removed from AI Coach. Boxes asked for inside the video call were not on the players; boxes from still frames were tight but cost more than the analysis and were often "not visible" at a play's start. The research is kept with the Click-once Spotlight milestone. Calls stay separate until separate calls have shown everything they can do.
 
 Ruled on 2026-11-20, after the version 3 run and the owner's own account of 4:18 to 5:56: prompt version 3's segmentation (stoppages as their own entries, cuts only at real events) is the working prompt; the joining is chosen by scoring candidates on real shifted boundaries against the owner's corrected truth, accuracy first and cost second (step 7); a call that reads only the descriptions is not used for joining; how often a description is false is counted before any version is approved (step 8).
 
@@ -161,7 +146,7 @@ Ruled on 2026-11-20, after the version 3 run and the owner's own account of 4:18
 - Schema changes made here, all at once so a run costs one set of calls:
   - `teams.team_N.attacking`: enum `left`, `right`, `unclear`; description says "as seen from the camera, in the video sent".
   - `plays[].cut_off`: enum `none`, `start`, `end`, `both`.
-  - per player: `qualities`, `shows`, `social`, `social_reason`, and the time of the player's action. The `box` field asked for inside the video call is removed (owner, 2026-11-20); boxes come from the stills pass in step 6, stored per player per play as four entries `{t_s, box_2d}` or `{t_s, visible: false}`.
+  - per player: `qualities`, `shows`, `social`, `social_reason`. No `box` field: it was tried and removed (owner, 2026-11-20, step 6).
 - Joined result gains `teams.team_N.attacks_first_period` (`left`, `right`, `unknown`), `ends_changed_at_s` (number or null), `windows[]` (`idx`, `start_s`, `end_s`, `attacking` per team, `teams_suspect`), and per play `source_window`, `stitched`, `teams_suspect`.
 - Twin matching runs after times are converted to seconds on the video's clock and after the from-zero shift (T16150 step 4). Use intersection over union at 0.5 and containment at 0.7 as named constants.
 - Slot agreement between overlap twins: compare which slot holds the higher relevance and the tag sets per slot; mirrored means both the relevance order and the tag sets match better when one side's slots are swapped. Log the score; do not auto-swap a piece on this alone before the owner has seen how often it fires.
@@ -188,6 +173,6 @@ Ruled on 2026-11-20, after the version 3 run and the owner's own account of 4:18
 - [ ] A person compared every overlap in the approved run with the video and listed any play that was cut, doubled or wrongly stitched.
 - [ ] The projected cost of a 90-minute game from the approved run is recorded; if it is above $3.39, the owner has been told before the version is approved.
 - [ ] The prototype folder is committed without the key, the videos or the large outputs, and Branch CI passes.
-- [ ] On the approved run, the four boxes for each noted player are drawn on their frames and shown to the owner; the count of boxes on the wrong person, of players not on screen in the first two seconds, and the measured cost for a 90-minute game under each way of limiting it are recorded, and the owner has chosen one.
+- [ ] The approved prompt and answer format contain no box field, and no output file or joined result carries one.
 - [ ] At least ten real lines between pieces on the test clip were scored against the owner's corrected truth for each joining candidate (plays told twice, plays lost, seconds told by neither, strong plays dropped); the table is in the change list and the owner has chosen the joining.
 - [ ] For the approved prompt version, the count of plays whose described event did not happen, of restarts named wrongly, and of plays rated 4 or 5 that the owner rates 3 or lower is recorded against the corrected truth, and the owner has seen it before approving.
