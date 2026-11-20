@@ -6,6 +6,9 @@
     "T17910:C4": {"kind": "browser"},
     "T17910:C5": {"kind": "browser"},
     "T17910:C6": {"kind": "browser"},
+    "T17910:C8": {"kind": "browser"},
+    "T17910:C9": {"kind": "browser"},
+    "T17910:C10": {"kind": "browser"},
     "T17910:C7": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/focus/frameButtonsAsSteps.test.jsx -t 'T17910:C7'"}
   }
 }
