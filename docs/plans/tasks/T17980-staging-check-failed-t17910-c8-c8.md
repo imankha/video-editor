@@ -1,6 +1,6 @@
 # T17980: Staging check failed: T17910:C8 C8: The paid button reads "Sharpen!" with a second, smaller
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-20
@@ -25,3 +25,7 @@ Found by the staging check after PR #850 merged (group g-t17910-1, 8a3da1694). I
 ### Relevant Files (REQUIRED)
 
 - To be found.
+
+## Resolution (2026-11-20)
+
+Not a defect. The staging check ran as e2e-gate@test.local, whose only unsharpened plays belong to a game whose upload never finished (playback-url 409 source_uploading), so no Frame screen could load. Re-run against staging as e2e-gate3@test.local: C1-C9 passed (14 of 16 tests). C10's numbered coach steps need a new account; e2e-gate3 has 3+ finished highlights and correctly gets the experienced coach sentence instead. Closed at the owner's request.

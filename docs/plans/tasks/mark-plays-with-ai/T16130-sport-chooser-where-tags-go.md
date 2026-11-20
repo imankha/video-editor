@@ -4,7 +4,7 @@
 
 Today a new account has no sport set, and tags (the labels on a play, such as Goal or Tackle) depend on the sport. When a parent with no sport opens the play form, the place where tags should be shows an amber warning, and in the sideways full-screen view it shows a line of text telling them to set their sport in a top bar that is not on that screen. The owner hit this on 2026-11-12 and said the tags view locks them out when it should simply offer a way to choose a sport and act as if nothing is wrong. We will replace the warning with a calm sport chooser everywhere tags would appear: one tap picks the sport and the tags show up in place, with the play being edited left untouched. Done when a parent with no sport can pick one and tag a play from every version of the play form, on a phone held either way and on desktop, without seeing a warning or leaving the screen.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M (frontend only, no schema)

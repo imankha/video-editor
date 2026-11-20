@@ -4,7 +4,7 @@
 
 Today credits (the app's prepaid currency) pay for two things: storing a game, priced by file size, and making a highlight, priced by the second. An AI analysis of a 90-minute game costs us about $2.95 in model fees, so it needs its own price. We will charge 1.5 credits for each minute of video, which is 135 credits for a 90-minute game: a little above cost on our cheapest pack and comfortably above on the others, as the owner asked. Credits are set aside when the analysis starts, taken only when the result is ready, and given back in full if it fails. A parent who uploads a game that was already analysed for someone else pays the same and gets the result at once. A family that receives the game through a share from someone who paid gets it free (T16202), and this task's record of who has AI Coach is built to hold both. An analysis that finishes is always charged, even if it found few plays (owner, 2026-11-12). Done when a parent is never charged more than the price shown (and exactly that whenever the browser and server read the same length), a failed analysis leaves the balance unchanged, and the admin can see credits earned against model cost for every analysis.
 
-**Status:** TODO
+**Status:** WIP
 **Design:** approved 2026-11-19 ([T16160-design.md](../T16160-design.md))
 **Impact:** 8
 **Complexity:** 4

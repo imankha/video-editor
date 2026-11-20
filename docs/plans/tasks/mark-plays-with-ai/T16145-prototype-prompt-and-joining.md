@@ -4,7 +4,7 @@
 
 Today the analysis exists as a prototype on the owner's machine that watches one five-minute piece of a game (the full match video) at a time. Seven changes to what we ask the model and what it answers are planned, and none of them has ever been run. The prototype also has two known weaknesses: a play (a moment worth keeping) that crosses the line between two pieces gets cut in half, and different pieces sometimes disagree about which team is which. We will make every change in the prototype first, run it on test video, and put the output files in front of the owner, who changes the wording and the format until the answers look right. Only then is the server version built, as a copy of what the owner approved. An analysis is stored once per video and never redone, so a mistake found after launch would mean paying to analyse every stored game again. Done when the owner has read the latest output files and approved one version of the prompt, the answer format and the joining.
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 4
 **Tier:** M (scripts in the prototype folder; no app code)

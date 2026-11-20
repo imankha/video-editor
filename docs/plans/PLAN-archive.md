@@ -1631,6 +1631,15 @@ User ran the full local Playwright suite 2026-08-25 (348 passed / 144 failed / 2
 | T15930 | [Staging check failed: T15550:C1 'Keep marking plays' returns to Annotate with the playhead after](tasks/T15930-staging-check-failed-t15550-c1-keep.md) | 5 | 3 | 1.7 | DONE | [ ] | DONE (deployed 2026-11-12 prod). Filed by /dotask staging check. |
 | T15940 | [Staging check failed: T15640:C2 Mark play near 0:00 yields a play of the normal](tasks/T15940-staging-check-failed-t15640-c2-mark.md) | 5 | 3 | 1.7 | DONE | [ ] | DONE (deployed 2026-11-12 prod). Filed by /dotask staging check. |
 | T15980 | [Staging check failed: T15630:C1 The sport is asked at most once per game, and](tasks/T15980-staging-check-failed-t15630-c1-the.md) | 5 | 3 | 1.7 | DONE | [ ] | DONE (deployed 2026-11-12 prod). Filed by /dotask staging check. |
+| T17920 | [Staging check failed: T17910:C1 C1: At 1440 wide in Frame, the bar's buttons read](tasks/T17920-staging-check-failed-t17910-c1-c1.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
+| T17930 | [Staging check failed: T17910:C2 C2: After tapping "Trim and slow motion" the button reads](tasks/T17930-staging-check-failed-t17910-c2-c2.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
+| T17940 | [Staging check failed: T17910:C3 C3: After tapping "Preview" the button reads "Close preview"; tapping](tasks/T17940-staging-check-failed-t17910-c3-c3.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
+| T17950 | [Staging check failed: T17910:C4 C4: At 1440 wide with nothing in progress, the bar](tasks/T17950-staging-check-failed-t17910-c4-c4.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
+| T17960 | [Staging check failed: T17910:C5 C5: The "Sharpen!" button shows the wand icon, not the](tasks/T17960-staging-check-failed-t17910-c5-c5.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
+| T17970 | [Staging check failed: T17910:C6 C6: At 1440 and 390 wide, the "Sharpen!" button's position](tasks/T17970-staging-check-failed-t17910-c6-c6.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
+| T17980 | [Staging check failed: T17910:C8 C8: The paid button reads "Sharpen!" with a second, smaller](tasks/T17980-staging-check-failed-t17910-c8-c8.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
+| T17990 | [Staging check failed: T17910:C9 C9: At 1440 wide, the gap between "Preview" and "Sharpen!"](tasks/T17990-staging-check-failed-t17910-c9-c9.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
+| T18000 | [Staging check failed: T17910:C10 C10: Opening Frame on a play that has no box](tasks/T18000-staging-check-failed-t17910-c10-c10.md) | 5 | 3 | 1.7 | DONE | [ ] | Filed by /dotask staging check. |
 
 ## Roadmap (re-ranked 2026-11-09 on production evidence) — Later (kept, not scheduled)
 
