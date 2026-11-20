@@ -54,6 +54,18 @@ When seeded, the account is guaranteed to have, on profile `9fa7378c`:
    card exists rather than hang. To make them RUN GREEN, re-seed an un-started draft (or leave
    one un-edited); do not write a spec that hard-requires "Not started" until the seed
    guarantees it.
+2a. **>= 1 project with a sharpened (working) video** (`has_working_video` in `GET /api/projects`)
+   on lane B (`e2e-gate@test.local`), so Spotlight opens without a sharpen at check time.
+   Consumed by `checks/T17780.check.spec.js` (T17880). That check used to sharpen a draft
+   itself when none existed, which spent ~8 credits per run until the account could not pay
+   (2026-11-19: balance 7, no framed project); it now fails at once naming this item and
+   asserts the balance is unchanged. Trap: sharpening an auto-created single play also
+   finishes it into a reel and ARCHIVES the project (`archived_at`), so it leaves
+   `GET /api/projects` (the old check then sharpened again on every run, the real drain).
+   Move it back with My Reels' restore (`POST /api/downloads/{final_video_id}/restore-project`);
+   a restored project stays in Drafts. Built 2026-11-19 on staging: project 48 "Play 6"
+   (game 3), trimmed 0-7 s, sharpened once for 7 credits, restored from final video 31.
+   Never make a check spend credits to build its own fixture.
 3. **(best-effort, NOT asserted by the seed) >= 1 published reel** — an exported reel
    (final video). Overlay mode is gated on an exported reel. The seed does **not**
    guarantee an exported draft, so specs that need it detect reachability and skip

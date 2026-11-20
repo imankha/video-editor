@@ -11,12 +11,14 @@
  * grid centred on the button must land on the button at every point. That counts a transparent
  * hit-pad (the RegionLayer T15600 pattern) the same as a bigger visible chip.
  *
- * Setup: opens Spotlight on the account's first framed project; with none, it first sharpens a
- * single-play draft on a READY game the way a parent does (T16525's setup). The staging gate
- * account's own single-play drafts sat on a game stuck uploading, where Frame shows no Sharpen
- * (T17810), so the draft comes from sharpenableDraft, which makes one from a ready game's play.
- * If that project has no text, the check taps "Add text" (a real user gesture) and deletes that
- * region again with the control under test, so the account is left as it was found.
+ * Setup: opens Spotlight on the account's first project that already has a sharpened (working)
+ * video. On a deployed target it never sharpens one (T17880): a sharpen at check time spent the
+ * staging gate account's credits on every run until the account could not pay for one, so with no
+ * such project the check fails at once and names the fixture to seed (FIXTURE-CONTRACT.md item 2a).
+ * A dev stack run's fresh preset account has none, so there it sharpens a draft first (framedProject).
+ * Each test asserts the credit balance is what it was after setup. If that project has no text, the
+ * check taps "Add text" (a real user gesture) and deletes that region again with the control under
+ * test, so the account is left as it was found.
  *
  * Run: bash scripts/dev-verify.sh e2e/checks/T17780.check.spec.js --reporter=line
  */
@@ -106,7 +108,7 @@ async function measureDelete(page) {
   }, DELETE_SELECTOR);
 }
 
-let s = null; // { context, page, created } shared by both criteria
+let s = null; // { context, page, created, balanceBefore } shared by both criteria
 
 /** GET an API path from inside the page (staging 401s page.request after the app's own session, T16100). */
 async function pageApi(page, path) {
@@ -122,13 +124,30 @@ async function listProjects(page) {
   return Array.isArray(res.body) ? res.body : res.body.projects || [];
 }
 
-/** A project Spotlight can open: one already framed, or a sharpenable single-play draft sharpened here the way a parent does. */
+async function creditBalance(page) {
+  const res = await pageApi(page, '/credits');
+  expect(res.ok, `GET /credits -> ${res.status}`).toBe(true);
+  return res.body.balance;
+}
+
+/**
+ * A project Spotlight can open: one that already has a sharpened video. On a deployed target it never
+ * sharpens one (T17880: that spent the gate account's credits on every run). A dev stack run gets a
+ * fresh throwaway preset account with no such project, so there it sharpens a single-play draft on a
+ * ready game the way a parent does (T16525's setup; sharpenableDraft avoids drafts on a game still
+ * uploading, T17810).
+ */
 async function framedProject(page) {
   const projects = await listProjects(page);
   const framed = projects.find((p) => p.has_working_video);
-  if (framed) return framed;
+  if (framed || process.env.E2E_BASE_URL) {
+    expect(framed, 'a Drafts project with a sharpened video (FIXTURE-CONTRACT.md item 2a): a sharpened single '
+      + 'play finishes into a reel and leaves Drafts, so move it back from My Reels; this check does not spend '
+      + 'credits sharpening one').toBeTruthy();
+    return framed;
+  }
   const draft = await sharpenableDraft(page);
-  expect(draft, 'a framed project, or a single-play draft on a ready game to sharpen').toBeTruthy();
+  expect(draft, 'a single-play draft on a ready game to sharpen (dev stack)').toBeTruthy();
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/focus/p/${draft.id}`);
   await page.getByTestId('focus-video-stage').waitFor({ timeout: 90000 });
@@ -153,6 +172,8 @@ test.beforeAll(async ({ browser }, testInfo) => {
   await page.goto('/home');
   await disableGuidanceForCheck(page);
   const project = await framedProject(page);
+  // Read after setup: on a deployed target setup spends nothing, on the dev stack its sharpen is the fixture.
+  const balanceBefore = await creditBalance(page);
   // Spotlight restores its saved text from overlay-data; a tap before that lands is overwritten.
   const restored = page.waitForResponse((r) => r.url().includes('/overlay-data') && r.ok(), { timeout: 90000 });
   await page.goto(`/overlay/p/${project.id}`);
@@ -173,7 +194,7 @@ test.beforeAll(async ({ browser }, testInfo) => {
     await page.keyboard.press('Escape');
   }
   await expect(page.locator(DELETE_SELECTOR).first()).toBeVisible({ timeout: 60000 });
-  s = { context, page, created };
+  s = { context, page, created, balanceBefore };
 });
 
 test.afterAll(async () => {
@@ -194,6 +215,7 @@ test('T17780:C1 Delete text control is at least 44 x 44 on touch at every listed
     const m = await measureDelete(s.page);
     expect(m.missed, `${size.width}x${size.height}: 44x44 hit area around the ${m.width}x${m.height} button`).toEqual([]);
   }
+  expect(await creditBalance(s.page), 'credit balance (T17880: the check spends nothing)').toBe(s.balanceBefore);
 });
 
 test('T17780:C2 the Delete text hit area overlaps no other control and hides no label', async () => {
@@ -203,4 +225,5 @@ test('T17780:C2 the Delete text hit area overlaps no other control and hides no 
     expect(m.overlapping, `${size.width}x${size.height}: controls under the 44x44 hit area`).toEqual([]);
     expect(m.bodyStillOnTop, `${size.width}x${size.height}: text block label still tappable`).toBe(true);
   }
+  expect(await creditBalance(s.page), 'credit balance (T17880: the check spends nothing)').toBe(s.balanceBefore);
 });
