@@ -66,3 +66,23 @@ A flat price per game was ruled out because a 25-minute small-sided game would p
 - [ ] A short balance returns 402 with the amount required and the balance.
 - [ ] The admin read-out lists each analysis with model cost, buyers and credits, and its 30-day total matches the ledger in a seeded test.
 - [ ] `ai_analysis_purchased` and `ai_analysis_ready` appear in the admin Journey inspector.
+
+## Ruling
+
+Design approved with these picks (owner, 2026-11-19). Full options and reasoning: [T16160-design.md](../T16160-design.md).
+
+- **D1 price:** B, length to the nearest minute, credits rounded up (90 min = 135, 25 min = 38). Smallest charge is 2 credits. Replaces the task's "rounded up" wording.
+- **D2 charge timing:** A, hold in the existing `credit_reservations` table, take at ready, release on failure. No `ai_analysis_refund` source.
+- **D3 home:** A, `pricing.json` rate, mirrored py/js helpers with a shared sample file, purchase record in Postgres, price frozen on the purchase row.
+- **D4 double charge:** A, unique purchase row per (user, profile, game) plus ledger key `ai_analysis:{profile_id}:{game_id}`.
+- **D5 tables:** A, `game_analysis_purchases` plus `game_analysis_purchase_analyses`. No `reservation_id` column.
+- **D6 length mismatch:** B, buy carries `expected_credits`; never charge more than shown; 409 `price_changed` if the server's price is higher.
+- **D7 recovery:** A, hold named `ai_analysis:{purchase_id}`, recovery skips that prefix, `credit_reservations` unchanged.
+- **Q1:** a video added after purchase is not analysed or charged in this epic.
+- **Q2:** only the main timeline is analysed and priced, not an overlapping extra angle (shared with T16150).
+- **Q3:** a share between a parent's own profiles carries AI Coach free (T16202 scope).
+- **Q4:** a prompt version change never recharges; the parent keeps the paid result.
+- **Q5:** a deleted account's purchases stay in the read-out for reporting. This departs from the design's proposal to purge them with the account; open item, see below.
+- **Q6:** acceptance wording not yet answered. Decision 6 B implies "never charged more than the price shown, and exactly that when browser and server read the same length"; confirm before implementing.
+
+Open item for the owner: Q5 conflicts with the design's purge of purchase rows on account deletion and with data-export/privacy handling. Needs a ruling on what "keep" means (anonymised rows without user_id, or kept as is).
