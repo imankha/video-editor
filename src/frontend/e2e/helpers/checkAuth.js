@@ -14,6 +14,10 @@ import { loginAsDevPreset, loginAsRealUser } from './realAuth';
  * the full preset's first session start runs migrations and finishes stranded exports, which once
  * took 53s (T17160).
  *
+ * Opening '/' reopens the account's last screen (T14980 resume point), and the shared staging
+ * account is left wherever the previous check ended. A check that starts on Home clears it first
+ * with page.request.delete(checkApi('/me/resume-point')) before navigating (T17900).
+ *
  * @param {import('@playwright/test').Page | import('@playwright/test').BrowserContext} pageOrContext
  * @param {{ devPreset?: 'empty' | 'upload' | 'full' }} [options] - dev preset; ignored on a deployed target
  */
