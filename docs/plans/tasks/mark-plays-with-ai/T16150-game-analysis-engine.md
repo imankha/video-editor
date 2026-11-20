@@ -108,7 +108,9 @@ Unique on (blake3_hash, sport, prompt_version).
 - No box (owner, 2026-11-20): the player object in the schema has no `box` field, the merge has no box validation, and no table or stored result has a place for one. Do not add a stills pass.
 - Postgres track migrates only by `POST /api/admin/migrate-postgres` after deploy.
 
-- Dead time (owner, 2026-11-20): stoppages are entries of the joined result (kind `stoppage`, start and end in seconds, rated zero, no players) and are stored with the plays, not dropped. They are product data: T16206 skips them in playback. Keep them through the join and expose them in the analysis read.
+- Dead time (owner, 2026-11-20): the stored result has a `dead_time` list beside `plays`, each range `{start_s, end_s, reason}` (notation in T16145 step 7b); a piece's answer marks every entry `play` or `dead_time`. They are product data: T16206 skips them in playback. Keep them through the join and expose them in the analysis read.
+
+- Any sport (owner, 2026-11-20): the prompt is the sport-neutral template plus the sport's block, as split in the prototype (T16145 step 7c). `analysis_prompts.py` builds the block from the sport's own tag data; a sport without a block is refused by the allow-list, never sent with another sport's words.
 
 ### Related Tasks
 - Depends on: T16145 (the approved prompt, format and joining); needs a paid Gemini key (owner) and the soccer quality list from T16320. Blocks: T16160, T16170, T16190.

@@ -102,6 +102,24 @@ So the joining is decided this way, accuracy first and cost second (owner, 2026-
 
 The stoppage entries are no longer only a help for joining: the app will let a parent skip them when watching (T16206). So the approved run also reports, against the owner's truth, how far each stoppage's start and end are from the real ones, any stoppage that covers live play, and the share of the clip marked dead. That error sets the safety margin T16206 uses.
 
+### 7b. The notation for a dead-time range (owner, 2026-11-20)
+
+Until now a stoppage was written as an ordinary play with both ratings at zero, and the joined result dropped the mark that said it was a stoppage. Dead time gets its own notation, in the model's answer and in the stored result:
+
+- **In each piece's answer**, every entry carries `kind`: `play` or `dead_time`. A `dead_time` entry has only `start`, `end` and `reason`, one of a short sport-neutral list: `out_of_play`, `restart_setup`, `official_stoppage`, `injury`, `substitution`, `break_between_periods`, `other`. It has no team sections, no players and no ratings, so the model cannot rate or describe dead time and spends no output on it.
+- **In the joined result**, dead time is its own list beside the plays: `dead_time: [{start_s, end_s, reason}]`, in order, never overlapping each other or a play. `plays` holds only real plays. The joining reads `dead_time` entries from both pieces to find the shared stoppage it cuts at, and writes each range once.
+- **In reports**, a dead-time range is written `[dead 04:23-04:47 out_of_play]`, so a reader can tell it from a play at a glance.
+- **On the timeline in the app**, a dead-time range is drawn as a quiet gap (T16206).
+
+### 7c. Nothing in the prompt belongs to one sport (owner, 2026-11-20)
+
+The app supports many sports (the tag lists in `src/frontend/src/modes/annotate/constants/` cover soccer, basketball, football, flag football, baseball, softball, hockey, lacrosse, rugby, tennis and volleyball). The prototype's prompt was written against soccer video and names soccer things in its own text: goals and assists, goalkeepers, wingers, corners, through balls. The prompt is split in two:
+
+- **The template** is the same for every sport and names none: what a play is, what dead time is, how to cut, how to rate, how to describe a player, the jersey-number rule, the clock rule, the joining notation. It says "score", "official", "restart", "period", "position", never a sport's word.
+- **The sport block** is filled in from that sport's own data: the sport's name, its tag names with one line each (from the sport's tag file, the single source), a few example positions, what counts as a highlight in that sport, and its words for restarts and periods. Soccer is the only block written and tested now; adding a sport means adding a block, not editing the template.
+
+A test fails if a word from any sport's tag file or a listed sport-specific term appears in the template. A second sport's block (basketball) is rendered into the template and checked for validity without any model call, to prove the split is real; it is not run on video in this task.
+
 ### 8. Is the description true (owner, 2026-11-20)
 
 A parent shown "angled shot saved by the keeper" for a pass that went out of play will stop trusting the notes, and a rating of 4 on a routine passage sends them to the wrong clip. From the corrected truth we count, for prompt version 3: plays whose described event did not happen (a shot, save, cross, corner or goal that is not in the truth), restarts named wrongly, and plays rated 4 or 5 that the owner rates 3 or lower. Then one change at a time is tried on a single piece and counted the same way: more frames a second; higher resolution; and a prompt rule that a shot, save, cross into the box, corner or goal is written only when it is clearly seen, with the rating tied to that outcome. The owner sees the counts before any version is approved.
@@ -129,6 +147,8 @@ Ruled on 2026-11-14, before the first run: a cut-off play with no whole version 
 Ruled on 2026-11-20: player boxes are removed from AI Coach. Boxes asked for inside the video call were not on the players; boxes from still frames were tight but cost more than the analysis and were often "not visible" at a play's start. The research is kept with the Click-once Spotlight milestone. Calls stay separate until separate calls have shown everything they can do.
 
 Ruled on 2026-11-20, after the version 3 run and the owner's own account of 4:18 to 5:56: prompt version 3's segmentation (stoppages as their own entries, cuts only at real events) is the working prompt; the joining is chosen by scoring candidates on real shifted boundaries against the owner's corrected truth, accuracy first and cost second (step 7); a call that reads only the descriptions is not used for joining; how often a description is false is counted before any version is approved (step 8).
+
+Ruled on 2026-11-20: dead time has its own notation (`kind: dead_time` with a reason, a separate `dead_time` list in the joined result) and is product data for skipping in playback (T16206); the prompt is a sport-neutral template plus a block per sport, soccer first.
 
 (Still to record when the owner approves a version: the version numbers of both questions, the chosen direction wording, whether the model's own cut-off flag is used, the example plays chosen for the offer, and the date.)
 
@@ -180,3 +200,5 @@ Ruled on 2026-11-20, after the version 3 run and the owner's own account of 4:18
 - [ ] The approved prompt and answer format contain no box field, and no output file or joined result carries one.
 - [ ] At least ten real lines between pieces on the test clip were scored against the owner's corrected truth for each joining candidate (plays told twice, plays lost, seconds told by neither, strong plays dropped); the table is in the change list and the owner has chosen the joining.
 - [ ] For the approved prompt version, the count of plays whose described event did not happen, of restarts named wrongly, and of plays rated 4 or 5 that the owner rates 3 or lower is recorded against the corrected truth, and the owner has seen it before approving.
+- [ ] Every entry in a piece's answer is marked `play` or `dead_time`; a dead-time entry has a start, an end and a reason and no ratings or players; the joined result lists dead time separately from the plays, with no range overlapping another range or a play.
+- [ ] The prompt template contains no word that belongs to one sport (a test checks it against every sport's tag file and a list of sport terms); soccer's words come only from the soccer block, and a basketball block renders into the same template without a model call.

@@ -21,7 +21,7 @@ The dead stretches are in the stored analysis and are thrown away on import: T16
 1. **The data.** The stored analysis keeps every stoppage entry, with its start and end in seconds. Nothing new is asked of the model. The dead stretches are read from the analysis when the game is opened; they are not copied into the parent's own data, so there is one copy.
 2. **Who gets it.** A game the parent has AI Coach on (the entitlement from T16165, including a free share from T16202). No AI Coach, no control.
 3. **The control.** One switch in the game's playback controls, "Skip dead time", off by default. The UI designer places it next to the existing way of watching only the plays.
-4. **What skipping does.** When playback reaches a dead stretch it jumps to that stretch's end. Each stretch is shortened by a safety margin at both ends, so a second of live play is never jumped over; the margin comes from the measured error in T16145 (about two seconds so far). A stretch shorter than the two margins plus three seconds is not skipped. The timeline shows the dead stretches as quiet gaps so the parent can see what was skipped and click into one.
+4. **What skipping does.** When playback reaches a dead stretch it jumps to that stretch's end. Each stretch is shortened by a safety margin at both ends, so a second of live play is never jumped over; the margin comes from the measured error in T16145 (about two seconds so far). A stretch shorter than the two margins plus three seconds is not skipped. The timeline shows each dead stretch as a quiet gap, with its reason on hover or tap ("ball out of play", "setting up a restart"), so the parent can see what was skipped and click into one. The words for each reason are sport-neutral.
 5. **Not saved.** The switch is how this parent is watching right now. It is not stored on the game or the profile.
 6. **Measure.** `dead_time_skip_on` and `dead_time_skip_off`, so the Journey shows whether parents use it.
 
@@ -39,7 +39,7 @@ Cutting the dead time out of the stored video was considered and dropped: it wou
 - `.claude/knowledge/annotate.md` (read first)
 
 ### Technical Notes
-- Stoppages are entries of the joined result with kind `stoppage`, a start and an end, rated zero, no players. Read them through the same path that checks the purchase; never from the parent's SQLite.
+- Dead time is the stored result's `dead_time` list: `{start_s, end_s, reason}` per range (T16145 step 7b). Read them through the same path that checks the purchase; never from the parent's SQLite.
 - The switch is view state: keep it in memory. Do not persist it (owner rule: no persisted view state).
 - Margins and the shortest stretch worth skipping are named constants in `constants/`, set from T16145's measured stoppage error.
 - Marking a play by hand inside a dead stretch must still work; the switch only affects automatic playback, never seeking.
