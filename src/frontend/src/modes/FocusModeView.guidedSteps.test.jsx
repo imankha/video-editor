@@ -341,7 +341,7 @@ it('disabling guidance stops targets and re-enabling preserves progress', () => 
 });
 it('saved trim edits never opt the user into trim guidance', () => {
   render(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, segmentBoundaries: [0, 2, 4, 10], trimRange: { start: 2, end: 8 } }} />);
-  expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
+  expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-expanded')).toBe('false');
   // T14760: box pre-placed (kf(10)) -- total 5, keep renumbers from 4 to 3.
   expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 5');
 });

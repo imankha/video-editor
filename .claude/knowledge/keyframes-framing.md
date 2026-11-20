@@ -96,6 +96,14 @@ seeded games. T11720 AC1's actual promise (timeline/Trim stay reachable above th
 just "band itself ≤56px") is asserted via a real DOM hit-test (`document.elementFromPoint` at a
 point inside each target, checked against the compact band) PLUS a trial click — proven to fail when
 the band is mutated to visually overlap the content above it (T11720's own STATUS record).)
+updated: 2026-11-19 (T17860, owner ruling): the Trim button's open state is its own label
+(`FRAMING_GUIDE.TRIM_BUTTON_DONE` "Done trimming", Check icon, `aria-expanded` +
+`aria-controls="frame-trim-track"` on `trim-guide-scope`); Preview likewise changes label, so
+NEITHER carries `aria-pressed`. The pressed look is `ActionCard`'s `pressed` prop, which REPLACES
+the secondary card classes: appending `border-cyan-300` via `className` loses to the variant's
+`border-cyan-400/50` in Tailwind's generated order (same-specificity utilities: never rely on a
+className to override a variant colour). Both cards pass `reserveTwoTitleLines` so a label swap
+never resizes the pinned phone band (Sharpen moved 6.5px at 390 without it).
 updated: 2026-11-07 (T14830, owner ruling "Confirm once" — the entire T11700/T11710/T11720 lock
 mechanism above is RETIRED: Generate/Trim-SlowMo/Preview are no longer disabled by drag or Play in
 either layout, and the T11720 compact-locked phone band (`ActionBand`'s `compactLocked` prop,

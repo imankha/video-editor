@@ -48,6 +48,8 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
   });
 });
 
+const classes = (el) => el.className.split(/\s+/);
+
 describe('FramingActionRow - Trim and SlowMo (T14830: never locked)', () => {
   it('renders Trim and SlowMo only when onToggleTrim is provided', () => {
     const { rerender } = render(<FramingActionRow onTogglePreview={vi.fn()} />);
@@ -56,14 +58,47 @@ describe('FramingActionRow - Trim and SlowMo (T14830: never locked)', () => {
     expect(screen.getByRole('button', { name: 'Trim and slow motion' })).toBeTruthy();
   });
 
-  it('calls onToggleTrim on click and reflects trimOpen via aria-pressed', () => {
+  it('calls onToggleTrim on click', () => {
     const onToggleTrim = vi.fn();
-    const { rerender } = render(<FramingActionRow onToggleTrim={onToggleTrim} />);
+    render(<FramingActionRow onToggleTrim={onToggleTrim} />);
     fireEvent.click(screen.getByTestId('trim-slowmo-button'));
     expect(onToggleTrim).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
-    rerender(<FramingActionRow onToggleTrim={onToggleTrim} trimOpen />);
-    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  // T17860 (owner ruling 2026-11-19, UX expert design): open, the button says what a tap does.
+  it('T17860: reads "Done trimming" with a check icon, aria-expanded and a pressed look while open', () => {
+    const { rerender } = render(<FramingActionRow onToggleTrim={vi.fn()} />);
+    const closed = screen.getByTestId('trim-slowmo-button');
+    expect(closed.getAttribute('aria-label')).toBe('Trim and slow motion');
+    expect(closed.getAttribute('aria-expanded')).toBe('false');
+    expect(closed.getAttribute('aria-controls')).toBe('frame-trim-track');
+    expect(closed.hasAttribute('aria-pressed')).toBe(false);
+    expect(closed.querySelector('svg').getAttribute('class')).toMatch(/lucide-scissors/);
+    expect(classes(closed)).not.toContain('border-cyan-300');
+    expect(closed.textContent).toMatch(/adjust timing and playback speed/i);
+
+    rerender(<FramingActionRow onToggleTrim={vi.fn()} trimOpen />);
+    const open = screen.getByTestId('trim-slowmo-button');
+    expect(open.getAttribute('aria-label')).toBe('Done trimming');
+    expect(open.textContent).toMatch(/^Done trimming/);
+    expect(open.textContent).toMatch(/your trim and speed changes stay/i);
+    expect(open.getAttribute('title')).toBe('Hide the trim and slow motion track. Your changes stay.');
+    expect(open.getAttribute('aria-expanded')).toBe('true');
+    expect(open.hasAttribute('aria-pressed')).toBe(false);
+    expect(open.querySelector('svg').getAttribute('class')).toMatch(/lucide-check/);
+    expect(classes(open)).toContain('border-cyan-300');
+    expect(classes(open)).toContain('ring-cyan-300/60');
+  });
+
+  it('T17860: Preview gets the same pressed look while previewing, with no aria-pressed', () => {
+    const { rerender } = render(<FramingActionRow onTogglePreview={vi.fn()} />);
+    expect(classes(screen.getByTestId('framing-preview-toggle'))).not.toContain('border-cyan-300');
+    expect(screen.getByTestId('framing-preview-toggle').hasAttribute('aria-pressed')).toBe(false);
+    rerender(<FramingActionRow onTogglePreview={vi.fn()} previewing />);
+    const on = screen.getByTestId('framing-preview-toggle');
+    expect(classes(on)).toContain('border-cyan-300');
+    expect(classes(on)).toContain('ring-cyan-300/60');
+    expect(on.hasAttribute('aria-pressed')).toBe(false);
   });
 
   // T14830 (owner ruling 2026-11-07, "Confirm once"): Trim and SlowMo and

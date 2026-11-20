@@ -64,7 +64,7 @@ async function press(page, locator) {
  * queue per clip, so an earlier gesture's response can arrive first, and reloading before the queued
  * save is sent aborts it (the verifier's phone run lost its remove_segment_split to a 409 that way).
  */
-async function pressAndSave(page, locator, actions, act = () => press(page, locator)) {
+export async function pressAndSave(page, locator, actions, act = () => press(page, locator)) {
   const saved = page.waitForResponse((r) => {
     if (r.request().method() !== 'POST' || !/\/clips\/.*\/actions/.test(r.url())) return false;
     try { return actions.includes(r.request().postDataJSON()?.action); } catch { return false; }
@@ -75,7 +75,7 @@ async function pressAndSave(page, locator, actions, act = () => press(page, loca
 }
 
 /** Put the clip back to one untrimmed section (undo trims, delete splits). */
-async function resetClip(page) {
+export async function resetClip(page) {
   for (let i = 0; i < 6; i += 1) {
     const untrim = ['set_trim_range', 'clear_trim_range'];
     if (await undoEnd(page).count()) { await pressAndSave(page, undoEnd(page).first(), untrim); }
@@ -91,7 +91,7 @@ async function resetClip(page) {
 }
 
 /** Split the speed track at a fraction of its usable width (inside the 20px edge padding). */
-async function splitAt(page, fraction) {
+export async function splitAt(page, fraction) {
   const track = page.locator('.segment-track');
   await track.scrollIntoViewIfNeeded();
   const box = await track.boundingBox();

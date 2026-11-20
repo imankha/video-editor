@@ -75,7 +75,7 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
   it('defaults collapsed for a fresh clip with no splits or trim', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: null });
     const toggle = screen.getByTestId('trim-slowmo-button');
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(lastFocusModeProps.showSegments).toBe(false);
   });
 
@@ -94,29 +94,29 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
   it('stays collapsed when the clip already has a user split, and opens on click', () => {
     renderView({ segmentBoundaries: [0, 50, 100], trimRange: null });
     const toggle = screen.getByTestId('trim-slowmo-button');
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(lastFocusModeProps.showSegments).toBe(false);
     fireEvent.click(toggle);
-    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-expanded')).toBe('true');
     expect(lastFocusModeProps.showSegments).toBe(true);
     expect(lastFocusModeProps.segmentBoundaries).toEqual([0, 50, 100]);
   });
 
   it('stays collapsed when the clip already has a trim range (134b1c6c4 opt-in)', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: { start: 0, end: 50 } });
-    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-expanded')).toBe('false');
     expect(lastFocusModeProps.showSegments).toBe(false);
   });
 
   it('toggles open/closed on click (gesture override)', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: null });
     const toggle = screen.getByTestId('trim-slowmo-button');
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
-    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-expanded')).toBe('true');
     expect(lastFocusModeProps.showSegments).toBe(true);
     fireEvent.click(screen.getByTestId('trim-slowmo-button'));
-    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-expanded')).toBe('false');
   });
 
   it('does not render the disclosure without a video', () => {

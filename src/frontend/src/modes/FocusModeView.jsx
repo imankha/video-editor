@@ -1109,6 +1109,7 @@ export function FocusModeView({
           {!mobileFs && (
             <div
               data-testid="trim-guide-scope"
+              id="frame-trim-track"
               ref={trimScopeRef}
               className="max-lg:[&_[data-crop-empty-hint]]:hidden"
               style={{ scrollMarginBottom: 'calc(var(--cta-bar-h, 0px) + 0.5rem)' }}
