@@ -1,6 +1,6 @@
 # T17860: "Trim and slow motion" button shows when its track is open
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-19

@@ -1,6 +1,6 @@
 # T17870: Frame settings show every option instead of hiding two under "More options"
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 1
 **Created:** 2026-11-19

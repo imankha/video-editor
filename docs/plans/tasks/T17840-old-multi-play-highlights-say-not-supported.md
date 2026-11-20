@@ -1,6 +1,6 @@
 # T17840: Old multi-play highlights should say plainly they are not supported
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-11-19
