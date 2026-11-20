@@ -91,7 +91,12 @@ CREATE TABLE IF NOT EXISTS users (
     -- unsubscribe link (/api/email/unsubscribe?token=...). The token is the
     -- link's only credential, random per user, so no signing secret exists.
     email_opted_out_at TIMESTAMPTZ,
-    email_unsubscribe_token TEXT UNIQUE NOT NULL DEFAULT gen_random_uuid()::text
+    email_unsubscribe_token TEXT UNIQUE NOT NULL DEFAULT gen_random_uuid()::text,
+    -- T18040 (v051): privacy-policy version last acknowledged (notice "Got it",
+    -- or sign-up) and when the account turned off internal-testing use of its
+    -- footage (NULL = allowed). Rule: services/policy_consent.py.
+    policy_version_acknowledged TEXT,
+    testing_opted_out_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

@@ -297,8 +297,9 @@ def _repair_stale_analytics_tables(cur):
 # platforms, v035 deleted users' segment activity, v026 is_test_account flags;
 # v005/v006/v007 rebuild legacy analytics tables from users for v009 to read.
 # _SCHEMA_DDL already creates their schema at head. test_t14410's audit fails
-# when a new data-mutating migration is not listed here.
-_NEVER_REPLAYED_DATA_MIGRATIONS = (5, 6, 7, 9, 15, 25, 26, 35)
+# when a new data-mutating migration is not listed here. v052 marks the T18040
+# in-person consent accounts (real dev emails) as acknowledged.
+_NEVER_REPLAYED_DATA_MIGRATIONS = (5, 6, 7, 9, 15, 25, 26, 35, 52)
 
 
 def _build_pg_schema(cur):

@@ -5,6 +5,7 @@ import { useCreditStore } from '../stores/creditStore';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { ACCOUNT_COPY, GUIDANCE_COPY } from '../config/displayNames';
+import { TestingConsentSwitch } from './PolicyNotice';
 
 /**
  * AccountSettings - Modal panel showing account info, Google link status,
@@ -161,6 +162,9 @@ export function AccountSettings() {
               <Trash2 size={16} className="text-red-400" />
               <span className="text-sm text-red-300">{ACCOUNT_COPY.DELETE_ACCOUNT}</span>
             </button>
+
+            {/* T18040: internal-testing use of the account's videos */}
+            <TestingConsentSwitch />
 
             <div className="flex items-center justify-between px-3 py-2 bg-white/5 rounded-lg">
               <span className="text-sm text-gray-300">Do Not Sell or Share</span>

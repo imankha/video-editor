@@ -59,7 +59,8 @@ def get_user_by_id(user_id: str) -> dict | None:
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT user_id, email, google_id, verified_at, created_at, picture_url, terms_accepted_at FROM users WHERE user_id = %s",
+            "SELECT user_id, email, google_id, verified_at, created_at, picture_url, terms_accepted_at, "
+            "policy_version_acknowledged, testing_opted_out_at FROM users WHERE user_id = %s",
             (user_id,),
         )
         return cur.fetchone()
@@ -72,12 +73,16 @@ def create_user(
     verified_at: str | None = None,
     is_test_account: bool = False,
 ) -> dict:
+    # T18040: signing up acknowledges the current privacy policy, so a new account never
+    # sees the policy-change notice. Imported here: policy_consent imports this module.
+    from app.services.policy_consent import CURRENT_POLICY_VERSION
+
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO users (user_id, email, google_id, verified_at, is_test_account) "
-            "VALUES (%s, %s, %s, %s, %s)",
-            (user_id, email, google_id, verified_at, is_test_account),
+            "INSERT INTO users (user_id, email, google_id, verified_at, is_test_account, "
+            "policy_version_acknowledged) VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, email, google_id, verified_at, is_test_account, CURRENT_POLICY_VERSION),
         )
 
     logger.info(f"[AuthDB] Created user: {user_id} email={email}")
@@ -292,7 +297,8 @@ def _validate_session_in_db(session_id: str) -> tuple[dict, datetime] | None:
         cur.execute(
             """SELECT s.session_id, s.user_id, s.expires_at,
                       s.impersonator_user_id, s.impersonation_expires_at,
-                      u.email, u.google_id, u.picture_url, u.terms_accepted_at
+                      u.email, u.google_id, u.picture_url, u.terms_accepted_at,
+                      u.policy_version_acknowledged, u.testing_opted_out_at
                FROM sessions s
                JOIN users u ON s.user_id = u.user_id
                WHERE s.session_id = %s AND s.expires_at > now()""",
@@ -327,6 +333,8 @@ def _validate_session_in_db(session_id: str) -> tuple[dict, datetime] | None:
         "picture_url": row.get("picture_url"),
         "google_id": row.get("google_id"),
         "terms_accepted_at": row.get("terms_accepted_at"),
+        "policy_version_acknowledged": row["policy_version_acknowledged"],
+        "testing_opted_out_at": row["testing_opted_out_at"],
     }
     if impersonator_user_id:
         imp_email = None

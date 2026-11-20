@@ -91,6 +91,10 @@ export const useAuthStore = create((set, get) => ({
   showAuthModal: false,
   showAccountSettings: false,  // T430: Account settings panel
   needsTermsAcceptance: false,  // T1740: Passive terms acceptance for new users
+  // T18040: the privacy-policy version the one-time notice announces (null = no notice),
+  // and the internal-testing switch. Both come from /me; each changes only by its gesture.
+  policyNoticeVersion: null,
+  useForTesting: null,
   pendingAction: null,
   isCheckingSession: true,  // true until initial session check completes
   // T1510: impersonation state — { id, email, expires_at } | null
@@ -275,6 +279,35 @@ export const useAuthStore = create((set, get) => ({
     clearProfileHeader(); // T7520: drop the stale profile header before reload
     resetSession();
     window.location.reload();
+  },
+
+  // T18040: /me answer -> the notice and the switch.
+  setPolicyStateFromMe: (me) => set({
+    policyNoticeVersion: me.needs_policy_notice ? me.policy_version : null,
+    useForTesting: me.use_for_testing,
+  }),
+
+  // T18040: "Got it" on the policy notice. Records the version the notice showed.
+  acknowledgePolicy: async () => {
+    const version = get().policyNoticeVersion;
+    const res = await apiFetch(`${API_BASE}/api/auth/acknowledge-policy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version }),
+    });
+    if (!res.ok) throw new Error(`acknowledge-policy failed: ${res.status}`);
+    set({ policyNoticeVersion: null });
+  },
+
+  // T18040: the "Use my videos to help test and improve ReelBallers" switch. One write.
+  setUseForTesting: async (useForTesting) => {
+    const res = await apiFetch(`${API_BASE}/api/auth/testing-consent`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ use_for_testing: useForTesting }),
+    });
+    if (!res.ok) throw new Error(`testing-consent failed: ${res.status}`);
+    set({ useForTesting });
   },
 
   // T1510: Start impersonating a target user. Admin gesture only.

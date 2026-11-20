@@ -1,0 +1,31 @@
+{
+  "criteria": {
+    "T18040:C1": {
+      "kind": "code",
+      "command": "cd src/backend && DATABASE_URL=\"${DATABASE_URL%/*}/rb_t18040_test\" timeout 300 python -m pytest tests/test_t18040_policy_consent.py -p no:cacheprovider -q -k c1_ && cd ../frontend && timeout 300 npx vitest run src/components/PolicyNotice.t18040.test.jsx -t \"T18040:C1 \""
+    },
+    "T18040:C2": {
+      "kind": "code",
+      "command": "cd src/backend && DATABASE_URL=\"${DATABASE_URL%/*}/rb_t18040_test\" timeout 300 python -m pytest tests/test_t18040_policy_consent.py -p no:cacheprovider -q -k c2_ && cd ../frontend && timeout 300 npx vitest run src/components/PolicyNotice.t18040.test.jsx -t \"T18040:C2 \""
+    },
+    "T18040:C3": {
+      "kind": "browser"
+    },
+    "T18040:C4": {
+      "kind": "code",
+      "command": "cd src/backend && DATABASE_URL=\"${DATABASE_URL%/*}/rb_t18040_test\" timeout 300 python -m pytest tests/test_t18040_policy_consent.py -p no:cacheprovider -q -k c4_"
+    },
+    "T18040:C5": {
+      "kind": "code",
+      "command": "test \"$(grep -o 'Use my videos to help test and improve ReelBallers&rdquo; under &ldquo;Your privacy rights&rdquo; in Account settings' src/frontend/src/components/PrivacyPolicy.jsx | wc -l)\" -eq 2 && grep -q '^\\*\\*Attorney approval of the opt-out sentence:\\*\\*' docs/plans/tasks/T18040-policy-change-notice-and-testing-opt-out.md"
+    },
+    "T18040:C6": {
+      "kind": "code",
+      "command": "for f in docs/legal/privacy-policy.md docs/legal/terms-of-service.md; do ! grep -qi 'draft' $f && grep -q 'Approved by legal counsel on November 20, 2026' $f && grep -q 'Last Updated:\\*\\* November 20, 2026' $f || exit 1; done && test \"$(grep -o 'Use my videos to help test and improve ReelBallers” under “Your privacy rights” in Account settings' docs/legal/privacy-policy.md | wc -l)\" -eq 2 && grep -q 'unless you opt out as described in our Privacy Policy' docs/legal/terms-of-service.md"
+    },
+    "T18040:C7": {
+      "kind": "code",
+      "command": "cd src/backend && DATABASE_URL=\"${DATABASE_URL%/*}/rb_t18040_test\" timeout 300 python -m pytest tests/test_t18040_policy_consent.py -p no:cacheprovider -q -k c7_"
+    }
+  }
+}

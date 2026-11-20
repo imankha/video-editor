@@ -1811,6 +1811,21 @@ export const ACCOUNT_COPY = {
   TAGLINE: 'Turn game video into high-quality highlights using AI upscaling',
 };
 
+// T18040: the one-time notice that the privacy policy changed, and the internal-testing
+// switch it shares with Account settings ("Your privacy rights"). The two WHAT_CHANGED
+// sentences summarize PrivacyPolicy.jsx sections 2 and 3 as of 2026-11-20.
+export const POLICY_NOTICE_COPY = {
+  TITLE: 'We updated our privacy policy',
+  WHAT_CHANGED_AI: 'When you choose it, an AI model may analyze a game to propose its plays.',
+  WHAT_CHANGED_TESTING: 'We may also use your videos and the plays you mark inside ReelBallers to test and improve it, unless you turn that off below.',
+  READ_POLICY: 'Read the privacy policy',
+  GOT_IT: 'Got it',
+  ACKNOWLEDGE_ERROR: "We couldn't record that. Try again.",
+  TESTING_LABEL: 'Use my videos to help test and improve ReelBallers',
+  TESTING_HINT: 'Used only inside ReelBallers. This never publishes anything or shows it to other users.',
+  TESTING_ERROR: "We couldn't change this setting. Try again.",
+};
+
 // T13230: Veo highlights zip -> clips pick list (Path B). Factual, nominative use of the
 // name (EPIC.md decision V5). No em dashes.
 export const VEO_CLIP_IMPORT = {
