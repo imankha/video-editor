@@ -319,7 +319,7 @@ export default function FocusCockpit({
               athlete under the box stays visible. Foot of the stage: the top corners hold the chips. */}
           {introSeen && !isCropDragging && (
             <div className="pointer-events-none absolute inset-x-2 bottom-2 z-20 flex justify-center">
-              <CompactGuide guide={guide} boxPrePlaced={boxPrePlaced} testId="cockpit-guide" className="w-full max-w-[30rem]" />
+              <CompactGuide guide={guide} shareWhereSkipped={boxPrePlaced} testId="cockpit-guide" className="w-full max-w-[30rem]" />
             </div>
           )}
         </div>

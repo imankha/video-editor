@@ -39,12 +39,12 @@ async function sharpenThenGoHome(page, tag) {
 
   await page.goto(`/focus/p/${draft.id}`);
   await page.getByTestId('focus-video-stage').waitFor({ timeout: 90000 });
-  const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
+  const sharpen = page.getByRole('button', { name: 'Sharpen!' }).first();
   await expect(sharpen).toBeEnabled({ timeout: 60000 });
   await sharpen.click();
   const confirm = page.getByTestId('focus-box-confirm');
   if (await confirm.waitFor({ timeout: 5000 }).then(() => true, () => false)) {
-    await confirm.getByRole('button', { name: 'Sharpen my highlight' }).click();
+    await confirm.getByRole('button', { name: 'Sharpen!' }).click();
   }
   // The back arrow while it sharpens: an in-app route change, the page never reloads.
   await page.getByTestId('editor-home').first().click();

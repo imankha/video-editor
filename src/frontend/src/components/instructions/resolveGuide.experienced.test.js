@@ -13,7 +13,7 @@ describe('T13640: experienced users get advanced options, not the 5 basics', () 
     expect(g.id).toBe('focus.progress.experienced');
     // T17910: the sentence calls Trim and Preview optional and names the finish.
     expect(g.message.title).toMatch(/Trim and Preview are optional/);
-    expect(g.message.title).toMatch(/Sharpen my highlight/);
+    expect(g.message.title).toMatch(/tap Sharpen!$/);
     expect(g.message.title).not.toMatch(/Drag the box/);
   });
 

@@ -470,8 +470,15 @@ export function FocusModeView({
   // positions (the shape was already settled in an earlier session).
   // T17230: also once positions exist at all (e.g. loaded after mount) -- the chooser
   // hides then, so the step must not point at a control that is gone.
+  // T17910 (owner ruling 2026-11-19): on a computer (the desktop layout, `!isMobile`) the
+  // Settings rail with its Shape row is always on screen, so the chooser would ask the same
+  // question twice: it is not rendered there, its step counts as done, and the coach
+  // numbers the remaining five steps. Phones (and the cockpit) keep the chooser and six steps.
+  const shapeChoiceShown = isMobile;
   const [shapeTapped, setShapeTapped] = useState(false);
-  const shapeChosen = shapeTapped || hasDragged || boxPrePlaced || focusPointCount > 0;
+  const shapeChosen = !shapeChoiceShown || shapeTapped || hasDragged || boxPrePlaced || focusPointCount > 0;
+  // The shape step never shows this session: pre-placed box (T14760) or no chooser (T17910).
+  const shareWhereSkipped = boxPrePlaced || !shapeChoiceShown;
   const handleShapeChosen = useCallback(() => setShapeTapped(true), []);
   // Step 3 -> 4: once the first play has started, reaching the clip end while
   // playing counts as one full play-through (playback loops, so the time wraps
@@ -801,7 +808,11 @@ export function FocusModeView({
 
   return (
     <GuideScope guides={[guide]}>
-    <div className="flex flex-col min-h-0">
+    {/* T17910: at least one viewport tall from lg up, with the spacer before the band below, so
+        the sticky band always sits at its pinned spot, even when the content above it is short
+        (no shape chooser on a computer). Short content left the band 6px above that spot at
+        1440x900 until opening Trim pushed it down, moving Sharpen!. */}
+    <div className="flex flex-col min-h-0 lg:min-h-[100dvh]">
       {/* Error Message */}
       {error && (
         <div data-testid="focus-video-error" className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
@@ -881,7 +892,7 @@ export function FocusModeView({
         {/* Guided framing: one floating instruction near the current action. */}
         {(videoUrl || error) && !isFullscreen && !mobileFs && guide && (
           <Guide guide={guide}>
-            <FramingGuide {...focusGuideStepDisplay(guide.step, boxPrePlaced)} text={guide.message.title} compact={guide.compact} />
+            <FramingGuide {...focusGuideStepDisplay(guide.step, shareWhereSkipped)} text={guide.message.title} compact={guide.compact} />
           </Guide>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
@@ -894,7 +905,7 @@ export function FocusModeView({
               slim strip between the corner buttons and lets touches through to the stage. */}
           {(isFullscreen || mobileFs) && (
             <div className="pointer-events-none absolute inset-x-14 top-2 z-30 flex justify-center sm:inset-x-16 sm:top-4">
-              <CompactGuide guide={guide} boxPrePlaced={boxPrePlaced} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
+              <CompactGuide guide={guide} shareWhereSkipped={shareWhereSkipped} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
             </div>
           )}
           {/* T14770: "Where will you share it?" (design decision 1, Option C) —
@@ -905,7 +916,7 @@ export function FocusModeView({
               T15990: the LIVE count, not `boxPrePlaced` (frozen at mount by T15610 for
               the step total) -- positions that load or get placed after mount must
               hide the chooser and make a Settings shape switch ask first, as the cockpit does. */}
-          {!isFullscreen && !mobileFs && (
+          {shapeChoiceShown && !isFullscreen && !mobileFs && (
             <div className="mb-2">
               <FrameShapeChoice
                 aspectRatio={globalAspectRatio}
@@ -1004,7 +1015,7 @@ export function FocusModeView({
             />
 
             {/* T17910: on a phone the preview disclosure rides on the picture -- in the pinned
-                band it added a row and moved Sharpen my highlight. From `sm` up it is in the
+                band it added a row and moved Sharpen!. From `sm` up it is in the
                 band's status cell (ExportButtonView). */}
             {previewActive && (
               <div data-testid="preview-disclosure-caption"
@@ -1279,6 +1290,8 @@ export function FocusModeView({
         // T10820: `relative overflow-x-clip` added — this sticky wrapper is now also
         // the mobile settings panel's containing block (`absolute bottom-full`
         // inside it), which is why the panel is mounted as this div's first child.
+        <>
+        <div aria-hidden="true" className="hidden lg:block lg:flex-1" />
         <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4 relative overflow-x-clip">
           {/* T9270: mobile settings panel — the SAME SettingsRail anchored above
               the band (T10820: `absolute bottom-full`, never `position:fixed`).
@@ -1321,7 +1334,7 @@ export function FocusModeView({
             renderedAt={renderedAt}
             backToPreviewLoading={backToPreviewLoading}
             previewing={previewing}
-            // [Trim and SlowMo] + [Preview] sit in the band before Sharpen my highlight
+            // [Trim and SlowMo] + [Preview] sit in the band before Sharpen!
             // (T17910 working order). Never locked
             // (T14830, owner ruling 2026-11-07). Trim and SlowMo toggles the
             // timeline's segment/speed/trim track (advancedOpen).
@@ -1336,6 +1349,7 @@ export function FocusModeView({
             }
           />
         </div>
+        </>
       )}
 
       {/* Technical readouts (dimensions/duration/fps) - 2026-09-18 (user request):

@@ -94,10 +94,9 @@ export default function ActionRail({
       onClick={onGenerate}
       disabled={ctaDisabled}
       guideTarget={GUIDE_PULSE.EXPORT}
-      title={`${FOCUS_COCKPIT.GENERATE_LINE_1} ${FOCUS_COCKPIT.GENERATE_LINE_2}`}
+      title={FOCUS_COCKPIT.GENERATE}
     >
-      <span>{FOCUS_COCKPIT.GENERATE_LINE_1}</span>
-      <span>{FOCUS_COCKPIT.GENERATE_LINE_2}</span>
+      <span>{FOCUS_COCKPIT.GENERATE}</span>
     </PrimaryCta>
   );
 

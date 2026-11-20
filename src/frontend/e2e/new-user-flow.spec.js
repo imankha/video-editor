@@ -435,7 +435,7 @@ test.describe('New User Flow — home page to a sharpened highlight', () => {
     await page.waitForTimeout(3000);
 
     // Click Generate Highlight to start export
-    const frameVideoBtn = page.locator('button:has-text("Sharpen my highlight"):not([disabled])');
+    const frameVideoBtn = page.locator('button:has-text("Sharpen!"):not([disabled])');
     // A project that already has a rendered highlight opens its preview instead of
     // the editor, so only start the export when the editor is showing the button;
     // the working-video check below is the real assertion either way.

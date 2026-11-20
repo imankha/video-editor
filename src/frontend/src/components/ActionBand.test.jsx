@@ -85,7 +85,7 @@ describe('ActionBand above slot', () => {
 
 /**
  * T17910 (owner ruling 2026-11-19, reverses T12020): Focus reads in working order --
- * Trim and Preview, then the CTA (Sharpen my highlight) -- in the DOM, so tab order matches.
+ * Trim and Preview, then the CTA (Sharpen!) -- in the DOM, so tab order matches.
  */
 describe('ActionBand secondary row (T12020 default, T17910 ctaLast)', () => {
   it('by default (Overlay) renders the CTA before the secondary row', () => {

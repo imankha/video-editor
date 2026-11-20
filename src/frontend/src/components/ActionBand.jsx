@@ -54,7 +54,7 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
         // T12020: by default the CTA is FIRST (left on desktop, top on mobile) and the
         // secondaries sit beside it (Overlay). T17910 (owner ruling 2026-11-19, Frame only,
         // `ctaLast`): working order in the DOM, so tab and screen-reader order match -- Trim,
-        // Preview, then Sharpen my highlight in the wide last column; on a phone Trim and
+        // Preview, then Sharpen! in the wide last column; on a phone Trim and
         // Preview share a row and the CTA spans the row beneath. The lg-only chevron is
         // absolute in the gap, so it never moves or resizes a cell.
         // T16640: on desktop (lg) the band is ONE row -- status | cards | cost -- of short
@@ -64,9 +64,11 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
         ctaLast ? (
           <div data-testid="action-band-above" className={`grid grid-cols-2 sm:[grid-template-columns:repeat(2,minmax(0,1fr))_minmax(0,1.4fr)] gap-2 lg:gap-x-4 px-3 sm:px-4 pt-3 max-w-4xl mx-auto ${BAND_ROW_CARDS}`}>
             {above}
-            <div className="relative col-span-2 sm:col-span-1">
+            {/* T17910 (owner change): the CTA cell's left margin equals the grid gap, so the gap
+                before Sharpen! is twice Trim-Preview's; the chevron is centred in that 2rem lg gap. */}
+            <div className="relative col-span-2 sm:col-span-1 sm:ml-2 lg:ml-4">
               <ChevronRight data-testid="sharpen-step-chevron" aria-hidden="true" size={14}
-                className="hidden lg:block absolute top-1/2 -translate-y-1/2 -left-[15px] text-cyan-300/50" />
+                className="hidden lg:block absolute top-1/2 -translate-y-1/2 -left-[23px] text-cyan-300/50" />
               {cta}
             </div>
           </div>

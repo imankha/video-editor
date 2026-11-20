@@ -29,7 +29,7 @@ const CONTROL_PHRASES = [
   { name: 'Drag the box', re: /\bDrag the box\b/, pulse: [P.CROP_BOX] },
   { name: 'Preview', re: /\bTap Preview\b/, pulse: [P.PREVIEW, P.COCKPIT_PREVIEW] },
   // T17910: the Preview sentence names Sharpen too; there the band (cockpit: the rail CTA) is kept clear.
-  { name: 'Sharpen my highlight', re: /\b[Tt]ap Sharpen my highlight\b/, pulse: [P.EXPORT], keepClear: ['action-band', 'cockpit-cta-ring'] },
+  { name: 'Sharpen!', re: /\b[Tt]ap Sharpen!/, pulse: [P.EXPORT], keepClear: ['action-band', 'cockpit-cta-ring'] },
   { name: 'Add spotlight to highlight', re: /\bTap Add spotlight to highlight\b/, pulse: [P.EXPORT] },
   { name: 'Trim and slow motion', re: /\bopen Trim and slow motion\b/, pulse: [] },
   { name: 'Exit fullscreen', re: /\bExit fullscreen\b/, pulse: [P.EXIT_FULLSCREEN] },

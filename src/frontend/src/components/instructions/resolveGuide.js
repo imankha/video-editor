@@ -73,7 +73,7 @@ const focus = (text, target, step, pulse = null, keepClear = [], phase = step, n
 // T13640: 3+ finished highlights = experienced. The basic drag/play/keep/preview steps give way to ONE advanced-options prompt.
 const EXPERIENCED_AFTER = 3;
 const experienced = (f) => (hp(f).finishedCount ?? 0) >= EXPERIENCED_AFTER && !f.local.rendered && !f.local.ctaBusy && !f.local.previewing && !f.local.hasPreviewPlayedThrough && f.local.trimStage !== 'split' && f.local.trimStage !== 'adjust';
-// T17910: the experienced sentence ends at Sharpen my highlight, but before the box has been dragged the parent still
+// T17910: the experienced sentence ends at Sharpen!, but before the box has been dragged the parent still
 // has to check it, so Sharpen pulses only once the box has moved (the `.framed` twins below).
 const EXPERIENCED_NO_PULSE = 'The box has not been checked yet; pulsing Sharpen would invite spending before it is.';
 const COCKPIT_CTA = tid('cockpit-cta-ring');
@@ -388,10 +388,12 @@ export function resolveGuide(facts) {
  * that step never shows this session. Renumber every later step down by one and drop
  * the total to 5, so the first step this parent can see always reads "Step 1", never
  * a skipped step's number -- at any later step either.
+ * T17910: the same holds on a computer, where the chooser is not rendered at all
+ * (FocusModeView passes `shareWhereSkipped` for either reason).
  */
-export function focusGuideStepDisplay(step, boxPrePlaced) {
+export function focusGuideStepDisplay(step, shareWhereSkipped) {
   if (step == null) return { step: null, total: null };
-  return boxPrePlaced ? { step: step - 1, total: 5 } : { step, total: 6 };
+  return shareWhereSkipped ? { step: step - 1, total: 5 } : { step, total: 6 };
 }
 
 const play = (rating, portrait = null, highlightCount = 0) => ({ selectedPlay: rating == null ? null : { rating }, portrait, highlightCount });

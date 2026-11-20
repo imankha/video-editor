@@ -3,8 +3,8 @@ import { checkApi } from './checkAuth';
 
 /**
  * sharpenWhilePreviewing - the T16750 flow, shared by the T16750 and T16810 checks:
- * a parent makes a new highlight, presses Preview in Frame, and presses "Sharpen my
- * highlight" while the preview plays, until the Finished panel opens over Frame.
+ * a parent makes a new highlight, presses Preview in Frame, and presses "Sharpen!"
+ * while the preview plays, until the Finished panel opens over Frame.
  *
  * T16810: the highlight is made fresh each run, the way a parent does it (Annotate, a play,
  * "Make highlight", which always creates a NEW draft) on a game whose video is ready.
@@ -113,7 +113,7 @@ export async function makeNewHighlight(page) {
  */
 export async function sharpenNewHighlightWhilePreviewing(page) {
   if (!(await makeNewHighlight(page))) return false;
-  const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
+  const sharpen = page.getByRole('button', { name: 'Sharpen!' }).first();
   await expect(sharpen).toBeEnabled({ timeout: 60000 });
 
   // Preview plays the highlight in the Frame editor's own video.
@@ -124,7 +124,7 @@ export async function sharpenNewHighlightWhilePreviewing(page) {
   await sharpen.click();
   const confirm = page.getByTestId('focus-box-confirm');
   if (await confirm.waitFor({ timeout: 5000 }).then(() => true, () => false)) {
-    await confirm.getByRole('button', { name: 'Sharpen my highlight' }).click();
+    await confirm.getByRole('button', { name: 'Sharpen!' }).click();
   }
   await page.getByTestId('focus-publish-action-bar').waitFor({ timeout: 480000 });
   return true;

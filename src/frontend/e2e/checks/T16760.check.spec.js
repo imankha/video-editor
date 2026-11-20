@@ -3,8 +3,8 @@
  *
  * In Frame, Preview resizes the stage to the reel's shape. For a portrait (9:16) reel the stage
  * used to take half the column's width (T15650's 50% width floor): at 1440x900 it ran ~890px
- * tall, its lower part and the play controls under the fixed action band ("Sharpen my
- * highlight"). The whole preview and its controls must sit above the band without scrolling.
+ * tall, its lower part and the play controls under the fixed action band ("Sharpen!")
+ * The whole preview and its controls must sit above the band without scrolling.
  * T16820: the setup makes a fresh highlight on a ready game (helpers/portraitPreviewLayout.js).
  *
  * Run: bash scripts/dev-verify.sh e2e/checks/T16760.check.spec.js --reporter=line

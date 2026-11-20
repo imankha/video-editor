@@ -40,6 +40,8 @@ export default function PrimaryCta({
   compact = false,
   guideTarget,
   phoneRow = false,
+  // T17910: a reserved second line under the label (Frame's "Uses N credits"); `undefined` renders none.
+  subline,
   children,
 }) {
   // T12750: pulses when the enclosing GuideScope names `guideTarget`; a disabled CTA never pulses.
@@ -77,6 +79,7 @@ export default function PrimaryCta({
   return <ActionCard compact phoneRow={phoneRow} variant="primary" icon={Icon} iconClassName={iconClassName}
     data-testid="primary-cta" onClick={onClick} disabled={disabled}
     title={children} tooltip={title} aria-label={typeof children === 'string' ? children : undefined}
+    subline={subline}
     description={disabled ? title : undefined}
     guideTarget={guideTarget} />;
 }

@@ -6,7 +6,7 @@ import { loginForCheck, checkApi, disableGuidanceForCheck } from './checkAuth';
  * asserts the flow sent no request to a dev-only test route).
  *
  * The highlight is made and published the way a parent does it, through routes that exist
- * on every target -- select a play in Annotate, "Make highlight", "Sharpen my highlight" in
+ * on every target -- select a play in Annotate, "Make highlight", "Sharpen!" in
  * Frame, then "Finish without spotlight" (renders and publishes in one tap). Then the reel
  * is deleted through DELETE /downloads/{id} (the endpoint the UI's delete button calls), and
  * the play's highlight list and "Make highlight" card must be back to the no-highlight
@@ -78,13 +78,13 @@ export async function deletedReelLeavesNoHighlight(context, page) {
 
   await page.getByTestId('focus-video-stage').waitFor({ timeout: 180000 });
   await disableGuidanceForCheck(page);
-  const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
+  const sharpen = page.getByRole('button', { name: 'Sharpen!' }).first();
   await expect(sharpen).toBeEnabled({ timeout: 120000 });
   await sharpen.click();
   // A box nobody moved asks once "Is your athlete in the box?" (T14830); continue.
   const confirm = page.getByTestId('focus-box-confirm');
   if (await confirm.waitFor({ state: 'visible', timeout: 30000 }).then(() => true, () => false)) {
-    await confirm.getByRole('button', { name: 'Sharpen my highlight' }).click();
+    await confirm.getByRole('button', { name: 'Sharpen!' }).click();
   }
 
   // The sharpen render lands on the publish action bar; "Finish without spotlight"

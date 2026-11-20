@@ -85,7 +85,10 @@ vi.mock('./focus', async () => {
     },
   };
 });
-vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false }));
+// T17910: the six-step walk (with "Where will you share it?") is the phone layout; on a
+// computer the chooser is not rendered (see the desktop describe in guidedSteps).
+const viewport = vi.hoisted(() => ({ isMobile: true }));
+vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => viewport.isMobile }));
 vi.mock('../hooks/useFullscreenControls', () => ({
   useFullscreenControls: () => ({
     isVisible: true,

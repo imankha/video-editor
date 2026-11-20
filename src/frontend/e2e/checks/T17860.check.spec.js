@@ -20,10 +20,10 @@ const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
 const previewButton = (page) => page.getByTestId('framing-preview-toggle');
-// The band's main CTA: "Sharpen my highlight", or "Watch highlight" in the same slot when the
+// The band's main CTA: "Sharpen!", or "Watch highlight" in the same slot when the
 // play the account loads was already sharpened.
 const sharpenButton = (page) => page.getByTestId('action-band')
-  .getByRole('button', { name: /^(Sharpen my highlight|Watch highlight)/ }).first();
+  .getByRole('button', { name: /^(Sharpen!|Watch highlight)/ }).first();
 
 /**
  * Border colour at rest: the pointer is moved off first so a hover style is never measured,
@@ -85,7 +85,7 @@ test.describe('at 1440 wide', () => {
 test.describe('at 390 wide', () => {
   test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
-  test('T17860:C3 - at 390 wide the Trim button is at least 44px high in both states and Sharpen my highlight does not move or resize', async ({ context, page }) => {
+  test('T17860:C3 - at 390 wide the Trim button is at least 44px high in both states and Sharpen! does not move or resize', async ({ context, page }) => {
     await loginForCheck(context);
     await openFrame(page, await framePlayPath(page));
     await page.waitForTimeout(1000);

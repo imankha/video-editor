@@ -7,8 +7,8 @@ import { resolveGuide } from '../../components/instructions/resolveGuide';
 import { GUIDE_PULSE } from '../../components/instructions/guideTargets';
 
 // T17910 (owner ruling 2026-11-19): the Frame bar reads in working order -- Trim, Preview,
-// then Sharpen my highlight -- the toggles say "Close ..." while on, an idle line names
-// Sharpen as the finish, Sharpen carries the wand, and the coach sentences name Sharpen.
+// then Sharpen! -- the toggles say "Close ..." while on, an idle line names Sharpen! as the
+// finish, Sharpen! carries the wand and its price, and the coach sentences name Sharpen!.
 
 const baseProps = {
   isCurrentlyExporting: false,
@@ -42,15 +42,16 @@ const frameBand = (over = {}, row = {}) => (
   />
 );
 
-const HINT = 'Trim and Preview are optional. When your athlete stays in the box, tap Sharpen my highlight.';
+const HINT = 'Trim and Preview are optional. When your athlete stays in the box, tap Sharpen!';
 const svgClass = (el) => el.querySelector('svg').getAttribute('class');
 
 describe('T17910:C1 working order', () => {
-  it('renders Trim, Preview, then Sharpen my highlight in DOM (tab) order, Sharpen in the wide last column', () => {
+  it('renders Trim, Preview, then Sharpen! in DOM (tab) order, Sharpen in the wide last column', () => {
     render(frameBand());
     const buttons = within(screen.getByTestId('action-band-above')).getAllByRole('button');
     expect(buttons.map((b) => b.getAttribute('data-testid'))).toEqual(['trim-slowmo-button', 'framing-preview-toggle', 'primary-cta']);
-    expect(screen.getByTestId('primary-cta').textContent).toContain('Sharpen my highlight');
+    expect(screen.getByTestId('primary-cta').getAttribute('aria-label')).toBe('Sharpen!');
+    expect(document.body.textContent).not.toMatch(/Sharpen my highlight/);
     const grid = screen.getByTestId('action-band-above');
     expect(grid.className).toContain('sm:[grid-template-columns:repeat(2,minmax(0,1fr))_minmax(0,1.4fr)]');
     // Phone: two-column grid, Sharpen's cell spans both columns (full width under Trim and Preview).
@@ -66,6 +67,49 @@ describe('T17910:C1 working order', () => {
     expect(chevron.getAttribute('aria-hidden')).toBe('true');
     expect(chevron.getAttribute('class')).toMatch(/\bhidden\b/);
     expect(chevron.getAttribute('class')).toMatch(/lg:block/);
+  });
+});
+
+describe('T17910:C9 separation before Sharpen!', () => {
+  it('from sm up the CTA cell adds a left margin equal to the grid gap, so the gap before Sharpen! is twice Trim-Preview', () => {
+    render(frameBand());
+    const grid = screen.getByTestId('action-band-above').className.split(/\s+/);
+    const ctaCell = screen.getByTestId('primary-cta').closest('[data-testid="action-band-above"] > div').className.split(/\s+/);
+    // sm: gap-2 (0.5rem) + sm:ml-2 (0.5rem); lg: lg:gap-x-4 (1rem) + lg:ml-4 (1rem).
+    expect(grid).toEqual(expect.arrayContaining(['gap-2', 'lg:gap-x-4']));
+    expect(ctaCell).toEqual(expect.arrayContaining(['sm:ml-2', 'lg:ml-4']));
+    // The chevron sits in the middle of the 2rem lg gap, inside the CTA cell's margin.
+    expect(screen.getByTestId('sharpen-step-chevron').getAttribute('class')).toMatch(/-left-\[23px\]/);
+  });
+});
+
+describe('T17910:C8 price on the button', () => {
+  it('Sharpen! carries a second line "Uses N credits" from the same estimate; the cost cell drops the count', () => {
+    render(frameBand({ estimatedCredits: 4 }));
+    const line = within(screen.getByTestId('primary-cta')).getByTestId('cta-cost-line');
+    expect(line.textContent).toBe('Uses 4 credits');
+    expect(line.className.split(/\s+/)).toEqual(expect.arrayContaining(['text-xs', 'min-h-[1lh]', 'whitespace-nowrap']));
+    expect(screen.getByTestId('export-credit-estimate').textContent).not.toMatch(/4 credits/);
+    expect(screen.getByTestId('export-credit-estimate').textContent).toMatch(/[Bb]alance 20/);
+  });
+
+  it('singular, and the line keeps its reserved space when the estimate is not known', () => {
+    const { rerender } = render(frameBand({ estimatedCredits: 1 }));
+    expect(screen.getByTestId('cta-cost-line').textContent).toBe('Uses 1 credit');
+    rerender(frameBand({ estimatedCredits: null }));
+    const line = screen.getByTestId('cta-cost-line');
+    expect(line.textContent.trim()).toBe('');
+    expect(line.className).toContain('min-h-[1lh]');
+  });
+
+  it('keeps the short-of-credits note in the cost cell', () => {
+    render(frameBand({ estimatedCredits: 30, creditBalance: 2, insufficientForEstimate: true }));
+    expect(screen.getByTestId('export-credit-estimate').textContent).toMatch(/Add credits to sharpen it/);
+  });
+
+  it('Overlay has no cost line', () => {
+    render(<ExportButtonView {...baseProps} isFramingMode={false} />);
+    expect(screen.queryByTestId('cta-cost-line')).toBeNull();
   });
 });
 
@@ -149,7 +193,7 @@ describe('T17910:C7 coach sentences name Sharpen', () => {
   it('new account at the Preview step: names Sharpen and keeps the action band clear of the shade', () => {
     const g = resolveGuide({ screen: 'focus', local: fl({ hasPreviewPlayedThrough: false }) });
     expect(g.id).toBe('focus.progress.preview');
-    expect(g.message.title).toBe('Tap Preview to see exactly what you’ll share, then tap Sharpen my highlight.');
+    expect(g.message.title).toBe('Tap Preview to see exactly what you’ll share, then tap Sharpen!');
     expect(g.pulse).toBe(GUIDE_PULSE.PREVIEW);
     expect(g.keepClear).toContain('[data-testid="action-band"]');
   });
@@ -157,7 +201,7 @@ describe('T17910:C7 coach sentences name Sharpen', () => {
   it('cockpit Preview step: same sentence, the rail Sharpen kept clear', () => {
     const g = resolveGuide({ screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true } });
     expect(g.id).toBe('focus.cockpit.preview');
-    expect(g.message.title).toBe('Tap Preview to see exactly what you’ll share, then tap Sharpen my highlight.');
+    expect(g.message.title).toBe('Tap Preview to see exactly what you’ll share, then tap Sharpen!');
     expect(g.keepClear).toContain('[data-testid="cockpit-cta-ring"]');
   });
 

@@ -1,7 +1,7 @@
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { GUIDE } from '../config/displayNames';
 import { useSettingsStore } from '../stores/settingsStore';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Guided framing steps: ONE instruction at a time (drag the box -> play -> keep the
@@ -82,7 +82,10 @@ vi.mock('./focus', async () => {
     },
   };
 });
-vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false }));
+// T17910: the six-step walk (with "Where will you share it?") is the phone layout; on a
+// computer the chooser is not rendered (see the desktop describe in guidedSteps).
+const viewport = vi.hoisted(() => ({ isMobile: true }));
+vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => viewport.isMobile }));
 vi.mock('../hooks/useFullscreenControls', () => ({
   useFullscreenControls: () => ({
     isVisible: true,
@@ -359,5 +362,29 @@ describe('FocusModeView rendered draft (T12470)', () => {
   it('still shows the step guide when a stale draft needs Generate', () => {
     render(<Harness initial={{ framingCtaMode: 'generate', showBackToPreview: true }} />);
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.shareWhere);
+  });
+});
+
+// T17910:C10 (owner ruling 2026-11-19): on a computer the Settings rail's Shape row is always
+// on screen, so "Where will you share it?" is not rendered and the coach starts at the drag
+// step, numbered "Step 1 of 5". Phones keep the chooser and six steps (the tests above).
+describe('T17910:C10 FocusModeView on a computer: no shape chooser, five steps', () => {
+  beforeEach(() => { viewport.isMobile = false; exportContainerSpy.mockClear(); });
+  afterEach(() => { viewport.isMobile = true; });
+
+  it('renders no chooser and starts at the drag step, "Step 1 of 5"', () => {
+    render(<Harness initial={{ keyframes: [] }} />);
+    expect(screen.queryByTestId('focus-shape-choice')).toBeNull();
+    expect(screen.queryByTestId('focus-shape-option-landscape')).toBeNull();
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.drag);
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 1 of 5');
+    expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
+  });
+
+  it('the next step after the drag is "Step 2 of 5"', () => {
+    const { rerender } = render(<Harness initial={{ keyframes: [] }} />);
+    fireEvent.click(screen.getByTestId('crop-box'));
+    rerender(<Harness initial={{ keyframes: [kf(10)] }} />);
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 2 of 5');
   });
 });

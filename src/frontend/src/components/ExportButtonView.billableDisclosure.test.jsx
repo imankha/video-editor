@@ -91,7 +91,8 @@ describe('ExportButtonView billable-duration disclosure (T9480 Stage E4, AC3)', 
         creditBalance={79}
       />,
     );
-    expect(screen.getByTestId('export-credit-estimate').textContent).toContain('~7 credits');
+    // T17910: the first reading of the count is now on Sharpen! ("Uses N credits").
+    expect(screen.getByTestId('cta-cost-line').textContent).toBe('Uses 7 credits');
     expect(screen.getByTestId('export-billable-disclosure').textContent).toContain('7 credits');
   });
 

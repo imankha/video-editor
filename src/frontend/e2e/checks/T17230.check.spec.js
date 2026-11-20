@@ -81,9 +81,11 @@ async function openFrameWithPositions(page) {
 async function placeFirstPosition(page) {
   const cropHandles = page.locator('.crop-handle');
   await cropHandles.first().waitFor({ timeout: 180000 });
-  const chooser = page.getByTestId('focus-shape-option-portrait');
   await shapeButtons(page).first().waitFor({ timeout: 60000 });
-  if (!(await chooser.isVisible())) return;
+  // T17910: on a computer the chooser is never rendered, so it cannot tell whether a position
+  // exists yet; there the drag always runs (a drag on a placed box just moves it).
+  const desktop = (page.viewportSize()?.width ?? 0) >= 1024;
+  if (!desktop && !(await page.getByTestId('focus-shape-option-portrait').isVisible())) return;
   await disableGuidanceForCheck(page);
   const boxes = await cropHandles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
   const cx = (Math.min(...boxes.map((b) => b.x + b.width / 2)) + Math.max(...boxes.map((b) => b.x + b.width / 2))) / 2;

@@ -7,7 +7,7 @@ import { EDITOR_PANELS, FRAMING_GUIDE } from '../../config/displayNames';
  * FramingActionRow - [Trim and SlowMo] + [Preview highlight].
  * Pure presentational: props in, callbacks out, no store reads.
  *
- * Rendered inline in the ActionBand BEFORE Sharpen my highlight (T17910: working
+ * Rendered inline in the ActionBand BEFORE Sharpen! (T17910: working
  * order Trim, Preview, Sharpen): on a phone the two tiles share a row with Sharpen
  * full width beneath; from `sm` up all three sit in one row.
  *

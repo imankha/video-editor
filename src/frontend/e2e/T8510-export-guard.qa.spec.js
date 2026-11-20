@@ -34,7 +34,7 @@ const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 const CAPTION = '[data-testid="export-unframed-caption"]';
 // T11700/T11720: the framing CTA is "Generate Highlight" (EXPORT_JOBS.framing.action);
 // the old "Generate Framing" locator was stale (T10640) and never matched.
-const EXPORT_BUTTON = 'button:has-text("Sharpen my highlight")';
+const EXPORT_BUTTON = 'button:has-text("Sharpen!")';
 const COMPACT = '[data-testid="action-band-compact"]';
 const LOCKED_PILL = '[data-testid="generate-locked-pill"]';
 

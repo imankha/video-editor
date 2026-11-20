@@ -1,7 +1,7 @@
 /**
  * T15400 - per-criterion acceptance checks (group checks protocol).
  *
- * The fixed bottom ActionBand (Sharpen my highlight / Trim and slow motion / Preview,
+ * The fixed bottom ActionBand (Sharpen! / Trim and slow motion / Preview,
  * ~226-230px tall) used to cover the Frame/Spotlight video, crop box, timeline and the
  * "Switch to landscape?" dialog at short-ish viewports. Fixed by:
  *  - App.jsx's Framing/Overlay scroll container now reserves `--cta-bar-h` (the band's

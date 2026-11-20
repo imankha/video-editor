@@ -273,7 +273,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         >
           {insufficientForEstimate && <AlertCircle size={12} />}
           <span>
-            {`~${CREDITS.count(estimatedCredits)} · balance ${creditBalance}`}
+            {/* T17910: the count now sits on Sharpen! itself ("Uses N credits"); the cell keeps the balance. */}
+            {CREDITS.balance(creditBalance)}
             {insufficientForEstimate ? FRAME_COPY.CREDIT_SHORT_NOTE : ''}
           </span>
         </div>
@@ -347,6 +348,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
               phoneRow={!isFramingMode}
               disabled={isButtonDisabled}
               title={buttonTitle}
+              subline={isFramingMode ? (!isCurrentlyExporting && estimatedCredits != null ? CREDITS.uses(estimatedCredits) : '') : undefined}
             >
               {ctaLabel}
             </PrimaryCta>

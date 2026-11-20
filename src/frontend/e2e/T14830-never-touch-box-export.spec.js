@@ -34,7 +34,7 @@ test.describe('T14830 never-touch-the-box export', () => {
     const stage = page.getByTestId('focus-video-stage');
     await stage.waitFor({ timeout: 90000 });
 
-    const generate = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
+    const generate = page.getByRole('button', { name: 'Sharpen!' }).first();
     // Never locked: enabled immediately, box never dragged, clip never played.
     await expect(generate).toBeEnabled();
     await saveEvidence(page, 'T14830-unframed-generate-enabled');
@@ -47,7 +47,7 @@ test.describe('T14830 never-touch-the-box export', () => {
     await saveEvidence(page, 'T14830-box-confirm-dialog');
 
     // Continuing proceeds with the export normally.
-    await confirm.getByRole('button', { name: 'Sharpen my highlight' }).click();
+    await confirm.getByRole('button', { name: 'Sharpen!' }).click();
     await expect(confirm).toBeHidden();
     await saveEvidence(page, 'T14830-after-continue');
   });
