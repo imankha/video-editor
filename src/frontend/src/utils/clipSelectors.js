@@ -37,10 +37,12 @@ export const clipCropKeyframes = (clip) => {
   return Array.isArray(clip.crop_data) ? clip.crop_data : [];
 };
 
+// The backend stores only the keys a gesture wrote (clear_trim_range on an untouched clip
+// stores {trimRange: null}) and its handlers read a missing key as empty; so do we (T17890).
 export const clipSegments = (clip, duration) => {
   const defaults = { boundaries: [0, duration || 0], userSplits: [], trimRange: null, segmentSpeeds: {} };
   if (!clip.segments_data) return defaults;
-  return typeof clip.segments_data === 'object' ? clip.segments_data : defaults;
+  return typeof clip.segments_data === 'object' ? { ...defaults, ...clip.segments_data } : defaults;
 };
 
 /**
