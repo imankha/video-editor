@@ -159,3 +159,7 @@ T16130 has no dependency and can ship on its own. T16145 is done with the owner 
 - [ ] A teammate tagged from the tagging screen receives the game and its Team plays exactly as they would today.
 - [ ] A play marked by the AI, assigned to the parent's athlete and made into a highlight, returns its qualities and its sentence in the one read of highlight facts.
 - [ ] The Journey shows how many game uploaders bought an analysis and how many of them reached a first highlight.
+
+## Added 2026-11-20 (owner): where each player is
+
+The first real prototype run showed boxes asked for inside the video call are not on the players; boxes asked for on still frames are. The analysis therefore stores, for each noted player in each play, four boxes across the play's first two seconds from a separate pass on still frames (T16145 step 6 proves it and prices it, T16150 builds it, T16190 copies it on import). Two tasks use them: T16203 highlights the athlete in their own plays, and T16204 turns the Spotlight step into one click. Tracking a child through the whole game from one tap was prototyped the same day and is not part of this epic: the model re-finds a clear player but cannot say when the player is absent.
