@@ -101,3 +101,7 @@ Import inserts through the existing clip save path with `my_athlete=0` and empty
 - [ ] Importing 60 plays, several rated 5, creates no highlight project and no credit charge.
 - [ ] A shared game delivers imported Team-lane plays to the recipient with tags, note and rating.
 - [ ] `ai_team_chosen`, `ai_plays_imported` and `ai_play_team_flipped` appear in the admin Journey inspector.
+
+## Addendum (owner, 2026-11-20): dead time
+
+The stored analysis also lists the game's dead stretches (stoppages). The import does not turn them into plays and does not copy them into the parent's data. The read this task adds for the analysis returns them beside the plays, behind the same purchase check, so playback can skip them (T16206).

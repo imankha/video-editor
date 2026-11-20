@@ -163,3 +163,7 @@ T16130 has no dependency and can ship on its own. T16145 is done with the owner 
 ## Changed 2026-11-20 (owner): no player boxes
 
 The analysis does not say where a player is on screen. The prototype tried it: boxes from the video call were not on the players, and boxes from still frames cost more than the analysis itself. Nothing in this epic stores or draws a box. The research is kept for the Click-once Spotlight milestone: [click-once-spotlight/RESEARCH-gemini-boxes-2026-11-20.md](../click-once-spotlight/RESEARCH-gemini-boxes-2026-11-20.md).
+
+## Added 2026-11-20 (owner): skip dead time
+
+The analysis writes each stoppage down as its own entry. T16206 uses them: a parent watching a game with AI Coach can skip the dead stretches in playback. T16150 keeps the stoppages in the stored result and T16190's read returns them.

@@ -98,6 +98,10 @@ So the joining is decided this way, accuracy first and cost second (owner, 2026-
 4. **A longer overlap** (60 seconds against 30) is run once on the same lines: dead ball came every 30 to 60 seconds in the owner's account, so a longer overlap should nearly always hold a stoppage to cut at. Its extra cost is measured.
 5. **A second look at the video** for one line is tried only on the lines the best candidate still gets wrong, and is kept only if it is right more often than it is wrong on those lines. A call that reads only the two descriptions is not tried: at the one line we have, the two descriptions of the same passage did not describe the same event.
 
+### 7a. Dead time is product data (owner, 2026-11-20)
+
+The stoppage entries are no longer only a help for joining: the app will let a parent skip them when watching (T16206). So the approved run also reports, against the owner's truth, how far each stoppage's start and end are from the real ones, any stoppage that covers live play, and the share of the clip marked dead. That error sets the safety margin T16206 uses.
+
 ### 8. Is the description true (owner, 2026-11-20)
 
 A parent shown "angled shot saved by the keeper" for a pass that went out of play will stop trusting the notes, and a rating of 4 on a routine passage sends them to the wrong clip. From the corrected truth we count, for prompt version 3: plays whose described event did not happen (a shot, save, cross, corner or goal that is not in the truth), restarts named wrongly, and plays rated 4 or 5 that the owner rates 3 or lower. Then one change at a time is tried on a single piece and counted the same way: more frames a second; higher resolution; and a prompt rule that a shot, save, cross into the box, corner or goal is written only when it is clearly seen, with the rating tied to that outcome. The owner sees the counts before any version is approved.
