@@ -98,6 +98,25 @@ What the prototype must settle before T16150 builds it:
 
 Every run draws the four boxes on their frames so the owner can judge them without reading numbers.
 
+### 7. Proving the joining on real boundaries (owner, 2026-11-20)
+
+The first real run doubled one attack at the line between its two pieces. Prompt version 3 then made stoppages their own entries and told the model to cut plays only at real events, and on the same clip the two pieces cut the shared 30 seconds at 05:17 and 05:18: the double went away with no change to the joining code. The owner then watched 4:18 to 5:56 and wrote down what happened. Two things follow from that account:
+
+- **When the ball is dead, the model is right.** Version 3's stoppages match the owner's within about two seconds (4:21-4:48 against 4:23-4:47; 5:17 or 5:18 against 5:19; play resuming 5:40 against 5:42).
+- **What happened is often wrong, in every model.** Version 2 reported a saved shot in one piece and a cross forcing a corner in the other; Argon reported a low cross blocked by the keeper; version 3 calls the restart a Navy goal kick. The owner saw a White throw-in, a hurried forward pass controlled by Navy, and a bad keeper pass going out. No shot, no cross, no corner.
+
+So the joining is decided this way, accuracy first and cost second (owner, 2026-11-20):
+
+1. **Truth.** The owner corrects the Argon output for the whole 10-minute clip on the review page (`outputs/golden/argon-s1-10min/review.html`). The corrected file is the truth; the owner's written account of 4:18 to 5:56 is its first part and is kept in `outputs/golden/owner-truth-0418-0556.md`.
+2. **Real boundaries.** The same clip is run again with the piece start times shifted so the lines fall in about ten different places. Every line gives a real pair of overlapping answers. No answer is invented by a model.
+3. **Score the candidates offline, at no model cost,** against the truth: today's joining; cutting at a stoppage both pieces report inside the overlap; one cut per line (the design in `T16145-dedup-design.md`); and stoppage first with one cut per line as the fallback. Counted per line: plays told twice, plays lost, seconds told by neither piece, strong plays dropped.
+4. **A longer overlap** (60 seconds against 30) is run once on the same lines: dead ball came every 30 to 60 seconds in the owner's account, so a longer overlap should nearly always hold a stoppage to cut at. Its extra cost is measured.
+5. **A second look at the video** for one line is tried only on the lines the best candidate still gets wrong, and is kept only if it is right more often than it is wrong on those lines. A call that reads only the two descriptions is not tried: at the one line we have, the two descriptions of the same passage did not describe the same event.
+
+### 8. Is the description true (owner, 2026-11-20)
+
+A parent shown "angled shot saved by the keeper" for a pass that went out of play will stop trusting the notes, and a rating of 4 on a routine passage sends them to the wrong clip. From the corrected truth we count, for prompt version 3: plays whose described event did not happen (a shot, save, cross, corner or goal that is not in the truth), restarts named wrongly, and plays rated 4 or 5 that the owner rates 3 or lower. Then one change at a time is tried on a single piece and counted the same way: more frames a second; higher resolution; and a prompt rule that a shot, save, cross into the box, corner or goal is written only when it is clearly seen, with the rating tied to that outcome. The owner sees the counts before any version is approved.
+
 ## Why this and not something else
 
 Building these changes straight into the server job was the earlier plan. It was dropped because the first full-game result would then be the first time anyone saw the new fields, and a stored analysis is never recomputed.
@@ -119,6 +138,8 @@ Asking each piece "which way did this team attack in the first half" was ruled o
 Ruled on 2026-11-14, before the first run: a cut-off play with no whole version is kept only when it is rated 4 or 5; both direction wordings are run on the same video and the owner picks from the counts; a suspect piece gets the second question described above.
 
 Ruled on 2026-11-20, after the first real run: boxes asked for inside the video call are dropped, because drawn on the frames they are not on the players; each noted player in each play gets four boxes from still frames across the play's first two seconds (0, 2/3, 1 1/3, 2 s); calls stay separate until separate calls have shown everything they can do. Player tracking through a whole game was tried as a side prototype (`gemini_analysis_test/tracking/`): it re-finds a clear player from one reference picture but cannot say when the player is absent, so it is not part of this epic.
+
+Ruled on 2026-11-20, after the version 3 run and the owner's own account of 4:18 to 5:56: prompt version 3's segmentation (stoppages as their own entries, cuts only at real events) is the working prompt; the joining is chosen by scoring candidates on real shifted boundaries against the owner's corrected truth, accuracy first and cost second (step 7); a call that reads only the descriptions is not used for joining; how often a description is false is counted before any version is approved (step 8).
 
 (Still to record when the owner approves a version: the version numbers of both questions, the chosen direction wording, whether the model's own cut-off flag is used, the example plays chosen for the offer, and the date.)
 
@@ -168,3 +189,5 @@ Ruled on 2026-11-20, after the first real run: boxes asked for inside the video 
 - [ ] The projected cost of a 90-minute game from the approved run is recorded; if it is above $3.39, the owner has been told before the version is approved.
 - [ ] The prototype folder is committed without the key, the videos or the large outputs, and Branch CI passes.
 - [ ] On the approved run, the four boxes for each noted player are drawn on their frames and shown to the owner; the count of boxes on the wrong person, of players not on screen in the first two seconds, and the measured cost for a 90-minute game under each way of limiting it are recorded, and the owner has chosen one.
+- [ ] At least ten real lines between pieces on the test clip were scored against the owner's corrected truth for each joining candidate (plays told twice, plays lost, seconds told by neither, strong plays dropped); the table is in the change list and the owner has chosen the joining.
+- [ ] For the approved prompt version, the count of plays whose described event did not happen, of restarts named wrongly, and of plays rated 4 or 5 that the owner rates 3 or lower is recorded against the corrected truth, and the owner has seen it before approving.
