@@ -902,6 +902,8 @@ export const FOCUS_PREVIEW = {
 
 // T14620: Frame screen strings that used to sit inline in the components.
 export const FRAME_COPY = {
+  // T17910 (owner ruling 2026-11-19): the band's idle line, left of the buttons on a computer.
+  IDLE_HINT: `Trim and Preview are optional. When your athlete stays in the box, tap ${EXPORT_JOBS.framing.action}.`,
   // T17230: the Settings row for the reel's portrait/landscape choice ("shape", as the
   // switch dialog says).
   SHAPE_LABEL: 'Shape',
@@ -1053,10 +1055,11 @@ export const GUIDE = {
     dragPrePlaced: 'The box is already on your athlete. Drag it if it isn’t, then tap Play.',
     play: 'Tap Play and watch your athlete.',
     keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the positions you set.',
-    preview: 'Tap Preview to see exactly what you’ll share.',
-    watchPreview: 'Watch it through. Tap Back to full video to change anything.',
+    // T17910 (owner ruling 2026-11-19): Preview is optional, so the Preview sentence names the finish too.
+    preview: `Tap Preview to see exactly what you’ll share, then tap ${EXPORT_JOBS.framing.action}.`,
+    watchPreview: 'Watch it through. Tap Close preview to change anything.',
     generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
-    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Preview when it looks right.`,
+    experienced: `You know the basics. Trim and Preview are optional. When your athlete stays in the box, tap ${EXPORT_JOBS.framing.action}.`,
     generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
     credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then sharpen it.`,
     progressExport: 'Sharpening your highlight. When it’s done it goes to your Highlights, even if you leave this screen.',
@@ -1072,7 +1075,7 @@ export const GUIDE = {
     videoError: 'This video didn’t load. Go back and open this play again.',
     leaveFullscreen: 'Exit fullscreen to check your athlete stays in view, then sharpen your highlight.',
     leaveFullscreenJob: 'Exit fullscreen to see your highlight’s status and what to do next.',
-    cockpitPreview: 'Tap Preview to see exactly what you’ll share.',
+    cockpitPreview: `Tap Preview to see exactly what you’ll share, then tap ${EXPORT_JOBS.framing.action}.`,
     cockpitWatchPreview: 'Watch it through. Tap Preview again to change anything.',
   },
   finished: {
@@ -1149,10 +1152,12 @@ export const FRAMING_GUIDE = {
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
   TRIM_BUTTON: 'Trim and slow motion',
   // T17860 (owner ruling 2026-11-19): while the track is open the button says what a tap does.
-  TRIM_BUTTON_DONE: 'Done trimming',
+  // T17910 (owner ruling 2026-11-19): "Close trimming" replaced "Done trimming", which read as a
+  // second finish button beside Sharpen my highlight.
+  TRIM_BUTTON_CLOSE: 'Close trimming',
   TRIM_BUTTON_DESC: 'Adjust timing and playback speed.',
-  TRIM_BUTTON_DONE_DESC: 'Your trim and speed changes stay.',
-  TRIM_BUTTON_DONE_HINT: 'Hide the trim and slow motion track. Your changes stay.',
+  TRIM_BUTTON_CLOSE_DESC: 'Your trim and speed changes stay.',
+  TRIM_BUTTON_CLOSE_HINT: 'Close the trim and slow motion track. Your changes stay.',
 };
 
 // T10850 (design D14): the two discovery hints that bracket the landscape flip.
@@ -1385,12 +1390,15 @@ export const EDITOR_PANELS = {
   // crop/timing/format/audio; approximate for image quality. Never a
   // sharpness claim in either direction.
   PREVIEW_HIGHLIGHT: 'Preview',
-  PREVIEW_BACK_TO_FRAMING: 'Back to full video',
+  // T17910 (owner ruling 2026-11-19): replaced "Back to full video".
+  PREVIEW_CLOSE: 'Close preview',
   // T12020 -- the Preview tile's caption follows its label: framing check before
   // previewing, return-to-box while previewing.
   PREVIEW_CAPTION_FRAMING: 'See what your highlight will show before you sharpen it.',
   PREVIEW_CAPTION_RETURN: 'Return to dragging the box.',
   PREVIEW_DISCLOSURE: 'This shows what stays in view, your timing and format. Final picture quality comes when you sharpen your highlight.',
+  // T17910: the phone caption on the preview picture (the full line sits in the band from `sm` up).
+  PREVIEW_DISCLOSURE_SHORT: 'Final picture quality comes when you sharpen your highlight.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same disclosure shape as the Trim and slow motion track (user request 2026-09-21).
   TEXT_LANE: 'Text',

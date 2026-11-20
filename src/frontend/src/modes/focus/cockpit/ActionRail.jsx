@@ -1,4 +1,4 @@
-import { Sliders, Eye, Download, Loader } from 'lucide-react';
+import { Sliders, Eye, Wand2, Loader } from 'lucide-react';
 import PrimaryCta from '../../../components/PrimaryCta';
 import { FOCUS_COCKPIT } from '../../../config/displayNames';
 import { useGuidePulse } from '../../../components/instructions/GuideScope';
@@ -89,7 +89,7 @@ export default function ActionRail({
     <PrimaryCta
       compact
       accent="focus"
-      icon={ctaExporting ? Loader : Download}
+      icon={ctaExporting ? Loader : Wand2}
       iconClassName={ctaExporting ? 'animate-spin' : ''}
       onClick={onGenerate}
       disabled={ctaDisabled}

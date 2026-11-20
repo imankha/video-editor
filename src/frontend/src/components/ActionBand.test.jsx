@@ -84,14 +84,27 @@ describe('ActionBand above slot', () => {
 });
 
 /**
- * T12020: Focus puts Generate FIRST (left on desktop, top on mobile) with Trim and
- * Preview as the secondary row. The old above-path rendered the secondaries before
- * the CTA, so Generate sat last on both breakpoints.
+ * T17910 (owner ruling 2026-11-19, reverses T12020): Focus reads in working order --
+ * Trim and Preview, then the CTA (Sharpen my highlight) -- in the DOM, so tab order matches.
  */
-describe('ActionBand secondary row (T12020)', () => {
-  it('renders the CTA before the secondary row in DOM order', () => {
+describe('ActionBand secondary row (T12020 default, T17910 ctaLast)', () => {
+  it('by default (Overlay) renders the CTA before the secondary row', () => {
     render(
       <ActionBand
+        above={<button data-testid="secondary-trim">Trim</button>}
+        cta={<button data-testid="primary-generate">Generate</button>}
+      />
+    );
+    const cta = screen.getByTestId('primary-generate');
+    const secondary = screen.getByTestId('secondary-trim');
+    expect(cta.compareDocumentPosition(secondary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByTestId('sharpen-step-chevron')).toBeNull();
+  });
+
+  it('with ctaLast (Frame) renders the secondary row before the CTA in DOM order', () => {
+    render(
+      <ActionBand
+        ctaLast
         above={<button data-testid="secondary-trim">Trim</button>}
         cta={<button data-testid="primary-generate">Generate</button>}
       />
@@ -99,6 +112,6 @@ describe('ActionBand secondary row (T12020)', () => {
 
     const cta = screen.getByTestId('primary-generate');
     const secondary = screen.getByTestId('secondary-trim');
-    expect(cta.compareDocumentPosition(secondary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(secondary.compareDocumentPosition(cta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

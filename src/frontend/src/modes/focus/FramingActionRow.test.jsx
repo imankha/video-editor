@@ -32,19 +32,14 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
     rerender(
       <FramingActionRow previewing onTogglePreview={vi.fn()} />
     );
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to full video/i);
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/close preview/i);
   });
 
-  it('shows the approximation disclosure only while previewing', () => {
-    const { rerender } = render(
-      <FramingActionRow previewing={false} onTogglePreview={vi.fn()} />
-    );
+  // T17910: the disclosure left this row (it added a band row and moved Sharpen); see
+  // ExportButtonView (status cell) and FocusModeView (phone caption).
+  it('never renders the preview disclosure inside the row', () => {
+    render(<FramingActionRow previewing onTogglePreview={vi.fn()} />);
     expect(screen.queryByTestId('preview-disclosure')).toBeNull();
-
-    rerender(
-      <FramingActionRow previewing onTogglePreview={vi.fn()} />
-    );
-    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/final picture quality comes when you sharpen/i);
   });
 });
 
@@ -66,7 +61,8 @@ describe('FramingActionRow - Trim and SlowMo (T14830: never locked)', () => {
   });
 
   // T17860 (owner ruling 2026-11-19, UX expert design): open, the button says what a tap does.
-  it('T17860: reads "Done trimming" with a check icon, aria-expanded and a pressed look while open', () => {
+  // T17910: the open label is "Close trimming" and the scissors stay.
+  it('T17860/T17910: reads "Close trimming" with the scissors icon, aria-expanded and a pressed look while open', () => {
     const { rerender } = render(<FramingActionRow onToggleTrim={vi.fn()} />);
     const closed = screen.getByTestId('trim-slowmo-button');
     expect(closed.getAttribute('aria-label')).toBe('Trim and slow motion');
@@ -79,13 +75,13 @@ describe('FramingActionRow - Trim and SlowMo (T14830: never locked)', () => {
 
     rerender(<FramingActionRow onToggleTrim={vi.fn()} trimOpen />);
     const open = screen.getByTestId('trim-slowmo-button');
-    expect(open.getAttribute('aria-label')).toBe('Done trimming');
-    expect(open.textContent).toMatch(/^Done trimming/);
+    expect(open.getAttribute('aria-label')).toBe('Close trimming');
+    expect(open.textContent).toMatch(/^Close trimming/);
     expect(open.textContent).toMatch(/your trim and speed changes stay/i);
-    expect(open.getAttribute('title')).toBe('Hide the trim and slow motion track. Your changes stay.');
+    expect(open.getAttribute('title')).toBe('Close the trim and slow motion track. Your changes stay.');
     expect(open.getAttribute('aria-expanded')).toBe('true');
     expect(open.hasAttribute('aria-pressed')).toBe(false);
-    expect(open.querySelector('svg').getAttribute('class')).toMatch(/lucide-check/);
+    expect(open.querySelector('svg').getAttribute('class')).toMatch(/lucide-scissors/);
     expect(classes(open)).toContain('border-cyan-300');
     expect(classes(open)).toContain('ring-cyan-300/60');
   });
@@ -117,21 +113,7 @@ describe('FramingActionRow - Trim and SlowMo (T14830: never locked)', () => {
   });
 });
 
-// 2026-10-09 (user screenshot): inline inside ActionBand's 3-column `above` grid the row is
-// `display: contents`, so the col-span-2 disclosure took the next row's first two cells and
-// pushed Generate highlight onto a second row, offset right. The disclosure must sit on its
-// own full-width row AFTER the CTA so the two cards and Generate share one row.
-describe('FramingActionRow inline in ActionBand - disclosure never displaces the CTA', () => {
-  it('places the preview disclosure on its own full-width row after the CTA', () => {
-    render(<FramingActionRow inline previewing onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />);
-    const classes = screen.getByTestId('preview-disclosure').className.split(/\s+/);
-    expect(classes).toContain('col-span-full');
-    expect(classes).toContain('order-last');
-    expect(classes).not.toContain('col-span-2');
-  });
-});
-
-// T12020: the Preview caption follows the label. "Back to full video" must not
+// T12020: the Preview caption follows the label. "Close preview" must not
 // carry the framing-check subtitle, which only makes sense before previewing.
 describe('FramingActionRow - state-aware Preview caption (T12020)', () => {
   it('shows the framing-check caption when not previewing', () => {

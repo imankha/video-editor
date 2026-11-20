@@ -28,7 +28,8 @@ const CONTROL_PHRASES = [
   { name: 'open a game', re: /\bopen a game\b/i, pulse: [P.FIRST_GAME] },
   { name: 'Drag the box', re: /\bDrag the box\b/, pulse: [P.CROP_BOX] },
   { name: 'Preview', re: /\bTap Preview\b/, pulse: [P.PREVIEW, P.COCKPIT_PREVIEW] },
-  { name: 'Sharpen my highlight', re: /\bTap Sharpen my highlight\b/, pulse: [P.EXPORT] },
+  // T17910: the Preview sentence names Sharpen too; there the band (cockpit: the rail CTA) is kept clear.
+  { name: 'Sharpen my highlight', re: /\b[Tt]ap Sharpen my highlight\b/, pulse: [P.EXPORT], keepClear: ['action-band', 'cockpit-cta-ring'] },
   { name: 'Add spotlight to highlight', re: /\bTap Add spotlight to highlight\b/, pulse: [P.EXPORT] },
   { name: 'Trim and slow motion', re: /\bopen Trim and slow motion\b/, pulse: [] },
   { name: 'Exit fullscreen', re: /\bExit fullscreen\b/, pulse: [P.EXIT_FULLSCREEN] },
@@ -56,7 +57,7 @@ const CONTROL_PHRASES = [
   { name: 'Tap the timeline', re: /\bTap the timeline\b/, pulse: [P.TRIM_TRACK] },
   { name: 'Tap 0.5x / trash', re: /\bTap 0\.5x\b/, pulse: [P.TRIM_ADJUST] },
   { name: 'drag it back', re: /\bdrag it back\b/, pulse: [P.CROP_BOX] },
-  { name: 'Back to full video', re: /\bTap Back to full video\b/, pulse: [] },
+  { name: 'Close preview', re: /\bTap Close preview\b/, pulse: [] },
   { name: 'Preview again', re: /\bTap Preview again\b/, pulse: [] },
   { name: 'Choose your game video', re: /\bChoose your game video\b/, pulse: [] },
   { name: 'Open a game (noPulse)', re: /\bOpen a game\b/, pulse: [] },

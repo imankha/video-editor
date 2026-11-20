@@ -39,16 +39,17 @@ export async function expectClosed(page) {
 export async function expectOpen(page) {
   const btn = trimButton(page);
   await expect(btn).toHaveAttribute('aria-expanded', 'true');
-  await expect(btn).toHaveAttribute('aria-label', 'Done trimming');
-  await expect(btn).toContainText('Done trimming');
-  expect(await iconClass(btn)).toMatch(/lucide-check/);
+  // T17910 (owner ruling 2026-11-19): "Close trimming" with the scissors replaced "Done trimming" with a check.
+  await expect(btn).toHaveAttribute('aria-label', 'Close trimming');
+  await expect(btn).toContainText('Close trimming');
+  expect(await iconClass(btn)).toMatch(/lucide-scissors/);
   await expect(btn).not.toHaveAttribute('aria-pressed', /.*/);
   await expect(page.getByTestId('speed-track')).toBeVisible({ timeout: 30000 });
 }
 
 /**
  * T17860:C2 on the play at `framePath`: with the track open, split, trim the last section and
- * slow the first to 0.5x (each saved); tapping Done trimming hides the track, restores the closed
+ * slow the first to 0.5x (each saved); tapping Close trimming hides the track, restores the closed
  * button and sends no save; the server's cut list and the highlight length are unchanged, and
  * reopening shows the same edits. The play is put back afterwards.
  */

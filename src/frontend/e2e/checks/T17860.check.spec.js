@@ -2,7 +2,8 @@
  * T17860 - per-criterion acceptance checks (group checks protocol).
  *
  * In Frame, "Trim and slow motion" opens the trim and speed track. Owner ruling 2026-11-19
- * (UX expert design): while open the button reads "Done trimming" with a check icon, carries
+ * (UX expert design): while open the button reads "Done trimming" with a check icon (T17910 renamed it "Close
+ * trimming" and kept the scissors; the checks assert the current label), carries
  * aria-expanded and a pressed look; Preview gets the same pressed look while previewing, and
  * neither button carries aria-pressed next to its changing label.
  *
@@ -38,7 +39,7 @@ for (const [label, viewport] of [['1440', DESKTOP], ['390', PHONE]]) {
   test.describe(`at ${label} wide`, () => {
     test.use({ viewport, ...(viewport === PHONE ? { hasTouch: true, isMobile: true } : {}) });
 
-    test(`T17860:C1 - at ${label} wide the open Trim button reads "Done trimming" with a check, aria-expanded="true", a different border colour, and the track shows`, async ({ context, page }) => {
+    test(`T17860:C1 - at ${label} wide the open Trim button reads its open label (T17910: "Close trimming"), aria-expanded="true", a different border colour, and the track shows`, async ({ context, page }) => {
       await loginForCheck(context);
       await openFrame(page, await framePlayPath(page));
       await expectClosed(page);
@@ -53,7 +54,7 @@ for (const [label, viewport] of [['1440', DESKTOP], ['390', PHONE]]) {
 test.describe('at 1440 wide', () => {
   test.use({ viewport: DESKTOP });
 
-  test('T17860:C2 - tapping Done trimming hides the track and restores the closed button; trim and speed edits made while open still apply', async ({ context, page }) => {
+  test('T17860:C2 - tapping the open Trim button (T17910: "Close trimming") hides the track and restores the closed button; trim and speed edits made while open still apply', async ({ context, page }) => {
     await loginForCheck(context);
     const framePath = await framePlayPath(page, { preferExpired: false });
     await closeKeepsEdits(page, framePath);
@@ -73,7 +74,7 @@ test.describe('at 1440 wide', () => {
     await expectClosed(page);
 
     await preview.click();
-    await expect(preview).toContainText('Back to full video', { timeout: 30000 });
+    await expect(preview).toContainText('Close preview', { timeout: 30000 });
     await expect(preview).not.toHaveAttribute('aria-pressed', /.*/);
     await expect(trimButton(page)).not.toHaveAttribute('aria-pressed', /.*/);
     await expect.poll(() => borderColor(page, preview), { timeout: 10000 }).not.toBe(idle);

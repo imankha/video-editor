@@ -143,7 +143,7 @@ test.describe('desktop', () => {
       const preview = page.getByRole('button', { name: /^Preview/ }).filter({ visible: true }).first();
       await preview.click({ timeout: 60000 });
       await expect(page.getByTestId('crop-rect')).toHaveCount(0, { timeout: 60000 });
-      await page.getByRole('button', { name: /Back to full video/ }).filter({ visible: true }).first().click({ timeout: 60000 });
+      await page.getByRole('button', { name: /Close preview/ }).filter({ visible: true }).first().click({ timeout: 60000 });
       await expect(page.getByTestId('crop-rect')).toBeVisible({ timeout: 60000 });
     } finally {
       if (made) await deleteProject(page, made);

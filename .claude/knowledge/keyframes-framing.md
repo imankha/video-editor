@@ -96,8 +96,19 @@ seeded games. T11720 AC1's actual promise (timeline/Trim stay reachable above th
 just "band itself ≤56px") is asserted via a real DOM hit-test (`document.elementFromPoint` at a
 point inside each target, checked against the compact band) PLUS a trial click — proven to fail when
 the band is mutated to visually overlap the content above it (T11720's own STATUS record).)
+updated: 2026-11-19 (T17910, owner ruling "Frame buttons read as steps"): the band is in working
+order in the DOM (`ActionBand` `ctaLast`, passed by `ExportButtonView` when `isFramingMode`):
+Trim, Preview, then Sharpen my highlight (wand icon `Wand2`; Sparkles means Spotlight) in the
+1.4fr last column, an lg-only absolute `ChevronRight` in the gap. Overlay keeps the CTA-first
+default. Open labels: `FRAMING_GUIDE.TRIM_BUTTON_CLOSE` "Close trimming" (scissors kept) and
+`EDITOR_PANELS.PREVIEW_CLOSE` "Close preview". The status cell swaps ONE line in place:
+`FRAME_COPY.IDLE_HINT` when idle, the T9950 `preview-disclosure` while previewing (both
+`hidden sm:block`; phones get `preview-disclosure-caption` on the picture). A row added to the
+band for a toggle moves Sharpen (the band is sticky, it grows upward). Closing Trim puts back the
+scroll `scrollClearOfBand` added on open: left scrolled, App's scroller sat past the sticky
+band's pinned spot and the band rose by the readouts row under it (43px at 1440x900).
 updated: 2026-11-19 (T17860, owner ruling): the Trim button's open state is its own label
-(`FRAMING_GUIDE.TRIM_BUTTON_DONE` "Done trimming", Check icon, `aria-expanded` +
+(T17910 renamed it "Close trimming" with the scissors; was "Done trimming", Check icon), `aria-expanded` +
 `aria-controls="frame-trim-track"` on `trim-guide-scope`); Preview likewise changes label, so
 NEITHER carries `aria-pressed`. The pressed look is `ActionCard`'s `pressed` prop, which REPLACES
 the secondary card classes: appending `border-cyan-300` via `className` loses to the variant's

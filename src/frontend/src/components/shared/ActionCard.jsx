@@ -37,7 +37,7 @@ const LOCKED = { card: 'border-transparent bg-white/5 text-gray-300 cursor-not-a
 export const actionCardClass = `${BASE} min-h-[168px] ${VARIANTS.secondary.card}`;
 
 // T17860: `reserveTwoTitleLines` keeps a phone row two title lines tall, so a card whose label
-// changes with state ("Trim and slow motion" -> "Done trimming") never resizes the pinned band.
+// changes with state ("Trim and slow motion" -> "Close trimming", T17910) never resizes the pinned band.
 export function ActionCardContent({ icon: Icon, title, description, compact = false, iconClassName = '', variant = 'secondary', locked = false, phoneRow = false, reserveTwoTitleLines = false }) {
   const v = locked ? LOCKED : VARIANTS[variant];
   return <>

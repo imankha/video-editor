@@ -1,0 +1,11 @@
+{
+  "criteria": {
+    "T17910:C1": {"kind": "browser"},
+    "T17910:C2": {"kind": "browser"},
+    "T17910:C3": {"kind": "browser"},
+    "T17910:C4": {"kind": "browser"},
+    "T17910:C5": {"kind": "browser"},
+    "T17910:C6": {"kind": "browser"},
+    "T17910:C7": {"kind": "code", "command": "cd src/frontend && npx vitest run src/modes/focus/frameButtonsAsSteps.test.jsx -t 'T17910:C7'"}
+  }
+}

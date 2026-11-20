@@ -342,3 +342,25 @@ describe('ExportButtonView - T11970 opening state', () => {
     expect(screen.queryByRole('button', { name: /Sharpen my highlight/ })).toBeNull();
   });
 });
+
+// T17910: the status cell swaps one line in place -- the idle hint, or the preview disclosure
+// while previewing -- so toggling Preview never adds a band row (Sharpen must not move).
+describe('ExportButtonView - T17910 status line swap', () => {
+  const above = <button type="button">Trim</button>;
+  it('shows the idle hint when not previewing and the disclosure while previewing, never both', () => {
+    const { rerender } = render(<ExportButtonView {...baseProps} actionsAbove={above} />);
+    expect(screen.getByTestId('frame-idle-hint')).toBeTruthy();
+    expect(screen.queryByTestId('preview-disclosure')).toBeNull();
+    rerender(<ExportButtonView {...baseProps} actionsAbove={above} previewing />);
+    expect(screen.queryByTestId('frame-idle-hint')).toBeNull();
+    const d = screen.getByTestId('preview-disclosure');
+    expect(d.textContent).toMatch(/final picture quality comes when you sharpen/i);
+    expect(d.getAttribute('role')).toBe('status');
+    expect(d.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'sm:block']));
+  });
+
+  it('progress or an error outranks the disclosure', () => {
+    render(<ExportButtonView {...baseProps} actionsAbove={above} previewing error="boom" />);
+    expect(screen.queryByTestId('preview-disclosure')).toBeNull();
+  });
+});

@@ -14,7 +14,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import useVideoDisplayRect from '../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../utils/outputPreviewTransform';
-import { FOCUS_HINTS, FRAME_COPY } from '../config/displayNames';
+import { FOCUS_HINTS, FRAME_COPY, EDITOR_PANELS } from '../config/displayNames';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
@@ -90,8 +90,10 @@ function scrollClearOfBand(el) {
   const view = isPage ? { top: 0, bottom: window.innerHeight } : scroller.getBoundingClientRect();
   const box = el.getBoundingClientRect();
   const covered = box.bottom + parseFloat(getComputedStyle(el).scrollMarginBottom) - view.bottom;
-  if (covered <= 0) return;
+  if (covered <= 0) return null;
+  const before = scroller.scrollTop;
   scroller.scrollBy({ top: Math.min(covered, Math.max(0, box.top - view.top)), behavior: 'smooth' });
+  return { scroller, before };
 }
 
 /**
@@ -151,6 +153,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   renderedAt,
   backToPreviewLoading,
   actionsAbove,
+  previewing = false,
 }, ref) {
   // Container: all business logic
   const container = ExportButtonContainer({
@@ -196,6 +199,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         renderedAt={renderedAt}
         backToPreviewLoading={backToPreviewLoading}
         actionsAbove={actionsAbove}
+        previewing={previewing}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle}
         isHighlightEnabled={false}
@@ -515,13 +519,21 @@ export function FocusModeView({
   // T13580: on a phone the lane opens below the fixed action band; the Trim
   // button gesture scrolls it into view (scroll-margin keeps it clear of the band).
   const trimScopeRef = useRef(null);
+  // T17910: closing the track puts back the scroll that opening it added. Left scrolled, the
+  // sticky band's scroller sat past the band's pinned spot and the band (Sharpen with it) rose
+  // by the readouts row under it (43px at 1440x900).
+  const trimRevealRef = useRef(null);
   const handleToggleTrim = () => {
     const opening = !advancedOpen;
     setAdvancedOverride(opening);
     if (opening) {
       requestAnimationFrame(() => {
-        if (trimScopeRef.current) scrollClearOfBand(trimScopeRef.current);
+        if (trimScopeRef.current) trimRevealRef.current = scrollClearOfBand(trimScopeRef.current);
       });
+    } else if (trimRevealRef.current) {
+      const { scroller, before } = trimRevealRef.current;
+      trimRevealRef.current = null;
+      scroller.scrollTo({ top: before });
     }
   };
 
@@ -991,6 +1003,16 @@ export function FocusModeView({
               }
             />
 
+            {/* T17910: on a phone the preview disclosure rides on the picture -- in the pinned
+                band it added a row and moved Sharpen my highlight. From `sm` up it is in the
+                band's status cell (ExportButtonView). */}
+            {previewActive && (
+              <div data-testid="preview-disclosure-caption"
+                className="sm:hidden pointer-events-none absolute top-2 inset-x-2 z-10 rounded bg-black/60 px-2 py-1 text-center text-[11px] leading-snug text-gray-200">
+                {EDITOR_PANELS.PREVIEW_DISCLOSURE_SHORT}
+              </div>
+            )}
+
             {/* Fullscreen exit button - desktop only (mobile has it in overlay) */}
             {isFullscreen && !mobileFs && (
               <div className="absolute top-4 right-4 z-10">
@@ -1298,8 +1320,9 @@ export function FocusModeView({
             onBackToPreview={onBackToPreview}
             renderedAt={renderedAt}
             backToPreviewLoading={backToPreviewLoading}
-            // [Trim and SlowMo] + [Preview highlight] sit in the band directly above
-            // Generate (same row-above-CTA shape as Annotate). Never locked
+            previewing={previewing}
+            // [Trim and SlowMo] + [Preview] sit in the band before Sharpen my highlight
+            // (T17910 working order). Never locked
             // (T14830, owner ruling 2026-11-07). Trim and SlowMo toggles the
             // timeline's segment/speed/trim track (advancedOpen).
             actionsAbove={

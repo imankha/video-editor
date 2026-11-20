@@ -442,7 +442,10 @@ never lives inside the settings container, never resizes, never moves.
   progress / failed-retry / disabled reason), the CTA (`flex-none`, centered on the
   viewport axis by the equal-flex sides), `flex-1` cost (right, `items-end`). It is
   the last `flex:none` child of each view's `flex flex-col` shell, so it spans the
-  full width under BOTH the main column and the rail.
+  full width under BOTH the main column and the rail. With an `above` row the CTA is
+  first by default (Overlay); Frame passes `ctaLast` (T17910): Trim, Preview, then
+  Sharpen in the 1.4fr last column, an lg-only chevron before it, cost left-aligned on lg.
+  A toggle must never add a band row: swap a line in the status cell instead.
 - **`PrimaryCta`** (`components/PrimaryCta.jsx`): ActionCard `variant=primary` (solid cyan on
   Focus and Overlay alike; T12010). `data-testid="primary-cta"`. Its box is byte-identical across
   rail-collapsed and drawer-open — nothing in its ancestry resizes with layout state.
