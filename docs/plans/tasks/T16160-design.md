@@ -1,6 +1,6 @@
 # T16160 Design: AI analysis price and charge
 
-**Status:** PICKS RECORDED 2026-11-19 (see task file "## Ruling"); Q5 and Q6 still open
+**Status:** PICKS RECORDED 2026-11-19 (see task file "## Ruling"); Q5 ruled (anonymise), Q6 still open; design follow-ups listed in task file
 **Author:** Architect agent
 **Date:** 2026-11-19
 **Approved:** not yet

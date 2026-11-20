@@ -82,7 +82,12 @@ Design approved with these picks (owner, 2026-11-19). Full options and reasoning
 - **Q2:** only the main timeline is analysed and priced, not an overlapping extra angle (shared with T16150).
 - **Q3:** a share between a parent's own profiles carries AI Coach free (T16202 scope).
 - **Q4:** a prompt version change never recharges; the parent keeps the paid result.
-- **Q5:** a deleted account's purchases stay in the read-out for reporting. This departs from the design's proposal to purge them with the account; open item, see below.
+- **Q5:** when an account is deleted or clears its data, its purchases are ANONYMISED, not purged (owner, 2026-11-19). Clear every reference to the person and their videos (user_id, profile_id, game_id, the link rows to analyses); keep what analytics needs (credits, status, source, timestamps, and the summed video seconds frozen on the purchase row at buying). Departs from the design's purge proposal.
 - **Q6:** acceptance wording not yet answered. Decision 6 B implies "never charged more than the price shown, and exactly that when browser and server read the same length"; confirm before implementing.
 
-Open item for the owner: Q5 conflicts with the design's purge of purchase rows on account deletion and with data-export/privacy handling. Needs a ruling on what "keep" means (anonymised rows without user_id, or kept as is).
+Design follow-ups from Q5 (the Architect updates the design before implementation):
+
+- `user_id`, `profile_id`, `game_id` become nullable on `game_analysis_purchases`; add `video_seconds` (frozen at buying) so minutes survive removal of the link rows. Account deletion and the reset scripts anonymise instead of delete; `privacy.py` export includes only a user's own identified rows.
+- The read-out must say what it can no longer attribute: buyers per analysis lose anonymised purchases, while totals (credits, minutes, count) stay complete.
+- The reconcile counter 'purchases total vs ledger `ai_analysis` total' only holds if the ledger's `ai_analysis` rows are anonymised the same way rather than purged with the account. Check how account deletion treats `credit_transactions` today and rule on it.
+- Q6 is still unanswered.
