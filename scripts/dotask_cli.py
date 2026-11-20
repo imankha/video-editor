@@ -441,7 +441,7 @@ def flip_plan_status(task_ids, status="WIP", only_from=None):
     if changed:
         plan_path.write_text("".join(lines), encoding="utf-8")
     if status == "WIP":
-        pull_to_top(plan_path, task_ids)
+        pull_milestone_to_top(plan_path, task_ids)
     for task_id in task_ids:
         matches = task_file_matches(MAIN_REPO, task_id)
         if len(matches) != 1:  # start's preflight already refused these; on merge, one bad id skips only itself
@@ -456,7 +456,9 @@ def flip_plan_status(task_ids, status="WIP", only_from=None):
 
 
 # Owner rule 2026-11-13: PLAN.md opens with the work in flight, then the bugs /dotask found (bugs always
-# outrank features), then everything else. Starting a task pulls its row up into IN_PROGRESS_SECTION.
+# outrank features), then everything else. Owner correction 2026-11-20: a started task's row stays in its
+# milestone; the whole milestone moves to the top of Current Focus (pull_milestone_to_top). The legacy
+# IN_PROGRESS_SECTION only holds rows moved there before that correction; nothing adds to it now.
 CURRENT_FOCUS = "## Current Focus"
 IN_PROGRESS_SECTION = "### In progress (a task's row moves here when work on it starts)"
 TABLE_HEAD = ["| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |",
@@ -494,28 +496,38 @@ def append_row(lines, heading_at, row):
     lines[at:at] = [row]
 
 
-def pull_to_top(plan_path, task_ids):
-    """Move each task's row into IN_PROGRESS_SECTION (an epic child loses its ↳: its epic is in the link)."""
+def pull_milestone_to_top(plan_path, task_ids):
+    """Move the ### section (milestone) holding each task's row, whole and unchanged, to the top of Current
+    Focus. The row itself never moves out of its milestone (owner correction 2026-11-20). Idempotent: a
+    milestone already first under Current Focus stays put. Rows in the legacy IN_PROGRESS_SECTION, or under a
+    ## heading with no ### milestone, move nothing."""
     raw = Path(plan_path).read_bytes().decode("utf-8")  # read_text would turn CRLF into LF
     newline = "\r\n" if "\r\n" in raw else "\n"
     lines = raw.replace("\r\n", "\n").split("\n")
-    heading_at = ensure_top_section(lines, IN_PROGRESS_SECTION, "Rows here are WIP or waiting on the owner; a "
-                                    "merged row stays until it is DONE and archived.")
-    end = section_end(lines, heading_at)
-    moved = []
-    for i, line in enumerate(lines):
-        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.startswith("|") else []
-        if cells and cells[0] in task_ids and not heading_at < i < end:
-            moved.append(i)
-    if not moved:
+    if CURRENT_FOCUS not in lines:
         return
-    rows = [re.sub(r"\|\s*↳\s*", "| ", lines[i], count=1) if "↳" in lines[i].split("|")[2] else lines[i]
-            for i in moved]
-    for i in reversed(moved):
-        del lines[i]
-    heading_at = lines.index(IN_PROGRESS_SECTION)
-    for row in rows:
-        append_row(lines, heading_at, row)
+    for task_id in task_ids:
+        row_at = next((i for i, line in enumerate(lines) if line.startswith("|")
+                       and line.strip().strip("|").split("|")[0].strip() == task_id), None)
+        if row_at is None:
+            continue
+        heading_at = next((i for i in range(row_at, -1, -1) if lines[i].startswith("#")), None)
+        if heading_at is None or not lines[heading_at].startswith("### ") or lines[heading_at] == IN_PROGRESS_SECTION:
+            continue
+        top = lines.index(CURRENT_FOCUS) + 1
+        while top < len(lines) and not lines[top].strip():
+            top += 1
+        if heading_at == top:
+            continue
+        end = section_end(lines, heading_at)
+        block = lines[heading_at:end]
+        while block and not block[-1].strip():
+            block.pop()
+        del lines[heading_at:end]
+        top = lines.index(CURRENT_FOCUS) + 1
+        while top < len(lines) and not lines[top].strip():
+            top += 1
+        lines[top:top] = block + [""]
     Path(plan_path).write_bytes(newline.join(lines).encode("utf-8"))
 
 
