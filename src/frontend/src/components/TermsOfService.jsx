@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 
-const LAST_UPDATED = 'November 8, 2026';
+const LAST_UPDATED = 'November 20, 2026';
 
 export function TermsOfService() {
   return (
@@ -133,8 +133,10 @@ export function TermsOfService() {
             <li>Process your content (transcode, crop, upscale, overlay) as directed by you</li>
             <li>Display your content back to you within the Service</li>
             <li>Transmit your content to recipients you explicitly share with</li>
+            <li>Analyze your content with automated tools, including AI models run by our service providers, to deliver features you choose</li>
+            <li>Use your content inside ReelBallers to test and improve the Service, unless you opt out as described in our Privacy Policy</li>
           </ul>
-          <p>This license exists solely to operate the Service on your behalf. It terminates when you delete your content or account.</p>
+          <p>This license exists solely to operate and improve the Service. It does not let us publish your content, show it to other users, or train AI models on it. It terminates when you delete your content or account.</p>
         </Section>
 
         {/* Section 7 */}

@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 
-const LAST_UPDATED = 'November 8, 2026';
+const LAST_UPDATED = 'November 20, 2026';
 
 export function PrivacyPolicy() {
   return (
@@ -91,6 +91,8 @@ export function PrivacyPolicy() {
             <li><strong className="text-white">Process payments:</strong> Complete purchases via Stripe</li>
             <li><strong className="text-white">Video content:</strong> We may analyze video metadata and content to identify games across multiple users&apos; uploads, enabling shared viewing experiences and collaborative features in the future. This analysis may include comparing video characteristics (timing, location, visual similarity) to determine whether separate uploads depict the same game.</li>
             <li><strong className="text-white">Improve the Service:</strong> Understand usage patterns through anonymous, aggregate analytics</li>
+            <li><strong className="text-white">AI analysis you choose:</strong> Where the Service offers a feature that has an AI model watch a game for you (for example, to mark plays), choosing it sends that game&apos;s video to our AI provider to be analyzed. The result is stored with your game.</li>
+            <li><strong className="text-white">Test and improve our features:</strong> We may use videos you upload, and the plays, ratings, and notes you add to them, inside ReelBallers to test and improve the Service, for example to check that automatic play detection finds the moments parents mark by hand. This is done by our own staff and by the service providers listed in Section 3 acting on our behalf, and may include having an AI provider analyze a video. It is never published or shown to other users. You can opt out at any time by emailing <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">privacy@reelballers.com</a>; opting out does not affect your use of the Service.</li>
             <li><strong className="text-white">Communicate with you:</strong> Send transactional emails (OTP codes, export completion, share notifications)</li>
           </ul>
           <p className="mb-3">We do <strong className="text-white">not</strong> use your information to:</p>
@@ -98,7 +100,7 @@ export function PrivacyPolicy() {
             <li>Sell to third parties</li>
             <li>Target advertising</li>
             <li>Build user profiles for marketing</li>
-            <li>Train AI/ML models on your video content</li>
+            <li>Train AI/ML models on your video content. Analyzing a video with an AI model, as described above, is not training a model on it.</li>
           </ul>
         </Section>
 
@@ -118,7 +120,7 @@ export function PrivacyPolicy() {
                 <tr><td className="py-2 pr-4 text-white">Modal</td><td className="py-2">GPU video processing (temporary)</td></tr>
                 <tr><td className="py-2 pr-4 text-white">Fly.io</td><td className="py-2">Application hosting</td></tr>
                 <tr><td className="py-2 pr-4 text-white">Resend</td><td className="py-2">Transactional email</td></tr>
-                <tr><td className="py-2 pr-4 text-white">Google</td><td className="py-2">OAuth authentication</td></tr>
+                <tr><td className="py-2 pr-4 text-white">Google</td><td className="py-2">OAuth authentication; AI video analysis (Gemini) for features you choose and for our internal testing</td></tr>
                 <tr><td className="py-2 pr-4 text-white">Stripe</td><td className="py-2">Payment processing</td></tr>
                 <tr><td className="py-2 pr-4 text-white">Cloudflare Web Analytics</td><td className="py-2">Privacy-preserving analytics (no PII)</td></tr>
               </tbody>
@@ -151,7 +153,7 @@ export function PrivacyPolicy() {
             <li><strong className="text-white">Right to Delete:</strong> Delete your account via &ldquo;Delete My Account&rdquo; in Account Settings. Deletion is permanent and immediate. A limited set of records survives deletion (transaction records, the record that the account was deleted, security logs of any staff access, de-identified bug reports, a one-way hash of your email so a future sign-up can be recognized as returning, and the retained usage statistics described in the Data Retention section above); retaining them never delays or limits erasure of your personal data.</li>
             <li><strong className="text-white">Right to Correct:</strong> Contact us to correct inaccurate information</li>
             <li><strong className="text-white">Right to Opt-Out of Sale/Sharing:</strong> We do not sell or share your data. This right is automatically honored.</li>
-            <li><strong className="text-white">Right to Limit Sensitive PI:</strong> Video content is used only as you direct</li>
+            <li><strong className="text-white">Right to Limit Sensitive PI:</strong> Video content is used as you direct and, unless you opt out, to test and improve the Service as described in Section 2. To opt out, email privacy@reelballers.com.</li>
             <li><strong className="text-white">Non-Discrimination:</strong> We will not discriminate against you for exercising rights</li>
           </ul>
           <p className="mb-2"><strong className="text-white">How to exercise your rights:</strong></p>
@@ -168,7 +170,7 @@ export function PrivacyPolicy() {
             <li><strong className="text-white">Children are data subjects in videos, not account holders.</strong> Our users are adults who upload and edit video of youth sporting events.</li>
             <li>We do not knowingly collect personal information from children under 13 (or under 16 for CCPA purposes).</li>
             <li>No biometric data is extracted. Video/photo framing and cropping are manual; player-photo background removal is segmentation, not facial recognition.</li>
-            <li>No automated identification of individuals in videos or photos is performed.</li>
+            <li>No facial recognition or biometric identification of individuals in videos or photos is performed. Where an AI model analyzes a game, it describes the play (for example a team&apos;s kit color, a player&apos;s position, or a jersey number visible on screen); it does not identify anyone by face.</li>
             <li><strong className="text-white">Intro cards are parent-created and consent-gated.</strong> You provide the photo, name, and display facts (position, graduation year, team); we record your parent/guardian consent before the first card and collect no birthdate, age, address, or school. A shared card is publicly visible to anyone with the link.</li>
           </ul>
           <p className="mt-3"><strong className="text-white">Parental rights:</strong> Parents/guardians who have uploaded video or created intro cards for their children retain full control. All Athlete Intro Card data (photo, parent-typed facts, and consent record) is included in a data export and erased when you delete the card or your account.</p>
