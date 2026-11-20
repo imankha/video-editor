@@ -1,7 +1,7 @@
 /**
  * T17030 - per-criterion acceptance check (group checks protocol).
  *
- * The server takes a sharpen's credits the moment it accepts "Sharpen my highlight", but the
+ * The server takes a sharpen's credits the moment it accepts "Sharpen!", but the
  * credit chip kept the old balance until the sharpen finished (minutes on staging). Each test
  * taps Sharpen, waits for GET /api/credits to show the charge, then expects the chip to equal
  * the server within a few seconds, before the sharpen can have finished.
@@ -44,7 +44,7 @@ async function tapSharpen(page) {
 
   await page.goto(`/focus/p/${draft.id}`);
   await page.getByTestId('focus-video-stage').waitFor({ timeout: 90000 });
-  const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
+  const sharpen = page.getByRole('button', { name: 'Sharpen!' }).first();
   await expect(sharpen).toBeEnabled({ timeout: 60000 });
   await expect(chip(page)).toBeVisible({ timeout: 60000 });
   const before = await serverBalance(page);
@@ -53,7 +53,7 @@ async function tapSharpen(page) {
   await sharpen.click();
   const confirm = page.getByTestId('focus-box-confirm');
   if (await confirm.waitFor({ timeout: 5000 }).then(() => true, () => false)) {
-    await confirm.getByRole('button', { name: 'Sharpen my highlight' }).click();
+    await confirm.getByRole('button', { name: 'Sharpen!' }).click();
   }
   // The charge lands when the server accepts the sharpen.
   await expect.poll(() => serverBalance(page), { timeout: 60000, intervals: [1000] }).toBeLessThan(before);

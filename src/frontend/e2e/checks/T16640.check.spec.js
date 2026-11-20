@@ -112,20 +112,20 @@ test.describe('T16640 @ phone 390x844', () => {
 
     const box = async (id) => page.getByTestId(id).first().boundingBox();
 
-    // Band shape on the phone: Sharpen full width on top, Trim and Preview side by side
-    // under it, each a short row card with its description hidden; cost line below.
+    // Band shape on the phone (T17910 working order): Trim and Preview side by side, each a
+    // short row card with its description hidden, Sharpen full width under them; cost line below.
     const band = await box('action-band');
-    const sharpen = await page.getByTestId('action-band-above').locator('button').first().boundingBox();
+    const sharpen = await page.getByTestId('action-band-above').locator('button').last().boundingBox();
     const trim = await box('trim-slowmo-button');
     const preview = await box('framing-preview-toggle');
-    expect(sharpen.y + sharpen.height <= trim.y + 0.5, 'Sharpen sits above Trim').toBe(true);
+    expect(trim.y + trim.height <= sharpen.y + 0.5, 'Sharpen sits under Trim').toBe(true);
     expect(Math.abs(trim.y - preview.y) < 1, 'Trim and Preview share a row').toBe(true);
     expect(sharpen.width > trim.width * 1.8, 'Sharpen spans the full width').toBe(true);
     expect(trim.height <= 60, `Trim is a short row card (h=${trim.height})`).toBe(true);
     await expect(page.getByTestId('trim-slowmo-button').locator('[data-cta-desc]')).toBeHidden();
     expect(band.y + band.height <= 844.5 && band.y >= 0, 'band inside the viewport').toBe(true);
     const cost = await box('export-credit-estimate');
-    if (cost) expect(cost.y >= trim.y + trim.height - 0.5, 'cost line sits under the cards').toBe(true);
+    if (cost) expect(cost.y >= sharpen.y + sharpen.height - 0.5, 'cost line sits under the cards').toBe(true);
 
     // The column stacks without overlap: chooser, then stage, then timeline.
     const shape = await box('focus-shape-choice');

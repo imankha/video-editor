@@ -11,7 +11,9 @@ describe('T13640: experienced users get advanced options, not the 5 basics', () 
   it('T13640:C1 with 3+ finished highlights the first Frame step offers advanced options', () => {
     const g = resolveGuide(focusFacts(4));
     expect(g.id).toBe('focus.progress.experienced');
-    expect(g.message.title).toMatch(/Trim and slow motion/);
+    // T17910: the sentence calls Trim and Preview optional and names the finish.
+    expect(g.message.title).toMatch(/Trim and Preview are optional/);
+    expect(g.message.title).toMatch(/tap Sharpen!$/);
     expect(g.message.title).not.toMatch(/Drag the box/);
   });
 
@@ -19,9 +21,10 @@ describe('T13640: experienced users get advanced options, not the 5 basics', () 
     expect(resolveGuide(focusFacts(3, { cockpit: true })).id).toBe('focus.cockpit.experienced');
   });
 
+  // T17910: once the box has been dragged the same sentence moves to the `.framed` twin, which pulses Sharpen.
   it('T13640:C1 every basic step is replaced, not just the first', () => {
     for (const local of [{ dragDone: true }, { dragDone: true, hasPlayed: true }, { dragDone: true, hasPlayed: true, hasPlayedThrough: true }]) {
-      expect(resolveGuide(focusFacts(4, local)).id).toBe('focus.progress.experienced');
+      expect(resolveGuide(focusFacts(4, local)).id).toBe('focus.progress.experienced.framed');
     }
   });
 

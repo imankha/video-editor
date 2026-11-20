@@ -89,7 +89,14 @@ for (const vp of VIEWPORTS) {
 
       await expectShownWithoutScrolling(page, page.getByTestId('editor-home'), 'header back/home button');
       await expectShownWithoutScrolling(page, page.getByTestId('mode-framing'), 'Frame mode tab');
-      await expectShownWithoutScrolling(page, page.getByTestId('focus-shape-choice').first(), 'Portrait/Landscape chooser');
+      // T17910 (owner ruling 2026-11-19): on a computer the chooser is not rendered; the
+      // Settings rail's Shape row asks that question instead. Phones keep the chooser.
+      if (vp.width >= 1024) {
+        await expect(page.getByTestId('focus-shape-choice')).toHaveCount(0);
+        await expect(page.getByText('Shape', { exact: true }).first()).toBeVisible();
+      } else {
+        await expectShownWithoutScrolling(page, page.getByTestId('focus-shape-choice').first(), 'Portrait/Landscape chooser');
+      }
     });
 
     test(`T16630:C2 - Spotlight opens at the top with header and mode tabs shown @ ${vp.label}`, async ({ context, page }) => {

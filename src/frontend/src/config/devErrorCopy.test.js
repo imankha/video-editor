@@ -76,7 +76,7 @@ describe('T14530 developer text stays out of shipped copy', () => {
     expect(copy?.TITLE).toBe('Unsaved changes');
     expect(copy?.SPOTLIGHT_BODY).toBe("You changed your spotlight but haven't added it to the highlight yet.");
     expect([copy?.DISCARD, copy?.SHARPEN, copy?.ADD_SPOTLIGHT, copy?.KEEP_EDITING])
-      .toEqual(['Discard changes', 'Sharpen my highlight', 'Add spotlight to highlight', 'Keep editing']);
+      .toEqual(['Discard changes', 'Sharpen!', 'Add spotlight to highlight', 'Keep editing']);
   });
 
   it('T14530:C1 App.jsx offers all three choices from the dialog copy', () => {

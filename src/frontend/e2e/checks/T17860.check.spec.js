@@ -2,7 +2,8 @@
  * T17860 - per-criterion acceptance checks (group checks protocol).
  *
  * In Frame, "Trim and slow motion" opens the trim and speed track. Owner ruling 2026-11-19
- * (UX expert design): while open the button reads "Done trimming" with a check icon, carries
+ * (UX expert design): while open the button reads "Done trimming" with a check icon (T17910 renamed it "Close
+ * trimming" and kept the scissors; the checks assert the current label), carries
  * aria-expanded and a pressed look; Preview gets the same pressed look while previewing, and
  * neither button carries aria-pressed next to its changing label.
  *
@@ -19,10 +20,10 @@ const DESKTOP = { width: 1440, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
 const previewButton = (page) => page.getByTestId('framing-preview-toggle');
-// The band's main CTA: "Sharpen my highlight", or "Watch highlight" in the same slot when the
+// The band's main CTA: "Sharpen!", or "Watch highlight" in the same slot when the
 // play the account loads was already sharpened.
 const sharpenButton = (page) => page.getByTestId('action-band')
-  .getByRole('button', { name: /^(Sharpen my highlight|Watch highlight)/ }).first();
+  .getByRole('button', { name: /^(Sharpen!|Watch highlight)/ }).first();
 
 /**
  * Border colour at rest: the pointer is moved off first so a hover style is never measured,
@@ -38,7 +39,7 @@ for (const [label, viewport] of [['1440', DESKTOP], ['390', PHONE]]) {
   test.describe(`at ${label} wide`, () => {
     test.use({ viewport, ...(viewport === PHONE ? { hasTouch: true, isMobile: true } : {}) });
 
-    test(`T17860:C1 - at ${label} wide the open Trim button reads "Done trimming" with a check, aria-expanded="true", a different border colour, and the track shows`, async ({ context, page }) => {
+    test(`T17860:C1 - at ${label} wide the open Trim button reads its open label (T17910: "Close trimming"), aria-expanded="true", a different border colour, and the track shows`, async ({ context, page }) => {
       await loginForCheck(context);
       await openFrame(page, await framePlayPath(page));
       await expectClosed(page);
@@ -53,7 +54,7 @@ for (const [label, viewport] of [['1440', DESKTOP], ['390', PHONE]]) {
 test.describe('at 1440 wide', () => {
   test.use({ viewport: DESKTOP });
 
-  test('T17860:C2 - tapping Done trimming hides the track and restores the closed button; trim and speed edits made while open still apply', async ({ context, page }) => {
+  test('T17860:C2 - tapping the open Trim button (T17910: "Close trimming") hides the track and restores the closed button; trim and speed edits made while open still apply', async ({ context, page }) => {
     await loginForCheck(context);
     const framePath = await framePlayPath(page, { preferExpired: false });
     await closeKeepsEdits(page, framePath);
@@ -73,7 +74,7 @@ test.describe('at 1440 wide', () => {
     await expectClosed(page);
 
     await preview.click();
-    await expect(preview).toContainText('Back to full video', { timeout: 30000 });
+    await expect(preview).toContainText('Close preview', { timeout: 30000 });
     await expect(preview).not.toHaveAttribute('aria-pressed', /.*/);
     await expect(trimButton(page)).not.toHaveAttribute('aria-pressed', /.*/);
     await expect.poll(() => borderColor(page, preview), { timeout: 10000 }).not.toBe(idle);
@@ -84,7 +85,7 @@ test.describe('at 1440 wide', () => {
 test.describe('at 390 wide', () => {
   test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
-  test('T17860:C3 - at 390 wide the Trim button is at least 44px high in both states and Sharpen my highlight does not move or resize', async ({ context, page }) => {
+  test('T17860:C3 - at 390 wide the Trim button is at least 44px high in both states and Sharpen! does not move or resize', async ({ context, page }) => {
     await loginForCheck(context);
     await openFrame(page, await framePlayPath(page));
     await page.waitForTimeout(1000);

@@ -19,7 +19,7 @@ const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 const GUIDE = '[data-testid="framing-guide-text"]';
 const TRIM = '[data-testid="trim-slowmo-button"]';
 const PREVIEW = '[data-testid="framing-preview-toggle"]';
-const GENERATE = 'button:has-text("Sharpen my highlight")';
+const GENERATE = 'button:has-text("Sharpen!")';
 
 let createdClipId = null;
 

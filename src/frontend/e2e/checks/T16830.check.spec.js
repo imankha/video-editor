@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test';
 import { loginForCheck, disableGuidanceForCheck } from '../helpers/checkAuth';
 import { sharpenableDraft } from '../helpers/returnAfterSharpen';
 
-const INTERRUPTED = 'Sharpening was interrupted. Tap Sharpen my highlight to try again.';
+const INTERRUPTED = 'Sharpening was interrupted. To try again, tap Sharpen!';
 
 test('T16830:C1 - a sharpen the server lost stops waiting within a minute and says to sharpen again', async ({ browser }) => {
   test.setTimeout(300000);
@@ -40,12 +40,12 @@ test('T16830:C1 - a sharpen the server lost stops waiting within a minute and sa
       await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ status: 'accepted', export_id: renderedId }) });
     });
 
-    const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
+    const sharpen = page.getByRole('button', { name: 'Sharpen!' }).first();
     await expect(sharpen).toBeEnabled({ timeout: 60000 });
     await sharpen.click();
     const confirm = page.getByTestId('focus-box-confirm');
     if (await confirm.waitFor({ timeout: 5000 }).then(() => true, () => false)) {
-      await confirm.getByRole('button', { name: 'Sharpen my highlight' }).click();
+      await confirm.getByRole('button', { name: 'Sharpen!' }).click();
     }
     await expect.poll(() => renderedId, { timeout: 30000 }).toBeTruthy();
     const waitingSince = Date.now();
@@ -54,7 +54,7 @@ test('T16830:C1 - a sharpen the server lost stops waiting within a minute and sa
     await expect(page.getByText(INTERRUPTED).first()).toBeVisible({ timeout: 60000 });
     expect(Date.now() - waitingSince).toBeLessThan(60000);
     // ...and Sharpen is there to press again.
-    await expect(page.getByRole('button', { name: 'Sharpen my highlight' }).first()).toBeEnabled({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Sharpen!' }).first()).toBeEnabled({ timeout: 10000 });
   } finally {
     await context.close();
   }

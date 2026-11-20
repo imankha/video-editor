@@ -151,13 +151,13 @@ async function framedProject(page) {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/focus/p/${draft.id}`);
   await page.getByTestId('focus-video-stage').waitFor({ timeout: 90000 });
-  const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
+  const sharpen = page.getByRole('button', { name: 'Sharpen!' }).first();
   await expect(sharpen).toBeEnabled({ timeout: 60000 });
   await sharpen.click();
   // An untouched box asks once (T14830); continuing sharpens as usual.
   const confirm = page.getByTestId('focus-box-confirm');
   if (await confirm.waitFor({ timeout: 5000 }).then(() => true, () => false)) {
-    await confirm.getByRole('button', { name: 'Sharpen my highlight' }).click();
+    await confirm.getByRole('button', { name: 'Sharpen!' }).click();
   }
   await page.getByTestId('focus-publish-action-bar').waitFor({ timeout: 480000 });
   await page.setViewportSize(SIZES[0]);

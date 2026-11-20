@@ -77,9 +77,11 @@ describe('T12760 failed-export copy names the real control', () => {
   it.each([
     ['focus', 'framing'],
     ['overlay', 'overlay'],
-  ])('%s.failed says "Tap {action} to try again." and pulses the export CTA', (screen_, job) => {
+  ])('%s.failed tells the user to tap {action} to try again and pulses the export CTA', (screen_, job) => {
     const g = resolveGuide({ screen: screen_, job: { status: 'failed' }, local: {} });
-    expect(g.message.title).toContain(`Tap ${EXPORT_JOBS[job].action} to try again.`);
+    // T17910: framing reads "To try again, tap Sharpen!" so the label's "!" ends the sentence.
+    expect(g.message.title.toLowerCase()).toContain(`tap ${EXPORT_JOBS[job].action.toLowerCase()}`);
+    expect(g.message.title.toLowerCase()).toContain('to try again');
     expect(g.message.title).not.toContain('Try again.');
     expect(g.pulse).toBe(GUIDE_PULSE.EXPORT);
   });

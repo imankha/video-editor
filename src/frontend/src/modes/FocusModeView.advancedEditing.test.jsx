@@ -131,6 +131,7 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
   function withLayout({ scopeTop, scopeBottom, marginBottom }, run) {
     const origRect = Element.prototype.getBoundingClientRect;
     const origScrollBy = Element.prototype.scrollBy;
+    const origScrollTo = Element.prototype.scrollTo;
     const origRaf = globalThis.requestAnimationFrame;
     const origStyle = window.getComputedStyle;
     const scrolled = [];
@@ -139,6 +140,7 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
       return { top: 0, bottom: 800 };
     };
     Element.prototype.scrollBy = function (opts) { scrolled.push([this, opts]); };
+    Element.prototype.scrollTo = function (opts) { scrolled.push([this, { to: opts }]); };
     globalThis.requestAnimationFrame = (cb) => { cb(0); return 0; };
     window.getComputedStyle = (el) => {
       if (el.dataset?.testid === 'trim-guide-scope') return { overflowY: 'visible', scrollMarginBottom: `${marginBottom}px` };
@@ -150,6 +152,7 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
     } finally {
       Element.prototype.getBoundingClientRect = origRect;
       Element.prototype.scrollBy = origScrollBy;
+      Element.prototype.scrollTo = origScrollTo;
       globalThis.requestAnimationFrame = origRaf;
       window.getComputedStyle = origStyle;
     }
@@ -166,9 +169,22 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
       expect(scrolled).toHaveLength(1);
       expect(scrolled[0][0]).toBe(scope.parentElement);
       expect(scrolled[0][1]).toEqual({ top: 25, behavior: 'smooth' });
-      // Closing does not scroll.
+      // T17910: closing puts back the scroll opening added, so the sticky band (and Sharpen
+      // my highlight in it) returns to its pinned spot.
       fireEvent.click(screen.getByTestId('trim-slowmo-button'));
-      expect(scrolled).toHaveLength(1);
+      expect(scrolled).toHaveLength(2);
+      expect(scrolled[1][0]).toBe(scope.parentElement);
+      expect(scrolled[1][1]).toEqual({ to: { top: 0 } });
+    });
+  });
+
+  it('closing does not scroll when opening did not', () => {
+    renderView({ segmentBoundaries: [0, 100], trimRange: null });
+    screen.getByTestId('trim-guide-scope').parentElement.dataset.testid = 'view-scroller';
+    withLayout({ scopeTop: 300, scopeBottom: 600, marginBottom: 81 }, (scrolled) => {
+      fireEvent.click(screen.getByTestId('trim-slowmo-button'));
+      fireEvent.click(screen.getByTestId('trim-slowmo-button'));
+      expect(scrolled).toHaveLength(0);
     });
   });
 

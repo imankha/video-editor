@@ -1,7 +1,7 @@
 /**
  * T16750 - per-criterion acceptance checks (group checks protocol).
  *
- * A parent presses Preview in Frame and then "Sharpen my highlight" while the preview plays.
+ * A parent presses Preview in Frame and then "Sharpen!" while the preview plays.
  * When the Finished panel opens over Frame, the Frame editor's video must stop: it used to keep
  * looping, unmuted, behind the Finished player. Closing Finished must not start it again.
  *

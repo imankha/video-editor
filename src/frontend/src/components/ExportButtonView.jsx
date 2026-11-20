@@ -1,12 +1,12 @@
 import { forwardRef, useImperativeHandle, lazy, Suspense } from 'react';
-import { Download, Loader, AlertCircle, Eye } from 'lucide-react';
+import { Download, Loader, AlertCircle, Eye, Wand2 } from 'lucide-react';
 import ActionBand from './ActionBand';
 import PrimaryCta from './PrimaryCta';
 import { ConfirmationDialog } from './shared/ConfirmationDialog';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
-import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_BOX_CONFIRM, ERROR_COPY, FRAME_COPY } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_BOX_CONFIRM, ERROR_COPY, FRAME_COPY, EDITOR_PANELS } from '../config/displayNames';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { exportFailureCopy } from '../utils/userError';
@@ -54,8 +54,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   onBackToPreview,
   renderedAt = null,
   backToPreviewLoading = false,
-  // Focus: secondary actions rendered in the band directly above the CTA.
+  // Focus: secondary actions rendered in the band beside the CTA.
   actionsAbove = null,
+  // T17910: Frame's Preview is on -- the status cell carries the preview disclosure.
+  previewing = false,
 
   // Button state
   isButtonDisabled,
@@ -121,12 +123,30 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // T11970: finished render is being opened -- disabled spinner CTA, never 'Generate highlight'.
   const isOpeningCta = isFramingMode && framingCtaMode === 'opening';
   const ghostBackToPreview = isFramingMode && !isCurrentlyExporting && showBackToPreview;
+  // T17910: the idle line naming Sharpen as the finish -- only while the status cell has
+  // nothing else to say and the CTA is Sharpen itself (not Back to Preview / opening).
+  const framingIdle = isFramingMode && actionsAbove != null && !isCurrentlyExporting && !isPreviewCta
+    && !isOpeningCta && !ghostBackToPreview && !disconnected && !error && !failedExport && displayProgress !== 100;
 
   // LEFT status cell — progress / disconnected / error / failed / success / disabled
   // reason. Rendered in priority order but each independent block is preserved so the
   // existing testids and copy are byte-identical.
   const statusCell = (
     <>
+      {/* T17910: one line at a time, swapped in place so the band never grows when Preview
+          toggles (Sharpen must not move). Phones show neither here: the band is pinned, so
+          the preview disclosure rides on the video instead (FocusModeView). */}
+      {framingIdle && !previewing && (
+        <div data-testid="frame-idle-hint" className="hidden sm:block text-xs text-gray-400">
+          {FRAME_COPY.IDLE_HINT}
+        </div>
+      )}
+      {framingIdle && previewing && (
+        <div data-testid="preview-disclosure" role="status" className="hidden sm:block text-xs text-gray-400">
+          {EDITOR_PANELS.PREVIEW_DISCLOSURE}
+        </div>
+      )}
+
       {/* T10650: secondary ghost "Back to Preview" — framing changed since the
           render, so the primary CTA is "Generate Framing" but the previous
           render is still one tap away. Sits above today's warnings. */}
@@ -253,7 +273,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         >
           {insufficientForEstimate && <AlertCircle size={12} />}
           <span>
-            {`~${CREDITS.count(estimatedCredits)} · balance ${creditBalance}`}
+            {/* T17910: the count now sits on Sharpen! itself ("Uses N credits"); the cell keeps the balance. */}
+            {CREDITS.balance(creditBalance)}
             {insufficientForEstimate ? FRAME_COPY.CREDIT_SHORT_NOTE : ''}
           </span>
         </div>
@@ -292,6 +313,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
     <>
       <ActionBand
         above={actionsAbove}
+        ctaLast={isFramingMode}
         status={statusCell}
         cta={
           isOpeningCta ? (
@@ -318,13 +340,15 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           ) : (
             <PrimaryCta
               accent={isFramingMode ? 'focus' : 'overlay'}
-              icon={isCurrentlyExporting ? Loader : Download}
+              // T17910: Sharpen carries the wand; Sparkles already means Spotlight across the app.
+              icon={isCurrentlyExporting ? Loader : isFramingMode ? Wand2 : Download}
               iconClassName={isCurrentlyExporting ? 'animate-spin' : ''}
               onClick={onExport}
               guideTarget={isCurrentlyExporting || isExporting ? undefined : GUIDE_PULSE.EXPORT}
               phoneRow={!isFramingMode}
               disabled={isButtonDisabled}
               title={buttonTitle}
+              subline={isFramingMode ? (!isCurrentlyExporting && estimatedCredits != null ? CREDITS.uses(estimatedCredits) : '') : undefined}
             >
               {ctaLabel}
             </PrimaryCta>

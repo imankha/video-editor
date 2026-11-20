@@ -55,7 +55,9 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
   it('shows the estimate + balance in Framing mode (normal state, not a warning)', () => {
     render(<ExportButtonView {...baseProps} estimatedCredits={9} insufficientForEstimate={false} creditBalance={42} />);
     const line = screen.getByTestId('export-credit-estimate');
-    expect(line.textContent).toContain('~9 credits · balance 42');
+    // T17910 (owner change): the count moved onto Sharpen! itself; the cell keeps the balance.
+    expect(line.textContent).toBe('Balance 42');
+    expect(screen.getByTestId('cta-cost-line').textContent).toBe('Uses 9 credits');
     // Normal state = subtle gray, NOT the amber warning.
     expect(line.className).toContain('text-gray-400');
     expect(line.className).not.toContain('text-amber-400');
@@ -64,7 +66,7 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
 
   it('singularizes "credit" for a 1-credit estimate', () => {
     render(<ExportButtonView {...baseProps} estimatedCredits={1} insufficientForEstimate={false} creditBalance={5} />);
-    expect(screen.getByTestId('export-credit-estimate').textContent).toContain('~1 credit · balance 5');
+    expect(screen.getByTestId('cta-cost-line').textContent).toBe('Uses 1 credit');
   });
 
   it('renders a warning (amber) when the estimate exceeds the balance', () => {
@@ -97,12 +99,12 @@ describe('ExportButtonView — T14830 (owner ruling 2026-11-07, "Confirm once"):
     render(<ExportButtonView {...baseProps}
       isButtonDisabled={false}
       estimatedCredits={12} creditBalance={42} />);
-    const btn = screen.getByRole('button', { name: /Sharpen my highlight/ });
+    const btn = screen.getByRole('button', { name: /Sharpen!/ });
     expect(btn.disabled).toBe(false);
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
     expect(screen.queryByTestId('action-band-compact')).toBeNull();
     expect(document.body.textContent).not.toMatch(/drag the box/i);
-    expect(screen.getByTestId('export-credit-estimate').textContent).toContain('~12 credits');
+    expect(screen.getByTestId('cta-cost-line').textContent).toBe('Uses 12 credits');
   });
 
   it('Overlay mode unaffected: no caption, button stays enabled', () => {
@@ -118,10 +120,10 @@ describe('ExportButtonView — T14830 (owner ruling 2026-11-07, "Confirm once"):
     expect(panel.textContent).toMatch(/Is your athlete in the box\?/);
     expect(panel.textContent).toMatch(/Sharpening uses credits/);
     expect(within(panel).getByRole('button', { name: 'Check the box' })).toBeTruthy();
-    expect(within(panel).getByRole('button', { name: 'Sharpen my highlight' })).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Sharpen!' })).toBeTruthy();
   });
 
-  it('"Check the box" calls onBoxConfirmCheck; "Sharpen my highlight" calls onBoxConfirmContinue', () => {
+  it('"Check the box" calls onBoxConfirmCheck; "Sharpen!" calls onBoxConfirmContinue', () => {
     const onCheck = vi.fn();
     const onContinue = vi.fn();
     render(<ExportButtonView {...baseProps} showBoxConfirm onBoxConfirmCheck={onCheck} onBoxConfirmContinue={onContinue} />);
@@ -129,7 +131,7 @@ describe('ExportButtonView — T14830 (owner ruling 2026-11-07, "Confirm once"):
     fireEvent.click(within(panel).getByRole('button', { name: 'Check the box' }));
     expect(onCheck).toHaveBeenCalledTimes(1);
     expect(onContinue).not.toHaveBeenCalled();
-    fireEvent.click(within(panel).getByRole('button', { name: 'Sharpen my highlight' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Sharpen!' }));
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
@@ -160,10 +162,9 @@ describe('ExportButtonView — T8280 high-fps 30fps-choice note (Option B-simple
         sourceFps={50}
       />
     );
-    const estimateLine = screen.getByTestId('export-credit-estimate');
     // The estimate VALUE is unchanged -- still ceil(seconds), no native-price
     // discount/premium baked into this number for Option B.
-    expect(estimateLine.textContent).toContain('~9 credit');
+    expect(screen.getByTestId('cta-cost-line').textContent).toBe('Uses 9 credits');
 
     const note = screen.getByTestId('export-high-fps-note');
     expect(note.textContent).toMatch(/50\s*fps/i);
@@ -211,9 +212,9 @@ describe('ExportButtonView — T8280 high-fps 30fps-choice note (Option B-simple
 });
 
 describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', () => {
-  it('Focus primary CTA reads "Sharpen my highlight" (N19)', () => {
+  it('Focus primary CTA reads "Sharpen!" (N19)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={true} />);
-    expect(screen.getByRole('button', { name: 'Sharpen my highlight' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sharpen!' })).toBeTruthy();
   });
 
   it('Overlay primary CTA is "Add spotlight to highlight" (the render action, not "Add")', () => {
@@ -273,11 +274,11 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
 });
 
 describe('ExportButtonView — T10650 Watch highlight CTA', () => {
-  it('preview mode: primary CTA reads "Watch highlight" (replaces Sharpen my highlight) and cost cell reads "No credits needed"', () => {
+  it('preview mode: primary CTA reads "Watch highlight" (replaces Sharpen!) and cost cell reads "No credits needed"', () => {
     render(<ExportButtonView {...baseProps} framingCtaMode="preview" estimatedCredits={9} creditBalance={42} />);
     expect(screen.getByRole('button', { name: 'Watch highlight' })).toBeTruthy();
     // D2: there is NO way to force a re-render in this state.
-    expect(screen.queryByRole('button', { name: /Sharpen my highlight/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Sharpen!/ })).toBeNull();
     expect(screen.getByTestId('export-no-credits-note').textContent).toContain('No credits needed');
     // The credit estimate is fully replaced.
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
@@ -302,12 +303,12 @@ describe('ExportButtonView — T10650 Watch highlight CTA', () => {
     expect(screen.queryByTestId('rendered-at-note')).toBeNull();
   });
 
-  it('generate + showBackToPreview: primary CTA stays "Sharpen my highlight" and a ghost "Watch highlight" appears', () => {
+  it('generate + showBackToPreview: primary CTA stays "Sharpen!" and a ghost "Watch highlight" appears', () => {
     const onBackToPreview = vi.fn();
     const onExport = vi.fn();
     render(<ExportButtonView {...baseProps} framingCtaMode="generate" showBackToPreview={true}
       onBackToPreview={onBackToPreview} onExport={onExport} estimatedCredits={9} creditBalance={42} />);
-    expect(screen.getByRole('button', { name: 'Sharpen my highlight' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sharpen!' })).toBeTruthy();
     // Credit estimate still shows (paid re-render path).
     expect(screen.getByTestId('export-credit-estimate')).toBeTruthy();
     const ghost = screen.getByTestId('back-to-preview-ghost');
@@ -335,10 +336,32 @@ describe('ExportButtonView — T10650 Watch highlight CTA', () => {
 });
 
 describe('ExportButtonView - T11970 opening state', () => {
-  it('opening mode: disabled Opening CTA, never Sharpen my highlight', () => {
+  it('opening mode: disabled Opening CTA, never Sharpen!', () => {
     render(<ExportButtonView {...baseProps} framingCtaMode="opening" />);
     const btn = screen.getByRole('button', { name: /Opening your highlight/ });
     expect(btn.disabled).toBe(true);
-    expect(screen.queryByRole('button', { name: /Sharpen my highlight/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Sharpen!/ })).toBeNull();
+  });
+});
+
+// T17910: the status cell swaps one line in place -- the idle hint, or the preview disclosure
+// while previewing -- so toggling Preview never adds a band row (Sharpen must not move).
+describe('ExportButtonView - T17910 status line swap', () => {
+  const above = <button type="button">Trim</button>;
+  it('shows the idle hint when not previewing and the disclosure while previewing, never both', () => {
+    const { rerender } = render(<ExportButtonView {...baseProps} actionsAbove={above} />);
+    expect(screen.getByTestId('frame-idle-hint')).toBeTruthy();
+    expect(screen.queryByTestId('preview-disclosure')).toBeNull();
+    rerender(<ExportButtonView {...baseProps} actionsAbove={above} previewing />);
+    expect(screen.queryByTestId('frame-idle-hint')).toBeNull();
+    const d = screen.getByTestId('preview-disclosure');
+    expect(d.textContent).toMatch(/final picture quality comes when you sharpen/i);
+    expect(d.getAttribute('role')).toBe('status');
+    expect(d.className.split(/\s+/)).toEqual(expect.arrayContaining(['hidden', 'sm:block']));
+  });
+
+  it('progress or an error outranks the disclosure', () => {
+    render(<ExportButtonView {...baseProps} actionsAbove={above} previewing error="boom" />);
+    expect(screen.queryByTestId('preview-disclosure')).toBeNull();
   });
 });

@@ -12,7 +12,7 @@ vi.mock('../components/AspectRatioSelector', () => ({ default: () => <div /> }))
 vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div /> }));
 vi.mock('../components/Controls', () => ({ Controls: () => <div /> }));
 vi.mock('../components/ZoomControls', () => ({ default: () => <div /> }));
-vi.mock('../components/ExportButtonView', () => ({ default: ({ actionsAbove }) => <div>{actionsAbove}</div> }));
+vi.mock('../components/ExportButtonView', () => ({ default: ({ actionsAbove, previewing }) => <div data-previewing={String(!!previewing)} data-testid="export-view-stub">{actionsAbove}</div> }));
 vi.mock('../containers/ExportButtonContainer', () => ({
   ExportButtonContainer: () => ({}),
   HIGHLIGHT_EFFECT_LABELS: {},
@@ -93,7 +93,9 @@ describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
     // boundary. The click handler must not replace it with absolute media zero.
     expect(videoRef.current.currentTime).toBe(561.9);
     expect(play).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to full video/i);
-    expect(screen.getByTestId('preview-disclosure')).not.toBeNull();
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/close preview/i);
+    // T17910: the band's status cell gets `previewing` (sm+ disclosure); phones get the caption on the picture.
+    expect(screen.getByTestId('export-view-stub').getAttribute('data-previewing')).toBe('true');
+    expect(screen.getByTestId('preview-disclosure-caption').className).toContain('sm:hidden');
   });
 });

@@ -73,7 +73,10 @@ const focus = (text, target, step, pulse = null, keepClear = [], phase = step, n
 // T13640: 3+ finished highlights = experienced. The basic drag/play/keep/preview steps give way to ONE advanced-options prompt.
 const EXPERIENCED_AFTER = 3;
 const experienced = (f) => (hp(f).finishedCount ?? 0) >= EXPERIENCED_AFTER && !f.local.rendered && !f.local.ctaBusy && !f.local.previewing && !f.local.hasPreviewPlayedThrough && f.local.trimStage !== 'split' && f.local.trimStage !== 'adjust';
-const EXPERIENCED_NO_PULSE = 'Names optional controls (any of several); nothing single to press.';
+// T17910: the experienced sentence ends at Sharpen!, but before the box has been dragged the parent still
+// has to check it, so Sharpen pulses only once the box has moved (the `.framed` twins below).
+const EXPERIENCED_NO_PULSE = 'The box has not been checked yet; pulsing Sharpen would invite spending before it is.';
+const COCKPIT_CTA = tid('cockpit-cta-ring');
 const job = (f) => f.job?.status ?? 'none';
 const jobRule = (id, screen, status, msg, target, fallback, tone, pulse = null, noPulse) =>
   ({ id, screen, when: (f) => job(f) === status, message: msg, anchor: { target, fallback }, tone, pulse, noPulse, avoid: [], step: null, phase: id });
@@ -269,7 +272,8 @@ export const GUIDE_RULES = [
   readyPanel(jobRule('focus.ready', 'focus', 'ready', { title: GUIDE.focus.ready, body: '' }, FOCUS_READY_PRIMARY, READY_PANEL, 'coach', GUIDE_PULSE.FOCUS_ADD_SPOTLIGHT), FOCUS_READY_CTAS),
   // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
   // T12770: the landscape cockpit has no guide sentence, only the crop-box cue; it is gated by Guidance like every pulse.
-  { id: 'focus.cockpit.experienced', screen: 'focus', when: (f) => f.local.cockpit && experienced(f), ...focus(GUIDE.focus.experienced, FOCUS_STAGE, null, null, [], 'experienced', EXPERIENCED_NO_PULSE) },
+  { id: 'focus.cockpit.experienced.framed', screen: 'focus', when: (f) => f.local.cockpit && experienced(f) && f.local.dragDone, ...focus(GUIDE.focus.experienced, FOCUS_STAGE, null, GUIDE_PULSE.EXPORT, [COCKPIT_CTA], 'experienced-framed') },
+  { id: 'focus.cockpit.experienced', screen: 'focus', when: (f) => f.local.cockpit && experienced(f) && !f.local.dragDone, ...focus(GUIDE.focus.experienced, FOCUS_STAGE, null, null, [], 'experienced', EXPERIENCED_NO_PULSE) },
   // T14770: step 1 of 6 -- the shape choice shows before the box-drag step.
   { id: 'focus.cockpit.shareWhere', screen: 'focus', when: (f) => f.local.cockpit && !f.local.shapeChosen, ...focus(GUIDE.focus.shareWhere, FRAME_SHAPE_CHOICE, 1, GUIDE_PULSE.FRAME_SHAPE_CHOICE) },
   { id: 'focus.cockpit.drag', screen: 'focus', when: (f) => f.local.cockpit && !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 2, GUIDE_PULSE.CROP_BOX) },
@@ -277,10 +281,11 @@ export const GUIDE_RULES = [
   { id: 'focus.cockpit.rendered', screen: 'focus', when: (f) => f.local.cockpit && f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
   { id: 'focus.cockpit.watch-preview', screen: 'focus', when: (f) => f.local.cockpit && f.local.previewing, ...focus(GUIDE.focus.cockpitWatchPreview, FOCUS_STAGE, 5, null, [], 5, 'Watching; Preview again is optional.') },
   { id: 'focus.cockpit.busy', screen: 'focus', when: (f) => f.local.cockpit && f.local.ctaBusy, silent: true, noPulse: 'The CTA is itself busy (documented null, like portrait).' },
-  { id: 'focus.cockpit.preview', screen: 'focus', when: (f) => f.local.cockpit && !f.local.hasPreviewed, ...focus(GUIDE.focus.cockpitPreview, FOCUS_STAGE, 5, GUIDE_PULSE.COCKPIT_PREVIEW) },
+  { id: 'focus.cockpit.preview', screen: 'focus', when: (f) => f.local.cockpit && !f.local.hasPreviewed, ...focus(GUIDE.focus.cockpitPreview, FOCUS_STAGE, 5, GUIDE_PULSE.COCKPIT_PREVIEW, [COCKPIT_CTA]) },
   { id: 'focus.cockpit.generate', screen: 'focus', when: (f) => f.local.cockpit, ...focus(GUIDE.focus.generate, FOCUS_STAGE, 6, GUIDE_PULSE.EXPORT) },
   { id: 'focus.rendered', screen: 'focus', when: (f) => f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
-  { id: 'focus.progress.experienced', screen: 'focus', when: (f) => !f.local.fullscreen && experienced(f), ...focus(GUIDE.focus.experienced, FOCUS_STAGE, null, null, [], 'experienced', EXPERIENCED_NO_PULSE) },
+  { id: 'focus.progress.experienced.framed', screen: 'focus', when: (f) => !f.local.fullscreen && experienced(f) && f.local.dragDone, ...focus(GUIDE.focus.experienced, ACTION_BAND, null, GUIDE_PULSE.EXPORT, [], 'experienced-framed') },
+  { id: 'focus.progress.experienced', screen: 'focus', when: (f) => !f.local.fullscreen && experienced(f) && !f.local.dragDone, ...focus(GUIDE.focus.experienced, FOCUS_STAGE, null, null, [], 'experienced', EXPERIENCED_NO_PULSE) },
   // T14770: step 1 of 6 -- "Where will you share it?" (design decision 1, Option
   // C), done once the parent taps a shape OR drags the box (dragging implicitly
   // confirms the pre-selected portrait shape). The box-drag step below is now 2.
@@ -293,8 +298,8 @@ export const GUIDE_RULES = [
   // T12790: fullscreen has no Preview toggle or action band; send the user back out once the stage steps are done.
   { id: 'focus.fullscreen.leave', screen: 'focus', when: (f) => f.local.fullscreen, ...focus(GUIDE.focus.leaveFullscreen, FOCUS_STAGE, null, GUIDE_PULSE.EXIT_FULLSCREEN, [], 'leave-fullscreen') },
   // T13570: compact, so on a phone the card fits the strip above the preview instead of covering it.
-  { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 5, null, [FOCUS_STAGE], 5, 'Watching; Back to full video is optional.'), compact: true },
-  { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 5, GUIDE_PULSE.PREVIEW) },
+  { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 5, null, [FOCUS_STAGE], 5, 'Watching; Close preview is optional.'), compact: true },
+  { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 5, GUIDE_PULSE.PREVIEW, [ACTION_BAND]) },
   // While the Preview/Generate button is itself busy the guide is silent (documented null).
   { id: 'focus.progress.generate.advanced', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none' && (hp(f).finishedCount ?? 0) > 1, ...focus(GUIDE.focus.generateAdvanced, ACTION_BAND, 6, GUIDE_PULSE.EXPORT) },
   { id: 'focus.progress.generate', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none', ...focus(GUIDE.focus.generate, ACTION_BAND, 6, GUIDE_PULSE.EXPORT) },
@@ -383,10 +388,12 @@ export function resolveGuide(facts) {
  * that step never shows this session. Renumber every later step down by one and drop
  * the total to 5, so the first step this parent can see always reads "Step 1", never
  * a skipped step's number -- at any later step either.
+ * T17910: the same holds on a computer, where the chooser is not rendered at all
+ * (FocusModeView passes `shareWhereSkipped` for either reason).
  */
-export function focusGuideStepDisplay(step, boxPrePlaced) {
+export function focusGuideStepDisplay(step, shareWhereSkipped) {
   if (step == null) return { step: null, total: null };
-  return boxPrePlaced ? { step: step - 1, total: 5 } : { step, total: 6 };
+  return shareWhereSkipped ? { step: step - 1, total: 5 } : { step, total: 6 };
 }
 
 const play = (rating, portrait = null, highlightCount = 0) => ({ selectedPlay: rating == null ? null : { rating }, portrait, highlightCount });
@@ -419,6 +426,7 @@ export const GUIDE_STATES = [
   { name: 'annotate: 5-star, portrait published', expectId: 'annotate.progress.published', facts: { screen: 'annotate', progress: play(5, { action: 'published' }), local: {} } },
   { name: 'focus cockpit: shape not chosen yet', expectId: 'focus.cockpit.shareWhere', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: false, dragDone: false } } },
   { name: 'focus cockpit: experienced (3+ finished)', expectId: 'focus.cockpit.experienced', facts: { screen: 'focus', progress: { finishedCount: 3 }, local: { cockpit: true, shapeChosen: true, dragDone: false } } },
+  { name: 'focus cockpit: experienced, box dragged', expectId: 'focus.cockpit.experienced.framed', facts: { screen: 'focus', progress: { finishedCount: 3 }, local: { cockpit: true, shapeChosen: true, dragDone: true } } },
   { name: 'focus cockpit: no focus point yet', expectId: 'focus.cockpit.drag', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: false } } },
   { name: 'focus cockpit: framed, not previewed', expectId: 'focus.cockpit.preview', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true } } },
   { name: 'focus cockpit: previewing', expectId: 'focus.cockpit.watch-preview', facts: { screen: 'focus', local: { cockpit: true, shapeChosen: true, dragDone: true, previewing: true } } },
@@ -428,6 +436,7 @@ export const GUIDE_STATES = [
   { name: 'focus cockpit: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: { cockpit: true, shapeChosen: true, dragDone: true } } },
   { name: 'focus: shape not chosen yet', expectId: 'focus.progress.shareWhere', facts: { screen: 'focus', local: { shapeChosen: false, dragDone: false } } },
   { name: 'focus: experienced (3+ finished), basics replaced', expectId: 'focus.progress.experienced', facts: { screen: 'focus', progress: { finishedCount: 3 }, local: { shapeChosen: true, dragDone: false, hasPlayed: false, trimStage: 'off', hasPlayedThrough: false, previewing: false, hasPreviewPlayedThrough: false, ctaBusy: false } } },
+  { name: 'focus: experienced (3+ finished), box dragged', expectId: 'focus.progress.experienced.framed', facts: { screen: 'focus', progress: { finishedCount: 3 }, local: { shapeChosen: true, dragDone: true, hasPlayed: false, trimStage: 'off', hasPlayedThrough: false, previewing: false, hasPreviewPlayedThrough: false, ctaBusy: false } } },
   { name: 'focus: video failed to load, retry offered', expectId: 'focus.video-error.retry', facts: { screen: 'focus', job: { status: 'processing' }, local: fl({ videoError: true, canRetryVideo: true }) } },
   { name: 'focus: video failed to load', expectId: 'focus.video-error', facts: { screen: 'focus', local: fl({ videoError: true }) } },
   { name: 'focus: fullscreen, stage steps done', expectId: 'focus.fullscreen.leave', facts: { screen: 'focus', local: fl({ fullscreen: true, hasPreviewPlayedThrough: false }) } },

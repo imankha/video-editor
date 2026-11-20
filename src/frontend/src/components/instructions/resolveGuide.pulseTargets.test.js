@@ -65,6 +65,8 @@ const TODAYS_TARGETS = {
   'focus.fullscreen.leave': P.EXIT_FULLSCREEN,
   'focus.cockpit.preview': P.COCKPIT_PREVIEW,
   'focus.cockpit.generate': P.EXPORT,
+  'focus.progress.experienced.framed': P.EXPORT, // T17910
+  'focus.cockpit.experienced.framed': P.EXPORT, // T17910
   'modal.attach-video.submit': P.ATTACH_SUBMIT,
   'modal.clip-upload-notice': P.CLIP_NOTICE_CONTINUE,
   'modal.clip-upload-too-large': P.CLIP_TOO_LARGE_OK,

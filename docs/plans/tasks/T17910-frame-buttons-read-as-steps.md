@@ -70,6 +70,17 @@ Build the Sharpen name into these strings from `EXPORT_JOBS.framing.action`, as 
 - Portrait phone: row 1 Trim and Preview, row 2 Sharpen full width, cost line under it, no hint. The pinned band height must not change; `reserveTwoTitleLines` still guards the label swaps.
 - Landscape phone cockpit: `ActionRail` already runs Settings, Preview, cost, Sharpen top to bottom. Only the icon swap and the guide twins apply. `COCKPIT_INTRO_BODY` stays true.
 
+### Owner changes after the first test (owner, 2026-11-19)
+
+The owner tested the first build and said the paid button still looks like a harmless extra next to the two free ones, and that Frame asks portrait or landscape twice. These rulings override anything above that disagrees.
+
+- **Name.** The paid button reads "Sharpen!". Every sentence inside the app that names the button says "Sharpen!" too (coach sentences, the idle hint, the box warning's continue button, the landscape intro card), worded so the name ends its sentence and no other punctuation follows it. Change `EXPORT_JOBS.framing.action` and reword the strings built from it. The busy, opening and finished labels are unchanged. The landing site is out of scope.
+- **Price on the button.** A second, smaller line inside the button reads "Uses N credits" (`CREDITS.count` of the same `estimatedCredits` the cost cell uses; never a second calculation). The line's space is reserved, so the button's width and height never change when the estimate changes or is not known yet. The cost cell keeps the balance, the per-second line and the short-of-credits note, and drops the repeated count.
+- **No confirmation.** Tapping the button starts sharpening exactly as today (owner: "I don't want to block conversion"). The existing one-time box warning (T14830) stays as it is.
+- **Separation.** From `sm` up, the gap before the paid button is at least twice the gap between Trim and Preview; the chevron stays inside that gap on `lg`. On a portrait phone the paid button already has its own row.
+- **Idle hint** becomes: `Trim and Preview are optional. When your athlete stays in the box, tap Sharpen!`
+- **Hide the "Where will you share it?" chooser on a computer only (owner, 2026-11-19, second ruling; this replaces the full removal and overrides the fix-round finding that says to remove it from phone and landscape too).** From `lg` up the Settings panel with its Shape row is always on screen, so the chooser asks the same question twice: do not render `FrameShapeChoice` there, and the coach skips the `shareWhere` step there, so it has five steps starting at drag the box ("Step 1 of 5"). Below `lg` and in the landscape phone cockpit, where Settings is behind a button, the chooser and its coach step stay exactly as they are today (six steps). The guide must never point at a chooser that is not rendered: drive the rule from a fact the view passes, not from a CSS-only hide. Delete nothing that the phone layouts still use. Update `.claude/knowledge/guidance.md` and `keyframes-framing.md`.
+
 ## Current code
 
 - `src/frontend/src/components/ActionBand.jsx` line ~60: the `above` grid renders the CTA cell first, then Trim and Preview (comment cites T12020).
@@ -92,10 +103,13 @@ Build the Sharpen name into these strings from `EXPORT_JOBS.framing.action`, as 
 
 ## Acceptance Criteria
 
-- [ ] C1: At 1440 wide in Frame, the bar's buttons read left to right "Trim and slow motion", "Preview", "Sharpen my highlight", and keyboard Tab reaches them in that order. At 390 wide, Trim and Preview share one row and "Sharpen my highlight" is full width directly beneath them.
+- [ ] C1: At 1440 wide in Frame, the bar's buttons read left to right "Trim and slow motion", "Preview", "Sharpen!", and keyboard Tab reaches them in that order. At 390 wide, Trim and Preview share one row and "Sharpen!" is full width directly beneath them.
 - [ ] C2: After tapping "Trim and slow motion" the button reads "Close trimming" with the scissors icon (no check) and aria-expanded="true", and the trim track is visible; tapping it again restores "Trim and slow motion" and hides the track. "Done trimming" appears nowhere in Frame.
 - [ ] C3: After tapping "Preview" the button reads "Close preview"; tapping it returns to dragging the box and the button reads "Preview". "Back to full video" appears nowhere in Frame.
-- [ ] C4: At 1440 wide with nothing in progress, the bar shows "Trim and Preview are optional. When your athlete stays in the box, tap Sharpen my highlight." to the left of the buttons; at 390 wide that line is not shown.
-- [ ] C5: The "Sharpen my highlight" button shows the wand icon, not the download arrow and not the Spotlight sparkles, at 1440 wide and in the landscape phone rail.
-- [ ] C6: At 1440 and 390 wide, the "Sharpen my highlight" button's position and size are the same with the trim track open or closed and with Preview on or off, and at 1280x800 the video, play controls and crop track still fit above the bar without scrolling.
-- [ ] C7: For an account with three or more finished highlights, the coach sentence in Frame names "Sharpen my highlight", and once the box has been dragged the Sharpen button pulses. For a new account at the Preview step, the sentence reads "Tap Preview to see exactly what you’ll share, then tap Sharpen my highlight." and the Sharpen button is not dimmed.
+- [ ] C4: At 1440 wide with nothing in progress, the bar shows "Trim and Preview are optional. When your athlete stays in the box, tap Sharpen!" to the left of the buttons; at 390 wide that line is not shown.
+- [ ] C5: The "Sharpen!" button shows the wand icon, not the download arrow and not the Spotlight sparkles, at 1440 wide and in the landscape phone rail.
+- [ ] C6: At 1440 and 390 wide, the "Sharpen!" button's position and size are the same with the trim track open or closed and with Preview on or off, and at 1280x800 the video, play controls and crop track still fit above the bar without scrolling.
+- [ ] C7: For an account with three or more finished highlights, the coach sentence in Frame names "Sharpen!", and once the box has been dragged the Sharpen button pulses. For a new account at the Preview step, the sentence reads "Tap Preview to see exactly what you’ll share, then tap Sharpen!" and the Sharpen button is not dimmed.
+- [ ] C8: The paid button reads "Sharpen!" with a second, smaller line "Uses N credits", where N is the same credit estimate the bar shows for this highlight. Shortening the highlight with a trim changes N while the button's width and height stay the same. "Sharpen my highlight" appears nowhere in Frame.
+- [ ] C9: At 1440 wide, the gap between "Preview" and "Sharpen!" is at least twice the gap between "Trim and slow motion" and "Preview".
+- [ ] C10: Opening Frame on a play that has no box positions yet shows no "Where will you share it?" chooser at 1440 wide, and the coach's first step there is the drag-the-box step and reads "Step 1 of 5". At 390 wide and on a landscape phone the chooser still shows and the coach's first step still points at it ("Step 1 of 6"). The Shape setting in Settings still switches between portrait and landscape.

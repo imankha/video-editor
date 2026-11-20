@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { ChevronRight } from 'lucide-react';
 import useCtaBarHeight from './shared/useCtaBarHeight';
 
 // T16640: lg-only shape of the `above` grid and its ActionCards (see the grid below).
@@ -33,7 +34,7 @@ const BAND_ROW_CARDS = 'lg:order-2 lg:flex-none lg:w-[56rem] lg:max-w-[64%] lg:m
  * Presentational only. `status`, `cta`, and `cost` are nodes supplied by the host.
  * `data-testid="action-band"` is the stable hook the e2e/unit specs assert against.
  */
-export default function ActionBand({ status = null, cta = null, cost = null, above = null, className = '' }) {
+export default function ActionBand({ status = null, cta = null, cost = null, above = null, ctaLast = false, className = '' }) {
   const ref = useRef(null);
   useCtaBarHeight(ref);
   return (
@@ -47,20 +48,36 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
         boxShadow: '0 -8px 24px rgba(0,0,0,0.35)',
       }}
     >
-      {/* Secondary-action row directly above the CTA (Focus: Trim and SlowMo +
-          Preview highlight). Optional; Overlay passes nothing. */}
+      {/* Secondary-action row beside the CTA (Focus: Trim and SlowMo + Preview;
+          Overlay: Add text). Optional. */}
       {above && (
-        // T12020: Generate is FIRST (left on desktop, top on mobile), Trim and Preview
-        // are the secondary row beside it; the preview disclosure (order-last,
-        // col-span-full) sits under them. Same column shape as CtaBar's band grid.
+        // T12020: by default the CTA is FIRST (left on desktop, top on mobile) and the
+        // secondaries sit beside it (Overlay). T17910 (owner ruling 2026-11-19, Frame only,
+        // `ctaLast`): working order in the DOM, so tab and screen-reader order match -- Trim,
+        // Preview, then Sharpen! in the wide last column; on a phone Trim and
+        // Preview share a row and the CTA spans the row beneath. The lg-only chevron is
+        // absolute in the gap, so it never moves or resizes a cell.
         // T16640: on desktop (lg) the band is ONE row -- status | cards | cost -- of short
         // row cards (icon beside title, description in the tooltip), so a 1280x800 laptop
         // keeps the video, play controls and crop track above it without scrolling. The
         // stacked tall cards + separate cost row were ~233px. Below lg nothing changes.
-        <div data-testid="action-band-above" className={`grid grid-cols-2 sm:[grid-template-columns:minmax(0,1.4fr)_repeat(2,minmax(0,1fr))] gap-2 px-3 sm:px-4 pt-3 max-w-4xl mx-auto ${BAND_ROW_CARDS}`}>
-          <div className="col-span-2 sm:col-span-1">{cta}</div>
-          {above}
-        </div>
+        ctaLast ? (
+          <div data-testid="action-band-above" className={`grid grid-cols-2 sm:[grid-template-columns:repeat(2,minmax(0,1fr))_minmax(0,1.4fr)] gap-2 lg:gap-x-4 px-3 sm:px-4 pt-3 max-w-4xl mx-auto ${BAND_ROW_CARDS}`}>
+            {above}
+            {/* T17910 (owner change): the CTA cell's left margin equals the grid gap, so the gap
+                before Sharpen! is twice Trim-Preview's; the chevron is centred in that 2rem lg gap. */}
+            <div className="relative col-span-2 sm:col-span-1 sm:ml-2 lg:ml-4">
+              <ChevronRight data-testid="sharpen-step-chevron" aria-hidden="true" size={14}
+                className="hidden lg:block absolute top-1/2 -translate-y-1/2 -left-[23px] text-cyan-300/50" />
+              {cta}
+            </div>
+          </div>
+        ) : (
+          <div data-testid="action-band-above" className={`grid grid-cols-2 sm:[grid-template-columns:minmax(0,1.4fr)_repeat(2,minmax(0,1fr))] gap-2 px-3 sm:px-4 pt-3 max-w-4xl mx-auto ${BAND_ROW_CARDS}`}>
+            <div className="col-span-2 sm:col-span-1">{cta}</div>
+            {above}
+          </div>
+        )
       )}
       <div className={`flex flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:min-h-[76px]${above ? ' lg:contents' : ''}`}>
         {/* Status cell — progress, failed/retry, disabled reason (T8510). */}
@@ -72,7 +89,8 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
           {cta}
         </div>}
         {/* Cost cell — credit estimate, output length. */}
-        <div className="order-3 flex-1 min-w-0 w-full sm:w-auto flex flex-col justify-center items-center sm:items-end gap-1 text-center sm:text-right">
+        {/* T17910: with the CTA last the cost sits right of Sharpen on lg, so it reads left-aligned. */}
+        <div className={`order-3 flex-1 min-w-0 w-full sm:w-auto flex flex-col justify-center items-center sm:items-end gap-1 text-center sm:text-right${above && ctaLast ? ' lg:items-start lg:text-left' : ''}`}>
           {cost}
         </div>
       </div>

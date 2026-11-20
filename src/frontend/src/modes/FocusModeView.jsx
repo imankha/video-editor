@@ -14,7 +14,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import useVideoDisplayRect from '../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../utils/outputPreviewTransform';
-import { FOCUS_HINTS, FRAME_COPY } from '../config/displayNames';
+import { FOCUS_HINTS, FRAME_COPY, EDITOR_PANELS } from '../config/displayNames';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
@@ -90,8 +90,10 @@ function scrollClearOfBand(el) {
   const view = isPage ? { top: 0, bottom: window.innerHeight } : scroller.getBoundingClientRect();
   const box = el.getBoundingClientRect();
   const covered = box.bottom + parseFloat(getComputedStyle(el).scrollMarginBottom) - view.bottom;
-  if (covered <= 0) return;
+  if (covered <= 0) return null;
+  const before = scroller.scrollTop;
   scroller.scrollBy({ top: Math.min(covered, Math.max(0, box.top - view.top)), behavior: 'smooth' });
+  return { scroller, before };
 }
 
 /**
@@ -151,6 +153,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   renderedAt,
   backToPreviewLoading,
   actionsAbove,
+  previewing = false,
 }, ref) {
   // Container: all business logic
   const container = ExportButtonContainer({
@@ -196,6 +199,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         renderedAt={renderedAt}
         backToPreviewLoading={backToPreviewLoading}
         actionsAbove={actionsAbove}
+        previewing={previewing}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle}
         isHighlightEnabled={false}
@@ -466,8 +470,15 @@ export function FocusModeView({
   // positions (the shape was already settled in an earlier session).
   // T17230: also once positions exist at all (e.g. loaded after mount) -- the chooser
   // hides then, so the step must not point at a control that is gone.
+  // T17910 (owner ruling 2026-11-19): on a computer (the desktop layout, `!isMobile`) the
+  // Settings rail with its Shape row is always on screen, so the chooser would ask the same
+  // question twice: it is not rendered there, its step counts as done, and the coach
+  // numbers the remaining five steps. Phones (and the cockpit) keep the chooser and six steps.
+  const shapeChoiceShown = isMobile;
   const [shapeTapped, setShapeTapped] = useState(false);
-  const shapeChosen = shapeTapped || hasDragged || boxPrePlaced || focusPointCount > 0;
+  const shapeChosen = !shapeChoiceShown || shapeTapped || hasDragged || boxPrePlaced || focusPointCount > 0;
+  // The shape step never shows this session: pre-placed box (T14760) or no chooser (T17910).
+  const shareWhereSkipped = boxPrePlaced || !shapeChoiceShown;
   const handleShapeChosen = useCallback(() => setShapeTapped(true), []);
   // Step 3 -> 4: once the first play has started, reaching the clip end while
   // playing counts as one full play-through (playback loops, so the time wraps
@@ -515,13 +526,21 @@ export function FocusModeView({
   // T13580: on a phone the lane opens below the fixed action band; the Trim
   // button gesture scrolls it into view (scroll-margin keeps it clear of the band).
   const trimScopeRef = useRef(null);
+  // T17910: closing the track puts back the scroll that opening it added. Left scrolled, the
+  // sticky band's scroller sat past the band's pinned spot and the band (Sharpen with it) rose
+  // by the readouts row under it (43px at 1440x900).
+  const trimRevealRef = useRef(null);
   const handleToggleTrim = () => {
     const opening = !advancedOpen;
     setAdvancedOverride(opening);
     if (opening) {
       requestAnimationFrame(() => {
-        if (trimScopeRef.current) scrollClearOfBand(trimScopeRef.current);
+        if (trimScopeRef.current) trimRevealRef.current = scrollClearOfBand(trimScopeRef.current);
       });
+    } else if (trimRevealRef.current) {
+      const { scroller, before } = trimRevealRef.current;
+      trimRevealRef.current = null;
+      scroller.scrollTo({ top: before });
     }
   };
 
@@ -789,7 +808,11 @@ export function FocusModeView({
 
   return (
     <GuideScope guides={[guide]}>
-    <div className="flex flex-col min-h-0">
+    {/* T17910: at least one viewport tall from lg up, with the spacer before the band below, so
+        the sticky band always sits at its pinned spot, even when the content above it is short
+        (no shape chooser on a computer). Short content left the band 6px above that spot at
+        1440x900 until opening Trim pushed it down, moving Sharpen!. */}
+    <div className="flex flex-col min-h-0 lg:min-h-[100dvh]">
       {/* Error Message */}
       {error && (
         <div data-testid="focus-video-error" className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
@@ -869,7 +892,7 @@ export function FocusModeView({
         {/* Guided framing: one floating instruction near the current action. */}
         {(videoUrl || error) && !isFullscreen && !mobileFs && guide && (
           <Guide guide={guide}>
-            <FramingGuide {...focusGuideStepDisplay(guide.step, boxPrePlaced)} text={guide.message.title} compact={guide.compact} />
+            <FramingGuide {...focusGuideStepDisplay(guide.step, shareWhereSkipped)} text={guide.message.title} compact={guide.compact} />
           </Guide>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
@@ -882,7 +905,7 @@ export function FocusModeView({
               slim strip between the corner buttons and lets touches through to the stage. */}
           {(isFullscreen || mobileFs) && (
             <div className="pointer-events-none absolute inset-x-14 top-2 z-30 flex justify-center sm:inset-x-16 sm:top-4">
-              <CompactGuide guide={guide} boxPrePlaced={boxPrePlaced} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
+              <CompactGuide guide={guide} shareWhereSkipped={shareWhereSkipped} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
             </div>
           )}
           {/* T14770: "Where will you share it?" (design decision 1, Option C) —
@@ -893,7 +916,7 @@ export function FocusModeView({
               T15990: the LIVE count, not `boxPrePlaced` (frozen at mount by T15610 for
               the step total) -- positions that load or get placed after mount must
               hide the chooser and make a Settings shape switch ask first, as the cockpit does. */}
-          {!isFullscreen && !mobileFs && (
+          {shapeChoiceShown && !isFullscreen && !mobileFs && (
             <div className="mb-2">
               <FrameShapeChoice
                 aspectRatio={globalAspectRatio}
@@ -990,6 +1013,16 @@ export function FocusModeView({
                 FRAME_COPY.LOADING
               }
             />
+
+            {/* T17910: on a phone the preview disclosure rides on the picture -- in the pinned
+                band it added a row and moved Sharpen!. From `sm` up it is in the
+                band's status cell (ExportButtonView). */}
+            {previewActive && (
+              <div data-testid="preview-disclosure-caption"
+                className="sm:hidden pointer-events-none absolute top-2 inset-x-2 z-10 rounded bg-black/60 px-2 py-1 text-center text-[11px] leading-snug text-gray-200">
+                {EDITOR_PANELS.PREVIEW_DISCLOSURE_SHORT}
+              </div>
+            )}
 
             {/* Fullscreen exit button - desktop only (mobile has it in overlay) */}
             {isFullscreen && !mobileFs && (
@@ -1257,6 +1290,8 @@ export function FocusModeView({
         // T10820: `relative overflow-x-clip` added — this sticky wrapper is now also
         // the mobile settings panel's containing block (`absolute bottom-full`
         // inside it), which is why the panel is mounted as this div's first child.
+        <>
+        <div aria-hidden="true" className="hidden lg:block lg:flex-1" />
         <div className="sticky bottom-0 z-30 mt-4 sm:mt-6 -mx-3 sm:-mx-4 relative overflow-x-clip">
           {/* T9270: mobile settings panel — the SAME SettingsRail anchored above
               the band (T10820: `absolute bottom-full`, never `position:fixed`).
@@ -1298,8 +1333,9 @@ export function FocusModeView({
             onBackToPreview={onBackToPreview}
             renderedAt={renderedAt}
             backToPreviewLoading={backToPreviewLoading}
-            // [Trim and SlowMo] + [Preview highlight] sit in the band directly above
-            // Generate (same row-above-CTA shape as Annotate). Never locked
+            previewing={previewing}
+            // [Trim and SlowMo] + [Preview] sit in the band before Sharpen!
+            // (T17910 working order). Never locked
             // (T14830, owner ruling 2026-11-07). Trim and SlowMo toggles the
             // timeline's segment/speed/trim track (advancedOpen).
             actionsAbove={
@@ -1313,6 +1349,7 @@ export function FocusModeView({
             }
           />
         </div>
+        </>
       )}
 
       {/* Technical readouts (dimensions/duration/fps) - 2026-09-18 (user request):

@@ -1,6 +1,6 @@
 // T14620: Frame and paid-step copy follows the copy glossary
 // (.claude/references/copy-glossary.md). "Make highlight" opens Frame; the paid AI step is
-// "Sharpen my highlight" everywhere, so the two never share a label.
+// "Sharpen!" everywhere (T17910; was "Sharpen my highlight"), so the two never share a label.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
@@ -46,14 +46,14 @@ describe('T14620 Frame and paid-step copy', () => {
     expect(screen.getAllByText('Make highlight')).toHaveLength(1);
   });
 
-  it('T14620:C2 the paid step is Sharpen my highlight on the button, in progress and when done', () => {
-    expect(EXPORT_JOBS.framing.action).toBe('Sharpen my highlight');
+  it('T14620:C2 / T17910:C8 the paid step is Sharpen! on the button, in progress and when done', () => {
+    expect(EXPORT_JOBS.framing.action).toBe('Sharpen!');
     expect(EXPORT_JOBS.framing.inProgress).toBe('Sharpening your highlight...');
     expect(EXPORT_JOBS.framing.completed).toBe('Your highlight is ready');
     expect(EXPORT_PROGRESS.RENDERING).toBe('Sharpening your highlight...');
     expect(ANNOTATE.FRAME_THIS_CLIP).not.toBe(EXPORT_JOBS.framing.action);
     const { rerender } = render(<ExportButtonView {...viewProps} />);
-    expect(screen.getByTestId('primary-cta').textContent).toContain('Sharpen my highlight');
+    expect(screen.getByTestId('primary-cta').textContent).toContain('Sharpen!');
     rerender(<ExportButtonView {...viewProps} isCurrentlyExporting isExporting />);
     expect(screen.getByTestId('primary-cta').textContent).toContain('Sharpening your highlight...');
   });

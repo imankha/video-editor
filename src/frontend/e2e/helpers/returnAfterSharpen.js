@@ -78,12 +78,12 @@ export async function returnAfterSharpenFindsHighlight(browser, tag) {
     test.skip(!draft, `[${tag}] no unsharpened single-clip draft on a ready game, and no play on a ready game to make one from`);
     await page.goto(`/focus/p/${draft.id}`);
     await page.getByTestId('focus-video-stage').waitFor({ timeout: 90000 });
-    const sharpen = page.getByRole('button', { name: 'Sharpen my highlight' }).first();
+    const sharpen = page.getByRole('button', { name: 'Sharpen!' }).first();
     await expect(sharpen).toBeEnabled({ timeout: 60000 });
     await sharpen.click();
     const confirm = page.getByTestId('focus-box-confirm');
     if (await confirm.waitFor({ timeout: 5000 }).then(() => true, () => false)) {
-      await confirm.getByRole('button', { name: 'Sharpen my highlight' }).click();
+      await confirm.getByRole('button', { name: 'Sharpen!' }).click();
     }
     await page.getByTestId('focus-publish-action-bar').waitFor({ timeout: 480000 });
 

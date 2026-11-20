@@ -742,13 +742,15 @@ export const UPLOAD_PROGRESS_COPY = {
 // action-bar labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory,
 // untouched here.
 //
-// T14620 (glossary): the paid step inside Frame is "Sharpen my highlight", and it never
+// T14620 (glossary): the paid step inside Frame is "Sharpen!" (T17910; was "Sharpen my highlight"), and it never
 // shares a label with "Make highlight", which only OPENS Frame. Completion is exactly
 // "Your highlight is ready". The free spotlight job is not the paid step, so it never
 // says sharpen.
 export const EXPORT_JOBS = {
   framing: {
-    action: 'Sharpen my highlight',
+    // T17910 (owner change 2026-11-19): "Sharpen!" -- every sentence naming it ends on the
+    // name, so no other punctuation follows the exclamation mark.
+    action: 'Sharpen!',
     inProgress: 'Sharpening your highlight...',
     completed: 'Your highlight is ready',
     // T16525: the server finished it (T16520), so it is already in Highlights.
@@ -902,6 +904,8 @@ export const FOCUS_PREVIEW = {
 
 // T14620: Frame screen strings that used to sit inline in the components.
 export const FRAME_COPY = {
+  // T17910 (owner ruling 2026-11-19): the band's idle line, left of the buttons on a computer.
+  IDLE_HINT: `Trim and Preview are optional. When your athlete stays in the box, tap ${EXPORT_JOBS.framing.action}`,
   // T17230: the Settings row for the reel's portrait/landscape choice ("shape", as the
   // switch dialog says).
   SHAPE_LABEL: 'Shape',
@@ -959,8 +963,8 @@ export const FOCUS_COCKPIT = {
   SETUP: 'Settings',
   PREVIEW: 'Preview',
   // Compact CTA, two 10px lines (D9 / D13).
-  GENERATE_LINE_1: 'Sharpen my',
-  GENERATE_LINE_2: 'highlight',
+  // T17910: one line, the paid step's name ("Sharpen!").
+  GENERATE: EXPORT_JOBS.framing.action,
   BACK_TO_PREVIEW_LINE_1: 'Watch',
   BACK_TO_PREVIEW_LINE_2: 'highlight',
   // T11970: finished render is being opened (replaces Generate until the panel opens).
@@ -1053,15 +1057,16 @@ export const GUIDE = {
     dragPrePlaced: 'The box is already on your athlete. Drag it if it isn’t, then tap Play.',
     play: 'Tap Play and watch your athlete.',
     keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the positions you set.',
-    preview: 'Tap Preview to see exactly what you’ll share.',
-    watchPreview: 'Watch it through. Tap Back to full video to change anything.',
-    generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
-    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Preview when it looks right.`,
-    generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
-    credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then sharpen it.`,
+    // T17910 (owner ruling 2026-11-19): Preview is optional, so the Preview sentence names the finish too.
+    preview: `Tap Preview to see exactly what you’ll share, then tap ${EXPORT_JOBS.framing.action}`,
+    watchPreview: 'Watch it through. Tap Close preview to change anything.',
+    generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}`,
+    experienced: `You know the basics. Trim and Preview are optional. When your athlete stays in the box, tap ${EXPORT_JOBS.framing.action}`,
+    generateAdvanced: `Looks right? To cut dead time, open Trim and slow motion first, or tap ${EXPORT_JOBS.framing.action}`,
+    credits: `You need more credits for this highlight. To add them and sharpen it, tap ${EXPORT_JOBS.framing.action}`,
     progressExport: 'Sharpening your highlight. When it’s done it goes to your Highlights, even if you leave this screen.',
     finishing: 'Your highlight is done. Opening it now.',
-    failed: `Your highlight didn’t finish. Tap ${EXPORT_JOBS.framing.action} to try again.`,
+    failed: `Your highlight didn’t finish. To try again, tap ${EXPORT_JOBS.framing.action}`,
     ready: 'Your highlight is ready. Add a spotlight so people know which athlete is yours, or tap Finish without spotlight.',
     // T16525: the server already put it in Highlights; Spotlight is still offered.
     readyFinished: 'Your highlight is in your Highlights. Add a spotlight so people know which athlete is yours, or tap Done.',
@@ -1072,7 +1077,7 @@ export const GUIDE = {
     videoError: 'This video didn’t load. Go back and open this play again.',
     leaveFullscreen: 'Exit fullscreen to check your athlete stays in view, then sharpen your highlight.',
     leaveFullscreenJob: 'Exit fullscreen to see your highlight’s status and what to do next.',
-    cockpitPreview: 'Tap Preview to see exactly what you’ll share.',
+    cockpitPreview: `Tap Preview to see exactly what you’ll share, then tap ${EXPORT_JOBS.framing.action}`,
     cockpitWatchPreview: 'Watch it through. Tap Preview again to change anything.',
   },
   finished: {
@@ -1149,10 +1154,12 @@ export const FRAMING_GUIDE = {
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
   TRIM_BUTTON: 'Trim and slow motion',
   // T17860 (owner ruling 2026-11-19): while the track is open the button says what a tap does.
-  TRIM_BUTTON_DONE: 'Done trimming',
+  // T17910 (owner ruling 2026-11-19): "Close trimming" replaced "Done trimming", which read as a
+  // second finish button beside Sharpen!
+  TRIM_BUTTON_CLOSE: 'Close trimming',
   TRIM_BUTTON_DESC: 'Adjust timing and playback speed.',
-  TRIM_BUTTON_DONE_DESC: 'Your trim and speed changes stay.',
-  TRIM_BUTTON_DONE_HINT: 'Hide the trim and slow motion track. Your changes stay.',
+  TRIM_BUTTON_CLOSE_DESC: 'Your trim and speed changes stay.',
+  TRIM_BUTTON_CLOSE_HINT: 'Close the trim and slow motion track. Your changes stay.',
 };
 
 // T10850 (design D14): the two discovery hints that bracket the landscape flip.
@@ -1183,7 +1190,7 @@ export const FOCUS_HINTS = {
   // Landscape first-entry card — shown once, over the stage, on the first
   // cockpit entry. Dismissed by "Got it" or the first touch on the stage.
   COCKPIT_INTRO_TITLE: 'More room in landscape',
-  COCKPIT_INTRO_BODY: 'Playback is on the left now, Sharpen my highlight on the right.',
+  COCKPIT_INTRO_BODY: `Playback is on the left now. On the right, tap ${EXPORT_JOBS.framing.action}`,
   COCKPIT_INTRO_CONFIRM: 'Got it',
 };
 
@@ -1197,7 +1204,7 @@ export const FOCUS_BOX_CONFIRM = {
   TITLE: 'Is your athlete in the box?',
   BODY: "You haven't moved the box, so it's still in the middle. Sharpening uses credits.",
   CHECK_BUTTON: 'Check the box',
-  CONTINUE_BUTTON: 'Sharpen my highlight',
+  CONTINUE_BUTTON: EXPORT_JOBS.framing.action,
 };
 
 // T8390: "Add Spotlight Later" toast copy. Was routed by is_auto_created (T8360
@@ -1385,12 +1392,15 @@ export const EDITOR_PANELS = {
   // crop/timing/format/audio; approximate for image quality. Never a
   // sharpness claim in either direction.
   PREVIEW_HIGHLIGHT: 'Preview',
-  PREVIEW_BACK_TO_FRAMING: 'Back to full video',
+  // T17910 (owner ruling 2026-11-19): replaced "Back to full video".
+  PREVIEW_CLOSE: 'Close preview',
   // T12020 -- the Preview tile's caption follows its label: framing check before
   // previewing, return-to-box while previewing.
   PREVIEW_CAPTION_FRAMING: 'See what your highlight will show before you sharpen it.',
   PREVIEW_CAPTION_RETURN: 'Return to dragging the box.',
   PREVIEW_DISCLOSURE: 'This shows what stays in view, your timing and format. Final picture quality comes when you sharpen your highlight.',
+  // T17910: the phone caption on the preview picture (the full line sits in the band from `sm` up).
+  PREVIEW_DISCLOSURE_SHORT: 'Final picture quality comes when you sharpen your highlight.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same disclosure shape as the Trim and slow motion track (user request 2026-09-21).
   TEXT_LANE: 'Text',
@@ -1487,6 +1497,9 @@ export const CREDITS = {
   STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight.',
   // T14560: the one place "credit" is pluralized.
   count: (n) => `${n} credit${n === 1 ? '' : 's'}`,
+  // T17910 (owner change 2026-11-19): the second line inside Sharpen!, from the same estimate as the cost cell.
+  uses: (n) => `Uses ${CREDITS.count(n)}`,
+  balance: (n) => `Balance ${n}`,
   added: (n) => `${CREDITS.count(n)} added to your balance!`,
   // T17250: the in-window payment confirmation, with the balance the grant produced.
   addedWithBalance: (n, balance) => `${CREDITS.count(n)} added. Your balance is ${balance}.`,
@@ -1940,7 +1953,7 @@ export const ERROR_COPY = {
   ADD_SPOTLIGHT: "We couldn't add your spotlight. Try again.",
   SAVE_HIGHLIGHT: "We couldn't save your highlight. Try again.",
   // T16830: the server restarted mid-job and has no record of it.
-  SHARPEN_INTERRUPTED: `Sharpening was interrupted. Tap ${EXPORT_JOBS.framing.action} to try again.`,
+  SHARPEN_INTERRUPTED: `Sharpening was interrupted. To try again, tap ${EXPORT_JOBS.framing.action}`,
   SPOTLIGHT_INTERRUPTED: `Adding your spotlight was interrupted. Tap ${EXPORT_JOBS.overlay.action} to try again.`,
   MAKE_HIGHLIGHT_REFUNDED: `We couldn't sharpen your highlight. ${CREDITS.REFUNDED} Try again.`,
   SAVE_EDITS: "We couldn't save your edits. Try again.",

@@ -13,12 +13,12 @@ import { ERROR_COPY } from '../../config/displayNames';
  * Turn off guidance button. The pulse on the named control still comes from the
  * screen's GuideScope.
  */
-export default function CompactGuide({ guide, boxPrePlaced = false, testId = 'compact-guide', className = '' }) {
+export default function CompactGuide({ guide, shareWhereSkipped = false, testId = 'compact-guide', className = '' }) {
   const { coachEnabled } = useGuidanceSettings();
   const setCoachEnabled = useSettingsStore(s => s.setCoachEnabled);
   const [closeError, setCloseError] = useState('');
   if (!guide || !coachEnabled) return null;
-  const { step: displayStep, total: displayTotal } = focusGuideStepDisplay(guide.step, boxPrePlaced);
+  const { step: displayStep, total: displayTotal } = focusGuideStepDisplay(guide.step, shareWhereSkipped);
   const handleClose = async (e) => {
     e.stopPropagation();
     setCloseError('');
