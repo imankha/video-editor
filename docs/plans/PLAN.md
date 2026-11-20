@@ -193,6 +193,7 @@ Filed by /dotask verify and the staging check. Bugs outrank every feature (owner
 |------|------|------|------|------|------|------|------|
 | T16020 | [Staging check failed: T15760:C1 The finished player has its own URL that cold-loads to](tasks/T16020-staging-check-failed-t15760-c1-the.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask staging check. |
 | T17800 | [Branch CI failed after a clean verdict](tasks/T17800-branch-ci-failed-after-a-clean.md) | 5 | 3 | 1.7 | STAGING | [ ] | Filed by /dotask verify. |
+| T17890 | [Staging check failed: T17860:C2 C2: Tapping it again hides the track and restores "Trim](tasks/T17890-staging-check-failed-t17860-c2-c2.md) | 5 | 3 | 1.7 | TODO | [ ] | Filed by /dotask staging check. |
 
 ### Signed-in loading is slow on production (owner report 2026-11-13, BUGS FIRST)
 
