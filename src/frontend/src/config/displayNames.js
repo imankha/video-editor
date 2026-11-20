@@ -576,7 +576,11 @@ export const HOME_TILE = {
   HIGHLIGHTS_LOAD_ERROR: 'We couldn’t load your highlights. Try again.',
   OTHER_GROUP: 'Other plays',
   EARLIER_GROUP: 'Earlier highlights',
-  EARLIER_NOTICE: 'You can still watch, download and share these, but they can no longer be edited.',
+  EARLIER_NOTICE: 'Highlights made from several plays are no longer supported for editing. You can still watch, download and share them.',
+  // T17840: the status chip on an old highlight made from several plays (clip_count > 1),
+  // in place of the stage word, so the card never reads as an editable draft.
+  LEGACY_MULTI_PLAY_CHIP: 'Not supported',
+  LEGACY_MULTI_PLAY_HINT: 'Highlights made from several plays are no longer supported for editing.',
 };
 
 // T14600: the Mark plays overlay's per-play stage status, same words as the Home

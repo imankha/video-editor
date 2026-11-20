@@ -466,6 +466,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   // progress strip). Mirrors the old metadata-row status logic, condensed to one word.
   let statusLabel = getDraftStageShortLabel(project);
   let statusTint = 'text-gray-200';
+  let statusTitle;
   // This branch only renders when !isReadyToPublish (isComplete && published,
   // see the render gate below), so getDraftStatus always resolves PUBLISHED here.
   if (isComplete) { statusLabel = getDraftStatus(project).label; statusTint = 'text-green-300'; }
@@ -473,6 +474,9 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   else if (isExporting && isOffline) { statusLabel = 'Offline'; statusTint = 'text-gray-300'; }
   else if (isExporting) { statusLabel = isExporting === 'overlay' ? FRAME_COPY.TILE_ADDING_SPOTLIGHT : FRAME_COPY.TILE_SHARPENING; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
+  // T17840: an old highlight made from several plays can't be edited, so it never
+  // wears the editable stage word ("In progress").
+  else if (isLegacyMultiClip) { statusLabel = HOME_TILE.LEGACY_MULTI_PLAY_CHIP; statusTitle = HOME_TILE.LEGACY_MULTI_PLAY_HINT; statusTint = 'text-gray-300'; }
   // T11790: the word comes from the shared ladder (draftStage.js), never a literal.
   else if (project.has_working_video || project.clips_in_progress > 0 || project.clips_exported > 0) { statusTint = 'text-blue-300'; }
 
@@ -658,7 +662,10 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {/* Status chip (Q7) — suppressed in the ready state (Q1): a ready tile shows
           only the top-left status badge. Every other state is byte-for-byte unchanged. */}
       {!isReadyToPublish && (
-        <span className={`absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm ${statusTint}`}>
+        <span
+          className={`absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm ${statusTint}`}
+          title={statusTitle}
+        >
           {statusLabel}
         </span>
       )}
@@ -731,15 +738,18 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
             <h3 className="flex-1 min-w-0 text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
               {getProjectDisplayName(project)}
             </h3>
-            <button
-              type="button"
-              onClick={handleStartRename}
-              title={renameLabel}
-              aria-label={renameLabel}
-              className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
-            >
-              <Pencil size={14} />
-            </button>
+            {/* T17840: no pencil on an old multi-play highlight; it can't be edited. */}
+            {!isLegacyMultiClip && (
+              <button
+                type="button"
+                onClick={handleStartRename}
+                title={renameLabel}
+                aria-label={renameLabel}
+                className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"
+              >
+                <Pencil size={14} />
+              </button>
+            )}
           </div>
         )}
         <div className="mt-0.5 flex items-center gap-1.5 flex-nowrap overflow-hidden">

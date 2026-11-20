@@ -20,7 +20,7 @@ const { apiFetchMock, fetchProjectsMock, toastSuccessMock, toastErrorMock, creat
 
 vi.mock('../utils/apiFetch', () => ({ default: (...a) => apiFetchMock(...a) }));
 vi.mock('../stores/projectsStore', () => {
-  const state = { fetchProjects: fetchProjectsMock };
+  const state = { fetchProjects: fetchProjectsMock, clearSelection: vi.fn() };
   const useProjectsStore = (sel) => sel(state);
   useProjectsStore.getState = () => state;
   return { useProjectsStore };
@@ -118,6 +118,7 @@ vi.mock('../utils/pendingNavigation', async (importOriginal) => ({
 import { DraftReelPreview } from './DraftReelPreview';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
+import { openFinishedReel } from '../utils/finishedReelNav';
 
 const jsonResponse = (status, body) => ({
   ok: status >= 200 && status < 300,
@@ -645,5 +646,51 @@ describe('DraftReelPreview "Update link" affordance (T10860)', () => {
       expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
       expect(screen.queryByRole('button', { name: /update link/i })).toBeNull();
     });
+  });
+});
+
+// T17840:C3: an old highlight made from several plays (clip_count > 1) can no
+// longer be edited, but Home's Watch still opens it here (through the REAL
+// openFinishedReel, as DraftTile's Watch does) and it can still be shared and
+// downloaded.
+describe('T17840:C3 old multi-play highlight opened from Home', () => {
+  const multiPlay = {
+    id: 42, final_video_id: 99, name: 'Season Reel', aspect_ratio: '9:16',
+    clip_count: 4, game_ids: [], has_final_video: true,
+  };
+
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+    createShareLinkMock.mockReset();
+    createShareLinkMock.mockResolvedValue('https://reelballers.com/shared/tok123');
+    downloadsApi.downloadFile.mockClear();
+    downloadsApi.downloadingId = null;
+    act(() => useReelPreviewStore.getState().close());
+  });
+
+  it('plays, shares (publish then link) and downloads', async () => {
+    apiFetchMock.mockImplementation(async (url) => {
+      if (/\/api\/downloads\/publish\/42$/.test(url)) return jsonResponse(200, { archived: true, final_video_id: 99 });
+      throw new Error(`unexpected apiFetch ${url}`);
+    });
+    render(<DraftReelPreview />);
+    act(() => { openFinishedReel(multiPlay); });
+
+    expect(screen.getByTestId('stream-url').textContent).toMatch(/\/api\/downloads\/99\/stream/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get link' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
+    });
+    await waitFor(() => expect(screen.getByText('Link ready')).toBeTruthy());
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/downloads\/publish\/42$/),
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(createShareLinkMock).toHaveBeenCalledWith({ downloadId: 99 });
+    expect(screen.getByDisplayValue('https://reelballers.com/shared/tok123')).toBeTruthy();
+
+    await act(async () => { fireEvent.click(screen.getByTitle('Download')); });
+    expect(downloadsApi.downloadFile).toHaveBeenCalledWith(99);
   });
 });

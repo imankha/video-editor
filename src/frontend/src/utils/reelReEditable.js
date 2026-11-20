@@ -29,13 +29,13 @@ export function canReEditReel(reel) {
 }
 
 /**
- * The clear, specific message shown when a user tries to RE-FRAME a legacy
- * multi-clip project (T11220) — shown instead of dropping into Framing (where
- * /render 400s generically). Names the affordances that DO still work.
+ * The message shown when a user tries to RE-FRAME a legacy multi-clip project
+ * (T11220), instead of dropping into Framing (where /render 400s generically).
+ * T17840: one short sentence, held on screen long enough to read.
  */
 export const LEGACY_MULTICLIP_REFRAME_MESSAGE =
-  'This highlight was made from multiple plays and can no longer be re-edited in Focus. ' +
-  'You can still add a Spotlight, finish, and download it.';
+  'Highlights made from several plays are no longer supported.';
+const LEGACY_MULTICLIP_TOAST_MS = 8000;
 
 /**
  * allowEnterFraming — the ONE guard every "enter Focus/Framing for this project"
@@ -58,7 +58,7 @@ export const LEGACY_MULTICLIP_REFRAME_MESSAGE =
  */
 export function allowEnterFraming(project) {
   if (project?.clip_count > 1) {
-    toast.info(LEGACY_MULTICLIP_REFRAME_MESSAGE);
+    toast.info(LEGACY_MULTICLIP_REFRAME_MESSAGE, { duration: LEGACY_MULTICLIP_TOAST_MS });
     return false;
   }
   return true;
