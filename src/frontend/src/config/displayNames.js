@@ -1298,8 +1298,6 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
 // players". "keyframe" is intentionally absent as a primary label: it survives
 // only as advanced help in component tooltips (FocusTimeline), per the task's
 // "demote, don't ban" rule.
-// T14630: Spotlight and Frame dim the same way, so both controls say the same thing.
-const DIM_OUTSIDE = 'Dim outside';
 
 export const EDITOR_PANELS = {
   // N17 -- the crop primitive is a "focus point"; its timeline track is the
@@ -1317,7 +1315,7 @@ export const EDITOR_PANELS = {
   // N30 -- styling sliders in plain words; the component keeps the live px/% readout.
   OUTLINE_THICKNESS: 'Outline thickness',   // was "Stroke Width"
   SPOTLIGHT_FILL: 'Spotlight fill',         // was "Fill"
-  DIM_BACKGROUND: DIM_OUTSIDE,               // T14630: one phrase with Frame's DARKEN_OUTSIDE
+  DIM_BACKGROUND: 'Dim outside',             // T14630 (T17870: Frame's dim setting is removed)
   // N31 -- the share still is a "Cover image"; the timeline marker CHOOSES its frame.
   COVER_IMAGE: 'Cover',                      // was "Thumbnail"
   CHOOSE_COVER_FRAME: 'Pick cover',         // was "Thumbnail marker"
@@ -1370,11 +1368,8 @@ export const EDITOR_PANELS = {
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
   TRIM_AND_SLOWMO_HINT: 'Split this highlight into sections, change playback speed, or trim the start and end.',
   // T12180: Focus settings in plain labels (the draggable rectangle is the 'box').
-  MORE_OPTIONS: 'More options',
   FIX_TILT: 'Fix a tilted camera',
   FIX_TILT_HELP: 'Drag along a straight line on the field to level it.',
-  DARKEN_OUTSIDE: DIM_OUTSIDE,
-  DARKEN_OUTSIDE_HELP: 'Editing view only. Your highlight is not changed.',
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for

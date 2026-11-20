@@ -62,11 +62,8 @@ function renderView(overrides = {}) {
   return render(<FocusModeView {...props} />);
 }
 
-// T12180: the control sits behind the collapsed 'More options' disclosure.
+// T17870: the control shows directly in Settings (no disclosure).
 function straightenToggle() {
-  if (!screen.queryByRole('button', { name: 'Fix a tilted camera' })) {
-    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
-  }
   return screen.getByRole('button', { name: 'Fix a tilted camera' });
 }
 

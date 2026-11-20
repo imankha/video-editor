@@ -13,8 +13,6 @@ const base = {
   onIncludeAudioChange: vi.fn(),
   straightenVisible: false,
   onToggleStraighten: vi.fn(),
-  dimOpacity: 0.2,
-  onToggleDim: vi.fn(),
 };
 
 const landscapeButton = () => within(screen.getByRole('group', { name: /shape/i }))
