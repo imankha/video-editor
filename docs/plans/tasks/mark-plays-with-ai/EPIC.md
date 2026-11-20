@@ -167,3 +167,7 @@ The analysis does not say where a player is on screen. The prototype tried it: b
 ## Added 2026-11-20 (owner): skip dead time
 
 The analysis writes each stoppage down as its own entry. T16206 uses them: a parent watching a game with AI Coach can skip the dead stretches in playback. T16150 keeps the stoppages in the stored result and T16190's read returns them.
+
+## Go or no-go gate (owner, 2026-11-20)
+
+The epic is gated on one question, answered by the prototype (T16145 step 9): does the analysis find a child's highlights, with no false statements about the game? No parent pays without that; coaching notes are secondary. Cost decides how many parents try it, not whether it ships, so the earlier $3.39 cost ceiling is lifted and the price follows from the configuration that works. If none reaches the bar, the epic is shelved until models improve. T16150 and every task after it wait for the owner's go; the price helpers and ledger groundwork already built in T16160 stand either way.

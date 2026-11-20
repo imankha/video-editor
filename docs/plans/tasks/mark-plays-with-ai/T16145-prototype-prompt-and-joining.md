@@ -124,6 +124,18 @@ A test fails if a word from any sport's tag file or a listed sport-specific term
 
 A parent shown "angled shot saved by the keeper" for a pass that went out of play will stop trusting the notes, and a rating of 4 on a routine passage sends them to the wrong clip. From the corrected truth we count, for prompt version 3: plays whose described event did not happen (a shot, save, cross, corner or goal that is not in the truth), restarts named wrongly, and plays rated 4 or 5 that the owner rates 3 or lower. Then one change at a time is tried on a single piece and counted the same way: more frames a second; higher resolution; and a prompt rule that a shot, save, cross into the box, corner or goal is written only when it is clearly seen, with the rating tied to that outcome. The owner sees the counts before any version is approved.
 
+### 9. Go or no-go: does it find the child's highlights (owner, 2026-11-20)
+
+The owner set the business test for the whole epic. No parent pays anything unless the analysis finds their own child's highlights; coaching notes are a nice extra. If it does that very well, price decides how many parents try it: at $50 for a 90-minute game there is still a parent who pays, at $2 most do. So accuracy decides whether the feature exists, and cost decides how big it is. An analysis that misses highlights, or states something false about the game (a corner called a goal, a goal called a save), is not shippable at any price. If no configuration reaches the bar, AI Coach is shelved until the models improve.
+
+This changes how the prototype is judged:
+
+- **The measure is highlight finding**, against plays parents marked by hand for their own children (seven ten-minute slices from six games, three parents, 61 marks, 22 of them five-star; more as they become available). A parent's marks are one child's view, not every highlight in the game, so they measure what is missed, not what is wrongly added.
+- **For each configuration tried** (model, prompt, settings, number of passes): the share of five-star marks and of four-star marks that come back as a moment of about the right length; whether that moment is credited to the right player where the player is known; every stated fact that is false (goal, save, corner, restart); how many moments a parent would have to look through; cost for a 90-minute game; and time to a finished analysis.
+- **Cost is no longer capped at $3.39.** That figure came from the planned price. A configuration that finds the highlights at a higher cost is reported with its cost, and the price follows from it (T16160's rate is one line in the pricing file).
+- **More than one model is tried.** Gemini first (Hydrogen, Argon, two passes, an athlete-focused pass, higher frame rates, combined runs), then the same tests on Twelve Labs, so the choice rests on accuracy, cost and time measured the same way.
+- **The owner decides** go or no-go from that table. Nothing after this task in the epic starts before a go.
+
 ## Why this and not something else
 
 Building these changes straight into the server job was the earlier plan. It was dropped because the first full-game result would then be the first time anyone saw the new fields, and a stored analysis is never recomputed.
@@ -149,6 +161,8 @@ Ruled on 2026-11-20: player boxes are removed from AI Coach. Boxes asked for ins
 Ruled on 2026-11-20, after the version 3 run and the owner's own account of 4:18 to 5:56: prompt version 3's segmentation (stoppages as their own entries, cuts only at real events) is the working prompt; the joining is chosen by scoring candidates on real shifted boundaries against the owner's corrected truth, accuracy first and cost second (step 7); a call that reads only the descriptions is not used for joining; how often a description is false is counted before any version is approved (step 8).
 
 Ruled on 2026-11-20: dead time has its own notation (`kind: dead_time` with a reason, a separate `dead_time` list in the joined result) and is product data for skipping in playback (T16206); the prompt is a sport-neutral template plus a block per sport, soccer first.
+
+Ruled on 2026-11-20 (the business test): no parent pays unless the analysis finds their child's highlights, and coaching notes are secondary; a missed highlight or a false statement about the game (a corner called a goal) is not acceptable at any price; cost is no longer capped at $3.39, the price follows from what works; Gemini configurations and Twelve Labs are compared on accuracy, cost and time; if nothing reaches the bar the epic is shelved until models improve (step 9).
 
 (Still to record when the owner approves a version: the version numbers of both questions, the chosen direction wording, whether the model's own cut-off flag is used, the example plays chosen for the offer, and the date.)
 
@@ -202,3 +216,4 @@ Ruled on 2026-11-20: dead time has its own notation (`kind: dead_time` with a re
 - [ ] For the approved prompt version, the count of plays whose described event did not happen, of restarts named wrongly, and of plays rated 4 or 5 that the owner rates 3 or lower is recorded against the corrected truth, and the owner has seen it before approving.
 - [ ] Every entry in a piece's answer is marked `play` or `dead_time`; a dead-time entry has a start, an end and a reason and no ratings or players; the joined result lists dead time separately from the plays, with no range overlapping another range or a play.
 - [ ] The prompt template contains no word that belongs to one sport (a test checks it against every sport's tag file and a list of sport terms); soccer's words come only from the soccer block, and a basketball block renders into the same template without a model call.
+- [ ] One table ranks every configuration tried (model, prompt, settings, passes) on five-star and four-star marks found, credit to the right player, false statements about the game, moments to look through, cost for a 90-minute game and time to finish, across at least the seven marked slices; the owner has recorded go or no-go for the epic under Ruling.
