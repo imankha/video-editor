@@ -2,7 +2,7 @@
 
 Domain: the AI Coach epic (`docs/plans/tasks/mark-plays-with-ai/`), the prototype that sends game video to a video model. This doc is the record of the 2026-11-20 prototype work, so nobody repeats a test. It is research, not shipped code: nothing here is in the app.
 
-updated: 2026-11-20 (first version; one day of tests, mostly one run per setting)
+updated: 2026-11-20 (one day of tests, mostly one run per setting; T16146 step 1 inventory added the same evening)
 
 ## Where things stand
 
@@ -73,7 +73,7 @@ On `sporting-77m` (four five-star marks), everything tried:
 - **Cropped by hand to the play, enlarged 2x** (640x360 of the frame): Argon at high resolution found both dribbles 3 of 3 at 1 fps and at 5 fps, right team every time. Hydrogen's best setting differs per dribble and its other settings scored 0 of 3 on one or the other. 3x was no better than 2x. The goal came back as a goal by Navy every time.
 - **Finding the crop automatically:**
   - Gemini on one still a second, asked for the ball carrier: the window held both dribbles for their whole length; about $0.008 a frame, so $36-44 a game. One still every 2 s loses the first dribble. 30% of stills found no ball carrier.
-  - Local person detector (YOLO11s), densest cluster: drifted to players on the next pitch; first dribble 0 of 3; about 6 s a frame on CPU.
+  - Local person detector (YOLO11s), densest cluster: drifted to players on the next pitch; first dribble 0 of 3; about 6 s a frame because the script forced the processor (the laptop has a graphics card, see the inventory below).
   - Motion (pan-compensated frame differences): the dribbles and the goal ranked below the median second. Useless.
   - Sound: the slice has no audio track, and no audio was ever sent to any model.
 - **One generic question on the crop** (all tags at once, no per-tag calls): the goal is right every time; dribbles are still found but with the wrong team or a different tag in some calls. About 20% dearer than the narrow question. One or two calls each: thin.
@@ -109,7 +109,9 @@ On `sporting-77m` (four five-star marks), everything tried:
 
 ## Where the files are
 
-Prototype checkout: `C:/work/tasks/g-t16130-2/gemini_analysis_test/` (dotask group `g-t16130-2`, branch `feature/T16130-T16145-sport-chooser-where-tags`). Much of it is untracked and is lost when the container is cleared: copy before nuking.
+Durable copy (2026-11-20, T16146): `C:/Users/imank/projects/ai-coach-prototype/gemini_analysis_test/`, the whole prototype folder except the Python environment, caches and `.env`. Outside the repo; it holds children's footage, so keep it off shared drives. New T16146 work goes in its `autocrop/` folder.
+
+Prototype checkout (the origin of that copy): `C:/work/tasks/g-t16130-2/gemini_analysis_test/` (dotask group `g-t16130-2`, branch `feature/T16130-T16145-sport-chooser-where-tags`). Much of it is untracked and is lost when the container is cleared. The Gemini key is only in that checkout's `.env`.
 
 | Path | What |
 |---|---|
@@ -122,7 +124,24 @@ Prototype checkout: `C:/work/tasks/g-t16130-2/gemini_analysis_test/` (dotask gro
 | `outputs/golden/argon-s1-10min/review.html` | a page to correct a model's play list against the video |
 | `prompts.py`, `sport_blocks.py`, `merge_windows.py`, `cost_model.py`, `run_windows.py` | prompt, sport blocks, joining, cost model, runner |
 
-Earlier detection and tracking research (before this epic): `C:/Users/imank/projects/player-tracking` and `docs/research/click-once-following-2026-11.md` (SAM 2.1 base+ chosen for following from one tap), the Player Moments epic, and the app's YOLOv8x person detection on Modal.
+## Earlier detection and tracking work: what it can do (T16146 step 1, 2026-11-20)
+
+| Work | What it measured, on what footage | Use for the automatic crop |
+|---|---|---|
+| `C:/Users/imank/projects/player-tracking`, write-up `docs/plans/research/click-once-following-2026-11.md` | Following one tapped player for 4 s on 54 phone clips, players 90 to 340 px tall. SAM 2.1 base+ held 47 of 47 clean clips at about 5 fps on the laptop card. YOLO + ByteTrack or BoT-SORT lost the player on more than half. | None for finding the crop (one tapped player, no wide footage, no ball). Its GPU Python environment and weights (YOLOv8x, YOLO11m, SAM 2.1) are reusable. |
+| Legacy 2025 endpoint (rescued in that project's `legacy/code/`) | A ball endpoint on the general detector's "sports ball" class. Never wired to the screen, never measured. | The idea only. |
+| App detection, `src/backend/app/modal_functions/video_processing.py` | YOLOv8x, people only, whole frame at default size, a few frames per highlight. Stored boxes sit beside the players on old clips; cause open (T16220 note 5). | The Modal setup for timing. Not the stored boxes. |
+| Player Moments epic (T14295, T14320) | Nothing run: both TODO, the candidate registry was never written. It excluded ball and pitch detectors (all-sports rule). | Its warnings: tiling costs about 5x; Ultralytics YOLO is AGPL (fine for a prototype, not for shipping). |
+| `tracking/` (2026-11-20) | YOLO11s + BoT-SORT on one slice: median hold 3.6 s, one player got 10 ids. | Box-linking does not give identity. The crop does not need identity. |
+| `crop/` (2026-11-20) | Densest-cluster crop from YOLO11s person boxes on three passages of `sporting-77m`; drifted to the next pitch. | Hand-read truth points for three passages (`bauto.py`), the clip cutter (`autopath.py`), 193 frames of stored detections (`yolo_dets.json`). |
+
+Facts found while taking the inventory:
+
+- **The laptop has an RTX 4060 (8 GB) and the `player-tracking` environment has GPU torch.** The "6 s a frame" figure came from `crop/yolo_run.py`, which forced the processor. Local detection is free; rent a card only to time a whole game.
+- **The general detector fires its "sports ball" class on the wide picture**: in the 193 stored frames (YOLO11s, full resolution, confidence 0.15) a ball was reported in 109, up to five per frame, median confidence 0.36. Nobody checked whether those are the real ball.
+- **No ball-specific or soccer-specific model has been tried**, and no cropper has used the ball or a pitch boundary.
+
+Outside scan of ball and player tracking (2026-11-20, secondary-sourced, several items unconfirmed): no published soccer ball tracker trained on wide or panoramic footage with downloadable weights was found. Open ball models (WASB-SBDT, the roboflow/sports ball detector run in tiles) are trained on broadcast footage. SoccerTrack v2 is panoramic but its ball track is interpolated. Permissive detectors: RF-DETR Nano to Large and D-FINE (Apache 2.0); no architecture showed a clear edge on ball-sized objects, so tiling, input size and fine-tuning matter more than the model. SAM 3 takes a text prompt and tracks through video; tiny-ball recall is unknown. Action spotting models (T-DEED, SoccerNet winners) are broadcast-trained.
 
 ## Spend (2026-11-20)
 

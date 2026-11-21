@@ -28,7 +28,7 @@ What we know (details and numbers in the knowledge doc):
 A prototype, in four steps. Stop and report after each; a failed step is a result.
 
 1. **Bring back the detection work.** Collect what exists and write down what each can do, before running anything new:
-   - `C:/Users/imank/projects/player-tracking` (outside this repo) and its write-up [docs/research/click-once-following-2026-11.md](../../research/click-once-following-2026-11.md): ten trackers compared on 54 highlights, SAM 2.1 base+ chosen for following from one tap.
+   - `C:/Users/imank/projects/player-tracking` (outside this repo) and its write-up [docs/plans/research/click-once-following-2026-11.md](../../research/click-once-following-2026-11.md): ten trackers compared on 54 highlights, SAM 2.1 base+ chosen for following from one tap.
    - The Player Moments epic ([player-moments/EPIC.md](../player-moments/EPIC.md), T14295 candidate registry, T14320 click-seeded tracking bake-off).
    - The app's own person detection on Modal (`src/backend/app/modal_functions/video_processing.py`, YOLOv8x) and the known fault that stored detection boxes sit beside the players (T16220 note 5).
    - The 2026-11-20 tests in the T16145 checkout: `gemini_analysis_test/tracking/` (YOLO11s + BoT-SORT held a player a median of 3.6 seconds; Gemini boxes on stills are tight), `crop/` (hand crops, Gemini-stills cropper, YOLO densest-cluster cropper, contact sheets).
@@ -55,7 +55,7 @@ Asking a model where the ball is on every frame works but costs more than everyt
 
 ### Relevant Files (REQUIRED)
 - `.claude/knowledge/ai-coach-video-analysis.md` (read first)
-- `docs/research/click-once-following-2026-11.md`, `C:/Users/imank/projects/player-tracking` (outside the repo; read only)
+- `docs/plans/research/click-once-following-2026-11.md`, `C:/Users/imank/projects/player-tracking` (outside the repo; read only)
 - `docs/plans/tasks/player-moments/EPIC.md`, `T14295-research-refresh-candidate-registry.md`, `T14320-click-seeded-tracking-bakeoff.md`
 - `src/backend/app/modal_functions/video_processing.py` (the app's person detection; read only)
 - Prototype checkout `C:/work/tasks/g-t16130-2/gemini_analysis_test/` on branch `feature/T16130-T16145-sport-chooser-where-tags`: `videos/` (the seven slices), `outputs/golden/owner-annotations-*.json` (the marks), `crop/`, `dribble/`, `tracking/`, `cost_model.py`, `prompts.py`, `sport_blocks.py`, `merge_windows.py`. Most of it is untracked: copy what you need before that container is cleared.
