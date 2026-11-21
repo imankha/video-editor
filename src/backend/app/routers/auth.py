@@ -341,7 +341,7 @@ async def acknowledge_policy_notice(body: AcknowledgePolicyRequest):
             f"[Auth] stale policy acknowledgement refused: user={user_id} "
             f"version={body.version} current={CURRENT_POLICY_VERSION}"
         )
-        raise HTTPException(status_code=409, detail="The privacy policy changed again. Reload to see it.")
+        raise HTTPException(status_code=409, detail="The privacy policy changed since this notice was shown.")
     await run_in_context(acknowledge_policy, user_id)
     return {"policy_version_acknowledged": CURRENT_POLICY_VERSION}
 
