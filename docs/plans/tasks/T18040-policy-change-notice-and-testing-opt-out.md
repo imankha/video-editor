@@ -4,7 +4,7 @@
 
 On 2026-11-20 the privacy policy and terms changed (T18030): they now say an AI model may analyze a game the parent chooses, and that we may use uploaded videos and the parent's own marks inside ReelBallers to test and improve the product, unless the parent opts out. Two promises in that wording have nothing behind them yet. The policy says we tell users about a material change with a notice in the application, and no such notice exists. And the opt-out is "email privacy@reelballers.com", which means someone keeps a list by hand and every test has to be checked against it. We will show every signed-in user a one-time notice that the policy changed, with what changed in two sentences and a link, and add a setting under "Your privacy rights" that turns the internal-testing use off for their account. Until a user has seen the notice, their footage is not used for testing. Done when an existing user sees the notice once, can switch the testing use off in the app, and the tool that picks test footage refuses any account that has opted out or has not yet seen the notice.
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Tier:** M (one notice, one setting, one small Postgres change; Migration agent)

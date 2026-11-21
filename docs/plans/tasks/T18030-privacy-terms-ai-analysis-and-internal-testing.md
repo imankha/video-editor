@@ -4,7 +4,7 @@
 
 The privacy policy and terms of service are pages in the app (`/privacy` and `/terms`; the landing site only links to them). Today they say a parent's video is used only as the parent directs, list Google for sign-in only, and give us a licence "solely to operate the Service on your behalf". AI Coach (the paid option that has a video model mark the plays in a game) will send game video to Google's Gemini, and to build it we need to test on real annotated games. On 2026-11-20 the owner asked for the pages to say so. This task changes the wording: an AI model may analyze a game the parent chooses; we may use uploaded videos and the parent's own marks inside ReelBallers to test and improve the product, with an opt-out by email; Google is named for AI video analysis; and we still do not train AI models on the video, sell it, publish it or show it to other users. Done when the two pages carry the new wording in production and the owner has decided how existing users are told.
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 2
 **Tier:** S (copy in two components)

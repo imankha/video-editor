@@ -3,6 +3,13 @@
 Completed (DONE) task rows moved verbatim out of [PLAN.md](PLAN.md) on 2026-08-03,
 grouped under their original headings. Task files remain in `docs/plans/tasks/`.
 
+## Current Focus — Staging check account (owner request 2026-11-20, BUGS FIRST)
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T18030 | [Privacy policy and terms cover AI analysis and internal testing](tasks/T18030-privacy-terms-ai-analysis-and-internal-testing.md) | 7 | 2 | 3.5 | DONE | [ ] | DONE (deployed 2026-11-20 prod). The privacy and terms pages said a parent's video is used only as they direct and listed Google for sign-in only. They now cover AI analysis of a game the parent chooses and internal testing with an opt-out, and still say no training, no selling. The attorney approved the wording and it merged on 2026-11-20 (PR #852). It goes live with the next production deploy of the app; telling existing users and the in-app opt-out are T18040. |
+| T18040 | [Tell existing users the privacy policy changed, and let them opt out in the app](tasks/T18040-policy-change-notice-and-testing-opt-out.md) | 6 | 4 | 1.5 | DONE | [x] | DONE (deployed 2026-11-20 prod). The new privacy policy promises an in-app notice of the change and offers an opt-out from internal testing, but there is no notice and the opt-out is an email address. Every signed-in user sees a one-time notice, a setting under Your privacy rights turns the testing use off, and the test tools refuse any account that opted out or has not seen the notice. Done when an existing user sees the notice once and can opt out in the app. |
+
 ## Current Focus — Milestone: Release check bugs (filed 2026-10-18, BUGS FIRST)
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
