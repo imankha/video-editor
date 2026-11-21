@@ -58,7 +58,7 @@ An email to every user was considered as the notice. The policy promises a notic
 
 **Attorney approval of the opt-out sentence:** approved by the owner's attorney on 2026-11-20 (owner, 2026-11-20). The approved sentence, in `/privacy` section 2: "You can opt out at any time by turning off “Use my videos to help test and improve ReelBallers” under “Your privacy rights” in Account settings, or by emailing privacy@reelballers.com; opting out does not affect your use of the Service." Section 5: "To opt out, turn off “Use my videos to help test and improve ReelBallers” under “Your privacy rights” in Account settings, or email privacy@reelballers.com."
 
-**Accounts that agreed in person** (owner, 2026-11-20): imankh@gmail.com (owner), sarkarati@gmail.com, arshia.kalentari@gmail.com. Postgres migration v052 records them as having acknowledged the 2026-11-20 policy.
+**Accounts that agreed in person** (owner, 2026-11-20): imankh@gmail.com (owner), sarkarati@gmail.com, arshia.kalantari@gmail.com. Postgres migration v052 records them as having acknowledged the 2026-11-20 policy; it carried a misspelling (arshia.kalentari), so on 2026-11-20 the owner had arshia.kalantari@gmail.com marked as acknowledged directly in prod Postgres (one row).
 
 ## Acceptance Criteria
 
