@@ -10,6 +10,8 @@ notice. may_use_for_testing() is the one rule the footage-pulling scripts ask.
 """
 
 import importlib.util
+import os
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -168,18 +170,51 @@ def test_c4_unknown_account_is_an_error_not_a_yes(users):
         may_use_for_testing(conn.cursor(), "t18040-no-such-user")
 
 
-def test_c4_footage_script_refuses_an_account_that_may_not_be_used(users):
+def _run_copy_script_from_production(monkeypatch, email):
+    """Run copy_user_between_envs.main() as `--from production --to dev` for `email`.
+
+    Both environments' configs point at the test Postgres; the copy steps only record that
+    they were reached, so the test sees whether the consent gate let the copy start.
+    """
     spec = importlib.util.spec_from_file_location(
         "copy_user_between_envs", _SCRIPTS / "copy_user_between_envs.py"
     )
     script = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(script)
-    with auth_db.get_auth_db() as conn:
-        cur = conn.cursor()
-        with pytest.raises(SystemExit) as refused:
-            script.require_testing_consent(cur, EXISTING_ID, "t18040-existing@example.com")
-        assert "may not be used for testing" in str(refused.value)
-        script.require_testing_consent(cur, NEW_ID, "t18040-new@example.com")  # allowed: no raise
+    dsn = os.environ["DATABASE_URL"]
+    monkeypatch.setattr(script, "load_env", lambda env: {"DATABASE_URL": dsn, "APP_ENV": env})
+    copied = []
+    monkeypatch.setattr(
+        script, "copy_postgres_rows",
+        lambda src, dst, email, dry_run, to_email: copied.append(email) or ("uid", "uid"),
+    )
+    monkeypatch.setattr(script, "copy_r2_objects", lambda *a, **k: copied.append("r2"))
+    monkeypatch.setattr(
+        sys, "argv",
+        ["copy_user_between_envs.py", "--email", email, "--from", "production", "--to", "dev"],
+    )
+    return script, copied
+
+
+@pytest.mark.parametrize("who", ["opted_out", "unacknowledged"])
+def test_c4_footage_script_refuses_an_account_that_may_not_be_used(users, monkeypatch, who):
+    from app.services.policy_consent import set_use_for_testing
+    if who == "opted_out":
+        set_use_for_testing(NEW_ID, False)  # acknowledged at sign-up, then turned the switch off
+        email = "t18040-new@example.com"
+    else:
+        email = "t18040-existing@example.com"  # pre-feature account, never acknowledged
+    script, copied = _run_copy_script_from_production(monkeypatch, email)
+    with pytest.raises(SystemExit) as refused:
+        script.main()
+    assert "may not be used for testing" in str(refused.value)
+    assert copied == []  # refused before any copy
+
+
+def test_c4_footage_script_copies_an_account_that_consents(users, monkeypatch):
+    script, copied = _run_copy_script_from_production(monkeypatch, "t18040-new@example.com")
+    script.main()
+    assert copied == ["t18040-new@example.com", "r2"]
 
 
 # C7 ------------------------------------------------------------------------

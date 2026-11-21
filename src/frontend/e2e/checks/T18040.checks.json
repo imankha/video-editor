@@ -1,8 +1,7 @@
 {
   "criteria": {
     "T18040:C1": {
-      "kind": "code",
-      "command": "cd src/backend && DATABASE_URL=\"${DATABASE_URL%/*}/rb_t18040_test\" timeout 300 python -m pytest tests/test_t18040_policy_consent.py -p no:cacheprovider -q -k c1_ && cd ../frontend && timeout 300 npx vitest run src/components/PolicyNotice.t18040.test.jsx -t \"T18040:C1 \""
+      "kind": "browser"
     },
     "T18040:C2": {
       "kind": "code",
@@ -21,7 +20,7 @@
     },
     "T18040:C6": {
       "kind": "code",
-      "command": "for f in docs/legal/privacy-policy.md docs/legal/terms-of-service.md; do ! grep -qi 'draft' $f && grep -q 'Approved by legal counsel on November 20, 2026' $f && grep -q 'Last Updated:\\*\\* November 20, 2026' $f || exit 1; done && test \"$(grep -o 'Use my videos to help test and improve ReelBallers” under “Your privacy rights” in Account settings' docs/legal/privacy-policy.md | wc -l)\" -eq 2 && grep -q 'unless you opt out as described in our Privacy Policy' docs/legal/terms-of-service.md"
+      "command": "cd src/frontend && timeout 300 npx vitest run src/components/legalDocs.t18040.test.jsx"
     },
     "T18040:C7": {
       "kind": "code",
