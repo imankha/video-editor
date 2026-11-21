@@ -14,9 +14,34 @@ Epic: [mark-plays-with-ai/EPIC.md](EPIC.md). Runs before T16150; it carries the 
 
 **Read first:** [.claude/knowledge/ai-coach-video-analysis.md](../../../../.claude/knowledge/ai-coach-video-analysis.md). It holds every result so far, what failed and why, the business bar, where the files are, and the traps. Do not repeat a test recorded there.
 
+## Direction change (owner, 2026-11-20, after step 1)
+
+The ball is dropped. AI Coach gets two modes. Team coaching uses the full picture, which mostly works today. The second mode is for one player: the parent clicks their child once, and the analysis is asked for highlights and coaching notes about that child, on a picture zoomed closer to the child with a box drawn around them. So this prototype no longer has to find the play. It has to prove one thing: that we can keep hold of one clicked player through the footage. Four capabilities, in the owner's words:
+
+1. Hold the player as he moves after the click.
+2. Hold the player backwards in time from the click, by running the frames in reverse.
+3. Detect when the player has left the picture.
+4. Recognise the player when he comes back, with no new click. This is the hard part. The owner's idea: build a model of that one player, trained on every picture of him we are certain of, including the ones that differ from the first click.
+
+Steps 2 to 4 under "Solution" below, the "How it is judged" columns and the old acceptance criteria are superseded by this section. Step 1 (the inventory) is done; see the knowledge doc.
+
+### Revised steps (stop and report after each; a failed step is a result)
+
+- **A. Truth.** On the owner's own slices the owner clicks his child on one frame every 10 seconds, or presses "not on screen". This is the answer key no tracker has touched.
+- **B. Hold, forwards and backwards (capabilities 1 and 2).** From one click, follow at full frame rate on a window that moves with the player and is enlarged. Candidates: SAM 2.1 base+ and SAMURAI (already measured on phone footage), SAM 3 if its weights can be downloaded, and a detector with box-linking and appearance matching as the baseline. Measure seconds held before the first loss or switch to another player, in both directions.
+- **C. Knowing he has gone (capability 3).** Use the follower's own confidence, the box reaching the picture edge, and the player model from step D as a check. Measure against the "not on screen" answers: how often it says he is present when he is not, and how often it stays on a different player.
+- **D. Recognising him again (capability 4).** Build the per-player model from the stretches held in step B: frozen appearance features (a person re-identification model and a general image model, compared), a small classifier on top, positives from the certain stretches, negatives from every other person visible in the same frames (they cannot be him) and from the other team. Score whole short tracks, never single frames; accept only above a threshold, otherwise report "unsure" (which the product would turn into "tap again"). Test adding newly accepted stretches to the model against not adding them, because one wrong acceptance can poison it.
+- **E. Whole slice, one click.** Run A to D end to end and report the numbers below. Then test the model made in `sporting-77m` on `sporting-90m` (same game, three minutes later) with no click at all.
+
+### How the revised prototype is judged
+
+Measures from the Player Moments epic (T14320), on the owner's answer key: share of seconds where present or absent is right; seconds spent on a different child, split by same kit and other kit; stretches lost and correctly found again; extra taps needed in ten minutes; frames per second and projected time and cost for a 90-minute game. The owner sets the bar before step E is run.
+
+Asking Gemini on the zoomed, boxed picture is a later, paid step with its own spending plan. Known cautions for it: a box asked for inside a video call was never on the player, and one published test found a drawn box lowered a model's accuracy.
+
 ## Problem
 
-What we know (details and numbers in the knowledge doc):
+What we knew before the direction change (details and numbers in the knowledge doc):
 
 - On the full picture, Gemini usually finds the passage a parent marked but rates fewer than half of the five-star marks as highlights (9 of 23 across seven slices, for both Hydrogen and Argon), calls only about half the marked goals a goal, and never credits the right child.
 - Cropped by hand to the play and enlarged 2x, Argon at high resolution found both five-star dribbles in every try with the right team, and the goal as a goal by the right team.

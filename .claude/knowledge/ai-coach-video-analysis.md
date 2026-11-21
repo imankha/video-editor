@@ -153,6 +153,6 @@ Until existing users have been told about the 2026-11-20 privacy policy change a
 
 ## Active work
 
-- T16146: find the ball and players, crop to the play, ask one generic question; score on all seven slices. Carries the go or no-go.
+- T16146, redirected by the owner on 2026-11-20 after the inventory: the ball is dropped. Two modes: team coaching on the full picture, and a one-player mode where the parent clicks their child and the analysis is asked about that child on a zoomed, boxed picture. The prototype now has to prove we can keep hold of one clicked player: forwards, backwards, knowing when he has left, and recognising him when he returns with no new click (a model of that one player built from the pictures we are certain of). Steps and measures are in the task file. Carries the go or no-go.
 - T16145: the prompt and joining prototype; its remaining steps (team direction across half time, the who-is-who call, a numbered approved version) wait for the gate.
 - Untested ideas, in rough order of promise: fixed overlapping tiles with no finder; a second model family voting on short clips (Qwen3-Omni or Qwen3-VL on a rented graphics card); sending audio; a soccer action spotter (T-DEED) fine-tuned on parent marks.
