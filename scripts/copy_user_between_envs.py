@@ -1,6 +1,9 @@
 """
 Copy a single user's data from one environment to another.
 
+Refuses a production account whose owner may not have their footage used for testing
+(T18040, scripts/testing_consent.py).
+
 Copies:
   1. Postgres rows (users + game_storage_refs)
   2. R2 objects (profile.sqlite, user.sqlite, media files)
@@ -33,6 +36,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # (like scripts/backfill_payments_ledger.py) and import the audit/stamp helpers
 # at module load so a broken import aborts before any deletion.
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
+sys.path.insert(0, str(PROJECT_ROOT / "scripts"))  # T18040: testing_consent, when imported by a test
+
+from testing_consent import require_testing_consent  # noqa: E402
 
 from app.analytics import deidentify_user_segments
 from app.services.account_clone import (  # noqa: F401 - re-exported: tests and callers resolve cu.verify_media_refs etc.
@@ -434,6 +440,21 @@ def main():
     dst_email = args.to_email or args.email
     log.info(f"Copying {args.email}: {args.from_env} -> {args.to_env}"
              + (f" as {dst_email}" if dst_email != args.email else ""))
+
+    # T18040: a production account's footage leaves production for testing only when its
+    # owner has acknowledged the current privacy policy and not opted out.
+    if args.from_env == "production":
+        src_conn = get_pg_conn(src_config)
+        try:
+            src_cur = src_conn.cursor()
+            src_cur.execute("SELECT user_id FROM users WHERE email = %s", (args.email,))
+            src_user = src_cur.fetchone()
+            if not src_user:
+                log.error(f"User {args.email} not found in source Postgres")
+                sys.exit(1)
+            require_testing_consent(src_cur, src_user["user_id"], args.email)
+        finally:
+            src_conn.close()
 
     # 1. Copy Postgres rows (users + game_storage_refs)
     user_id, dst_user_id = copy_postgres_rows(src_config, dst_config, args.email, args.dry_run, args.to_email)

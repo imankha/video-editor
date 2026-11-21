@@ -55,12 +55,13 @@ from app.services.auth_db import (
     validate_session,
 )
 from app.services.ip_rate_limit import IpRateAction, client_ip, try_consume
+from app.services.policy_consent import CURRENT_POLICY_VERSION, acknowledge_policy, set_use_for_testing
 from app.session_init import invalidate_user_cache, user_session_init
 from app.storage import (
     APP_ENV,
     R2_ENABLED,
 )
-from app.user_context import get_current_user_id, set_current_user_id
+from app.user_context import get_current_impersonator_id, get_current_user_id, set_current_user_id
 from app.utils.cookies import delete_cookie as _delete_cookie
 from app.utils.cookies import set_cookie as _set_cookie
 from app.utils.offload import run_in_context
@@ -310,6 +311,48 @@ async def accept_terms(request: Request):
     forget_user_sessions(user_id)  # T16380: the remembered session row carries terms_accepted_at
     logger.info(f"[Auth] Terms accepted: user={user_id} version={version}")
     return {"accepted": True}
+
+
+class AcknowledgePolicyRequest(BaseModel):
+    version: str
+
+
+class TestingConsentRequest(BaseModel):
+    use_for_testing: bool
+
+
+def _refuse_consent_write_while_impersonating(user_id: str) -> None:
+    """T18040: consent is the account owner's own gesture; an admin viewing as them never records it."""
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.warning(f"[Auth] consent write refused: user={user_id} impersonated by {impersonator}")
+        raise HTTPException(status_code=403, detail="Only the account owner can change this.")
+
+
+@router.post("/acknowledge-policy")
+async def acknowledge_policy_notice(body: AcknowledgePolicyRequest):
+    """T18040: "Got it" on the privacy-policy notice. Records the version the user saw."""
+    user_id = get_current_user_id()
+    _refuse_consent_write_while_impersonating(user_id)
+    if body.version != CURRENT_POLICY_VERSION:
+        # The app showed a notice for a policy that is no longer current: do not record
+        # an acknowledgement of a text the user did not see.
+        logger.warning(
+            f"[Auth] stale policy acknowledgement refused: user={user_id} "
+            f"version={body.version} current={CURRENT_POLICY_VERSION}"
+        )
+        raise HTTPException(status_code=409, detail="The privacy policy changed since this notice was shown.")
+    await run_in_context(acknowledge_policy, user_id)
+    return {"policy_version_acknowledged": CURRENT_POLICY_VERSION}
+
+
+@router.put("/testing-consent")
+async def put_testing_consent(body: TestingConsentRequest):
+    """T18040: the "Use my videos to help test and improve ReelBallers" switch."""
+    user_id = get_current_user_id()
+    _refuse_consent_write_while_impersonating(user_id)
+    await run_in_context(set_use_for_testing, user_id, body.use_for_testing)
+    return {"use_for_testing": body.use_for_testing}
 
 
 @router.delete("/user")
@@ -687,6 +730,14 @@ async def auth_me(request: Request):
         "impersonator": impersonator,
         "needs_terms_acceptance": needs_terms_acceptance,
         "resume_point": resume_point,
+        # T18040: the policy-change notice is the account owner's to acknowledge, so an
+        # admin viewing as them never sees it.
+        "needs_policy_notice": (
+            impersonator is None
+            and session["policy_version_acknowledged"] != CURRENT_POLICY_VERSION
+        ),
+        "policy_version": CURRENT_POLICY_VERSION,
+        "use_for_testing": session["testing_opted_out_at"] is None,
     }
 
 

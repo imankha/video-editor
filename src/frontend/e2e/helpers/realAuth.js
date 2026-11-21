@@ -57,7 +57,11 @@ export async function loginAsRealUser(
       data,
       headers: { 'X-Test-Mode': 'true' },
     });
-    if (lastRes.ok()) return lastRes.json();
+    if (lastRes.ok()) {
+      const body = await lastRes.json();
+      await acknowledgePolicyNotice(pageOrContext, apiBase);
+      return body;
+    }
     // Only a 5xx is the staging PG stale-pool blip worth retrying; a 4xx (404 =
     // user not seeded / prod, 401/403) is a real misconfig — fail fast, don't mask it.
     if (lastRes.status() < 500 || attempt === DEV_LOGIN_MAX_TRIES) break;
@@ -67,6 +71,21 @@ export async function loginAsRealUser(
 
   throw new Error(`dev-login failed (${lastRes.status()}) for ${email}: ${await lastRes.text()}\n` +
     'Is the backend running (dev/staging, not prod) and does this user exist in Postgres?');
+}
+
+/**
+ * T18040: an account created before the 2026-11-20 privacy policy sees a one-time notice
+ * that only "Got it" closes, which would block every check on a seeded fixture account
+ * (e2e-gate@test.local on staging). Fixture accounts are ours: acknowledge it on login, the
+ * way a parent would with "Got it". New accounts (dev presets) never see the notice.
+ */
+async function acknowledgePolicyNotice(pageOrContext, apiBase) {
+  const me = await pageOrContext.request.get(`${apiBase}/auth/me`);
+  if (!me.ok()) throw new Error(`/auth/me failed (${me.status()}) after dev-login`);
+  const { needs_policy_notice: needsNotice, policy_version: version } = await me.json();
+  if (!needsNotice) return;
+  const res = await pageOrContext.request.post(`${apiBase}/auth/acknowledge-policy`, { data: { version } });
+  if (!res.ok()) throw new Error(`acknowledge-policy failed (${res.status()}): ${await res.text()}`);
 }
 
 /**

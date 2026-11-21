@@ -379,6 +379,7 @@ def clone_account_for_dev(*, r2, bucket: str, env: str, template_user_id: str,
     prefix is purged on any failure. Game videos are shared and never copied.
     """
     from app.services import auth_db  # local import: keeps the script re-export import-light
+    from app.services.policy_consent import CURRENT_POLICY_VERSION
 
     started = time.monotonic()
     try:
@@ -398,10 +399,11 @@ def clone_account_for_dev(*, r2, bucket: str, env: str, template_user_id: str,
 
         with auth_db.get_auth_db() as conn:
             cur = conn.cursor()
+            # T18040: a new account acknowledges the current policy by signing up.
             cur.execute(
-                "INSERT INTO users (user_id, email, verified_at, is_test_account) "
-                "VALUES (%s, %s, now(), TRUE)",
-                (new_user_id, new_email),
+                "INSERT INTO users (user_id, email, verified_at, is_test_account, "
+                "policy_version_acknowledged) VALUES (%s, %s, now(), TRUE, %s)",
+                (new_user_id, new_email, CURRENT_POLICY_VERSION),
             )
             copy_game_storage_refs(cur, cur, template_user_id, new_user_id)
     except Exception as e:

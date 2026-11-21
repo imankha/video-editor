@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const setSessionState = vi.fn();
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: { getState: () => ({ setSessionState, needsTermsAcceptance: false }), setState: vi.fn() },
+  useAuthStore: { getState: () => ({ setSessionState, setPolicyStateFromMe: vi.fn(), needsTermsAcceptance: false }), setState: vi.fn() },
 }));
 vi.mock('../stores/editorStore', () => ({
   parseEditorPath: () => ({ profileId: null }),

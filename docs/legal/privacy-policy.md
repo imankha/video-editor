@@ -1,294 +1,167 @@
 # Privacy Policy
 
-**DRAFT — For Attorney Review. Do not publish without legal counsel approval.**
+**Approved by legal counsel on November 20, 2026.** This file mirrors the live page in the app (`src/frontend/src/components/PrivacyPolicy.jsx`, served at `/privacy`); the app page is the published text. Change both together.
 
-**Effective Date:** [DATE TBD]
-**Last Updated:** May 8, 2026
-
-Reel Ballers ("we," "us," or "our") operates the Reel Ballers video editing application (the "Service"). This Privacy Policy describes how we collect, use, disclose, and protect your personal information when you use our Service.
-
-This policy is designed to comply with the California Consumer Privacy Act (CCPA/CPRA), California Online Privacy Protection Act (CalOPPA), Children's Online Privacy Protection Act (COPPA), the FTC Act, and other applicable privacy laws.
+**Last Updated:** November 20, 2026
 
 ---
 
-## Table of Contents
-
-1. [Information We Collect](#1-information-we-collect)
-2. [How We Use Your Information](#2-how-we-use-your-information)
-3. [How We Share Your Information](#3-how-we-share-your-information)
-4. [Data Retention](#4-data-retention)
-5. [Your Privacy Rights (CCPA/CPRA)](#your-rights)
-6. [Children's Privacy (COPPA)](#6-childrens-privacy-coppa)
-7. [Cookies and Tracking Technologies](#7-cookies-and-tracking-technologies)
-8. [Do Not Track / Global Privacy Control](#8-do-not-track--global-privacy-control)
-9. [Security](#9-security)
-10. [International Data Transfers](#10-international-data-transfers)
-11. [Data Breach Notification](#11-data-breach-notification)
-12. [Changes to This Policy](#12-changes-to-this-policy)
-13. [Contact Us](#13-contact-us)
-
----
+ReelBallers (“we,” “us,” or “our”) operates the ReelBallers video editing application (the “Service”). This Privacy Policy describes how we collect, use, disclose, and protect your personal information when you use our Service.
 
 ## 1. Information We Collect
 
 ### Information You Provide
 
-| Category | Specific Data | Source |
-|----------|--------------|--------|
-| **Account data** | Email address | User-provided (Google OAuth or email OTP) |
-| **Account data** | Google ID (`sub` claim) | Google OAuth |
-| **Account data** | Profile picture URL | Google OAuth |
-| **Game metadata** | Opponent name, game date, tournament name, game type | User-provided when adding a game |
-| **Athlete Intro Card data** | A player photo, the player's name, and short display facts (playing position, graduation year/class, and team name), plus any free text you type onto an Athlete Intro Card | User-provided when you build an Athlete Intro Card for a player profile |
-| **Parental-consent attestation** | A timestamp recording that the account holder attested they are the parent or guardian, consent to using the player's likeness, and understand it becomes publicly visible to anyone they share a link with | Recorded when you first create an Athlete Intro Card for a profile |
-| **Payment data** | Credit card and billing details | Processed entirely by Stripe; never stored on our servers |
+- **Account data:** Email address, Google ID, profile picture URL
+- **Game metadata:** Opponent name, game date, tournament name, game type
+- **Intro card data:** A player photo, the player's name, and short display facts (position, graduation year/class, team) plus any free text you type onto an Athlete Intro Card, along with a parental-consent attestation recorded when you first create a card. No birthdate, age, address, or school is collected.
+- **Payment data:** Credit card and billing details processed entirely by Stripe — never stored on our servers
 
 ### Information Collected Automatically
 
-| Category | Specific Data | Source |
-|----------|--------------|--------|
-| **Session data** | Session token (httponly cookie: `rb_session`) | Generated at login; used solely for authentication |
-| **Payment data** | Stripe customer ID | Created by Stripe when you make a purchase |
-| **Usage data** | Page views (anonymous, no PII) | Cloudflare Web Analytics (cookieless, privacy-focused) |
-| **Device data** | User agent string | HTTP headers; logged only in admin impersonation audit trail |
+- **Session data:** Session token via httponly cookie (`rb_session`), used solely for authentication
+- **Payment data:** Stripe customer ID, created when you make a purchase
+- **Usage data:** Anonymous page views via Cloudflare Web Analytics (cookieless, no PII)
+- **Device data:** User agent string, logged only in admin impersonation audit trail
 
 ### Information Derived from Your Content
 
-| Category | Specific Data | How We Derive It |
-|----------|--------------|-----------------|
-| **Video metadata** | Duration, resolution, frame rate, file size, file hash (blake3) | Automatically extracted from videos you upload |
-| **Editing data** | Clip selections, crop keyframes, overlay settings, export job records | Created through your editing actions in the Service |
+- **Video metadata:** Duration, resolution, frame rate, file size, file hash
+- **Editing data:** Highlight selections, crop keyframes, overlay settings, export job records
 
 ### Video Content
 
-**Video files and metadata.** Video files you upload from your own device, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events. All video content is uploaded by the user from their own device; Reel Ballers does not access, download, scrape, or pull content from any third-party platform or service on a user's behalf.
+Video files you upload, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events. We do not extract biometric data from videos. Our framing feature uses manual crop controls, not facial recognition or detection.
 
-We do not extract biometric data from videos. Our framing (crop/zoom) feature uses manual crop controls, not facial recognition or detection. We do not extract GPS or location data from video metadata. We do not verify the source, ownership, or licensing status of video content uploaded by users.
+### Intro cards
 
-### Athlete Intro Cards
-
-**Player photos, names, and display facts.** The Service lets you build "Athlete Intro Card" graphics for a youth player using a photo you upload, the player's name, and a small, fixed set of display facts you type in — the player's playing position, graduation year (class), and team name — along with any free text you choose to add. These facts are optional display fields you enter for the card; they are not derived from the video, and no birthdate, age, height, home address, school, or other sensitive identifier is collected. **Because these cards depict a minor, we require the account holder to record a parental-consent attestation before the first card is created, and we surface a warning that a card attached to a shared reel or collection is publicly visible to anyone with the link.**
-
-We do not run facial recognition, facial templating, or any other biometric identification on player photos. Optional background removal (a "cut-out" of the player) is image segmentation only — it separates foreground from background and does not identify, match, or template a face.
+You can build “intro card” graphics for a youth player from a photo you upload, the player's name, and a small fixed set of display facts you type (position, graduation year, team). Because a card depicts a minor, we record a parental-consent attestation before the first card is created and warn you that a card attached to a shared highlight or collection is publicly visible to anyone with the link. We do not run facial recognition or biometric templating on player photos; optional background removal is image segmentation only.
 
 ### Information We Do NOT Collect
 
-- No biometric data (video framing/cropping is performed manually by users; player-photo background removal is segmentation, not facial recognition)
-- No facial recognition or automated identification of individuals in videos or player photos
-- No birthdate, age, home address, or school is collected for players featured in Athlete Intro Cards (only playing position, graduation year, team name, and a photo the account holder provides)
+- No biometric data (video/photo cropping is manual; background removal is segmentation, not facial recognition)
+- No birthdate, age, address, or school for players featured in intro cards
 - No location data (beyond what may exist in video metadata, which we do not extract)
-- No advertising identifiers
-- No cross-site tracking
+- No advertising identifiers or cross-site tracking
 - No contact lists or social graphs
 - No data from children directly (children do not create accounts)
-- No special categories of sensitive personal data (racial/ethnic origin, political opinions, religious beliefs, health data, sexual orientation) are intentionally collected or processed, except to the extent incidentally present in sports video footage
-
----
 
 ## 2. How We Use Your Information
 
 We use your personal information to:
 
-- **Provide the Service:** Process, enhance, crop, overlay, and export your video clips solely as you direct.
-- **Authenticate you:** Verify your identity and maintain your session.
-- **Process payments:** Complete purchases via Stripe.
-- **Video content:** We use video you upload for processing, enhancement, and export as you direct. We may also analyze video metadata and content to identify games across multiple users' uploads, enabling shared viewing experiences and collaborative features in the future. This analysis may include comparing video characteristics (timing, location, visual similarity) to determine whether separate uploads depict the same game.
-- **Improve the Service:** Understand usage patterns through anonymous, aggregate analytics (Cloudflare Web Analytics).
-- **Communicate with you:** Send transactional emails related to your account (OTP codes, export completion, share notifications).
-- **Comply with legal obligations.**
+- **Provide the Service:** Process, enhance, crop, overlay, and export your videos as you direct
+- **Authenticate you:** Verify your identity and maintain your session
+- **Process payments:** Complete purchases via Stripe
+- **Video content:** We may analyze video metadata and content to identify games across multiple users' uploads, enabling shared viewing experiences and collaborative features in the future. This analysis may include comparing video characteristics (timing, location, visual similarity) to determine whether separate uploads depict the same game.
+- **Improve the Service:** Understand usage patterns through anonymous, aggregate analytics
+- **AI analysis you choose:** Where the Service offers a feature that has an AI model watch a game for you (for example, to mark plays), choosing it sends that game's video to our AI provider to be analyzed. The result is stored with your game.
+- **Test and improve our features:** We may use videos you upload, and the plays, ratings, and notes you add to them, inside ReelBallers to test and improve the Service, for example to check that automatic play detection finds the plays parents mark by hand. This is done by our own staff and by the service providers listed in Section 3 acting on our behalf, and may include having an AI provider analyze a video. It is never published or shown to other users. You can opt out at any time by turning off “Use my videos to help test and improve ReelBallers” under “Your privacy rights” in Account settings, or by emailing [privacy@reelballers.com](mailto:privacy@reelballers.com); opting out does not affect your use of the Service.
+- **Communicate with you:** Send transactional emails (OTP codes, export completion, share notifications)
 
 We do **not** use your information to:
 
 - Sell to third parties
 - Target advertising
-- Build user profiles for marketing purposes
-- Train AI/ML models on your video content
-
----
+- Build user profiles for marketing
+- Train AI/ML models on your video content. Analyzing a video with an AI model, as described above, is not training a model on it.
 
 ## 3. How We Share Your Information
 
-We share your information only with service providers who assist in operating the Service:
+We share data only with service providers who help operate the Service:
 
-| Service Provider | Data Shared | Purpose |
-|-----------------|-------------|---------|
-| **Cloudflare R2** | Video files, user databases | Cloud storage (bucket: `reel-ballers-users`) |
-| **Modal** | Video files (temporary) | GPU video processing; files are deleted after processing completes |
-| **Fly.io** | Application data | Application hosting |
-| **Resend** | Email addresses | Transactional email delivery (OTP codes, share notifications) |
-| **Google** | Google ID, email, profile picture | OAuth authentication |
-| **Stripe** | Payment data (handled entirely by Stripe) | Payment processing |
-| **Cloudflare Web Analytics** | Anonymous page view data (no PII) | Privacy-preserving analytics |
+| Provider | Purpose |
+|---|---|
+| Cloudflare R2 | Cloud file storage |
+| Modal | GPU video processing (temporary) |
+| Fly.io | Application hosting |
+| Resend | Transactional email |
+| Google | OAuth authentication; AI video analysis (Gemini) for features you choose and for our internal testing |
+| Stripe | Payment processing |
+| Cloudflare Web Analytics | Privacy-preserving analytics (no PII) |
 
-**With other users (future feature).** We may introduce features that allow users who recorded the same game to share or access each other's uploads. If we do, we will provide you with controls to opt in or out of such sharing, and we will notify you before enabling any sharing of your content. We will never share your video with other users without your explicit consent at the time of sharing.
+**With other users (future feature):** We may introduce features that allow users who recorded the same game to share or access each other's uploads. If we do, we will provide you with controls to opt in or out of such sharing, and we will notify you before enabling any sharing of your content. We will never share your video with other users without your explicit consent at the time of sharing.
 
-**User-initiated sharing.** When you use the Service's sharing features (share links), you are directing us to make that content accessible to the recipients you choose. We do not independently select, curate, or recommend content for distribution. You are solely responsible for ensuring you have the right to share content depicting any individuals, including obtaining any required consents from parents or guardians of minors.
+**Legal requirements:** We may disclose information if required by law, subpoena, or other legal process, or if we believe in good faith that disclosure is necessary to protect our rights, protect your safety or the safety of others, or investigate fraud.
 
-**Legal requirements.** We may disclose information if required by law, subpoena, or other legal process, or if we believe in good faith that disclosure is necessary to protect our rights, protect your safety or the safety of others, or investigate fraud.
-
-**We do not sell or share your personal information** as defined by the CCPA/CPRA. We have no advertising partners, data brokers, or third-party tracking.
-
----
+We do not sell or share your personal information as defined by CCPA/CPRA.
 
 ## 4. Data Retention
 
-| Data Type | Retention Period |
-|-----------|-----------------|
-| Game footage & clips | 30 days after game expiry (per storage credits system) |
-| Athlete Intro Card data (photo, name, position/class/team, free text, consent record) | Retained until you delete the Athlete Intro Card or your account; erased on either |
-| Account data (email, settings) | Retained until you request deletion |
-| Processing artifacts (GPU intermediates) | Automatically deleted after export completes |
-| Session tokens | 30 days maximum, or until logout |
-| OTP codes | Expire after 10 minutes |
-| Transaction records (payment amounts, keyed to an opaque account id; no name, email, or card data) | Retained after account deletion to meet tax and accounting legal obligations |
+- Game footage: 30 days after game expiry
+- Account data: retained until you request deletion
+- Processing artifacts: deleted immediately after generation
+- Sessions: 30 days max, or until logout
+- OTP codes: expire after 10 minutes
 
-Upon account deletion request, your personal data is permanently deleted within 45 days (CCPA compliance deadline). A small set of records is kept, for the legal and security reasons described below. See our [Data Retention Policy](data-retention-policy.md) for details.
+Upon deletion request, your personal data is permanently removed immediately (within 45 days if via email), apart from the limited records described next.
 
-After deletion we keep a small set of records, each keyed to an opaque account id with no name, email, or contact details: transaction records (payment amounts and dates) to meet tax and accounting obligations; a record that the account was deleted, including when and through which path, to evidence that the erasure happened; and, where support staff accessed the account, the security log of that access to protect the account and our systems. We also keep the text of any bug reports you submitted, with your email, device details, and attachments removed, to help us fix the problems you reported, and usage and activity statistics in de-identified form to understand how the product is used. Keeping these records does not delay or limit erasure of your personal data.
+Transaction records (payment amounts keyed to an opaque account id, with no name, email, or card details) are retained after account deletion to meet our tax and accounting obligations. We also keep a record that the account was deleted, including when and through which path, to evidence that the erasure happened, and, where support staff accessed the account, the security log of that access to protect the account and our systems. We also keep the text of any bug reports you submitted, with your email, device details, and attachments removed, to help us fix the problems you reported.
 
----
+We also keep, under the same opaque account id, usage and activity statistics and the attribution signals that first brought you to ReelBallers (such as which campaign, referral link, or page you arrived from, and which sport you were browsing), collectively our “retained usage statistics,” to understand how the product is used and which channels bring people to it. To let us recognize a person who deletes their account and signs up again, without restoring any of their deleted data, we keep a one-way cryptographic hash of the deleted account's email address; the original email cannot be recovered from it. Retaining these records does not delay or limit erasure of your personal data.
 
-<a id="your-rights"></a>
 ## 5. Your Privacy Rights (CCPA/CPRA)
 
-If you are a California resident (or where otherwise required by law), you have the following rights:
+California residents (and others where required by law) have the following rights:
 
-### Right to Know / Access
-You may request a copy of all personal information we hold about you. Use the "Download My Data" button in Account Settings or email us.
+- **Right to Know/Access:** Request a copy of your data via “Download My Data” in Account Settings
+- **Right to Delete:** Delete your account via “Delete My Account” in Account Settings. Deletion is permanent and immediate. A limited set of records survives deletion (transaction records, the record that the account was deleted, security logs of any staff access, de-identified bug reports, a one-way hash of your email so a future sign-up can be recognized as returning, and the retained usage statistics described in the Data Retention section above); retaining them never delays or limits erasure of your personal data.
+- **Right to Correct:** Contact us to correct inaccurate information
+- **Right to Opt-Out of Sale/Sharing:** We do not sell or share your data. This right is automatically honored.
+- **Right to Limit Sensitive PI:** Video content is used as you direct and, unless you opt out, to test and improve the Service as described in Section 2. To opt out, turn off “Use my videos to help test and improve ReelBallers” under “Your privacy rights” in Account settings, or email privacy@reelballers.com.
+- **Non-Discrimination:** We will not discriminate against you for exercising rights
 
-### Right to Delete
-You may request deletion of your personal information. Use the "Delete My Account" button in Account Settings or email us. Deletion is permanent and immediate. A limited set of records survives deletion, each keyed to an opaque account id with no name, email, or contact details: transaction records (payment amounts and dates) to meet tax and accounting obligations, a record that the account was deleted to evidence the erasure, any security log of staff access to the account, the text of any bug reports you submitted (with your email, device details, and attachments removed) to help us fix the problems you reported, and usage and activity statistics in de-identified form. These records are described in full in Section 4 (Data Retention) above and in our [Data Retention Policy](data-retention-policy.md). We never refuse your erasure request on this basis; your personal data is still erased.
+**How to exercise your rights:**
 
-### Right to Correct
-You may request correction of inaccurate personal information by contacting us.
-
-### Right to Opt-Out of Sale/Sharing
-**We do not sell or share your personal information.** This right is automatically honored. The "Do Not Sell or Share" indicator in Account Settings confirms this status.
-
-### Right to Limit Use of Sensitive Personal Information
-Video content containing identifiable minors is used solely for the purpose you direct (video processing). We do not use it for any other purpose.
-
-### Non-Discrimination
-We will not discriminate against you for exercising any of your privacy rights.
-
-### How to Exercise Your Rights
-
-- **In-app:** Account Settings → Your Privacy Rights
-- **Email:** [privacy@reelballers.com](mailto:privacy@reelballers.com)
-
-We will verify your identity before fulfilling requests. We respond within 45 days as required by CCPA.
-
----
+- In-app: Account settings, then Your privacy rights
+- Email: [privacy@reelballers.com](mailto:privacy@reelballers.com)
 
 ## 6. Children's Privacy (COPPA)
 
-**Reel Ballers is designed for parents, guardians, and coaches** of youth athletes. Children do not create accounts on our Service.
+ReelBallers is designed for parents, guardians, and coaches of youth athletes.
 
-- **Children are data subjects in videos, not account holders.** Our users are adults who upload and edit video of youth sporting events. Children appear in video content uploaded by their parent, guardian, or authorized coach.
-- **We do not knowingly collect personal information from children under 13** (or under 16 for CCPA purposes).
-- **No biometric data is extracted.** Video framing and cropping are manual operations performed by the user. We do not use facial recognition or detection on video or on player photos. Optional player-photo background removal is image segmentation, not facial recognition.
-- **No automated identification** of individuals in videos or photos is performed.
-- **Athlete Intro Cards are parent-created and consent-gated.** When you build an Athlete Intro Card for a youth player, you provide the player's photo, name, and a small set of display facts (playing position, graduation year, team name). We record your attestation that you are the parent or guardian and consent to using the player's likeness before the first card is created, and we do not collect a birthdate, age, address, or school. These fields are display data for a graphic you create — we do not use them to build a behavioral or marketing profile of the child.
-- **Public visibility.** A card attached to a reel or collection you share becomes visible to anyone who has the share link. You control whether, and with whom, to share.
+- **Children are data subjects in videos, not account holders.** Our users are adults who upload and edit video of youth sporting events.
+- We do not knowingly collect personal information from children under 13 (or under 16 for CCPA purposes).
+- No biometric data is extracted. Video/photo framing and cropping are manual; player-photo background removal is segmentation, not facial recognition.
+- No facial recognition or biometric identification of individuals in videos or photos is performed. Where an AI model analyzes a game, it describes the play (for example a team's kit color, a player's position, or a jersey number visible on screen); it does not identify anyone by face.
+- **Intro cards are parent-created and consent-gated.** You provide the photo, name, and display facts (position, graduation year, team); we record your parent/guardian consent before the first card and collect no birthdate, age, address, or school. A shared card is publicly visible to anyone with the link.
 
-If you believe a child under 13 has somehow created an account, please contact us immediately at [privacy@reelballers.com](mailto:privacy@reelballers.com) and we will delete the account.
+**Parental rights:** Parents/guardians who have uploaded video or created intro cards for their children retain full control. All Athlete Intro Card data (photo, parent-typed facts, and consent record) is included in a data export and erased when you delete the card or your account.
 
-**Parental rights.** Parents/guardians who have uploaded video content or created Athlete Intro Cards for their children retain full control. They may delete any content — including a player's photo, name, and display facts — at any time through the app, or request full account deletion. All Athlete Intro Card data (the photo, the parent-typed facts, and the consent record) is included in a data export you request and is erased when you delete the associated Athlete Intro Card or your account.
+If you believe a child under 13 has created an account, contact us at [privacy@reelballers.com](mailto:privacy@reelballers.com).
 
----
+## 7. Cookies and Tracking
 
-## 7. Cookies and Tracking Technologies
+We use **one cookie**:
 
-### First-Party Cookies
+| Cookie | Type | Purpose |
+|---|---|---|
+| rb_session | Strictly necessary | Authentication |
 
-The following cookies are set on our domain. All are strictly necessary for the Service to function (authentication and payment security). No consent is required for strictly necessary cookies.
+We use **Cloudflare Web Analytics** which does not set cookies, collect PII, or track across sites.
 
-| Cookie | Type | Purpose | Set By | Duration |
-|--------|------|---------|--------|----------|
-| `rb_session` | Strictly necessary | Authentication session | Reel Ballers | 30 days |
-| `g_state` | Strictly necessary | Manages Google One Tap sign-in prompt state (e.g., suppressing the prompt after dismissal) | Google Identity Services | Session |
-| `_stripe_mid` | Strictly necessary | Fraud prevention and device identification for payment security | Stripe.js | 1 year |
-
-### Third-Party Cookies
-
-When you interact with our payment features, Stripe's embedded scripts (`js.stripe.com`) may set cookies on Stripe's own domain for fraud prevention and payment security. These cookies are governed by [Stripe's Privacy Policy](https://stripe.com/privacy). Common Stripe cookies include:
-
-| Cookie | Purpose |
-|--------|---------|
-| `__Secure-has_logged_in` | Tracks whether the user has logged into Stripe |
-| `cid`, `machine_identifier`, `private_machine_identifier` | Device identification for fraud prevention |
-| `__stripe_orig_props` | Tracks referral origin for fraud signals |
-| `_ga` | Google Analytics on Stripe's domain (not ours) for Stripe's own analytics |
-
-We do not control these third-party cookies and do not receive personally identifiable information from them. They are used solely by Stripe for payment fraud prevention.
-
-### Analytics
-
-We use **Cloudflare Web Analytics**, which is a privacy-preserving analytics service that:
-- Does **not** set any cookies
-- Does **not** collect personally identifiable information
-- Does **not** track users across websites
-- Does **not** use fingerprinting
-
-### What We Do NOT Use
-
-- No advertising cookies
-- No third-party tracking pixels
-- No Google Analytics on our site (Stripe may use Google Analytics on its own domain)
-- No social media tracking
-- No cross-site tracking of any kind
-
----
+We do not use advertising cookies, tracking pixels, Google Analytics, or cross-site tracking of any kind.
 
 ## 8. Do Not Track / Global Privacy Control
 
-- **Do Not Track (DNT):** Our analytics (Cloudflare Web Analytics) do not use cookies or track across sites, so DNT signals are effectively honored by default.
-- **Global Privacy Control (GPC):** We honor the GPC signal (`Sec-GPC: 1`). We do not sell your personal information or share it for cross-context behavioral advertising (as those terms are defined under the CCPA/CPRA). We do disclose limited data to service providers who help operate the Service (see Section 3), but these disclosures are for operational purposes only and do not constitute "selling" or "sharing" under California law. Receiving a GPC signal requires no change in our behavior. We log GPC signals for compliance record-keeping.
-
----
+- **Do Not Track (DNT):** Effectively honored — our analytics don't use cookies or cross-site tracking.
+- **Global Privacy Control (GPC):** We honor the GPC signal. Since we don't sell or share data, no behavioral change is needed — your data is already protected.
 
 ## 9. Security
 
-We implement appropriate technical and organizational measures to protect your personal information:
-
 - All data transmitted over HTTPS/TLS
 - Session cookies are httponly and secure
-- Video files stored in encrypted-at-rest cloud storage (Cloudflare R2)
-- Per-user database isolation (each user's data stored in separate SQLite databases)
+- Video files stored in encrypted-at-rest cloud storage
+- Per-user database isolation
 - No shared access between user accounts
 - Processing artifacts deleted immediately after use
-- Access to personal data is limited to personnel with a legitimate business need, who are subject to a duty of confidentiality
 
-While we take reasonable precautions, no method of transmission over the Internet or electronic storage is 100% secure. We cannot guarantee absolute security of your data. You are responsible for maintaining the confidentiality of your account credentials.
+## 10. Changes to This Policy
 
----
+We will notify you of material changes by displaying a notice in the application and updating the “Last Updated” date. Continued use after changes constitutes acceptance.
 
-## 10. International Data Transfers
+## 11. Contact Us
 
-Your data may be processed by our service providers in locations outside your jurisdiction. Our service providers (Cloudflare, Modal, Fly.io, Stripe, Resend) may process data in the United States and other countries. We rely on each provider's compliance frameworks (including Standard Contractual Clauses where applicable) to ensure adequate protection of your data during any cross-border transfer.
+**ReelBallers**
 
----
-
-## 11. Data Breach Notification
-
-In the event of a security breach that results in unauthorized access to your personal information, we will notify affected users within the timeframes required by applicable law (72 hours under CCPA where feasible). Notification will be sent via the email address associated with your account. We will also notify relevant regulatory authorities as required by law.
-
----
-
-## 12. Changes to This Policy
-
-We will notify you of material changes to this policy by:
-- Displaying a notice in the application
-- Updating the "Last Updated" date at the top of this page
-
-Your continued use of the Service after changes constitutes acceptance of the updated policy. If you disagree with changes, you may delete your account at any time.
-
----
-
-## 13. Contact Us
-
-**Reel Ballers**
-
-**Privacy inquiries:** [privacy@reelballers.com](mailto:privacy@reelballers.com)
-
-For California residents: You may also designate an authorized agent to make a request on your behalf. The authorized agent must provide proof of authorization.
+Privacy inquiries: [privacy@reelballers.com](mailto:privacy@reelballers.com)

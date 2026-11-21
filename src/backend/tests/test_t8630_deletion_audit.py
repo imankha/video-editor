@@ -708,13 +708,11 @@ class TestT7PrivacyCopyAssertions:
         assert "—" not in jsx_paragraph
 
         privacy_md = self._read(PRIVACY_POLICY_MD_PATH)
-        # T8630 round 2: the copy no longer calls transaction records "the one
-        # exception" (three record classes are retained now), so anchor on the
-        # new enumerating sentence instead.
-        md_sentence_start = "After deletion we keep a small set of records"
-        assert md_sentence_start in privacy_md
+        # T18040: the md now mirrors the live page (legalDocs.t18040.test.jsx), so
+        # its retention paragraph is the same one the JSX carries.
         assert "the one exception" not in privacy_md
-        md_sentence = privacy_md.split(md_sentence_start, 1)[1].split("\n\n", 1)[0]
+        assert jsx_paragraph_start in privacy_md
+        md_sentence = privacy_md.split(jsx_paragraph_start, 1)[1].split("\n\n", 1)[0]
         assert "—" not in md_sentence
 
         retention_md = self._read(DATA_RETENTION_MD_PATH)

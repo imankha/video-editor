@@ -36,7 +36,7 @@ def _app() -> FastAPI:
     @app.middleware("http")
     async def _session(request: Request, call_next):
         # Stand-in for db_sync's auth: the session /me reads, plus the user context.
-        request.state.session = {"user_id": USER_ID, "email": "t15790@test.local", "terms_accepted_at": "x"}
+        request.state.session = {"user_id": USER_ID, "email": "t15790@test.local", "terms_accepted_at": "x", "policy_version_acknowledged": None, "testing_opted_out_at": None}
         set_current_user_id(USER_ID)
         set_current_impersonator_id(None)
         return await call_next(request)

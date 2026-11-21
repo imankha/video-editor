@@ -42,6 +42,7 @@ const OverlayScreen = lazyWithReload(() => import('./screens/OverlayScreen').the
 const AdminScreen = lazyWithReload(() => import('./screens/AdminScreen').then(m => ({ default: m.AdminScreen })));
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AccountSettings } from './components/AccountSettings';
+import { PolicyNotice } from './components/PolicyNotice';
 import { AdminGate } from './components/admin/AdminGate';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
@@ -903,6 +904,8 @@ function App() {
         <SyncStatusIndicator />
         {/* T430: Account Settings panel */}
         <AccountSettings />
+        {/* T18040: one-time privacy-policy notice */}
+        <PolicyNotice />
         {/* T9470: draft preview player — ALSO mounted on the home/Drafts screen,
             which is where Preview is actually clicked (openFinishedReel lands on
             PROJECT_MANAGER before opening). It was previously only mounted in the
@@ -1049,6 +1052,8 @@ function App() {
       {/* GoogleOneTap + AuthGateModal + ToastContainer are mounted once in main.jsx. */}
       {/* T430: Account Settings panel */}
       <AccountSettings />
+      {/* T18040: one-time privacy-policy notice */}
+      <PolicyNotice />
 
       {/* T1780: Shared video overlay */}
       {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}

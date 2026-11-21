@@ -331,6 +331,7 @@ export async function initSession() {
         if (meData.needs_terms_acceptance) {
           useAuthStore.setState({ needsTermsAcceptance: true });
         }
+        useAuthStore.getState().setPolicyStateFromMe(meData);
         console.log(`[Auth:Init] /me OK: user=${userId}, email=${email}${impersonator ? ` [impersonated by ${impersonator.email}]` : ''}`);
       } else {
         console.log(`[Auth:Init] /me returned ${meResponse.status} — unauthenticated`);

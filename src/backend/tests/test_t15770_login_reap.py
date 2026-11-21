@@ -116,7 +116,7 @@ async def test_login_reaps_abandoned_upload_without_reopening_add_game(monkeypat
     monkeypatch.setattr("app.routers.games_upload.r2_is_multipart_upload_valid", lambda key, upload_id: False)
     monkeypatch.setattr("app.routers.games_upload.r2_abort_multipart_upload", lambda key, upload_id: True)
 
-    request = FakeRequest({"user_id": TEST_USER_ID, "email": f"{TEST_USER_ID}@test.com", "terms_accepted_at": "x"})
+    request = FakeRequest({"user_id": TEST_USER_ID, "email": f"{TEST_USER_ID}@test.com", "terms_accepted_at": "x", "policy_version_acknowledged": None, "testing_opted_out_at": None})
 
     # The route itself never calls GET /api/games/pending-uploads -- only its
     # background writes do (login bootstrap), proving the reap does not

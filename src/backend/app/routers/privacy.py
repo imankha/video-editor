@@ -111,6 +111,10 @@ async def export_user_data(request: Request):
             "google_id": "linked" if user_record.get("google_id") else None,
             "created_at": user_record.get("created_at"),
             "terms_accepted_at": user_record.get("terms_accepted_at"),
+            # T18040: the privacy-policy version acknowledged and the testing switch.
+            "policy_version_acknowledged": user_record["policy_version_acknowledged"],
+            "use_for_testing": user_record["testing_opted_out_at"] is None,
+            "testing_opted_out_at": user_record["testing_opted_out_at"],
         }
 
     # 2. Credit transactions (Postgres, T5840)

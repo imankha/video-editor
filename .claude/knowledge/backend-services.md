@@ -1,5 +1,17 @@
 ---
 domain: backend-services
+updated: 2026-11-20 (T18040: privacy-policy notice + internal-testing opt-out. Two `users` columns (Postgres v051):
+`policy_version_acknowledged` TEXT (NULL = never told) and `testing_opted_out_at` TIMESTAMPTZ (NULL = allowed).
+Rule + writers in `services/policy_consent.py` (`CURRENT_POLICY_VERSION`, bump it with PrivacyPolicy.jsx
+LAST_UPDATED; every existing account then sees the notice again). New accounts get the current version at
+INSERT (`auth_db.create_user`, `account_clone` -- any new `INSERT INTO users` path must set it too, or the
+account gets the blocking notice). Both values ride the remembered session row (`_validate_session_in_db`),
+so every write calls `forget_user_sessions`. Gestures: POST /api/auth/acknowledge-policy {version} (409 if
+not current), PUT /api/auth/testing-consent {use_for_testing}; both 403 while impersonating, and /me's
+`needs_policy_notice` is false for an impersonated session. `may_use_for_testing(cur, user_id)` takes a
+cursor so scripts can ask any env; `scripts/testing_consent.require_testing_consent` exits on "no";
+`copy_user_between_envs.py --from production` calls it. v052 marks the 3 in-person consent emails acknowledged (owner ruling). e2e `loginAsRealUser` acknowledges the notice for
+pre-existing fixture accounts.)
 updated: 2026-11-15 (T5940: `routers/admin/` split into the `routers/admin/` package, one sub-router per subject, URLs byte-identical; analytics aggregation helpers moved to `services/analytics.py`. See Router inventory.)
 updated: 2026-11-08 (T14940, sport dimension piece 2/3: profile-scoped `record_milestone`
 events now carry `"sport"` in their `user_action_log.context`, resolved WITHOUT a second DB
